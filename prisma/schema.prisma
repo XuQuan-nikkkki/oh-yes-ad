@@ -21,4 +21,25 @@ model Client {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  contacts ClientContact[]
+}
+
+model ClientContact {
+  id        String   @id @default(uuid())
+
+  name      String
+  title     String? 
+  scope     String?
+  preference String?
+
+  phone     String?
+  email     String?
+  wechat    String?
+
+  clientId  String
+  client    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
