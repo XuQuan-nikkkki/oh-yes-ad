@@ -13,11 +13,12 @@ datasource db {
 }
 
 model Client {
-  id        String   @id @default(uuid())
-  name      String
-  industry  String
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
 
-  remark    String? 
+  name     String
+  industry String
+  remark   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -27,6 +28,7 @@ model Client {
 
 model ClientContact {
   id        String   @id @default(uuid())
+  notionPageId  String?  @unique
 
   name      String
   title     String? 
@@ -36,6 +38,7 @@ model ClientContact {
   phone     String?
   email     String?
   wechat    String?
+  address   String?
 
   clientId  String
   client    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)

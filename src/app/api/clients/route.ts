@@ -9,7 +9,11 @@ const prisma = new PrismaClient({
   adapter,
 });
 export async function GET() {
-  const clients = await prisma.client.findMany();
+  const clients = await prisma.client.findMany({
+    include: {
+      contacts: true,
+    },
+  });
   return Response.json(clients);
 }
 
