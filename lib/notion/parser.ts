@@ -3,6 +3,7 @@ import { PageObjectResponse } from "@notionhq/client";
 type PropertyType =
   | "title"
   | "select"
+  | "status"
   | "rich_text"
   | "relation"
   | "multi_select"
@@ -62,7 +63,15 @@ const getTypedProperty = (
       break;
     case "date":
       // @ts-expect-error property 是 date 类型
-      value = property.date.start;
+      value = property.date?.start ?? null;
+      break;
+    case "status":
+      // @ts-expect-error property 是 status 类型
+      value = property.status?.name ?? null;
+      break;
+    case "checkbox":
+      // @ts-expect-error property 是 checkbox 类型
+      value = property.checkbox;
       break;
     default:
       throw new Error(`不支持的属性类型: ${expectedType}`);
@@ -133,4 +142,20 @@ export const getDateValue = (
   return getTypedProperty(response, key, "date", required) as {
     id: string;
   }[];
+};
+
+export const getStatusValue = (
+  response: PageObjectResponse,
+  key: string,
+  required = false,
+) => {
+  return getTypedProperty(response, key, "status", required);
+};
+
+export const getCheckboxValue = (
+  response: PageObjectResponse,
+  key: string,
+  required = false,
+) => {
+  return getTypedProperty(response, key, "checkbox", required);
 };

@@ -24,6 +24,7 @@ model Client {
   updatedAt DateTime @updatedAt
 
   contacts ClientContact[]
+  projects Project[]
 }
 
 model ClientContact {
@@ -135,6 +136,8 @@ model Employee {
   updatedAt DateTime @updatedAt
 
   leaveRecords LeaveRecord[]
+  ownedProjects Project[]  @relation("ProjectOwner")
+  projects      Project[]  @relation("ProjectMembers")
 }
 
 model LeaveRecord {
@@ -152,4 +155,34 @@ model LeaveRecord {
   updatedAt DateTime @updatedAt
 
   @@index([employeeId, startDate])
+}
+
+model Project {
+  id            String   @id @default(uuid())
+  notionPageId  String?  @unique
+
+  // 基础字段
+  name          String
+  type          String   // CLIENT / INTERNAL（暂时字符串）
+  status        String?
+  stage         String?
+
+  startDate     DateTime?
+  endDate       DateTime?
+
+  // relation
+
+  // 所属客户
+  clientId      String?
+  client        Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  // 项目负责人
+  ownerId       String?
+  owner         Employee? @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  // 项目成员（多对多）
+  members       Employee[] @relation("ProjectMembers")
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
