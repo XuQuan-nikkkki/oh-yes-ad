@@ -27,22 +27,74 @@ model Client {
 }
 
 model ClientContact {
-  id        String   @id @default(uuid())
-  notionPageId  String?  @unique
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
 
-  name      String
-  title     String? 
-  scope     String?
+  name       String
+  title      String?
+  scope      String?
   preference String?
 
-  phone     String?
-  email     String?
-  wechat    String?
-  address   String?
+  phone   String?
+  email   String?
+  wechat  String?
+  address String?
 
-  clientId  String
-  client    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
+
+model LegalEntity {
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
+
+  name      String  @unique
+  fullName  String?
+  taxNumber String?
+  address   String?
+  remark    String?
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bankAccounts BankAccount[]
+}
+
+model BankAccount {
+  id           String  @id @default(uuid())
+
+  legalEntityId String
+  legalEntity   LegalEntity @relation(fields: [legalEntityId], references: [id])
+
+  bankName      String
+  bankBranch    String
+  accountNumber String  @unique
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  balanceSnapshots BankAccountBalanceSnapshot[]
+}
+
+model BankAccountBalanceSnapshot {
+  id            String   @id @default(uuid())
+
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  balance       Decimal
+  recordedAt    DateTime
+
+  notionPageId  String?  @unique
+
+  createdAt     DateTime @default(now())
+
+  @@index([bankAccountId, recordedAt])
+}
+

@@ -7,6 +7,7 @@ import {
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { syncClientContacts, syncClients } from "./migrate-clients";
+import { syncLegalEntities } from "./migrate-companies";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -86,7 +87,7 @@ export const migrateDatabase = async (
 //       console.error("查询 Notion 数据源失败:", error);
 //     });
 // };
-// getResultStructure(process.env.NOTION_CLIENT_CONTACT_DB_ID!);
+// getResultStructure(process.env.NOTION_LEGAL_ENTITY_DB_ID!);
 
 const resetDatabases = async () => {
   console.log("重置数据库...");
@@ -97,9 +98,10 @@ const resetDatabases = async () => {
 // resetDatabases().catch(console.error);
 const runMigrate = async () => {
   console.log("开始迁移...");
-  await resetDatabases();
-  await syncClients();
-  await syncClientContacts();
+  // await resetDatabases();
+  // await syncClients();
+  // await syncClientContacts();
+  await syncLegalEntities();
 }
 
 runMigrate().catch(console.error);
