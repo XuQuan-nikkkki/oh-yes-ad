@@ -96,3 +96,145 @@ export const syncProjects = async () => {
   await migrateDatabase(process.env.NOTION_PROJECT_DB_ID!, syncProject, "项目");
   console.log("项目同步完成");
 };
+
+const syncSegment = async (segment: PageObjectResponse) => {
+  const { id } = segment;
+
+  // ===== 基础字段 =====
+  const name = getTitleValue(segment, "环节名称", true);
+  const status = getStatusValue(segment, "环节状态");
+  const dueDate = getDateValue(segment, "截止日期");
+
+  // ===== 所属项目 =====
+  const projectRelation = getRelationValue(segment, "所属项目");
+
+  if (!projectRelation?.length) {
+    throw new Error("环节未关联项目");
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { notionPageId: projectRelation[0].id },
+  });
+
+  if (!project) {
+    throw new Error("未找到对应项目");
+  }
+
+  // ===== 环节负责人 =====
+  const ownerRelation = getRelationValue(segment, "环节负责人");
+  let ownerId: string | null = null;
+
+  if (ownerRelation?.length) {
+    const owner = await prisma.employee.findUnique({
+      where: { notionPageId: ownerRelation[0].id },
+    });
+
+    if (!owner) {
+      throw new Error("未找到环节负责人");
+    }
+
+    ownerId = owner.id;
+  }
+
+  // ===== 创建 =====
+  await prisma.projectSegment.create({
+    data: {
+      notionPageId: id,
+      name,
+      status,
+      dueDate: dueDate ? new Date(dueDate) : null,
+
+      projectId: project.id,
+      ownerId,
+    },
+  });
+
+  console.log("已同步环节:", name);
+};
+
+export const syncProjectSegments = async () => {
+  console.log("开始同步项目环节...", process.env.NOTION_PROJECT_SEGMENT_DB_ID);
+  await migrateDatabase(process.env.NOTION_PROJECT_SEGMENT_DB_ID!, syncSegment, "项目环节");
+  console.log("项目环节同步完成");
+};
+
+const syncTask = async (task: PageObjectResponse) => {
+  const { id } = task;
+
+  // ===== 基础字段 =====
+  const name = getTitleValue(task, "任务名称", true);
+  const status = getStatusValue(task, "任务状态");
+  const dueDate = getDateValue(task, "截止日期");
+
+  // ===== 所属环节 =====
+  const segmentRelation = getRelationValue(task, "所属环节");
+
+  if (!segmentRelation?.length) {
+    throw new Error("任务未关联环节");
+  }
+
+  const segment = await prisma.projectSegment.findUnique({
+    where: { notionPageId: segmentRelation[0].id },
+  });
+
+  if (!segment) {
+    throw new Error("未找到对应环节");
+  }
+
+  // ===== 任务负责人 =====
+  const ownerRelation = getRelationValue(task, "任务负责人");
+  let ownerId: string | null = null;
+
+  if (ownerRelation?.length) {
+    const owner = await prisma.employee.findUnique({
+      where: { notionPageId: ownerRelation[0].id },
+    });
+
+    if (!owner) {
+      throw new Error("未找到任务负责人");
+    }
+
+    ownerId = owner.id;
+  }
+
+  // ===== 创建者（created_by）=====
+  let creatorId: string | null = null;
+
+  const createdByProperty = task.properties["创建者"];
+
+  if (createdByProperty?.type === "created_by") {
+    const notionUserId = createdByProperty.created_by?.id;
+
+    if (notionUserId) {
+      const creator = await prisma.employee.findUnique({
+        where: { notionPageId: notionUserId },
+      });
+
+      if (creator) {
+        creatorId = creator.id;
+      }
+    }
+  }
+
+  // ===== 创建 =====
+  await prisma.projectTask.create({
+    data: {
+      notionPageId: id,
+      name,
+      status,
+      dueDate: dueDate ? new Date(dueDate) : null,
+
+      segmentId: segment.id,
+      ownerId,
+      creatorId,
+    },
+  });
+
+  console.log("已同步任务:", name);
+};
+
+export const syncProjectTasks = async () => {
+  console.log("开始同步项目任务...", process.env.NOTION_PROJECT_TASK_DB_ID);
+  await migrateDatabase(process.env.NOTION_PROJECT_TASK_DB_ID!, syncTask, "项目任务");
+  console.log("项目任务同步完成");
+};

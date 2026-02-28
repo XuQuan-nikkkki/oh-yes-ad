@@ -135,9 +135,12 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  leaveRecords LeaveRecord[]
-  ownedProjects Project[]  @relation("ProjectOwner")
-  projects      Project[]  @relation("ProjectMembers")
+  leaveRecords    LeaveRecord[]
+  ownedProjects   Project[]        @relation("ProjectOwner")
+  projects        Project[]        @relation("ProjectMembers")
+  projectSegments ProjectSegment[]
+  ownedTasks      ProjectTask[]    @relation("TaskOwner")
+  createdTasks    ProjectTask[]    @relation("TaskCreator")
 }
 
 model LeaveRecord {
@@ -158,31 +161,87 @@ model LeaveRecord {
 }
 
 model Project {
-  id            String   @id @default(uuid())
-  notionPageId  String?  @unique
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
 
   // 基础字段
-  name          String
-  type          String   // CLIENT / INTERNAL（暂时字符串）
-  status        String?
-  stage         String?
+  name   String
+  type   String // CLIENT / INTERNAL（暂时字符串）
+  status String?
+  stage  String?
 
-  startDate     DateTime?
-  endDate       DateTime?
+  startDate DateTime?
+  endDate   DateTime?
 
   // relation
 
   // 所属客户
-  clientId      String?
-  client        Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   // 项目负责人
-  ownerId       String?
-  owner         Employee? @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId String?
+  owner   Employee? @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
 
   // 项目成员（多对多）
-  members       Employee[] @relation("ProjectMembers")
+  members Employee[] @relation("ProjectMembers")
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  segments ProjectSegment[]
+}
+
+model ProjectSegment {
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
+
+  // 基础字段
+  name    String
+  status  String?
+  dueDate DateTime?
+
+  // relation
+
+  // 所属项目
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // 环节负责人
+  ownerId String?
+  owner   Employee? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  projectTasks ProjectTask[]
+
+  @@index([projectId])
+}
+
+model ProjectTask {
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
+
+  // 基础字段
+  name    String
+  status  String?
+  dueDate DateTime?
+
+  // 所属环节
+  segmentId String
+  segment   ProjectSegment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+
+  // 任务负责人
+  ownerId String?
+  owner   Employee? @relation("TaskOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  // 创建者
+  creatorId String?
+  creator   Employee? @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([segmentId])
+  @@index([ownerId])
 }
