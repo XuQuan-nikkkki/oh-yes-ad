@@ -28,7 +28,7 @@ const syncLegalEntity = async (entity: PageObjectResponse) => {
 
 export const syncLegalEntities = async () => {
   console.log("开始同步公司主体...", process.env.NOTION_LEGAL_ENTITY_DB_ID);
-  migrateDatabase(
+  await migrateDatabase(
     process.env.NOTION_LEGAL_ENTITY_DB_ID!,
     syncLegalEntity,
     "公司主体",

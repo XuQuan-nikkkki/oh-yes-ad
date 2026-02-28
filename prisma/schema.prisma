@@ -62,17 +62,18 @@ model LegalEntity {
   updatedAt DateTime @updatedAt
 
   bankAccounts BankAccount[]
+  employees    Employee[]
 }
 
 model BankAccount {
-  id           String  @id @default(uuid())
+  id String @id @default(uuid())
 
   legalEntityId String
   legalEntity   LegalEntity @relation(fields: [legalEntityId], references: [id])
 
   bankName      String
   bankBranch    String
-  accountNumber String  @unique
+  accountNumber String @unique
 
   isActive Boolean @default(true)
 
@@ -83,18 +84,53 @@ model BankAccount {
 }
 
 model BankAccountBalanceSnapshot {
-  id            String   @id @default(uuid())
+  id String @id @default(uuid())
 
   bankAccountId String
   bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
 
-  balance       Decimal
-  recordedAt    DateTime
+  balance    Decimal
+  recordedAt DateTime
 
-  notionPageId  String?  @unique
+  notionPageId String? @unique
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([bankAccountId, recordedAt])
 }
 
+model Employee {
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
+
+  name String
+
+  function String?
+  position String?
+  level    String?
+
+  departmentLevel1 String?
+  departmentLevel2 String?
+
+  employmentType   String
+  employmentStatus String @default("在职")
+
+  entryDate DateTime?
+  leaveDate DateTime?
+
+  salary          Decimal?
+  socialSecurity  Decimal?
+  providentFund   Decimal?
+  workstationCost Decimal?
+  utilityCost     Decimal?
+
+  bankAccountNumber String?
+  bankName          String?
+  bankBranch        String?
+
+  legalEntityId String?
+  legalEntity   LegalEntity? @relation(fields: [legalEntityId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
