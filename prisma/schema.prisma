@@ -190,6 +190,8 @@ model Project {
   updatedAt DateTime @updatedAt
 
   segments ProjectSegment[]
+
+  documents ProjectDocument[]
 }
 
 model ProjectSegment {
@@ -244,4 +246,25 @@ model ProjectTask {
 
   @@index([segmentId])
   @@index([ownerId])
+}
+
+model ProjectDocument {
+  id            String   @id @default(uuid())
+  notionPageId  String?  @unique
+
+  // 基础字段
+  name          String
+  type          String?      // 资料类型
+  date          DateTime?
+  isFinal       Boolean      @default(false)
+  internalLink  String?      // 内部盘链接
+
+  // 所属项目
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([projectId])
 }

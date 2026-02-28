@@ -4,6 +4,7 @@ import {
   getCheckboxValue,
   getDateValue,
   getRelationValue,
+  getRichTextValue,
   getSelectValue,
   getStatusValue,
   getTitleValue,
@@ -154,7 +155,11 @@ const syncSegment = async (segment: PageObjectResponse) => {
 
 export const syncProjectSegments = async () => {
   console.log("开始同步项目环节...", process.env.NOTION_PROJECT_SEGMENT_DB_ID);
-  await migrateDatabase(process.env.NOTION_PROJECT_SEGMENT_DB_ID!, syncSegment, "项目环节");
+  await migrateDatabase(
+    process.env.NOTION_PROJECT_SEGMENT_DB_ID!,
+    syncSegment,
+    "项目环节",
+  );
   console.log("项目环节同步完成");
 };
 
@@ -235,6 +240,67 @@ const syncTask = async (task: PageObjectResponse) => {
 
 export const syncProjectTasks = async () => {
   console.log("开始同步项目任务...", process.env.NOTION_PROJECT_TASK_DB_ID);
-  await migrateDatabase(process.env.NOTION_PROJECT_TASK_DB_ID!, syncTask, "项目任务");
+  await migrateDatabase(
+    process.env.NOTION_PROJECT_TASK_DB_ID!,
+    syncTask,
+    "项目任务",
+  );
   console.log("项目任务同步完成");
+};
+
+const syncProjectDocument = async (doc: PageObjectResponse) => {
+  const { id } = doc;
+
+  // ===== 基础字段 =====
+  const name = getTitleValue(
+    doc,
+    "资料名称(项目名+交付/沟通内容+资料类型)",
+    true,
+  );
+
+  const type = getSelectValue(doc, "资料类型");
+  const date = getDateValue(doc, "日期");
+  const isFinal = getCheckboxValue(doc, "是最终版");
+  const internalLink = getRichTextValue(doc, "内部盘链接");
+
+  // ===== 所属项目 =====
+  const projectRelation = getRelationValue(doc, "所属项目");
+
+  if (!projectRelation?.length) {
+    throw new Error("资料未关联项目");
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { notionPageId: projectRelation[0].id },
+  });
+
+  if (!project) {
+    throw new Error("未找到对应项目");
+  }
+
+  // ===== 创建 =====
+  await prisma.projectDocument.create({
+    data: {
+      notionPageId: id,
+      name,
+      type,
+      date: date ? new Date(date) : null,
+      isFinal: isFinal ?? false,
+      internalLink,
+
+      projectId: project.id,
+    },
+  });
+
+  console.log("已同步项目资料:", name);
+};
+
+export const syncProjectDocuments = async () => {
+  console.log("开始同步项目资料...", process.env.NOTION_PROJECT_DOC_DB_ID);
+  await migrateDatabase(
+    process.env.NOTION_PROJECT_DOC_DB_ID!,
+    syncProjectDocument,
+    "项目资料",
+  );
+  console.log("项目资料同步完成");
 };
