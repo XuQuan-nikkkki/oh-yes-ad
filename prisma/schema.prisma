@@ -133,4 +133,23 @@ model Employee {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  leaveRecords LeaveRecord[]
+}
+
+model LeaveRecord {
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
+
+  type      String // 以后可改 enum
+  startDate DateTime
+  endDate   DateTime
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId, startDate])
 }

@@ -60,6 +60,10 @@ const getTypedProperty = (
       // @ts-expect-error property 是数组类型
       value = property.relation;
       break;
+    case "date":
+      // @ts-expect-error property 是 date 类型
+      value = property.date.start;
+      break;
     default:
       throw new Error(`不支持的属性类型: ${expectedType}`);
   }
@@ -117,6 +121,16 @@ export const getRelationValue = (
   required = false,
 ): { id: string }[] => {
   return getTypedProperty(response, key, "relation", required) as {
+    id: string;
+  }[];
+};
+
+export const getDateValue = (
+  response: PageObjectResponse,
+  key: string,
+  required = false,
+): { id: string }[] => {
+  return getTypedProperty(response, key, "date", required) as {
     id: string;
   }[];
 };
