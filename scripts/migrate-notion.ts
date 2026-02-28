@@ -10,6 +10,7 @@ import { syncClientContacts, syncClients } from "./migrate-clients";
 import { syncLegalEntities } from "./migrate-companies";
 import { syncEmployees, syncLeaveRecords } from "./migrate-employees";
 import { syncProjectDocuments, syncProjects, syncProjectSegments, syncProjectTasks } from "./migrate-projects";
+import { syncVendors } from "./migrate-vendors";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -101,7 +102,7 @@ const getResultStructure = async (databaseId: string) => {
       console.error("查询 Notion 数据源失败:", error);
     });
 };
-// getResultStructure(process.env.NOTION_PROJECT_DOC_DB_ID!);
+// getResultStructure(process.env.NOTION_VENDOR_DB_ID!);
 
 const resetDatabases = async () => {
   console.log("重置数据库...");
@@ -113,22 +114,27 @@ const resetDatabases = async () => {
   await prisma.bankAccountBalanceSnapshot.deleteMany({});
   await prisma.leaveRecord.deleteMany({});
   await prisma.project.deleteMany({});
+  await prisma.projectSegment.deleteMany({});
+  await prisma.projectTask.deleteMany({});
+  await prisma.projectDocument.deleteMany({});
+  await prisma.vendor.deleteMany({});
   console.log("数据库重置完成");
 };
 
 // resetDatabases().catch(console.error);
 const runMigrate = async () => {
   console.log("开始迁移...");
-  // await resetDatabases();
-  // await syncClients();
-  // await syncClientContacts();
-  // await syncLegalEntities();
-  // await syncEmployees();
-  // await syncLeaveRecords();
-  // await syncProjects();
-  // await syncProjectSegments();
-  // await syncProjectTasks();
+  await resetDatabases();
+  await syncClients();
+  await syncClientContacts();
+  await syncLegalEntities();
+  await syncEmployees();
+  await syncLeaveRecords();
+  await syncProjects();
+  await syncProjectSegments();
+  await syncProjectTasks();
   await syncProjectDocuments();
+  await syncVendors();
 }
 
 runMigrate().catch(console.error);

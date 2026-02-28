@@ -192,6 +192,7 @@ model Project {
   segments ProjectSegment[]
 
   documents ProjectDocument[]
+  vendors   Vendor[]          @relation("ProjectVendors")
 }
 
 model ProjectSegment {
@@ -249,22 +250,64 @@ model ProjectTask {
 }
 
 model ProjectDocument {
-  id            String   @id @default(uuid())
-  notionPageId  String?  @unique
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
 
   // 基础字段
-  name          String
-  type          String?      // 资料类型
-  date          DateTime?
-  isFinal       Boolean      @default(false)
-  internalLink  String?      // 内部盘链接
+  name         String
+  type         String? // 资料类型
+  date         DateTime?
+  isFinal      Boolean   @default(false)
+  internalLink String? // 内部盘链接
 
   // 所属项目
-  projectId     String
-  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([projectId])
+}
+
+model Vendor {
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
+
+  // 基础信息
+  name     String
+  fullName String?
+
+  vendorType   String?
+  businessType String?
+  services     String[]
+  location     String?
+
+  // 联系方式
+  contactName  String?
+  contactPhone String?
+  phone        String?
+  email        String?
+  wechat       String?
+
+  // 能力描述
+  strengths     String?
+  notes         String?
+  companyIntro  String?
+  portfolioLink String?
+  priceRange    String?
+
+  // 风控
+  isBlacklisted Boolean @default(false)
+
+  // 合作状态
+  cooperationStatus String?
+  rating            String?
+  lastCoopDate      String?
+
+  // 项目多对多
+  projects Project[] @relation("ProjectVendors")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

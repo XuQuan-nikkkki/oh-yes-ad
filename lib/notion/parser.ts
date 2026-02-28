@@ -73,6 +73,10 @@ const getTypedProperty = (
       // @ts-expect-error property 是 checkbox 类型
       value = property.checkbox;
       break;
+    case "multi_select":
+      // @ts-expect-error property 是 multi_select 类型
+      value = property.multi_select?.map((option) => option.name) ?? [];
+      break;
     default:
       throw new Error(`不支持的属性类型: ${expectedType}`);
   }
@@ -158,4 +162,12 @@ export const getCheckboxValue = (
   required = false,
 ) => {
   return getTypedProperty(response, key, "checkbox", required);
+};
+
+export const getMultiSelectValue = (
+  response: PageObjectResponse,
+  key: string,
+  required = false,
+) => {
+  return getTypedProperty(response, key, "multi_select", required) as string[];
 };
