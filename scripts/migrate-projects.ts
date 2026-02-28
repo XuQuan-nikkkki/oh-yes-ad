@@ -304,3 +304,107 @@ export const syncProjectDocuments = async () => {
   );
   console.log("项目资料同步完成");
 };
+
+const syncProjectMilestone = async (milestone: PageObjectResponse) => {
+  const { id } = milestone;
+
+  // ===== 基础字段 =====
+  const name = getTitleValue(milestone, "里程碑名称", true);
+  const type = getSelectValue(milestone, "类型");
+  const date = getDateValue(milestone, "日期");
+  const location = getRichTextValue(milestone, "地点");
+  const method = getSelectValue(milestone, "方式");
+
+  // ===== 所属项目 =====
+  const projectRelation = getRelationValue(milestone, "所属项目");
+
+  if (!projectRelation?.length) {
+    throw new Error("里程碑未关联项目");
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { notionPageId: projectRelation[0].id },
+  });
+
+  if (!project) {
+    throw new Error("未找到对应项目");
+  }
+
+  // ===== 参与人员 =====
+  const internalRelations = getRelationValue(milestone, "参与人员-内部") ?? [];
+  const vendorRelations = getRelationValue(milestone, "参与人员-供应商") ?? [];
+  const clientRelations = getRelationValue(milestone, "参与人员-客户") ?? [];
+
+  const internalParticipants = await prisma.employee.findMany({
+    where: {
+      notionPageId: { in: internalRelations.map((r) => r.id) },
+    },
+    select: { id: true },
+  });
+
+  const vendorParticipants = await prisma.vendor.findMany({
+    where: {
+      notionPageId: { in: vendorRelations.map((r) => r.id) },
+    },
+    select: { id: true },
+  });
+
+  const clientParticipants = await prisma.clientContact.findMany({
+    where: {
+      notionPageId: { in: clientRelations.map((r) => r.id) },
+    },
+    select: { id: true },
+  });
+
+  // ===== 创建或更新 =====
+  await prisma.projectMilestone.upsert({
+    where: { notionPageId: id },
+    update: {
+      name,
+      type,
+      date: date ? new Date(date) : null,
+      location,
+      method,
+      projectId: project.id,
+      internalParticipants: {
+        set: internalParticipants.map((p) => ({ id: p.id })),
+      },
+      vendorParticipants: {
+        set: vendorParticipants.map((p) => ({ id: p.id })),
+      },
+      clientParticipants: {
+        set: clientParticipants.map((p) => ({ id: p.id })),
+      },
+    },
+    create: {
+      notionPageId: id,
+      name,
+      type,
+      date: date ? new Date(date) : null,
+      location,
+      method,
+      projectId: project.id,
+      internalParticipants: {
+        connect: internalParticipants.map((p) => ({ id: p.id })),
+      },
+      vendorParticipants: {
+        connect: vendorParticipants.map((p) => ({ id: p.id })),
+      },
+      clientParticipants: {
+        connect: clientParticipants.map((p) => ({ id: p.id })),
+      },
+    },
+  });
+
+  console.log("已同步里程碑:", name);
+};
+
+export const syncProjectMilestones = async () => {
+  console.log("开始同步项目里程碑...", process.env.NOTION_PROJECT_MILESTONE_DB_ID);
+  await migrateDatabase(
+    process.env.NOTION_PROJECT_MILESTONE_DB_ID!,
+    syncProjectMilestone,
+    "项目里程碑",
+  );
+  console.log("项目里程碑同步完成");
+};

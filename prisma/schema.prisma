@@ -44,6 +44,8 @@ model ClientContact {
   clientId String
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
+  milestones ProjectMilestone[] @relation("MilestoneClientParticipants")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -136,11 +138,12 @@ model Employee {
   updatedAt DateTime @updatedAt
 
   leaveRecords    LeaveRecord[]
-  ownedProjects   Project[]        @relation("ProjectOwner")
-  projects        Project[]        @relation("ProjectMembers")
+  ownedProjects   Project[]          @relation("ProjectOwner")
+  projects        Project[]          @relation("ProjectMembers")
   projectSegments ProjectSegment[]
-  ownedTasks      ProjectTask[]    @relation("TaskOwner")
-  createdTasks    ProjectTask[]    @relation("TaskCreator")
+  ownedTasks      ProjectTask[]      @relation("TaskOwner")
+  createdTasks    ProjectTask[]      @relation("TaskCreator")
+  milestones      ProjectMilestone[] @relation("MilestoneInternalParticipants")
 }
 
 model LeaveRecord {
@@ -191,8 +194,9 @@ model Project {
 
   segments ProjectSegment[]
 
-  documents ProjectDocument[]
-  vendors   Vendor[]          @relation("ProjectVendors")
+  documents  ProjectDocument[]
+  vendors    Vendor[]           @relation("ProjectVendors")
+  milestones ProjectMilestone[]
 }
 
 model ProjectSegment {
@@ -261,8 +265,9 @@ model ProjectDocument {
   internalLink String? // 内部盘链接
 
   // 所属项目
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  String
+  project    Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestones ProjectMilestone[] @relation("MilestoneDocuments")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -306,8 +311,38 @@ model Vendor {
   lastCoopDate      String?
 
   // 项目多对多
-  projects Project[] @relation("ProjectVendors")
+  projects   Project[]          @relation("ProjectVendors")
+  milestones ProjectMilestone[] @relation("MilestoneVendorParticipants")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ProjectMilestone {
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
+
+  // 基础字段
+  name     String
+  type     String?
+  date     DateTime?
+  location String?
+  method   String?
+
+  // 所属项目
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // 参与人员
+  internalParticipants Employee[]      @relation("MilestoneInternalParticipants")
+  vendorParticipants   Vendor[]        @relation("MilestoneVendorParticipants")
+  clientParticipants   ClientContact[] @relation("MilestoneClientParticipants")
+
+  // 关联资料
+  documents ProjectDocument[] @relation("MilestoneDocuments")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
 }
