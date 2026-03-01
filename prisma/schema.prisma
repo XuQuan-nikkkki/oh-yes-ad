@@ -249,6 +249,8 @@ model ProjectTask {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  plannedWorkEntries PlannedWorkEntry[]
+
   @@index([segmentId])
   @@index([ownerId])
 }
@@ -345,4 +347,19 @@ model ProjectMilestone {
   updatedAt DateTime @updatedAt
 
   @@index([projectId])
+}
+
+model PlannedWorkEntry {
+  id           String   @id @default(uuid())
+  notionPageId String?  @unique
+
+  taskId       String
+  task         ProjectTask @relation(fields: [taskId], references: [id])
+
+  year         Int
+  weekNumber   Int
+  plannedDays  Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

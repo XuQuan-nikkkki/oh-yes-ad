@@ -11,6 +11,7 @@ import { syncLegalEntities } from "./migrate-companies";
 import { syncEmployees, syncLeaveRecords } from "./migrate-employees";
 import { syncProjectDocuments, syncProjectMilestones, syncProjects, syncProjectSegments, syncProjectTasks } from "./migrate-projects";
 import { syncVendors } from "./migrate-vendors";
+import { syncPlannedWorkEntries } from "./migrate-work-entries";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -90,19 +91,26 @@ export const migrateDatabase = async (
 
 // 测试
 const getResultStructure = async (databaseId: string) => {
-  getDataSourceProperties(databaseId!)
+  // getDataSourceProperties(databaseId!)
+  //   .then((results) => {
+  //     for (const [key, value] of Object.entries(results)) {
+  //       if (value.type !== "formula" && value.type !== "button") {
+  //         console.log(`${key}: ${JSON.stringify(value)}`);
+  //       }
+  //     }
+  //   })
+  //   .catch((error) => {
+  //     console.error("查询 Notion 数据源失败:", error);
+  //   });
+  getDataSourceResults(databaseId!)
     .then((results) => {
-      for (const [key, value] of Object.entries(results)) {
-        if (value.type !== "formula" && value.type !== "button") {
-          console.log(`${key}: ${JSON.stringify(value)}`);
-        }
-      }
+      console.log("查询结果:", results.length);
     })
     .catch((error) => {
       console.error("查询 Notion 数据源失败:", error);
     });
 };
-// getResultStructure(process.env.NOTION_PROJECT_MILESTONE_DB_ID!);
+getResultStructure(process.env.NOTION_PLANNED_WORK_ENTRY_DB_ID!);
 
 const resetDatabases = async () => {
   console.log("重置数据库...");
@@ -135,7 +143,8 @@ const runMigrate = async () => {
   // await syncProjectTasks();
   // await syncProjectDocuments();
   // await syncVendors();
-  await syncProjectMilestones();
+  // await syncProjectMilestones();
+  await syncPlannedWorkEntries();
 }
 
-runMigrate().catch(console.error);
+// runMigrate().catch(console.error);

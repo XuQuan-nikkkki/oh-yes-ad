@@ -77,6 +77,10 @@ const getTypedProperty = (
       // @ts-expect-error property 是 multi_select 类型
       value = property.multi_select?.map((option) => option.name) ?? [];
       break;
+    case "number":
+      // @ts-expect-error property 是 number 类型
+      value = property.number ?? null;
+      break;
     default:
       throw new Error(`不支持的属性类型: ${expectedType}`);
   }
@@ -170,4 +174,12 @@ export const getMultiSelectValue = (
   required = false,
 ) => {
   return getTypedProperty(response, key, "multi_select", required) as string[];
+};
+
+export const getNumberValue = (
+  response: PageObjectResponse,
+  key: string,
+  required = false,
+) => {
+  return getTypedProperty(response, key, "number", required) as number;
 };
