@@ -9,7 +9,13 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { syncClientContacts, syncClients } from "./migrate-clients";
 import { syncLegalEntities } from "./migrate-companies";
 import { syncEmployees, syncLeaveRecords } from "./migrate-employees";
-import { syncProjectDocuments, syncProjectMilestones, syncProjects, syncProjectSegments, syncProjectTasks } from "./migrate-projects";
+import {
+  syncProjectDocuments,
+  syncProjectMilestones,
+  syncProjects,
+  syncProjectSegments,
+  syncProjectTasks,
+} from "./migrate-projects";
 import { syncVendors } from "./migrate-vendors";
 import { syncPlannedWorkEntries } from "./migrate-work-entries";
 
@@ -42,10 +48,23 @@ const getDataSourceIdByDbId = async (databaseId: string) => {
 
 const getDataSourceResults = async (databaseId: string) => {
   const dataSourceId = await getDataSourceIdByDbId(databaseId);
-  const response = await notion.dataSources.query({
-    data_source_id: dataSourceId,
-  });
-  return response.results;
+
+  let cursor: string | undefined = undefined;
+  let allResults: PageObjectResponse[] = [];
+
+  do {
+    const response = await notion.dataSources.query({
+      data_source_id: dataSourceId,
+      start_cursor: cursor,
+      page_size: 100,
+    });
+
+    allResults = allResults.concat(response.results as PageObjectResponse[]);
+
+    cursor = response.next_cursor ?? undefined;
+  } while (cursor);
+
+  return allResults;
 };
 
 const getDataSourceProperties = async (databaseId: string) => {
@@ -54,7 +73,7 @@ const getDataSourceProperties = async (databaseId: string) => {
     data_source_id: dataSourceId,
   });
   return response.properties;
-}
+};
 
 export const migrateDatabase = async (
   database_id: string,
@@ -91,48 +110,43 @@ export const migrateDatabase = async (
 
 // 测试
 const getResultStructure = async (databaseId: string) => {
-  // getDataSourceProperties(databaseId!)
-  //   .then((results) => {
-  //     for (const [key, value] of Object.entries(results)) {
-  //       if (value.type !== "formula" && value.type !== "button") {
-  //         console.log(`${key}: ${JSON.stringify(value)}`);
-  //       }
-  //     }
-  //   })
-  //   .catch((error) => {
-  //     console.error("查询 Notion 数据源失败:", error);
-  //   });
-  getDataSourceResults(databaseId!)
+  getDataSourceProperties(databaseId!)
     .then((results) => {
-      console.log("查询结果:", results.length);
+      for (const [key, value] of Object.entries(results)) {
+        if (value.type !== "formula" && value.type !== "button") {
+          console.log(`${key}: ${JSON.stringify(value)}`);
+        }
+      }
     })
     .catch((error) => {
       console.error("查询 Notion 数据源失败:", error);
     });
 };
-getResultStructure(process.env.NOTION_PLANNED_WORK_ENTRY_DB_ID!);
+// getResultStructure(process.env.NOTION_PLANNED_WORK_ENTRY_DB_ID!);
 
 const resetDatabases = async () => {
   console.log("重置数据库...");
-  await prisma.clientContact.deleteMany({});
-  await prisma.client.deleteMany({});
-  await prisma.employee.deleteMany({});
-  await prisma.legalEntity.deleteMany({});
-  await prisma.bankAccount.deleteMany({});
-  await prisma.bankAccountBalanceSnapshot.deleteMany({});
-  await prisma.leaveRecord.deleteMany({});
-  await prisma.project.deleteMany({});
-  await prisma.projectSegment.deleteMany({});
-  await prisma.projectTask.deleteMany({});
-  await prisma.projectDocument.deleteMany({});
-  await prisma.vendor.deleteMany({});
+  // await prisma.clientContact.deleteMany({});
+  // await prisma.client.deleteMany({});
+  // await prisma.employee.deleteMany({});
+  // await prisma.legalEntity.deleteMany({});
+  // await prisma.bankAccount.deleteMany({});
+  // await prisma.bankAccountBalanceSnapshot.deleteMany({});
+  // await prisma.leaveRecord.deleteMany({});
+  // await prisma.project.deleteMany({});
+  // await prisma.projectSegment.deleteMany({});
+  // await prisma.projectTask.deleteMany({});
+  // await prisma.projectDocument.deleteMany({});
+  // await prisma.vendor.deleteMany({});
+  // await prisma.projectMilestone.deleteMany({});
+  await prisma.plannedWorkEntry.deleteMany({});
   console.log("数据库重置完成");
 };
 
 // resetDatabases().catch(console.error);
 const runMigrate = async () => {
   console.log("开始迁移...");
-  // await resetDatabases();
+  await resetDatabases();
   // await syncClients();
   // await syncClientContacts();
   // await syncLegalEntities();
@@ -145,6 +159,6 @@ const runMigrate = async () => {
   // await syncVendors();
   // await syncProjectMilestones();
   await syncPlannedWorkEntries();
-}
+};
 
-// runMigrate().catch(console.error);
+runMigrate().catch(console.error);
