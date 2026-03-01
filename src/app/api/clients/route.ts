@@ -8,22 +8,60 @@ const adapter = new PrismaPg({
 const prisma = new PrismaClient({
   adapter,
 });
+
+// ==================== GET ====================
 export async function GET() {
   const clients = await prisma.client.findMany({
-    include: {
-      contacts: true,
+    orderBy: {
+      createdAt: "desc",
     },
   });
+
   return Response.json(clients);
 }
 
-export async function POST() {
+// ==================== POST ====================
+export async function POST(req: Request) {
+  const body = await req.json();
+
   const client = await prisma.client.create({
     data: {
-      name: "测试客户",
-      industry: "酒类",
-      remark: "这是一个测试客户",
+      name: body.name,
+      industry: body.industry,
+      remark: body.remark ?? null,
     },
   });
+
   return Response.json(client);
+}
+
+// ==================== PUT ====================
+export async function PUT(req: Request) {
+  const body = await req.json();
+
+  const client = await prisma.client.update({
+    where: {
+      id: body.id,
+    },
+    data: {
+      name: body.name,
+      industry: body.industry,
+      remark: body.remark ?? null,
+    },
+  });
+
+  return Response.json(client);
+}
+
+// ==================== DELETE ====================
+export async function DELETE(req: Request) {
+  const body = await req.json();
+
+  await prisma.client.delete({
+    where: {
+      id: body.id,
+    },
+  });
+
+  return Response.json({ success: true });
 }
