@@ -17,7 +17,10 @@ import {
   syncProjectTasks,
 } from "./migrate-projects";
 import { syncVendors } from "./migrate-vendors";
-import { syncPlannedWorkEntries } from "./migrate-work-entries";
+import {
+  syncActualWorkEntries,
+  syncPlannedWorkEntries,
+} from "./migrate-work-entries";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -122,24 +125,26 @@ const getResultStructure = async (databaseId: string) => {
       console.error("查询 Notion 数据源失败:", error);
     });
 };
-// getResultStructure(process.env.NOTION_PLANNED_WORK_ENTRY_DB_ID!);
+// getResultStructure(process.env.NOTION_ACTUAL_WORK_ENTRY_DB_ID!);
 
 const resetDatabases = async () => {
   console.log("重置数据库...");
-  // await prisma.clientContact.deleteMany({});
-  // await prisma.client.deleteMany({});
-  // await prisma.employee.deleteMany({});
-  // await prisma.legalEntity.deleteMany({});
-  // await prisma.bankAccount.deleteMany({});
-  // await prisma.bankAccountBalanceSnapshot.deleteMany({});
-  // await prisma.leaveRecord.deleteMany({});
-  // await prisma.project.deleteMany({});
-  // await prisma.projectSegment.deleteMany({});
-  // await prisma.projectTask.deleteMany({});
-  // await prisma.projectDocument.deleteMany({});
-  // await prisma.vendor.deleteMany({});
-  // await prisma.projectMilestone.deleteMany({});
+  await prisma.clientContact.deleteMany({});
+  await prisma.client.deleteMany({});
   await prisma.plannedWorkEntry.deleteMany({});
+  await prisma.actualWorkEntry.deleteMany({});
+  await prisma.vendor.deleteMany({});
+  await prisma.employee.deleteMany({});
+  await prisma.legalEntity.deleteMany({});
+  await prisma.bankAccount.deleteMany({});
+  await prisma.bankAccountBalanceSnapshot.deleteMany({});
+  await prisma.leaveRecord.deleteMany({});
+  await prisma.projectMilestone.deleteMany({});
+  await prisma.projectDocument.deleteMany({});
+  await prisma.projectTask.deleteMany({});
+  await prisma.projectSegment.deleteMany({});
+  await prisma.project.deleteMany({});
+
   console.log("数据库重置完成");
 };
 
@@ -147,18 +152,19 @@ const resetDatabases = async () => {
 const runMigrate = async () => {
   console.log("开始迁移...");
   await resetDatabases();
-  // await syncClients();
-  // await syncClientContacts();
-  // await syncLegalEntities();
-  // await syncEmployees();
-  // await syncLeaveRecords();
-  // await syncProjects();
-  // await syncProjectSegments();
-  // await syncProjectTasks();
-  // await syncProjectDocuments();
-  // await syncVendors();
-  // await syncProjectMilestones();
+  await syncClients();
+  await syncClientContacts();
+  await syncLegalEntities();
+  await syncEmployees();
+  await syncLeaveRecords();
+  await syncProjects();
+  await syncProjectSegments();
+  await syncProjectTasks();
+  await syncProjectDocuments();
+  await syncVendors();
+  await syncProjectMilestones();
   await syncPlannedWorkEntries();
+  await syncActualWorkEntries();
 };
 
 runMigrate().catch(console.error);

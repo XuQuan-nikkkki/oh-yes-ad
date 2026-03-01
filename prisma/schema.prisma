@@ -144,6 +144,7 @@ model Employee {
   ownedTasks      ProjectTask[]      @relation("TaskOwner")
   createdTasks    ProjectTask[]      @relation("TaskCreator")
   milestones      ProjectMilestone[] @relation("MilestoneInternalParticipants")
+  actualWorkEntries ActualWorkEntry[]
 }
 
 model LeaveRecord {
@@ -197,6 +198,7 @@ model Project {
   documents  ProjectDocument[]
   vendors    Vendor[]           @relation("ProjectVendors")
   milestones ProjectMilestone[]
+  actualWorkEntries ActualWorkEntry[]
 }
 
 model ProjectSegment {
@@ -362,4 +364,26 @@ model PlannedWorkEntry {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ActualWorkEntry {
+  id            String   @id @default(uuid())
+  notionPageId  String?  @unique
+
+  title         String
+
+  date          DateTime
+
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id])
+
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id])
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([projectId])
+  @@index([date])
 }
