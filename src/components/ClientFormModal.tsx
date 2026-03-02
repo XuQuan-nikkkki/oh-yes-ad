@@ -13,6 +13,7 @@ type Props = {
   open: boolean;
   onCancel: () => void;
   onSuccess: () => void;
+  industryOptions?: string[];
   initialValues?: Client | null;
 };
 
@@ -20,6 +21,7 @@ const ClientFormModal = ({
   open,
   onCancel,
   onSuccess,
+  industryOptions=[],
   initialValues,
 }: Props) => {
   const isEdit = !!initialValues?.id;
@@ -79,6 +81,10 @@ const ClientFormModal = ({
         >
           <Select
             mode="tags"
+            options={industryOptions.map((item) => ({
+              label: item,
+              value: item,
+            }))}
             maxCount={1}
             placeholder="选择或输入行业"
           />

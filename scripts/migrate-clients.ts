@@ -38,7 +38,7 @@ export const syncClients = async () => {
 const syncClientContact = async (contact: PageObjectResponse) => {
   const { id } = contact;
   const name = getTitleValue(contact, "姓名", true);
-  const title = getRichTextValue(contact, "职务");
+  const title = getRichTextValue(contact, "职位");
   const scope = getRichTextValue(contact, "负责范围");
   const preference = getRichTextValue(contact, "偏好");
   const address = getRichTextValue(contact, "地址");

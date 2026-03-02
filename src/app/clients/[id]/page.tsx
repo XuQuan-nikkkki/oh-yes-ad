@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Card, Space, Descriptions, Table, Button } from "antd";
+import { Card, Space, Descriptions, Button } from "antd";
 import { EditOutlined, PlusOutlined } from "@ant-design/icons";
 import { useParams } from "next/navigation";
 import ClientFormModal from "@/components/ClientFormModal";
+import ClientContactTable from "@/components/ClientContactTable";
+import ContactFormModal from "@/components/ContactFormModal";
 
 type Client = {
   id: string;
@@ -29,6 +31,9 @@ const ClientDetailPage = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [contactLoading, setContactLoading] = useState(false);
 
   const fetchClient = useCallback(async () => {
     setLoading(true);
@@ -39,10 +44,38 @@ const ClientDetailPage = () => {
   }, [clientId]);
 
   const fetchContacts = useCallback(async () => {
-    const res = await fetch(`/api/client-contacts?clientId=${clientId}`);
-    const data = await res.json();
-    setContacts(data);
+    if (!clientId) return;
+
+    try {
+      setContactLoading(true);
+
+      const res = await fetch(`/api/client-contacts?clientId=${clientId}`);
+      const data = await res.json();
+      setContacts(data);
+    } finally {
+      setContactLoading(false);
+    }
   }, [clientId]);
+
+  const handleDeleteContact = async (id: string) => {
+    await fetch(`/api/client-contacts`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+
+    await fetchContacts();
+  };
+
+  const handleEditContact = (record: Contact) => {
+    setEditingContact(record);
+    setContactModalOpen(true);
+  };
+
+  const handleCreateContact = () => {
+    setEditingContact(null);
+    setContactModalOpen(true);
+  };
 
   useEffect(() => {
     if (!clientId) return;
@@ -51,13 +84,6 @@ const ClientDetailPage = () => {
       await fetchContacts();
     })();
   }, [clientId, fetchClient, fetchContacts]);
-
-  const contactColumns = [
-    { title: "姓名", dataIndex: "name" },
-    { title: "职位", dataIndex: "title" },
-    { title: "电话", dataIndex: "phone" },
-    { title: "邮箱", dataIndex: "email" },
-  ];
 
   return (
     <Space orientation="vertical" size={8} style={{ width: "100%" }}>
@@ -86,17 +112,21 @@ const ClientDetailPage = () => {
       <Card
         title="客户人员"
         extra={
-          <Button type="primary" icon={<PlusOutlined />}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreateContact}
+          >
             新建人员
           </Button>
         }
       >
-        <Table
-          rowKey="id"
-          columns={contactColumns}
-          dataSource={contacts}
-          pagination={false}
-        />
+        <ClientContactTable
+          contacts={contacts}
+          loading={contactLoading}
+          onEdit={handleEditContact}
+          onDelete={handleDeleteContact}
+        />{" "}
       </Card>
 
       <Card title="合作项目">
@@ -110,6 +140,22 @@ const ClientDetailPage = () => {
         onSuccess={async () => {
           setOpen(false);
           await fetchClient();
+        }}
+      />
+
+      <ContactFormModal
+        open={contactModalOpen}
+        clientId={clientId}
+        clientEditable={false}
+        initialValues={editingContact}
+        onCancel={() => {
+          setContactModalOpen(false);
+          setEditingContact(null);
+        }}
+        onSuccess={async () => {
+          setContactModalOpen(false);
+          setEditingContact(null);
+          await fetchContacts();
         }}
       />
     </Space>

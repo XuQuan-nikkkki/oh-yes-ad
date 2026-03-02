@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Table, Button, Space, Card, Popconfirm, Tag, Typography } from "antd";
-import { EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { Table, Button, Card, Tag } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
 import ClientFormModal from "@/components/ClientFormModal";
 import Link from "next/link";
+import TableActions from "@/components/TableActions";
 
 type Client = {
   id: string;
@@ -18,6 +19,8 @@ const ClientsPage = () => {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+
+  const industryOptions = Array.from(new Set(clients.map((c) => c.industry)));
 
   const fetchClients = async () => {
     setLoading(true);
@@ -48,13 +51,30 @@ const ClientsPage = () => {
     {
       title: "名称",
       dataIndex: "name",
+      width: 300,
+      ellipsis: true,
+      filters: clients.map((c) => ({
+        text: c.name,
+        value: c.name,
+      })),
+      filterSearch: true,
+      onFilter: (value, record) => record.name.includes(value as string),
+      sorter: (a, b) => a.name.localeCompare(b.name),
       render: (value: string, record: Client) => (
-        <Link href={`/clients/${record.id}`} style={{ color: "#1677ff" }}>{value}</Link>
+        <Link href={`/clients/${record.id}`} style={{ color: "#1677ff" }}>
+          {value}
+        </Link>
       ),
     },
     {
       title: "行业",
       dataIndex: "industry",
+      filters: industryOptions.map((item) => ({
+        text: item,
+        value: item,
+      })),
+      onFilter: (value, record) => record.industry === value,
+      sorter: (a, b) => a.industry.localeCompare(b.industry),
       render: (value: string) => (
         <Tag
           style={{
@@ -74,31 +94,16 @@ const ClientsPage = () => {
     },
     {
       title: "操作",
+      width: 300,
       render: (_: any, record: Client) => (
-        <Space size={12}>
-          <Button
-            variant="text"
-            color="primary"
-            icon={<EditOutlined />}
-            onClick={() => {
-              setEditingClient(record);
-              setOpen(true);
-            }}
-          >
-            编辑
-          </Button>
-
-          <Popconfirm
-            title="确定删除这个客户？"
-            okText="确认"
-            cancelText="取消"
-            onConfirm={() => handleDelete(record.id)}
-          >
-            <Button variant="text" color="danger" icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
+        <TableActions
+          onEdit={() => {
+            setEditingClient(record);
+            setOpen(true);
+          }}
+          onDelete={() => handleDelete(record.id)}
+          deleteTitle="确定删除这个客户？"
+        />
       ),
     },
   ];
@@ -139,6 +144,7 @@ const ClientsPage = () => {
           setEditingClient(null);
           await fetchClients();
         }}
+        industryOptions={industryOptions}
       />
     </Card>
   );
