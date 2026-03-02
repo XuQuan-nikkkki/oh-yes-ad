@@ -1,20 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Table,
-  Button,
-  Modal,
-  Form,
-  Input,
-  Space,
-  Card,
-  Popconfirm,
-  Tag,
-  Select,
-  Typography,
-} from "antd";
+import { Table, Button, Space, Card, Popconfirm, Tag, Typography } from "antd";
 import { EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import ClientFormModal from "@/components/ClientFormModal";
+import Link from "next/link";
 
 type Client = {
   id: string;
@@ -27,12 +17,7 @@ const ClientsPage = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form] = Form.useForm();
-
-  const industryOptions = Array.from(
-    new Set(clients.map((c) => c.industry).filter(Boolean)),
-  );
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
 
   const fetchClients = async () => {
     setLoading(true);
@@ -42,39 +27,12 @@ const ClientsPage = () => {
     setLoading(false);
   };
 
-  const handleSubmit = async (values: any) => {
-    setLoading(true);
-
-    if (editingId) {
-      await fetch("/api/clients", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editingId,
-          ...values,
-          industry: Array.isArray(values.industry)
-            ? values.industry[0]
-            : values.industry,
-        }),
-      });
-    } else {
-      await fetch("/api/clients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...values,
-          industry: Array.isArray(values.industry)
-            ? values.industry[0]
-            : values.industry,
-        }),
-      });
-    }
-
-    form.resetFields();
-    setEditingId(null);
-    setOpen(false);
-    await fetchClients();
-  };
+  useEffect(() => {
+    const loadClients = async () => {
+      await fetchClients();
+    };
+    loadClients();
+  }, []);
 
   const handleDelete = async (id: string) => {
     await fetch("/api/clients", {
@@ -86,40 +44,17 @@ const ClientsPage = () => {
     fetchClients();
   };
 
-  const handleEdit = (record: Client) => {
-    form.setFieldsValue(record);
-    setEditingId(record.id);
-    setOpen(true);
-  };
-
-  useEffect(() => {
-    (async () => {
-      await fetchClients();
-    })();
-  }, []);
-
   const columns = [
     {
       title: "名称",
       dataIndex: "name",
-      width: 300,
-      ellipsis: true,
-      filters: clients.map((c) => ({ text: c.name, value: c.name })),
-      filterSearch: true,
-      onFilter: (value, record) => record.name.includes(value as string),
       render: (value: string, record: Client) => (
-        <Typography.Link href={`/clients/${record.id}`}>
-          {value}
-        </Typography.Link>
+        <Link href={`/clients/${record.id}`} style={{ color: "#1677ff" }}>{value}</Link>
       ),
     },
     {
       title: "行业",
       dataIndex: "industry",
-      filters: industryOptions.map((item) => ({ text: item, value: item })),
-      onFilter: (value, record) => record.industry === value,
-      defaultSortOrder: "descend",
-      sorter: (a, b) => a.industry.localeCompare(b.industry),
       render: (value: string) => (
         <Tag
           style={{
@@ -139,17 +74,20 @@ const ClientsPage = () => {
     },
     {
       title: "操作",
-      width: 300,
       render: (_: any, record: Client) => (
         <Space size={12}>
           <Button
             variant="text"
             color="primary"
             icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
+            onClick={() => {
+              setEditingClient(record);
+              setOpen(true);
+            }}
           >
             编辑
           </Button>
+
           <Popconfirm
             title="确定删除这个客户？"
             okText="确认"
@@ -168,18 +106,12 @@ const ClientsPage = () => {
   return (
     <Card
       title={<h3>客户管理</h3>}
-      style={{ width: "100%" }}
       extra={
         <Button
           type="primary"
           icon={<PlusOutlined />}
-          style={{
-            borderRadius: 8,
-            padding: "0 18px",
-          }}
           onClick={() => {
-            form.resetFields();
-            setEditingId(null);
+            setEditingClient(null);
             setOpen(true);
           }}
         >
@@ -193,50 +125,21 @@ const ClientsPage = () => {
         dataSource={clients}
         loading={loading}
         pagination={{ pageSize: 10 }}
-        bordered={false}
-        size="middle"
       />
 
-      <Modal
-        title={editingId ? "编辑客户" : "新建客户"}
+      <ClientFormModal
         open={open}
-        onCancel={() => setOpen(false)}
-        footer={null}
-      >
-        <Form form={form} layout="vertical" onFinish={handleSubmit}>
-          <Form.Item
-            label="名称"
-            name="name"
-            rules={[{ required: true, message: "请输入名称" }]}
-          >
-            <Input />
-          </Form.Item>
-
-          <Form.Item
-            label="行业"
-            name="industry"
-            rules={[{ required: true, message: "请输入行业" }]}
-          >
-            <Select
-              mode="tags"
-              maxCount={1}
-              placeholder="选择或输入行业"
-              options={industryOptions.map((item) => ({
-                label: item,
-                value: item,
-              }))}
-            />
-          </Form.Item>
-
-          <Form.Item label="备注" name="remark">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-
-          <Button type="primary" htmlType="submit" loading={loading} block>
-            保存
-          </Button>
-        </Form>
-      </Modal>
+        initialValues={editingClient}
+        onCancel={() => {
+          setOpen(false);
+          setEditingClient(null);
+        }}
+        onSuccess={async () => {
+          setOpen(false);
+          setEditingClient(null);
+          await fetchClients();
+        }}
+      />
     </Card>
   );
 };
