@@ -28,11 +28,27 @@ const ClientContactTable = ({ contacts, loading, onEdit, onDelete }: Props) => {
       title: "姓名",
       dataIndex: "name",
       width: 160,
+      filters: Array.from(new Set(contacts.map((c) => c.name))).map((name) => ({
+        text: name,
+        value: name,
+      })),
+      filterSearch: true,
+      onFilter: (value: string | number | boolean, record: ClientContact) =>
+        record.name.includes(value as string),
     },
     {
       title: "职位",
       dataIndex: "title",
       width: 160,
+      filters: Array.from(
+        new Set(contacts.map((c) => c.title).filter(Boolean)),
+      ).map((title) => ({
+        text: title as string,
+        value: title,
+      })),
+      filterSearch: true,
+      onFilter: (value: string | number | boolean, record: ClientContact) =>
+        record.title === value,
       render: (value: string | null) => value ?? "-",
     },
     {
