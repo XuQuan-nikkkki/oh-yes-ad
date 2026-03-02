@@ -11,20 +11,17 @@ const prisma = new PrismaClient({
 });
 
 // ================= GET =================
+// /api/client-contacts
 // /api/client-contacts?clientId=xxx
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const clientId = searchParams.get("clientId");
 
-  if (!clientId) {
-    return Response.json(
-      { error: "clientId is required" },
-      { status: 400 }
-    );
-  }
-
   const contacts = await prisma.clientContact.findMany({
-    where: { clientId },
+    where: clientId ? { clientId } : undefined,
+    include: {
+      client: true,
+    },
     orderBy: { createdAt: "desc" },
   });
 

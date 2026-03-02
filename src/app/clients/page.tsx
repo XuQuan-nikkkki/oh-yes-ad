@@ -131,7 +131,6 @@ const ClientsPage = () => {
         loading={loading}
         pagination={{ pageSize: 10 }}
       />
-
       <ClientFormModal
         open={open}
         initialValues={editingClient}
