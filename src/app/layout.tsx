@@ -4,7 +4,7 @@ import "./globals.css";
 import { Layout, Menu, ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import { useRouter, usePathname } from "next/navigation";
-import { HomeOutlined, UserOutlined, TeamOutlined, DatabaseOutlined, ClockCircleOutlined, CalendarOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from "@ant-design/icons";
+import { HomeOutlined, UserOutlined, TeamOutlined, DatabaseOutlined, ClockCircleOutlined, CalendarOutlined, MenuFoldOutlined, MenuUnfoldOutlined, ShoppingOutlined, BuildOutlined } from "@ant-design/icons";
 import { useState } from "react";
 
 const { Sider, Content } = Layout;
@@ -31,6 +31,8 @@ export default function RootLayout({
       children: [
         { key: "/clients", icon: <UserOutlined />, label: "客户管理" },
         { key: "/client-contacts", icon: <TeamOutlined />, label: "客户人员" },
+        { key: "/client-projects", icon: <ShoppingOutlined />, label: "客户项目" },
+        { key: "/internal-projects", icon: <BuildOutlined />, label: "内部项目" },
       ],
     },
     {

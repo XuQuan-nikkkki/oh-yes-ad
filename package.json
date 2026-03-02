@@ -13,6 +13,7 @@
     "@prisma/adapter-pg": "^7.4.1",
     "@prisma/client": "^7.4.1",
     "antd": "^6.3.1",
+    "dayjs": "^1.11.19",
     "dotenv": "^17.3.1",
     "next": "16.1.6",
     "pg": "^8.18.0",

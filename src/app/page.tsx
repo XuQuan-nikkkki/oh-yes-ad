@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, Row, Col, Button, Space } from "antd";
-import { UserOutlined, TeamOutlined, ClockCircleOutlined, CalendarOutlined } from "@ant-design/icons";
+import { UserOutlined, TeamOutlined, ClockCircleOutlined, CalendarOutlined, ShoppingOutlined, BuildOutlined } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 
 export default function Home() {
@@ -13,6 +13,8 @@ export default function Home() {
       items: [
         { label: "客户管理", icon: <UserOutlined />, path: "/clients" },
         { label: "客户人员", icon: <TeamOutlined />, path: "/client-contacts" },
+        { label: "客户项目", icon: <ShoppingOutlined />, path: "/client-projects" },
+        { label: "内部项目", icon: <BuildOutlined />, path: "/internal-projects" },
       ],
     },
     {
