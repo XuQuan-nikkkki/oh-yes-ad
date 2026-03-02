@@ -51,7 +51,7 @@ const ClientsPage = () => {
     {
       title: "名称",
       dataIndex: "name",
-      width: 300,
+      width: 160,
       ellipsis: true,
       filters: clients.map((c) => ({
         text: c.name,

@@ -110,7 +110,6 @@ const ClientContactTable = ({
     },
     {
       title: "操作",
-      width: 300,
       render: (_: any, record: ClientContact) => (
         <TableActions
           onEdit={() => onEdit(record)}
