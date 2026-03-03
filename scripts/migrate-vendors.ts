@@ -25,8 +25,7 @@ const syncVendor = async (vendor: PageObjectResponse) => {
   const location = getRichTextValue(vendor, "所在地");
 
   const contactName = getRichTextValue(vendor, "联系人");
-  const contactPhone = getPhoneValue(vendor, "联系电话");
-  const phone = getPhoneValue(vendor, "电话");
+  const phone = getPhoneValue(vendor, "联系电话");
   const email = getEmailValue(vendor, "邮箱");
   const wechat = getRichTextValue(vendor, "联系人微信");
 
@@ -40,6 +39,7 @@ const syncVendor = async (vendor: PageObjectResponse) => {
   const cooperationStatus = getSelectValue(vendor, "合作状态");
   const rating = getSelectValue(vendor, "综合评级");
   const lastCoopDate = getRichTextValue(vendor, "最近合作时间");
+  const cooperatedProjects = getRichTextValue(vendor, "往期合作项目");
 
   await prisma.vendor.upsert({
     where: { notionPageId: id },
@@ -51,7 +51,6 @@ const syncVendor = async (vendor: PageObjectResponse) => {
       services,
       location,
       contactName,
-      contactPhone,
       phone,
       email,
       wechat,
@@ -63,6 +62,7 @@ const syncVendor = async (vendor: PageObjectResponse) => {
       cooperationStatus,
       rating,
       lastCoopDate,
+      cooperatedProjects
     },
     create: {
       notionPageId: id,
@@ -73,7 +73,6 @@ const syncVendor = async (vendor: PageObjectResponse) => {
       services,
       location,
       contactName,
-      contactPhone,
       phone,
       email,
       wechat,

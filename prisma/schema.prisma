@@ -310,7 +310,6 @@ model Vendor {
 
   // 联系方式
   contactName  String?
-  contactPhone String?
   phone        String?
   email        String?
   wechat       String?
@@ -329,6 +328,7 @@ model Vendor {
   cooperationStatus String?
   rating            String?
   lastCoopDate      String?
+  cooperatedProjects   String?
 
   // 项目多对多
   projects   Project[]          @relation("ProjectVendors")

@@ -130,6 +130,7 @@ const getResultStructure = async (databaseId: string) => {
 
 const resetDatabases = async () => {
   console.log("重置数据库...");
+  await prisma.workdayAdjustment.deleteMany({});
   await prisma.clientContact.deleteMany({});
   await prisma.client.deleteMany({});
   await prisma.plannedWorkEntry.deleteMany({});
@@ -145,7 +146,6 @@ const resetDatabases = async () => {
   await prisma.projectTask.deleteMany({});
   await prisma.projectSegment.deleteMany({});
   await prisma.project.deleteMany({});
-  await prisma.workdayAdjustment.deleteMany({});
 
   console.log("数据库重置完成");
 };
@@ -153,20 +153,20 @@ const resetDatabases = async () => {
 // resetDatabases().catch(console.error);
 const runMigrate = async () => {
   console.log("开始迁移...");
-  // await resetDatabases();
-  // await syncClients();
-  // await syncClientContacts();
-  // await syncLegalEntities();
-  // await syncEmployees();
-  // await syncLeaveRecords();
-  // await syncProjects();
-  // await syncProjectSegments();
-  // await syncProjectTasks();
-  // await syncProjectDocuments();
-  // await syncVendors();
-  // await syncProjectMilestones();
-  // await syncPlannedWorkEntries();
-  // await syncActualWorkEntries();
+  await resetDatabases();
+  await syncClients();
+  await syncClientContacts();
+  await syncLegalEntities();
+  await syncEmployees();
+  await syncLeaveRecords();
+  await syncProjects();
+  await syncProjectSegments();
+  await syncProjectTasks();
+  await syncProjectDocuments();
+  await syncVendors();
+  await syncProjectMilestones();
+  await syncPlannedWorkEntries();
+  await syncActualWorkEntries();
   await syncWorkdayAdjustments();
 };
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Table, Button, Card, Tag } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
+import Link from "next/link";
 import VendorFormModal from "@/components/VendorFormModal";
 import TableActions from "@/components/TableActions";
 
@@ -10,6 +11,11 @@ type Vendor = {
   id: string;
   name: string;
   vendorType?: string | null;
+  businessType?: string | null;
+  services?: string[];
+  cooperationStatus?: string | null;
+  rating?: string | null;
+  isBlacklisted?: boolean;
   contactName?: string | null;
   notes?: string | null;
 };
@@ -19,9 +25,27 @@ const VendorsPage = () => {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
+  const [current, setCurrent] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const vendorTypeOptions = Array.from(
     new Set(vendors.map((v) => v.vendorType).filter(Boolean) as string[])
+  );
+  const businessTypeOptions = Array.from(
+    new Set(vendors.map((v) => (v as any).businessType).filter(Boolean) as string[])
+  );
+  const servicesOptions = Array.from(
+    new Set(
+      vendors
+        .flatMap((v) => (v as any).services || [])
+        .filter(Boolean) as string[]
+    )
+  );
+  const cooperationStatusOptions = Array.from(
+    new Set(vendors.map((v) => (v as any).cooperationStatus).filter(Boolean) as string[])
+  );
+  const ratingOptions = Array.from(
+    new Set(vendors.map((v) => (v as any).rating).filter(Boolean) as string[])
   );
 
   const fetchVendors = async () => {
@@ -49,11 +73,15 @@ const VendorsPage = () => {
     fetchVendors();
   };
 
+  const handleTableChange = (newPagination: any) => {
+    setCurrent(newPagination.current);
+    setPageSize(newPagination.pageSize);
+  };
+
   const columns = [
     {
       title: "名称",
       dataIndex: "name",
-      width: 160,
       ellipsis: true,
       filters: vendors.map((v) => ({
         text: v.name,
@@ -61,48 +89,90 @@ const VendorsPage = () => {
       })),
       filterSearch: true,
       onFilter: (value, record: Vendor) => record.name.includes(value as string),
-      sorter: (a: Vendor, b: Vendor) => a.name.localeCompare(b.name),
-      render: (value: string) => value,
+      render: (value: string, record: Vendor) => (
+        <Link href={`/vendors/${record.id}`} style={{ color: "#1677ff" }}>
+          {value}
+        </Link>
+      ),
     },
     {
-      title: "类型",
+      title: "供应商类型",
       dataIndex: "vendorType",
       filters: vendorTypeOptions.map((item) => ({
         text: item,
         value: item,
       })),
       onFilter: (value, record: Vendor) => record.vendorType === value,
-      sorter: (a: Vendor, b: Vendor) =>
-        (a.vendorType || "").localeCompare(b.vendorType || ""),
       render: (value: string | null) =>
-        value ? (
-          <Tag
-            style={{
-              borderRadius: 6,
-              padding: "2px 10px",
-              fontWeight: 500,
-            }}
-          >
-            {value}
-          </Tag>
-        ) : (
-          "-"
-        ),
+        value ? <Tag>{value}</Tag> : "-",
     },
     {
-      title: "联系人",
-      dataIndex: "contactName",
-      render: (value: string | null) => value ?? "-",
+      title: "业务类型",
+      dataIndex: "businessType",
+      width: 120,
+      filters: businessTypeOptions.map((item) => ({
+        text: item,
+        value: item,
+      })),
+      onFilter: (value, record: any) => record.businessType === value,
+      render: (value: string | null) =>
+        value ? <Tag>{value}</Tag> : "-",
     },
     {
-      title: "备注",
-      dataIndex: "notes",
-      ellipsis: true,
-      render: (value: string | null) => value ?? "-",
+      title: "服务范围",
+      dataIndex: "services",
+      filters: servicesOptions.map((item) => ({
+        text: item,
+        value: item,
+      })),
+      onFilter: (value, record: any) =>
+        record.services && record.services.includes(value as string),
+      render: (value: string[] | null) =>
+        value && value.length > 0
+          ? value.map((service) => <Tag key={service}>{service}</Tag>)
+          : "-",
+    },
+    {
+      title: "合作状态",
+      dataIndex: "cooperationStatus",
+      filters: cooperationStatusOptions.map((item) => ({
+        text: item,
+        value: item,
+      })),
+      onFilter: (value, record: any) => record.cooperationStatus === value,
+      render: (value: string | null) =>
+        value ? <Tag>{value}</Tag> : "-",
+    },
+    {
+      title: "综合评级",
+      dataIndex: "rating",
+      width: 200,
+      filters: [
+        { text: "S", value: "S" },
+        { text: "A", value: "A" },
+        { text: "B", value: "B" },
+        { text: "C", value: "C" },
+        { text: "未知", value: "未知" },
+      ],
+      onFilter: (value, record: any) => record.rating === value,
+      render: (value: string | null) =>
+        value ? <Tag color="orange">{value}</Tag> : "-",
+    },
+    {
+      title: "黑名单",
+      width: 100,
+      dataIndex: "isBlacklisted",
+      filters: [
+        { text: "是", value: true },
+        { text: "否", value: false },
+      ],
+      onFilter: (value, record: any) => record.isBlacklisted === value,
+      render: (value: boolean) =>
+        value ? <Tag color="red">是</Tag> : <Tag color="green">否</Tag>,
     },
     {
       title: "操作",
-      width: 160,
+      width: 200,
       render: (_: unknown, record: Vendor) => (
         <TableActions
           onEdit={() => {
@@ -137,7 +207,9 @@ const VendorsPage = () => {
         columns={columns}
         dataSource={vendors}
         loading={loading}
-        pagination={{ pageSize: 10 }}
+        pagination={{ current, pageSize, total: vendors.length }}
+        onChange={handleTableChange}
+        scroll={{ x: 1200 }}
       />
       <VendorFormModal
         open={open}
@@ -152,6 +224,10 @@ const VendorsPage = () => {
           await fetchVendors();
         }}
         vendorTypeOptions={vendorTypeOptions}
+        businessTypeOptions={businessTypeOptions}
+        servicesOptions={servicesOptions}
+        cooperationStatusOptions={cooperationStatusOptions}
+        ratingOptions={ratingOptions}
       />
     </Card>
   );
