@@ -21,3 +21,24 @@ export async function GET() {
     );
   }
 }
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const record = await prisma.workdayAdjustment.create({
+      data: {
+        name: body.name ?? null,
+        changeType: body.changeType,
+        startDate: new Date(body.startDate),
+        endDate: new Date(body.endDate),
+      },
+    });
+    return Response.json(record);
+  } catch (error) {
+    console.error("POST /api/workday-adjustments error:", error);
+    return Response.json(
+      { error: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
