@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Table, Card, Tag } from "antd";
-import dayjs from "dayjs";
+import { useEffect, useState, useCallback } from "react";
+import { Table, Card, Tag, Button, Popconfirm, Space, message } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
+import EmployeeFormModal from "@/components/EmployeeFormModal";
+import TableActions from "@/components/TableActions";
 
 type Employee = {
   id: string;
@@ -21,14 +23,19 @@ type Employee = {
 const EmployeesPage = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/employees?list=full");
       const text = await res.text();
       const data = text ? JSON.parse(text) : [];
-      if (!res.ok) throw new Error(typeof data === "object" && data?.error ? data.error : res.statusText);
+      if (!res.ok)
+        throw new Error(
+          typeof data === "object" && data?.error ? data.error : res.statusText,
+        );
       setEmployees(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("获取团队成员失败:", err);
@@ -36,92 +43,138 @@ const EmployeesPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchEmployees();
-  }, []);
+  }, [fetchEmployees]);
 
   const functionOptions = Array.from(
-    new Set(employees.map((e) => e.function).filter(Boolean) as string[])
+    new Set(employees.map((e) => e.function).filter(Boolean) as string[]),
   );
-  const statusOptions = Array.from(
-    new Set(employees.map((e) => e.employmentStatus).filter(Boolean) as string[])
-  );
+
+  const handleAddEmployee = () => {
+    setEditingEmployee(null);
+    setOpen(true);
+  };
+
+  const handleEdit = (record: Employee) => {
+    setEditingEmployee(record);
+    setOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await fetch("/api/employees", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) throw new Error("删除失败");
+      message.success("删除成功");
+      fetchEmployees();
+    } catch (err) {
+      console.error("删除团队成员失败:", err);
+      message.error("删除失败");
+    }
+  };
+
+  const handleModalCancel = () => {
+    setOpen(false);
+    setEditingEmployee(null);
+  };
+
+  const handleModalSuccess = () => {
+    setOpen(false);
+    setEditingEmployee(null);
+    fetchEmployees();
+  };
 
   const columns = [
     {
       title: "姓名",
       dataIndex: "name",
-      width: 120,
-      sorter: (a: Employee, b: Employee) => a.name.localeCompare(b.name),
+      filters: employees.map((e) => ({ text: e.name, value: e.name })),
+      onFilter: (value: string | number | boolean, record: Employee) =>
+        record.name === value,
     },
     {
       title: "职能",
       dataIndex: "function",
-      width: 120,
       filters: functionOptions.map((t) => ({ text: t, value: t })),
       onFilter: (value: string | number | boolean, record: Employee) =>
         record.function === value,
       render: (value: string | null) =>
         value ? (
-          <Tag style={{ borderRadius: 6, padding: "2px 10px", fontWeight: 500 }}>
+          <Tag
+            style={{ borderRadius: 6, padding: "2px 10px", fontWeight: 500 }}
+          >
             {value}
           </Tag>
         ) : (
           "-"
         ),
-    },
-    {
-      title: "职位",
-      dataIndex: "position",
-      width: 120,
-      render: (value: string | null) => value ?? "-",
-    },
-    {
-      title: "一级部门",
-      dataIndex: "departmentLevel1",
-      width: 120,
-      render: (value: string | null) => value ?? "-",
     },
     {
       title: "用工状态",
       dataIndex: "employmentStatus",
-      width: 100,
-      filters: statusOptions.map((t) => ({ text: t, value: t })),
+      filters: [
+        { text: "在职", value: "在职" },
+        { text: "离职", value: "离职" },
+      ],
       onFilter: (value: string | number | boolean, record: Employee) =>
         record.employmentStatus === value,
       render: (value: string | null) =>
         value ? (
-          <Tag color={value === "在职" ? "green" : "default"}>
-            {value}
-          </Tag>
+          <Tag color={value === "在职" ? "green" : "default"}>{value}</Tag>
         ) : (
           "-"
         ),
     },
     {
-      title: "入职日期",
-      dataIndex: "entryDate",
-      width: 120,
-      sorter: (a: Employee, b: Employee) =>
-        (a.entryDate || "").localeCompare(b.entryDate || ""),
-      render: (value: string | null) =>
-        value ? dayjs(value).format("YYYY-MM-DD") : "-",
+      title: "操作",
+      render: (_: any, record: Employee) => (
+        <TableActions
+          onEdit={() => handleEdit(record)}
+          onDelete={() => handleDelete(record.id)}
+          deleteTitle="确定删除这个团队成员？"
+        />
+      ),
     },
   ];
 
   return (
-    <Card title={<h3>团队成员</h3>}>
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={employees}
-        loading={loading}
-        pagination={{ pageSize: 10 }}
-        locale={{ emptyText: "暂无团队成员" }}
+    <>
+      <Card
+        title={<h3>团队成员</h3>}
+        extra={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleAddEmployee}
+          >
+            新增成员
+          </Button>
+        }
+      >
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={employees}
+          loading={loading}
+          pagination={{ pageSize: 10 }}
+          locale={{ emptyText: "暂无团队成员" }}
+        />
+      </Card>
+
+      <EmployeeFormModal
+        open={open}
+        onCancel={handleModalCancel}
+        onSuccess={handleModalSuccess}
+        functionOptions={functionOptions}
+        initialValues={editingEmployee}
       />
-    </Card>
+    </>
   );
 };
 

@@ -115,7 +115,7 @@ model Employee {
   departmentLevel1 String?
   departmentLevel2 String?
 
-  employmentType   String
+  employmentType   String?
   employmentStatus String @default("在职")
 
   entryDate DateTime?

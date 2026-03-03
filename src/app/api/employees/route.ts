@@ -40,3 +40,42 @@ export async function GET(req: Request) {
   });
   return Response.json(employees);
 }
+
+export async function POST(req: Request) {
+  const body = await req.json();
+
+  const employee = await prisma.employee.create({
+    data: {
+      name: body.name,
+      function: body.function || null,
+      employmentStatus: body.employmentStatus || null,
+    },
+  });
+
+  return Response.json(employee);
+}
+
+export async function PUT(req: Request) {
+  const body = await req.json();
+
+  const employee = await prisma.employee.update({
+    where: { id: body.id },
+    data: {
+      name: body.name,
+      function: body.function || null,
+      employmentStatus: body.employmentStatus || null,
+    },
+  });
+
+  return Response.json(employee);
+}
+
+export async function DELETE(req: Request) {
+  const body = await req.json();
+
+  await prisma.employee.delete({
+    where: { id: body.id },
+  });
+
+  return Response.json({ success: true });
+}
