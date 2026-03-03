@@ -13,11 +13,15 @@ const prisma = new PrismaClient({
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const type = url.searchParams.get("type");
+  const clientId = url.searchParams.get("clientId");
 
   const where: any = {};
   if (type) {
     // type is expected to be Chinese string like 客户项目 or 内部项目
     where.type = type;
+  }
+  if (clientId) {
+    where.clientId = clientId;
   }
 
   const projects = await prisma.project.findMany({

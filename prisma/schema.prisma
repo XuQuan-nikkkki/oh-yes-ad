@@ -164,6 +164,22 @@ model LeaveRecord {
   @@index([employeeId, startDate])
 }
 
+// 工作日变动：管理每年的休假、调休等日期变动
+model WorkdayAdjustment {
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
+
+  name       String? // 名称/描述，如「春节调休」
+  changeType String  // 变动类型：上班、休假、调休
+  startDate  DateTime // 开始日期
+  endDate    DateTime // 结束日期
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([startDate, endDate])
+}
+
 model Project {
   id           String  @id @default(uuid())
   notionPageId String? @unique

@@ -11,7 +11,7 @@ import {
   Select,
   Empty,
   Radio,
-  List,
+  Table,
   Divider,
 } from "antd";
 import { EditOutlined, CloseOutlined } from "@ant-design/icons";
@@ -25,6 +25,14 @@ type PeriodInfo = {
   naturalDays: number;
   workdays: number;
   display: string;
+};
+
+type WorkdayAdjustment = {
+  id: string;
+  name?: string | null;
+  changeType: string;
+  startDate: string;
+  endDate: string;
 };
 
 type Project = {
@@ -54,18 +62,37 @@ type Project = {
   milestones?: {
     id: string;
     name: string;
-    dueDate?: string | null;
+    date?: string | null;
   }[];
   segments?: {
     id: string;
     name: string;
-    startDate?: string | null;
-    endDate?: string | null;
+    dueDate?: string | null;
+    projectTasks?: {
+      id: string;
+      name: string;
+      dueDate?: string | null;
+      plannedWorkEntries?: {
+        id: string;
+        year: number;
+        weekNumber: number;
+        plannedDays: number;
+      }[];
+    }[];
   }[];
-  tasks?: {
+  actualWorkEntries?: {
+    id: string;
+    title: string;
+    date: string;
+    employee?: { id: string; name: string };
+  }[];
+  documents?: {
     id: string;
     name: string;
-    dueDate?: string | null;
+    type?: string | null;
+    date?: string | null;
+    isFinal: boolean;
+    internalLink?: string | null;
   }[];
   periodInfo?: PeriodInfo;
 };
@@ -89,16 +116,95 @@ const ProjectDetailPage = () => {
   const [project, setProject] = useState<Project | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [workdayAdjustments, setWorkdayAdjustments] = useState<
+    WorkdayAdjustment[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [addingFunction, setAddingFunction] = useState<string | null>(null);
   const [scheduleView, setScheduleView] = useState<
     "milestone" | "segment" | "task"
   >("milestone");
+  const [workView, setWorkView] = useState<"planned" | "actual">("planned");
 
   const projectTypeMap: Record<string, string> = {
     CLIENT: "客户项目",
     INTERNAL: "内部项目",
+  };
+
+  // 计算时间段内的工作日数
+  const calculateWorkdays = (
+    startDate: Date,
+    endDate: Date,
+    adjustments: WorkdayAdjustment[],
+  ): number => {
+    let workdays = 0;
+    const current = new Date(startDate);
+
+    while (current <= endDate) {
+      const dayOfWeek = current.getDay();
+      const dateStr = current.toISOString().split("T")[0];
+
+      // 查找是否有针对此日期的调整
+      const adjustment = adjustments.find((adj) => {
+        const adjStart = new Date(adj.startDate).toISOString().split("T")[0];
+        const adjEnd = new Date(adj.endDate).toISOString().split("T")[0];
+        return dateStr >= adjStart && dateStr <= adjEnd;
+      });
+
+      // 根据调整信息判断是否为工作日
+      if (adjustment) {
+        if (adjustment.changeType === "上班") {
+          workdays++;
+        }
+        // 如果是"休假"或"调休"，不计入工作日
+      } else {
+        // 没有调整信息时，默认周一到周五为工作日
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+          workdays++;
+        }
+      }
+
+      current.setDate(current.getDate() + 1);
+    }
+
+    return workdays;
+  };
+
+  // 计算项目周期
+  const calculatePeriodInfo = (
+    startDate: string | null | undefined,
+    endDate: string | null | undefined,
+    adjustments: WorkdayAdjustment[],
+  ): PeriodInfo | undefined => {
+    if (!startDate) return undefined;
+
+    const start = new Date(startDate);
+    const end = endDate ? new Date(endDate) : new Date();
+    const today = new Date();
+
+    // 计算到目前为止的周期
+    const effectiveEnd = endDate ? new Date(endDate) : today;
+    const naturalDays =
+      Math.floor(
+        (effectiveEnd.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
+      ) + 1;
+    const workdays = calculateWorkdays(start, effectiveEnd, adjustments);
+
+    // 生成显示字符串
+    const startStr = dayjs(start).format("YYYY/MM/DD");
+    const endStr = endDate ? dayjs(end).format("YYYY/MM/DD") : "至今";
+    const period = `${startStr} - ${endStr}`;
+
+    // 添加自然日和工作日信息
+    const display = `${period} (自然日: ${naturalDays}天 | 工作日: ${workdays}天)`;
+
+    return {
+      period,
+      naturalDays,
+      workdays,
+      display,
+    };
   };
 
   const fetchProject = useCallback(async () => {
@@ -125,10 +231,25 @@ const ProjectDetailPage = () => {
     }
   };
 
+  const fetchWorkdayAdjustments = async () => {
+    try {
+      const res = await fetch("/api/workday-adjustments");
+      const data = await res.json();
+      setWorkdayAdjustments(data);
+    } catch (error) {
+      console.error("Failed to fetch workday adjustments:", error);
+    }
+  };
+
   useEffect(() => {
     if (!projectId) return;
     (async () => {
-      await Promise.all([fetchProject(), fetchClients(), fetchEmployees()]);
+      await Promise.all([
+        fetchProject(),
+        fetchClients(),
+        fetchEmployees(),
+        fetchWorkdayAdjustments(),
+      ]);
     })();
   }, [projectId, fetchProject]);
 
@@ -327,7 +448,11 @@ const ProjectDetailPage = () => {
                 </Descriptions.Item>
                 {project.startDate && (
                   <Descriptions.Item label="项目周期">
-                    {project.periodInfo?.display}
+                    {calculatePeriodInfo(
+                      project.startDate,
+                      project.endDate,
+                      workdayAdjustments,
+                    )?.display}
                   </Descriptions.Item>
                 )}
               </Descriptions>
@@ -343,11 +468,9 @@ const ProjectDetailPage = () => {
               column={3}
               size="small"
             >
-              {project.owner && (
-                <Descriptions.Item label="负责人">
-                  {project.owner.name}
-                </Descriptions.Item>
-              )}
+              <Descriptions.Item label="负责人">
+                {project.owner?.name ?? "-"}
+              </Descriptions.Item>
             </Descriptions>
           </>
         )}
@@ -445,11 +568,11 @@ const ProjectDetailPage = () => {
       </Card>
 
       {/* 项目安排 */}
-      <Card 
+      <Card
         title="项目安排"
         extra={
-          <Radio.Group 
-            value={scheduleView} 
+          <Radio.Group
+            value={scheduleView}
             onChange={(e) => setScheduleView(e.target.value)}
             buttonStyle="solid"
           >
@@ -460,74 +583,240 @@ const ProjectDetailPage = () => {
         }
       >
         {scheduleView === "milestone" && (
-          <div>
-            {project?.milestones && project.milestones.length > 0 ? (
-              <List
-                dataSource={project.milestones}
-                renderItem={(item) => (
-                  <List.Item>
-                    <div>
-                      <strong>{item.name}</strong>
-                      {item.dueDate && (
-                        <div style={{ fontSize: "12px", color: "#999" }}>
-                          截止日期: {dayjs(item.dueDate).format("YYYY-MM-DD")}
-                        </div>
-                      )}
-                    </div>
-                  </List.Item>
-                )}
-              />
-            ) : (
-              <Empty description="暂无里程碑" />
-            )}
-          </div>
+          <Table
+            rowKey="id"
+            columns={[
+              {
+                title: "里程碑名称",
+                dataIndex: "name",
+                width: "60%",
+                sorter: (a, b) => a.name.localeCompare(b.name),
+              },
+              {
+                title: "截止日期",
+                dataIndex: "date",
+                sorter: (a, b) => (a.date || "").localeCompare(b.date || ""),
+                render: (value: string | null) =>
+                  value ? dayjs(value).format("YYYY-MM-DD") : "-",
+              },
+            ]}
+            dataSource={project?.milestones ?? []}
+            pagination={{ pageSize: 10 }}
+            locale={{ emptyText: "暂无里程碑" }}
+          />
         )}
         {scheduleView === "segment" && (
-          <div>
-            {project?.segments && project.segments.length > 0 ? (
-              <List
-                dataSource={project.segments}
-                renderItem={(item) => (
-                  <List.Item>
-                    <div>
-                      <strong>{item.name}</strong>
-                      {item.startDate && item.endDate && (
-                        <div style={{ fontSize: "12px", color: "#999" }}>
-                          {dayjs(item.startDate).format("YYYY-MM-DD")} ~ {dayjs(item.endDate).format("YYYY-MM-DD")}
-                        </div>
-                      )}
-                    </div>
-                  </List.Item>
-                )}
-              />
-            ) : (
-              <Empty description="暂无环节" />
-            )}
-          </div>
+          <Table
+            rowKey="id"
+            columns={[
+              {
+                title: "环节名称",
+                dataIndex: "name",
+                width: "60%",
+                sorter: (a, b) => a.name.localeCompare(b.name),
+              },
+              {
+                title: "截止日期",
+                dataIndex: "dueDate",
+                sorter: (a, b) =>
+                  (a.dueDate || "").localeCompare(b.dueDate || ""),
+                render: (value: string | null) =>
+                  value ? dayjs(value).format("YYYY-MM-DD") : "-",
+              },
+            ]}
+            dataSource={project?.segments ?? []}
+            pagination={{ pageSize: 10 }}
+            locale={{ emptyText: "暂无环节" }}
+          />
         )}
         {scheduleView === "task" && (
-          <div>
-            {project?.tasks && project.tasks.length > 0 ? (
-              <List
-                dataSource={project.tasks}
-                renderItem={(item) => (
-                  <List.Item>
-                    <div>
-                      <strong>{item.name}</strong>
-                      {item.dueDate && (
-                        <div style={{ fontSize: "12px", color: "#999" }}>
-                          截止日期: {dayjs(item.dueDate).format("YYYY-MM-DD")}
-                        </div>
-                      )}
-                    </div>
-                  </List.Item>
-                )}
-              />
-            ) : (
-              <Empty description="暂无任务" />
-            )}
-          </div>
+          <Table
+            rowKey="id"
+            columns={[
+              {
+                title: "任务名称",
+                dataIndex: "name",
+                width: "40%",
+                sorter: (a, b) => a.name.localeCompare(b.name),
+              },
+              {
+                title: "所属环节",
+                dataIndex: "segmentName",
+                width: "30%",
+                sorter: (a, b) =>
+                  (a.segmentName || "").localeCompare(b.segmentName || ""),
+              },
+              {
+                title: "截止日期",
+                dataIndex: "dueDate",
+                sorter: (a, b) =>
+                  (a.dueDate || "").localeCompare(b.dueDate || ""),
+                render: (value: string | null) =>
+                  value ? dayjs(value).format("YYYY-MM-DD") : "-",
+              },
+            ]}
+            dataSource={
+              project?.segments?.flatMap((s) =>
+                (s.projectTasks ?? []).map((t) => ({
+                  ...t,
+                  segmentName: s.name,
+                })),
+              ) ?? []
+            }
+            pagination={{ pageSize: 10 }}
+            locale={{ emptyText: "暂无任务" }}
+          />
         )}
+      </Card>
+
+      {/* 项目工时 */}
+      <Card
+        title="项目工时"
+        extra={
+          <Radio.Group
+            value={workView}
+            onChange={(e) => setWorkView(e.target.value)}
+            buttonStyle="solid"
+          >
+            <Radio.Button value="planned">计划工时</Radio.Button>
+            <Radio.Button value="actual">实际工时</Radio.Button>
+          </Radio.Group>
+        }
+      >
+        {workView === "planned" && (
+          <Table
+            rowKey="id"
+            columns={[
+              {
+                title: "任务",
+                dataIndex: "taskName",
+                width: "30%",
+                sorter: (a, b) =>
+                  (a.taskName || "").localeCompare(b.taskName || ""),
+              },
+              {
+                title: "所属环节",
+                dataIndex: "segmentName",
+                width: "20%",
+                sorter: (a, b) =>
+                  (a.segmentName || "").localeCompare(b.segmentName || ""),
+              },
+              {
+                title: "年份",
+                dataIndex: "year",
+                width: 100,
+                sorter: (a, b) => a.year - b.year,
+              },
+              {
+                title: "周数",
+                dataIndex: "weekNumber",
+                width: 100,
+                sorter: (a, b) => a.weekNumber - b.weekNumber,
+              },
+              {
+                title: "计划天数",
+                dataIndex: "plannedDays",
+                sorter: (a, b) => a.plannedDays - b.plannedDays,
+              },
+            ]}
+            dataSource={
+              project?.segments?.flatMap((s) =>
+                (s.projectTasks ?? []).flatMap((t) =>
+                  (t.plannedWorkEntries ?? []).map((e) => ({
+                    ...e,
+                    taskName: t.name,
+                    segmentName: s.name,
+                  })),
+                ),
+              ) ?? []
+            }
+            pagination={{ pageSize: 10 }}
+            locale={{ emptyText: "暂无计划工时" }}
+          />
+        )}
+        {workView === "actual" && (
+          <Table
+            rowKey="id"
+            columns={[
+              {
+                title: "标题",
+                dataIndex: "title",
+                width: "30%",
+                sorter: (a, b) => (a.title || "").localeCompare(b.title || ""),
+              },
+              {
+                title: "日期",
+                dataIndex: "date",
+                width: 120,
+                sorter: (a, b) => (a.date || "").localeCompare(b.date || ""),
+                render: (value: string | null) =>
+                  value ? dayjs(value).format("YYYY-MM-DD") : "-",
+              },
+              {
+                title: "人员",
+                dataIndex: ["employee", "name"],
+                sorter: (a, b) =>
+                  (a.employee?.name || "").localeCompare(
+                    b.employee?.name || "",
+                  ),
+              },
+            ]}
+            dataSource={project?.actualWorkEntries ?? []}
+            pagination={{ pageSize: 10 }}
+            locale={{ emptyText: "暂无实际工时" }}
+          />
+        )}
+      </Card>
+
+      {/* 项目文档 */}
+      <Card title="项目文档">
+        <Table
+          rowKey="id"
+          columns={[
+            {
+              title: "名称",
+              dataIndex: "name",
+              width: "25%",
+              sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
+            },
+            {
+              title: "类型",
+              dataIndex: "type",
+              width: "15%",
+              sorter: (a, b) => (a.type || "").localeCompare(b.type || ""),
+            },
+            {
+              title: "日期",
+              dataIndex: "date",
+              width: 120,
+              sorter: (a, b) => (a.date || "").localeCompare(b.date || ""),
+              render: (value: string | null) =>
+                value ? dayjs(value).format("YYYY-MM-DD") : "-",
+            },
+            {
+              title: "终稿",
+              dataIndex: "isFinal",
+              width: 80,
+              render: (value: boolean) => (value ? "是" : "否"),
+            },
+            {
+              title: "内部链接",
+              dataIndex: "internalLink",
+              ellipsis: true,
+              render: (value: string | null) =>
+                value ? (
+                  <a href={value} target="_blank" rel="noopener noreferrer">
+                    {value}
+                  </a>
+                ) : (
+                  "-"
+                ),
+            },
+          ]}
+          dataSource={project?.documents ?? []}
+          pagination={{ pageSize: 10 }}
+          locale={{ emptyText: "暂无项目文档" }}
+        />
       </Card>
 
       <ProjectFormModal

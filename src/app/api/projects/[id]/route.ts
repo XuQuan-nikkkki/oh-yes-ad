@@ -32,8 +32,9 @@ export async function GET(req: Request) {
         select: {
           id: true,
           name: true,
-          dueDate: true,
+          date: true,
         },
+        orderBy: { date: "asc" },
       },
       segments: {
         select: {
@@ -45,9 +46,39 @@ export async function GET(req: Request) {
               id: true,
               name: true,
               dueDate: true,
+              plannedWorkEntries: {
+                select: {
+                  id: true,
+                  year: true,
+                  weekNumber: true,
+                  plannedDays: true,
+                },
+              },
             },
           },
         },
+      },
+      actualWorkEntries: {
+        select: {
+          id: true,
+          title: true,
+          date: true,
+          employee: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: { date: "desc" },
+      },
+      documents: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          date: true,
+          isFinal: true,
+          internalLink: true,
+        },
+        orderBy: { date: "desc" },
       },
     },
   });

@@ -146,10 +146,27 @@ export const getDateValue = (
   response: PageObjectResponse,
   key: string,
   required = false,
-): { id: string }[] => {
-  return getTypedProperty(response, key, "date", required) as {
-    id: string;
-  }[];
+): string | null => {
+  return getTypedProperty(response, key, "date", required) as string | null;
+};
+
+/** 获取日期范围：支持单个 Date 属性带 start/end，或分别传入开始/结束字段名 */
+export const getDateRangeValue = (
+  response: PageObjectResponse,
+  key: string,
+  required = false,
+): { start: string | null; end: string | null } => {
+  const property = response.properties[key];
+  if (!property || property.type !== "date") {
+    if (required) throw new Error(`字段 '${key}' 未获取到或类型错误`);
+    return { start: null, end: null };
+  }
+  // @ts-expect-error date 类型有 start/end
+  const start = property.date?.start ?? null;
+  // @ts-expect-error date 类型有 end，无 end 时用 start（单日）
+  const end = property.date?.end ?? property.date?.start ?? null;
+  if (required && !start) throw new Error(`字段 '${key}' 为空`);
+  return { start, end };
 };
 
 export const getStatusValue = (
@@ -183,3 +200,25 @@ export const getNumberValue = (
 ) => {
   return getTypedProperty(response, key, "number", required) as number;
 };
+
+export const getStartDateValue = (
+  response: PageObjectResponse,
+  key: string,
+  required = false,
+) => {
+  const range = getDateRangeValue(response, key, required);
+  if (range.start) return range.start;
+  // 如果没有单一日期范围属性，再尝试分别获取开始/结束日期
+  return getDateValue(response, key, required);
+}
+
+export const getEndDateValue = (
+  response: PageObjectResponse,
+  key: string,
+  required = false,
+) => {
+  const range = getDateRangeValue(response, key, required);
+  if (range.end) return range.end;
+  // 如果没有单一日期范围属性，再尝试分别获取开始/结束日期
+  return getDateValue(response, key, required);
+}

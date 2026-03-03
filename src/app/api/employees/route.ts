@@ -9,15 +9,33 @@ const prisma = new PrismaClient({
   adapter,
 });
 
-// 只暴露基本的员工列表用于下拉选择
-export async function GET() {
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const list = searchParams.get("list");
+
+  const select = list === "full"
+    ? {
+        id: true,
+        name: true,
+        function: true,
+        position: true,
+        level: true,
+        departmentLevel1: true,
+        departmentLevel2: true,
+        employmentType: true,
+        employmentStatus: true,
+        entryDate: true,
+        leaveDate: true,
+      }
+    : {
+        id: true,
+        name: true,
+        function: true,
+        employmentStatus: true,
+      };
+
   const employees = await prisma.employee.findMany({
-    select: {
-      id: true,
-      name: true,
-      function: true,
-      employmentStatus: true,
-    },
+    select,
     orderBy: { name: "asc" },
   });
   return Response.json(employees);

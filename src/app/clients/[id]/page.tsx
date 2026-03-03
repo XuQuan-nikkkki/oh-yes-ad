@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import ClientFormModal from "@/components/ClientFormModal";
 import ClientContactTable from "@/components/ClientContactTable";
 import ContactFormModal from "@/components/ContactFormModal";
+import ProjectsTable, { Project } from "@/components/ProjectsTable";
 
 type Client = {
   id: string;
@@ -29,7 +30,9 @@ const ClientDetailPage = () => {
 
   const [client, setClient] = useState<Client | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
+  const [projectLoading, setProjectLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
@@ -54,6 +57,21 @@ const ClientDetailPage = () => {
       setContacts(data);
     } finally {
       setContactLoading(false);
+    }
+  }, [clientId]);
+
+  const fetchProjects = useCallback(async () => {
+    if (!clientId) return;
+
+    try {
+      setProjectLoading(true);
+      const res = await fetch(`/api/projects?clientId=${clientId}`);
+      const data = await res.json();
+      setProjects(data);
+    } catch (error) {
+      console.error("Failed to fetch projects:", error);
+    } finally {
+      setProjectLoading(false);
     }
   }, [clientId]);
 
@@ -82,8 +100,9 @@ const ClientDetailPage = () => {
     (async () => {
       await fetchClient();
       await fetchContacts();
+      await fetchProjects();
     })();
-  }, [clientId, fetchClient, fetchContacts]);
+  }, [clientId, fetchClient, fetchContacts, fetchProjects]);
 
   return (
     <Space orientation="vertical" size={8} style={{ width: "100%" }}>
@@ -130,7 +149,11 @@ const ClientDetailPage = () => {
       </Card>
 
       <Card title="合作项目">
-        <p>项目部分待开发</p>
+        <ProjectsTable
+          projects={projects}
+          loading={projectLoading}
+          columnKeys={["name", "status", "startDate", "endDate"]}
+        />
       </Card>
 
       <ClientFormModal

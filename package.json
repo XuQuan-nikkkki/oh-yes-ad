@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "migrate:workday-adjustment": "tsx scripts/migrate-workday-adjustment.ts",
     "dev": "next dev",
     "build": "prisma generate && prisma db push && next build",
     "start": "next start",

@@ -21,6 +21,7 @@ import {
   syncActualWorkEntries,
   syncPlannedWorkEntries,
 } from "./migrate-work-entries";
+import { syncWorkdayAdjustments } from "./migrate-workday-adjustment";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -144,6 +145,7 @@ const resetDatabases = async () => {
   await prisma.projectTask.deleteMany({});
   await prisma.projectSegment.deleteMany({});
   await prisma.project.deleteMany({});
+  await prisma.workdayAdjustment.deleteMany({});
 
   console.log("数据库重置完成");
 };
@@ -151,20 +153,21 @@ const resetDatabases = async () => {
 // resetDatabases().catch(console.error);
 const runMigrate = async () => {
   console.log("开始迁移...");
-  await resetDatabases();
-  await syncClients();
-  await syncClientContacts();
-  await syncLegalEntities();
-  await syncEmployees();
-  await syncLeaveRecords();
-  await syncProjects();
-  await syncProjectSegments();
-  await syncProjectTasks();
-  await syncProjectDocuments();
-  await syncVendors();
-  await syncProjectMilestones();
-  await syncPlannedWorkEntries();
-  await syncActualWorkEntries();
+  // await resetDatabases();
+  // await syncClients();
+  // await syncClientContacts();
+  // await syncLegalEntities();
+  // await syncEmployees();
+  // await syncLeaveRecords();
+  // await syncProjects();
+  // await syncProjectSegments();
+  // await syncProjectTasks();
+  // await syncProjectDocuments();
+  // await syncVendors();
+  // await syncProjectMilestones();
+  // await syncPlannedWorkEntries();
+  // await syncActualWorkEntries();
+  await syncWorkdayAdjustments();
 };
 
 runMigrate().catch(console.error);
