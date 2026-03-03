@@ -87,7 +87,7 @@ export default function RootLayout({
               marginLeft: collapsed ? "80px" : "200px",
               transition: "margin-left 0.3s"
             }}>
-              <Content style={{ padding: 24, flex: 1, overflow: "auto" }}>{children}</Content>
+              <Content style={{ padding: 16, flex: 1, overflow: "auto" }}>{children}</Content>
             </Layout>
           </Layout>
         </ConfigProvider>
