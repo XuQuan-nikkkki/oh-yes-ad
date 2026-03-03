@@ -19,3 +19,29 @@ export async function GET() {
 
   return Response.json(records);
 }
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const record = await prisma.leaveRecord.create({
+      data: {
+        type: body.type,
+        startDate: new Date(body.startDate),
+        endDate: new Date(body.endDate),
+        employeeId: body.employeeId,
+      },
+      include: {
+        employee: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+    return Response.json(record);
+  } catch (error) {
+    console.error("POST /api/leave-records error:", error);
+    return Response.json(
+      { error: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
