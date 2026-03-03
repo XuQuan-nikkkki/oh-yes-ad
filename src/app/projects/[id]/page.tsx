@@ -10,11 +10,10 @@ import {
   Modal,
   Select,
   Empty,
-  Radio,
+  Segmented,
   Table,
-  Divider,
 } from "antd";
-import { EditOutlined, CloseOutlined } from "@ant-design/icons";
+import { EditOutlined } from "@ant-design/icons";
 import { useParams } from "next/navigation";
 import ProjectFormModal from "@/components/ProjectFormModal";
 import Link from "next/link";
@@ -448,11 +447,13 @@ const ProjectDetailPage = () => {
                 </Descriptions.Item>
                 {project.startDate && (
                   <Descriptions.Item label="项目周期">
-                    {calculatePeriodInfo(
-                      project.startDate,
-                      project.endDate,
-                      workdayAdjustments,
-                    )?.display}
+                    {
+                      calculatePeriodInfo(
+                        project.startDate,
+                        project.endDate,
+                        workdayAdjustments,
+                      )?.display
+                    }
                   </Descriptions.Item>
                 )}
               </Descriptions>
@@ -569,17 +570,25 @@ const ProjectDetailPage = () => {
 
       {/* 项目安排 */}
       <Card
-        title="项目安排"
-        extra={
-          <Radio.Group
+        title={
+          <Segmented
             value={scheduleView}
-            onChange={(e) => setScheduleView(e.target.value)}
-            buttonStyle="solid"
-          >
-            <Radio.Button value="milestone">项目里程碑</Radio.Button>
-            <Radio.Button value="segment">项目环节</Radio.Button>
-            <Radio.Button value="task">项目任务</Radio.Button>
-          </Radio.Group>
+            onChange={(value) => setScheduleView(value as any)}
+            options={[
+              { label: "项目里程碑", value: "milestone" },
+              { label: "项目环节", value: "segment" },
+              { label: "项目任务", value: "task" },
+            ]}
+          />
+        }
+        extra={
+          <Button type="primary">
+            {scheduleView === "milestone"
+              ? "新增里程碑"
+              : scheduleView === "segment"
+                ? "新增环节"
+                : "新增任务"}
+          </Button>
         }
       >
         {scheduleView === "milestone" && (
@@ -589,20 +598,67 @@ const ProjectDetailPage = () => {
               {
                 title: "里程碑名称",
                 dataIndex: "name",
-                width: "60%",
+                width: "15%",
                 sorter: (a, b) => a.name.localeCompare(b.name),
+              },
+              {
+                title: "类型",
+                dataIndex: "type",
+                width: "10%",
+                render: (value: string | null) => value ?? "-",
               },
               {
                 title: "截止日期",
                 dataIndex: "date",
+                width: "12%",
                 sorter: (a, b) => (a.date || "").localeCompare(b.date || ""),
                 render: (value: string | null) =>
                   value ? dayjs(value).format("YYYY-MM-DD") : "-",
+              },
+              {
+                title: "地点",
+                dataIndex: "location",
+                width: "12%",
+                render: (value: string | null) => value ?? "-",
+              },
+              {
+                title: "方式",
+                dataIndex: "method",
+                width: "10%",
+                render: (value: string | null) => value ?? "-",
+              },
+              {
+                title: "内部参与人员",
+                dataIndex: "internalParticipants",
+                width: "15%",
+                render: (participants: any[]) =>
+                  participants && participants.length > 0
+                    ? participants.map((p) => p.name).join(", ")
+                    : "-",
+              },
+              {
+                title: "客户参与人员",
+                dataIndex: "clientParticipants",
+                width: "15%",
+                render: (participants: any[]) =>
+                  participants && participants.length > 0
+                    ? participants.map((p) => p.name).join(", ")
+                    : "-",
+              },
+              {
+                title: "供应商",
+                dataIndex: "vendorParticipants",
+                width: "11%",
+                render: (vendors: any[]) =>
+                  vendors && vendors.length > 0
+                    ? vendors.map((v) => v.name).join(", ")
+                    : "-",
               },
             ]}
             dataSource={project?.milestones ?? []}
             pagination={{ pageSize: 10 }}
             locale={{ emptyText: "暂无里程碑" }}
+            scroll={{ x: 1500 }}
           />
         )}
         {scheduleView === "segment" && (
@@ -671,16 +727,15 @@ const ProjectDetailPage = () => {
 
       {/* 项目工时 */}
       <Card
-        title="项目工时"
-        extra={
-          <Radio.Group
+        title={
+          <Segmented
             value={workView}
-            onChange={(e) => setWorkView(e.target.value)}
-            buttonStyle="solid"
-          >
-            <Radio.Button value="planned">计划工时</Radio.Button>
-            <Radio.Button value="actual">实际工时</Radio.Button>
-          </Radio.Group>
+            onChange={(value) => setWorkView(value as any)}
+            options={[
+              { label: "计划工时", value: "planned" },
+              { label: "实际工时", value: "actual" },
+            ]}
+          />
         }
       >
         {workView === "planned" && (

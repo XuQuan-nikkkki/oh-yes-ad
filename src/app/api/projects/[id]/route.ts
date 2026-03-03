@@ -32,7 +32,32 @@ export async function GET(req: Request) {
         select: {
           id: true,
           name: true,
+          type: true,
           date: true,
+          location: true,
+          method: true,
+          internalParticipants: {
+            select: {
+              id: true,
+              name: true,
+              function: true,
+              employmentStatus: true,
+            },
+          },
+          vendorParticipants: {
+            select: {
+              id: true,
+              name: true,
+              contactName: true,
+            },
+          },
+          clientParticipants: {
+            select: {
+              id: true,
+              name: true,
+              title: true,
+            },
+          },
         },
         orderBy: { date: "asc" },
       },
