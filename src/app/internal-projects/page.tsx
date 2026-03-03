@@ -5,7 +5,7 @@ import { Table, Button, Card, Tag } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import ProjectFormModal from "@/components/ProjectFormModal";
 import TableActions from "@/components/TableActions";
-import dayjs from "dayjs";
+import Link from "next/link";
 
 type Project = {
   id: string;
@@ -115,6 +115,11 @@ const InternalProjectsPage = () => {
       filterSearch: true,
       onFilter: (value, record) => record.name.includes(value as string),
       sorter: (a, b) => a.name.localeCompare(b.name),
+      render: (text: string, record: Project) => (
+        <Link href={`/projects/${record.id}`} style={{ color: "#1677ff" }}>
+          {text}
+        </Link>
+      ),
     },
     {
       title: "操作",
