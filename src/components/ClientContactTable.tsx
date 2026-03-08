@@ -1,6 +1,6 @@
 "use client";
 
-import { Table, Descriptions } from "antd";
+import { Table } from "antd";
 import Link from "next/link";
 import TableActions from "./TableActions";
 
@@ -51,6 +51,7 @@ const ClientContactTable = ({
     {
       title: "姓名",
       dataIndex: "name",
+      width: 120,
       filters: Array.from(new Set(contacts.map((c) => c.name))).map((name) => ({
         text: name,
         value: name,
@@ -66,6 +67,7 @@ const ClientContactTable = ({
           {
             title: "客户",
             dataIndex: ["client", "name"],
+            width: 120,
             filters: clientFilters,
             onFilter: (value: any, record: ClientContact) =>
               record.client?.id === value,
@@ -89,6 +91,7 @@ const ClientContactTable = ({
     {
       title: "职位",
       dataIndex: "title",
+      width: 250,
       filters: Array.from(
         new Set(contacts.map((c) => c.title).filter(Boolean)),
       ).map((title) => ({
@@ -101,15 +104,42 @@ const ClientContactTable = ({
     {
       title: "职责范围",
       dataIndex: "scope",
+      width: 350,
       render: (value: string | null) => value ?? "-",
     },
     {
       title: "偏好",
       dataIndex: "preference",
+      width: 100,
+      render: (value: string | null) => value ?? "-",
+    },
+    {
+      title: "电话",
+      dataIndex: "phone",
+      width: 130,
+      render: (value: string | null) => value ?? "-",
+    },
+    {
+      title: "邮箱",
+      dataIndex: "email",
+      width: 150,
+      render: (value: string | null) => value ?? "-",
+    },
+    {
+      title: "微信",
+      dataIndex: "wechat",
+      width: 120,
+      render: (value: string | null) => value ?? "-",
+    },
+    {
+      title: "地址",
+      dataIndex: "address",
+      width: 180,
       render: (value: string | null) => value ?? "-",
     },
     {
       title: "操作",
+      width: 100,
       render: (_: any, record: ClientContact) => (
         <TableActions
           onEdit={() => onEdit(record)}
@@ -127,25 +157,7 @@ const ClientContactTable = ({
       dataSource={contacts}
       loading={loading}
       pagination={showClientColumn ? { pageSize: 10 } : false}
-      expandable={{
-        expandRowByClick: true,
-        expandedRowRender: (record: ClientContact) => (
-          <Descriptions size="small" column={3}>
-            <Descriptions.Item label="电话">
-              {record.phone ?? "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="邮箱">
-              {record.email ?? "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="微信">
-              {record.wechat ?? "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="地址" span={3}>
-              {record.address ?? "-"}
-            </Descriptions.Item>
-          </Descriptions>
-        ),
-      }}
+      scroll={{ x: 1200 }}
     />
   );
 };
