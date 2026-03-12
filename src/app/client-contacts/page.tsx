@@ -37,10 +37,8 @@ const ClientContactsPage = () => {
   }, []);
 
   const handleDelete = async (id: string) => {
-    await fetch("/api/client-contacts", {
+    await fetch(`/api/client-contacts/${id}`, {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
     });
 
     fetchContacts();

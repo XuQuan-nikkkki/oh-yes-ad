@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import type { Prisma } from "@prisma/client";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -9,13 +10,20 @@ const prisma = new PrismaClient({
   adapter,
 });
 
+const ownerPublicSelect = {
+  id: true,
+  name: true,
+  function: true,
+  employmentStatus: true,
+} as const;
+
 // ==================== GET ====================
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const type = url.searchParams.get("type");
   const clientId = url.searchParams.get("clientId");
 
-  const where: any = {};
+  const where: Prisma.ProjectWhereInput = {};
   if (type) {
     // type is expected to be Chinese string like 客户项目 or 内部项目
     where.type = type;
@@ -28,7 +36,9 @@ export async function GET(req: Request) {
     where,
     include: {
       client: true,
-      owner: true,
+      owner: {
+        select: ownerPublicSelect,
+      },
     },
     orderBy: {
       createdAt: "desc",
@@ -55,7 +65,9 @@ export async function POST(req: Request) {
     },
     include: {
       client: true,
-      owner: true,
+      owner: {
+        select: ownerPublicSelect,
+      },
     },
   });
 
@@ -82,7 +94,9 @@ export async function PUT(req: Request) {
     },
     include: {
       client: true,
-      owner: true,
+      owner: {
+        select: ownerPublicSelect,
+      },
     },
   });
 

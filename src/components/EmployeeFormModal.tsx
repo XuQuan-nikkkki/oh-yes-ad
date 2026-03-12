@@ -1,13 +1,28 @@
 "use client";
 
 import { Modal, Form, Input, Select, Button, Row, Col } from "antd";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 type Employee = {
   id?: string;
   name?: string;
+  phone?: string | null;
+  fullName?: string | null;
+  roles?: {
+    role: {
+      id: string;
+      code: "ADMIN" | "PROJECT_MANAGER" | "HR" | "FINANCE" | "STAFF";
+      name: string;
+    };
+  }[];
   function?: string | null;
   employmentStatus?: string | null;
+};
+
+type RoleOption = {
+  id: string;
+  code: "ADMIN" | "PROJECT_MANAGER" | "HR" | "FINANCE" | "STAFF";
+  name: string;
 };
 
 type Props = {
@@ -15,7 +30,17 @@ type Props = {
   onCancel: () => void;
   onSuccess: () => void;
   functionOptions: string[];
+  roleOptions: RoleOption[];
   initialValues?: Employee | null;
+};
+
+type FormValues = {
+  name: string;
+  phone?: string;
+  fullName?: string;
+  roleIds?: string[];
+  function?: string | string[];
+  employmentStatus?: string | null;
 };
 
 const EmployeeFormModal = ({
@@ -23,16 +48,24 @@ const EmployeeFormModal = ({
   onCancel,
   onSuccess,
   functionOptions,
+  roleOptions,
   initialValues,
 }: Props) => {
   const [form] = Form.useForm();
   const isEdit = !!initialValues?.id;
+  const selectedRoleIds = useMemo(
+    () => initialValues?.roles?.map((item) => item.role.id) ?? [],
+    [initialValues?.roles],
+  );
 
   useEffect(() => {
     if (open) {
       if (isEdit && initialValues) {
         form.setFieldsValue({
           name: initialValues.name || "",
+          phone: initialValues.phone || "",
+          fullName: initialValues.fullName || "",
+          roleIds: selectedRoleIds,
           function: initialValues.function || undefined,
           employmentStatus: initialValues.employmentStatus || "在职",
         });
@@ -40,15 +73,18 @@ const EmployeeFormModal = ({
         form.resetFields();
       }
     }
-  }, [open, isEdit, initialValues, form]);
+  }, [open, isEdit, initialValues, selectedRoleIds, form]);
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: FormValues) => {
     const functionValue = Array.isArray(values.function)
       ? values.function[0] || null
       : values.function || null;
 
     const payload = {
       name: values.name,
+      phone: values.phone || null,
+      fullName: values.fullName || null,
+      roleIds: values.roleIds ?? [],
       function: functionValue,
       employmentStatus: values.employmentStatus || null,
     };
@@ -85,6 +121,35 @@ const EmployeeFormModal = ({
           rules={[{ required: true, message: "请输入姓名" }]}
         >
           <Input placeholder="请输入姓名" />
+        </Form.Item>
+
+        <Form.Item
+          label="手机号"
+          name="phone"
+          rules={[{ required: true, message: "请输入手机号" }]}
+        >
+          <Input placeholder="用于登录的手机号" />
+        </Form.Item>
+
+        <Form.Item label="全名" name="fullName">
+          <Input placeholder="可选，完整姓名" />
+        </Form.Item>
+
+        <Form.Item
+          label="角色"
+          name="roleIds"
+          rules={[{ required: true, message: "请至少选择一个角色" }]}
+        >
+          <Select
+            mode="multiple"
+            options={[
+              ...roleOptions.map((item) => ({
+                label: item.name,
+                value: item.id,
+              })),
+            ]}
+            placeholder="选择角色"
+          />
         </Form.Item>
 
         <Form.Item label="职能" name="function">

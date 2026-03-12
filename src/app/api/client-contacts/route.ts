@@ -48,35 +48,3 @@ export async function POST(req: NextRequest) {
 
   return Response.json(contact);
 }
-
-// ================= PUT =================
-export async function PUT(req: NextRequest) {
-  const body = await req.json();
-
-  const contact = await prisma.clientContact.update({
-    where: { id: body.id },
-    data: {
-      name: body.name,
-      title: body.title,
-      scope: body.scope,
-      preference: body.preference,
-      phone: body.phone,
-      email: body.email,
-      wechat: body.wechat,
-      address: body.address,
-    },
-  });
-
-  return Response.json(contact);
-}
-
-// ================= DELETE =================
-export async function DELETE(req: NextRequest) {
-  const body = await req.json();
-
-  await prisma.clientContact.delete({
-    where: { id: body.id },
-  });
-
-  return Response.json({ success: true });
-}

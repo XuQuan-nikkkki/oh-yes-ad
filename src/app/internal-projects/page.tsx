@@ -5,7 +5,7 @@ import { Table, Button, Card, Tag } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import ProjectFormModal from "@/components/ProjectFormModal";
 import TableActions from "@/components/TableActions";
-import Link from "next/link";
+import AppLink from "@/components/AppLink";
 
 type Project = {
   id: string;
@@ -116,9 +116,9 @@ const InternalProjectsPage = () => {
       onFilter: (value, record) => record.name.includes(value as string),
       sorter: (a, b) => a.name.localeCompare(b.name),
       render: (text: string, record: Project) => (
-        <Link href={`/projects/${record.id}`} style={{ color: "#1677ff" }}>
+        <AppLink href={`/projects/${record.id}`}>
           {text}
-        </Link>
+        </AppLink>
       ),
     },
     {

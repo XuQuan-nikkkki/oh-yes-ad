@@ -1,14 +1,24 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Table, Card, Tag, Button, Popconfirm, Space, message } from "antd";
+import { Table, Card, Tag, Button, message } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import EmployeeFormModal from "@/components/EmployeeFormModal";
 import TableActions from "@/components/TableActions";
+import AppLink from "@/components/AppLink";
 
 type Employee = {
   id: string;
   name: string;
+  phone?: string | null;
+  fullName?: string | null;
+  roles?: {
+    role: {
+      id: string;
+      code: "ADMIN" | "PROJECT_MANAGER" | "HR" | "FINANCE" | "STAFF";
+      name: string;
+    };
+  }[];
   function?: string | null;
   position?: string | null;
   level?: string | null;
@@ -22,6 +32,9 @@ type Employee = {
 
 const EmployeesPage = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [roleOptions, setRoleOptions] = useState<
+    { id: string; code: string; name: string }[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
@@ -48,6 +61,14 @@ const EmployeesPage = () => {
   useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch("/api/roles");
+      const data = await res.json();
+      setRoleOptions(Array.isArray(data) ? data : []);
+    })();
+  }, []);
 
   const functionOptions = Array.from(
     new Set(employees.map((e) => e.function).filter(Boolean) as string[]),
@@ -97,6 +118,39 @@ const EmployeesPage = () => {
       filters: employees.map((e) => ({ text: e.name, value: e.name })),
       onFilter: (value: string | number | boolean, record: Employee) =>
         record.name === value,
+      render: (value: string, record: Employee) => (
+        <AppLink href={`/employees/${record.id}`}>
+          {value}
+        </AppLink>
+      ),
+    },
+    {
+      title: "手机号",
+      dataIndex: "phone",
+      render: (value: string | null) => value ?? "-",
+    },
+    {
+      title: "全名",
+      dataIndex: "fullName",
+      render: (value: string | null) => value ?? "-",
+    },
+    {
+      title: "角色",
+      filters: roleOptions.map((item) => ({ text: item.name, value: item.code })),
+      onFilter: (value: string | number | boolean, record: Employee) =>
+        Boolean(record.roles?.some((item) => item.role.code === value)),
+      render: (_: unknown, record: Employee) =>
+        record.roles && record.roles.length > 0 ? (
+          <>
+            {record.roles.map((item) => (
+              <Tag color="blue" key={item.role.id}>
+                {item.role.name}
+              </Tag>
+            ))}
+          </>
+        ) : (
+          "-"
+        ),
     },
     {
       title: "职能",
@@ -133,7 +187,7 @@ const EmployeesPage = () => {
     },
     {
       title: "操作",
-      render: (_: any, record: Employee) => (
+      render: (_: unknown, record: Employee) => (
         <TableActions
           onEdit={() => handleEdit(record)}
           onDelete={() => handleDelete(record.id)}
@@ -172,6 +226,7 @@ const EmployeesPage = () => {
         onCancel={handleModalCancel}
         onSuccess={handleModalSuccess}
         functionOptions={functionOptions}
+        roleOptions={roleOptions}
         initialValues={editingEmployee}
       />
     </>

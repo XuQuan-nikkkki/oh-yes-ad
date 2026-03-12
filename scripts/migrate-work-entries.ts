@@ -1,12 +1,13 @@
 import "dotenv/config";
 import { PageObjectResponse } from "@notionhq/client";
 import {
-  getDateValue,
+  getCheckboxValue,
+  getDateRangeValue,
   getNumberValue,
   getRelationValue,
   getSelectValue,
   getTitleValue,
-} from "../lib/notion/parser";
+} from "./parser";
 import { prisma, migrateDatabase } from "./migrate-notion";
 
 const syncPlannedWorkEntry = async (page: PageObjectResponse) => {
@@ -30,6 +31,13 @@ const syncPlannedWorkEntry = async (page: PageObjectResponse) => {
   const yearStr = getSelectValue(page, "年份", true);
   const weekNumber = getNumberValue(page, "第n周", true);
   const plannedDays = getNumberValue(page, "工时(天)", true);
+  const monday = getCheckboxValue(page, "周一") ?? false;
+  const tuesday = getCheckboxValue(page, "周二") ?? false;
+  const wednesday = getCheckboxValue(page, "周三") ?? false;
+  const thursday = getCheckboxValue(page, "周四") ?? false;
+  const friday = getCheckboxValue(page, "周五") ?? false;
+  const saturday = getCheckboxValue(page, "周六") ?? false;
+  const sunday = getCheckboxValue(page, "周天") ?? false;
 
   await prisma.plannedWorkEntry.create({
     data: {
@@ -38,6 +46,13 @@ const syncPlannedWorkEntry = async (page: PageObjectResponse) => {
       year: Number(yearStr),
       weekNumber,
       plannedDays,
+      monday,
+      tuesday,
+      wednesday,
+      thursday,
+      friday,
+      saturday,
+      sunday,
     },
   });
 
@@ -62,7 +77,12 @@ const syncActualWorkEntry = async (page: PageObjectResponse) => {
 
   const title = getTitleValue(page, "事件", true);
 
-  const date = getDateValue(page, "时间", true);
+  const timeRange = getDateRangeValue(page, "时间", true);
+  const startDate = timeRange.start;
+  const endDate = timeRange.end ?? timeRange.start;
+  if (!startDate || !endDate) {
+    throw new Error("字段 '时间' 为空");
+  }
 
   // 人员 relation
   const employeeRelation = getRelationValue(page, "人员", true);
@@ -98,7 +118,8 @@ const syncActualWorkEntry = async (page: PageObjectResponse) => {
     data: {
       notionPageId: id,
       title,
-      date: new Date(date),
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
       employeeId: employee.id,
       projectId: project.id,
     },

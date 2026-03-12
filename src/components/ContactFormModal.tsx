@@ -59,13 +59,10 @@ const ContactFormModal = ({
 
   const handleSubmit = async (values: Contact) => {
     if (isEdit) {
-      await fetch("/api/client-contacts", {
-        method: "PUT",
+      await fetch(`/api/client-contacts/${initialValues?.id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: initialValues?.id,
-          ...values,
-        }),
+        body: JSON.stringify(values),
       });
     } else {
       await fetch("/api/client-contacts", {

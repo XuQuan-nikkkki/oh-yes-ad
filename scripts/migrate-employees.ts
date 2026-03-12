@@ -5,7 +5,7 @@ import {
   getRelationValue,
   getSelectValue,
   getTitleValue,
-} from "../lib/notion/parser";
+} from "./parser";
 import { prisma, migrateDatabase } from "./migrate-notion";
 import { Employee, LeaveRecord } from "@prisma/client";
 import { Prisma } from "@prisma/client";

@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { PageObjectResponse } from "@notionhq/client";
-import { getRichTextValue, getTitleValue } from "../lib/notion/parser";
+import { getRichTextValue, getTitleValue } from "./parser";
 import { prisma, migrateDatabase } from "./migrate-notion";
 import { LegalEntity } from "@prisma/client";
 

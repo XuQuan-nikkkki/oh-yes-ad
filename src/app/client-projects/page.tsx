@@ -5,7 +5,7 @@ import { Table, Button, Card, Tag } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import ProjectFormModal from "@/components/ProjectFormModal";
 import TableActions from "@/components/TableActions";
-import Link from "next/link";
+import AppLink from "@/components/AppLink";
 
 type Project = {
   id: string;
@@ -117,9 +117,9 @@ const ClientProjectsPage = () => {
       onFilter: (value, record) => record.name.includes(value as string),
       sorter: (a, b) => a.name.localeCompare(b.name),
       render: (text: string, record: Project) => (
-        <Link href={`/projects/${record.id}`} style={{ color: "#1677ff" }}>
+        <AppLink href={`/projects/${record.id}`}>
           {text}
-        </Link>
+        </AppLink>
       ),
     },
     {
@@ -135,9 +135,9 @@ const ClientProjectsPage = () => {
       onFilter: (value, record) => record.client?.name === value,
       render: (value: string, record: Project) =>
         record.client ? (
-          <Link href={`/clients/${record.client.id}`} style={{ color: "#1677ff" }}>
+          <AppLink href={`/clients/${record.client.id}`}>
             {value}
-          </Link>
+          </AppLink>
         ) : (
           "-"
         ),

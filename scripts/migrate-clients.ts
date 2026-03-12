@@ -8,7 +8,7 @@ import {
   getRichTextValue,
   getSelectValue,
   getTitleValue,
-} from "../lib/notion/parser";
+} from "./parser";
 import { prisma, migrateDatabase } from "./migrate-notion";
 
 const syncClient = async (client: PageObjectResponse) => {
@@ -31,7 +31,7 @@ const syncClient = async (client: PageObjectResponse) => {
 
 export const syncClients = async () => {
   console.log("开始同步客户...", process.env.NOTION_CLIENT_DB_ID);
-  migrateDatabase(process.env.NOTION_CLIENT_DB_ID!, syncClient, "客户");
+  await migrateDatabase(process.env.NOTION_CLIENT_DB_ID!, syncClient, "客户");
   console.log("客户同步完成");
 };
 
@@ -43,7 +43,7 @@ const syncClientContact = async (contact: PageObjectResponse) => {
   const preference = getRichTextValue(contact, "偏好");
   const address = getRichTextValue(contact, "地址");
   const wechat = getRichTextValue(contact, "微信号");
-  const phone = getPhoneValue(contact, "手机号");
+  const phone = getPhoneValue(contact, "电话");
   const email = getEmailValue(contact, "邮箱");
   const clientRelation = getRelationValue(contact, "所属客户", true);
 

@@ -9,7 +9,7 @@ import {
   getRichTextValue,
   getSelectValue,
   getTitleValue,
-} from "../lib/notion/parser";
+} from "./parser";
 import { prisma, migrateDatabase } from "./migrate-notion";
 
 const syncVendor = async (vendor: PageObjectResponse) => {

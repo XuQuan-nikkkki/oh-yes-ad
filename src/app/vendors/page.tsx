@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { Table, Button, Card, Tag } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
-import Link from "next/link";
 import VendorFormModal from "@/components/VendorFormModal";
 import TableActions from "@/components/TableActions";
+import AppLink from "@/components/AppLink";
 
 type Vendor = {
   id: string;
@@ -90,9 +90,9 @@ const VendorsPage = () => {
       filterSearch: true,
       onFilter: (value, record: Vendor) => record.name.includes(value as string),
       render: (value: string, record: Vendor) => (
-        <Link href={`/vendors/${record.id}`} style={{ color: "#1677ff" }}>
+        <AppLink href={`/vendors/${record.id}`}>
           {value}
-        </Link>
+        </AppLink>
       ),
     },
     {

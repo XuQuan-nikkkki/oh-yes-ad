@@ -7,6 +7,13 @@ const adapter = new PrismaPg({
 
 const prisma = new PrismaClient({ adapter });
 
+const ownerPublicSelect = {
+  id: true,
+  name: true,
+  function: true,
+  employmentStatus: true,
+} as const;
+
 export async function GET(req: Request) {
   const { pathname } = new URL(req.url);
   const id = pathname.split("/").pop();
@@ -19,7 +26,15 @@ export async function GET(req: Request) {
     where: { id },
     include: {
       client: true,
-      owner: true,
+      owner: {
+        select: ownerPublicSelect,
+      },
+      vendors: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       members: {
         select: {
           id: true,
@@ -65,11 +80,26 @@ export async function GET(req: Request) {
         select: {
           id: true,
           name: true,
+          status: true,
           dueDate: true,
+          owner: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
           projectTasks: {
             select: {
               id: true,
               name: true,
+              segmentId: true,
+              owner: {
+                select: {
+                  id: true,
+                  name: true,
+                  employmentStatus: true,
+                },
+              },
               dueDate: true,
               plannedWorkEntries: {
                 select: {
@@ -77,6 +107,13 @@ export async function GET(req: Request) {
                   year: true,
                   weekNumber: true,
                   plannedDays: true,
+                  monday: true,
+                  tuesday: true,
+                  wednesday: true,
+                  thursday: true,
+                  friday: true,
+                  saturday: true,
+                  sunday: true,
                 },
               },
             },
@@ -87,12 +124,13 @@ export async function GET(req: Request) {
         select: {
           id: true,
           title: true,
-          date: true,
+          startDate: true,
+          endDate: true,
           employee: {
             select: { id: true, name: true },
           },
         },
-        orderBy: { date: "desc" },
+        orderBy: { startDate: "desc" },
       },
       documents: {
         select: {

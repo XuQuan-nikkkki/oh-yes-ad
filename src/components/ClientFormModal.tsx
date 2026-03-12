@@ -1,6 +1,7 @@
 "use client";
 
-import { Modal, Form, Input, Select, Button } from "antd";
+import { Modal } from "antd";
+import ClientForm, { ClientFormValues } from "@/components/ClientForm";
 
 type Client = {
   id?: string;
@@ -21,27 +22,21 @@ const ClientFormModal = ({
   open,
   onCancel,
   onSuccess,
-  industryOptions=[],
+  industryOptions = [],
   initialValues,
 }: Props) => {
   const isEdit = !!initialValues?.id;
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: ClientFormValues) => {
     const payload = {
       ...values,
-      industry: Array.isArray(values.industry)
-        ? values.industry[0]
-        : values.industry,
+      industry: Array.isArray(values.industry) ? values.industry[0] : "",
     };
 
-    await fetch("/api/clients", {
-      method: isEdit ? "PUT" : "POST",
+    await fetch(isEdit ? `/api/clients/${initialValues?.id}` : "/api/clients", {
+      method: isEdit ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        isEdit
-          ? { id: initialValues?.id, ...payload }
-          : payload
-      ),
+      body: JSON.stringify(payload),
     });
 
     onSuccess();
@@ -55,49 +50,11 @@ const ClientFormModal = ({
       footer={null}
       destroyOnHidden
     >
-      <Form
-        key={initialValues?.id || "new"} // 🔥 关键：强制切换时重建 Form
-        layout="vertical"
-        initialValues={{
-          ...initialValues,
-          industry: initialValues?.industry
-            ? [initialValues.industry]
-            : undefined,
-        }}
-        onFinish={handleSubmit}
-      >
-        <Form.Item
-          label="名称"
-          name="name"
-          rules={[{ required: true, message: "请输入名称" }]}
-        >
-          <Input />
-        </Form.Item>
-
-        <Form.Item
-          label="行业"
-          name="industry"
-          rules={[{ required: true, message: "请输入行业" }]}
-        >
-          <Select
-            mode="tags"
-            options={industryOptions.map((item) => ({
-              label: item,
-              value: item,
-            }))}
-            maxCount={1}
-            placeholder="选择或输入行业"
-          />
-        </Form.Item>
-
-        <Form.Item label="备注" name="remark">
-          <Input.TextArea rows={3} />
-        </Form.Item>
-
-        <Button type="primary" htmlType="submit" block>
-          保存
-        </Button>
-      </Form>
+      <ClientForm
+        initialValues={initialValues}
+        industryOptions={industryOptions}
+        onSubmit={handleSubmit}
+      />
     </Modal>
   );
 };

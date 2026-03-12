@@ -7,7 +7,7 @@ import {
   getTitleValue,
   getStartDateValue,
   getEndDateValue,
-} from "../lib/notion/parser";
+} from "./parser";
 import { prisma, migrateDatabase } from "./migrate-notion";
 
 const syncWorkdayAdjustment = async (page: PageObjectResponse) => {

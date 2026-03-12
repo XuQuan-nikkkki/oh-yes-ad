@@ -1,8 +1,8 @@
 "use client";
 
 import { Table } from "antd";
-import Link from "next/link";
 import TableActions from "./TableActions";
+import AppLink from "@/components/AppLink";
 
 type ClientContact = {
   id: string;
@@ -75,13 +75,12 @@ const ClientContactTable = ({
               (a.client?.name ?? "").localeCompare(b.client?.name ?? ""),
             render: (_: any, record: ClientContact) =>
               record.client ? (
-                <Link
+                <AppLink
                   href={`/clients/${record.client.id}`}
-                  style={{ color: "#1677ff" }}
                   onClick={e => e.stopPropagation()}
                 >
                   {record.client.name}
-                </Link>
+                </AppLink>
               ) : (
                 "-"
               ),

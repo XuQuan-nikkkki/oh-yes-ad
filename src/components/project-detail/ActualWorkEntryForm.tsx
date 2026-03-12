@@ -1,0 +1,146 @@
+"use client";
+
+import { Button, DatePicker, Form, Input, Select } from "antd";
+import dayjs from "dayjs";
+
+export type ActualWorkEntryFormPayload = {
+  projectId: string;
+  title: string;
+  employeeId: string;
+  startDate: string;
+  endDate: string;
+};
+
+type EmployeeOption = {
+  id: string;
+  name: string;
+  employmentStatus?: string;
+};
+
+type ProjectOption = {
+  id: string;
+  name: string;
+};
+
+type InitialValues = ActualWorkEntryFormPayload & {
+  id: string;
+};
+
+type FormValues = {
+  projectId: string;
+  title: string;
+  employeeId: string;
+  timeRange: [dayjs.Dayjs, dayjs.Dayjs];
+};
+
+type Props = {
+  projectOptions: ProjectOption[];
+  selectedProjectId?: string;
+  disableProjectSelect?: boolean;
+  disableEmployeeSelect?: boolean;
+  employees: EmployeeOption[];
+  initialValues?: InitialValues | null;
+  onSubmit: (payload: ActualWorkEntryFormPayload) => Promise<void> | void;
+};
+
+const ActualWorkEntryForm = ({
+  projectOptions,
+  selectedProjectId,
+  disableProjectSelect = false,
+  disableEmployeeSelect = false,
+  employees,
+  initialValues,
+  onSubmit,
+}: Props) => {
+  const employeeOptions = employees
+    .filter((employee) => employee.employmentStatus !== "离职")
+    .map((employee) => ({ label: employee.name, value: employee.id }));
+  const initialProjectId =
+    selectedProjectId ?? initialValues?.projectId ?? projectOptions[0]?.id;
+
+  return (
+    <Form<FormValues>
+      key={initialValues?.id || "new"}
+      layout="vertical"
+      initialValues={{
+        projectId: initialProjectId,
+        title: initialValues?.title,
+        employeeId: initialValues?.employeeId,
+        timeRange:
+          initialValues?.startDate && initialValues?.endDate
+            ? [dayjs(initialValues.startDate), dayjs(initialValues.endDate)]
+            : undefined,
+      }}
+      onFinish={(values) => {
+        const [startDate, endDate] = values.timeRange;
+        return onSubmit({
+          projectId: values.projectId,
+          title: values.title,
+          employeeId: values.employeeId,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+        });
+      }}
+    >
+      <Form.Item
+        label="所属项目"
+        name="projectId"
+        rules={[{ required: true, message: "请选择项目" }]}
+      >
+        <Select
+          disabled={disableProjectSelect}
+          placeholder="请选择项目"
+          options={projectOptions.map((project) => ({
+            label: project.name,
+            value: project.id,
+          }))}
+        />
+      </Form.Item>
+      <Form.Item label="事件" name="title" rules={[{ required: true, message: "请输入事件" }]}>
+        <Input />
+      </Form.Item>
+      <Form.Item
+        label="人员"
+        name="employeeId"
+        rules={[{ required: true, message: "请选择人员" }]}
+      >
+        <Select
+          disabled={disableEmployeeSelect}
+          placeholder="请选择人员"
+          options={employeeOptions}
+        />
+      </Form.Item>
+      <Form.Item
+        label="时间范围"
+        name="timeRange"
+        rules={[
+          { required: true, message: "请选择时间范围" },
+          () => ({
+            validator(_, value: [dayjs.Dayjs, dayjs.Dayjs] | undefined) {
+              if (!value || value.length !== 2) {
+                return Promise.resolve();
+              }
+              const [start, end] = value;
+              if (end.isAfter(start) || end.isSame(start)) {
+                return Promise.resolve();
+              }
+              return Promise.reject(new Error("结束时间需晚于或等于开始时间"));
+            },
+          }),
+        ]}
+      >
+        <DatePicker.RangePicker
+          showTime
+          style={{ width: "100%" }}
+          format="YYYY-MM-DD HH:mm"
+        />
+      </Form.Item>
+
+      <Button type="primary" htmlType="submit" block>
+        保存
+      </Button>
+    </Form>
+  );
+};
+
+export default ActualWorkEntryForm;

@@ -29,3 +29,25 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+/* Global modal behavior: vertically centered with max 90vh content height */
+.ant-modal-root .ant-modal-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ant-modal-root .ant-modal {
+  top: 0;
+  padding-bottom: 0;
+}
+
+.ant-modal-root .ant-modal-content {
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ant-modal-root .ant-modal-body {
+  overflow-y: auto;
+}

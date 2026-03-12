@@ -1,9 +1,9 @@
 "use client";
 
 import { Table, Tag } from "antd";
-import Link from "next/link";
 import TableActions from "@/components/TableActions";
 import dayjs from "dayjs";
+import AppLink from "@/components/AppLink";
 
 export type Project = {
   id: string;
@@ -93,9 +93,9 @@ const ProjectsTable = ({
         record.name.includes(value as string),
       sorter: (a: Project, b: Project) => a.name.localeCompare(b.name),
       render: (value: string, record: Project) => (
-        <Link href={`/projects/${record.id}`} style={{ color: "#1677ff" }}>
+        <AppLink href={`/projects/${record.id}`}>
           {value}
-        </Link>
+        </AppLink>
       ),
     },
     type: {

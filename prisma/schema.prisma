@@ -107,6 +107,9 @@ model Employee {
   notionPageId String? @unique
 
   name String
+  phone String? @unique
+  fullName String?
+  password String @default("admin123")
 
   function String?
   position String?
@@ -145,6 +148,30 @@ model Employee {
   createdTasks    ProjectTask[]      @relation("TaskCreator")
   milestones      ProjectMilestone[] @relation("MilestoneInternalParticipants")
   actualWorkEntries ActualWorkEntry[]
+  roles EmployeeRole[]
+  apiCallLogs ApiCallLog[]
+}
+
+model Role {
+  id        String @id @default(uuid())
+  code      String @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employees EmployeeRole[]
+}
+
+model EmployeeRole {
+  employeeId String
+  roleId     String
+  createdAt  DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  role     Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, roleId])
+  @@index([roleId])
 }
 
 model LeaveRecord {
@@ -249,7 +276,6 @@ model ProjectTask {
 
   // 基础字段
   name    String
-  status  String?
   dueDate DateTime?
 
   // 所属环节
@@ -377,6 +403,13 @@ model PlannedWorkEntry {
   year         Int
   weekNumber   Int
   plannedDays  Float
+  monday       Boolean @default(false)
+  tuesday      Boolean @default(false)
+  wednesday    Boolean @default(false)
+  thursday     Boolean @default(false)
+  friday       Boolean @default(false)
+  saturday     Boolean @default(false)
+  sunday       Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -388,7 +421,8 @@ model ActualWorkEntry {
 
   title         String
 
-  date          DateTime
+  startDate     DateTime
+  endDate       DateTime
 
   employeeId    String
   employee      Employee @relation(fields: [employeeId], references: [id])
@@ -401,5 +435,31 @@ model ActualWorkEntry {
 
   @@index([employeeId])
   @@index([projectId])
-  @@index([date])
+  @@index([startDate])
+}
+
+model ApiCallLog {
+  id String @id @default(uuid())
+
+  path       String
+  method     String
+  statusCode Int
+
+  requestBody  Json?
+  responseBody Json?
+  errorMessage String?
+
+  employeeId String?
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  ip        String?
+  userAgent String?
+
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  @@index([path, createdAt])
+  @@index([method, createdAt])
+  @@index([statusCode, createdAt])
+  @@index([employeeId, createdAt])
 }

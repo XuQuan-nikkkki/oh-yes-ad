@@ -161,9 +161,7 @@ export const getDateRangeValue = (
     if (required) throw new Error(`字段 '${key}' 未获取到或类型错误`);
     return { start: null, end: null };
   }
-  // @ts-expect-error date 类型有 start/end
   const start = property.date?.start ?? null;
-  // @ts-expect-error date 类型有 end，无 end 时用 start（单日）
   const end = property.date?.end ?? property.date?.start ?? null;
   if (required && !start) throw new Error(`字段 '${key}' 为空`);
   return { start, end };

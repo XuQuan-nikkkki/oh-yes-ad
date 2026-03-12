@@ -8,7 +8,7 @@ import {
   getSelectValue,
   getStatusValue,
   getTitleValue,
-} from "../lib/notion/parser";
+} from "./parser";
 import { prisma, migrateDatabase } from "./migrate-notion";
 import { Project } from "@prisma/client";
 
@@ -226,7 +226,6 @@ const syncTask = async (task: PageObjectResponse) => {
     data: {
       notionPageId: id,
       name,
-      status,
       dueDate: dueDate ? new Date(dueDate) : null,
 
       segmentId: segment.id,

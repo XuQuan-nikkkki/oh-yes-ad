@@ -33,6 +33,15 @@ type Props = {
   projectType?: string;
 };
 
+type ProjectFormValues = {
+  name: string;
+  type: string;
+  status?: string[] | string | null;
+  stage?: string[] | string | null;
+  clientId?: string | null;
+  ownerId?: string | null;
+};
+
 const ProjectFormModal = ({
   open,
   onCancel,
@@ -45,17 +54,35 @@ const ProjectFormModal = ({
   const isEdit = !!initialValues?.id;
   const isInternalProject = projectType === "内部项目" || initialValues?.type === "INTERNAL";
 
-  const handleSubmit = async (values: any) => {
+  const normalizeSingleValue = (value: unknown): string | null => {
+    if (Array.isArray(value)) {
+      const first = value[0];
+      return typeof first === "string" && first.trim() ? first : null;
+    }
+    return typeof value === "string" && value.trim() ? value : null;
+  };
+
+  const normalizeProjectType = (value: unknown): string | null => {
+    const normalized = normalizeSingleValue(value);
+    if (!normalized) return null;
+    if (normalized === "客户项目") return "CLIENT";
+    if (normalized === "内部项目") return "INTERNAL";
+    return normalized;
+  };
+
+  const handleSubmit = async (values: ProjectFormValues) => {
+    const type = normalizeProjectType(values.type);
+
     const payload = {
       name: values.name,
-      type: values.type,
-      status: isInternalProject ? null : (values.status || null),
-      stage: isInternalProject ? null : (values.stage || null),
-      clientId: isInternalProject ? null : (values.clientId || null),
-      ownerId: values.ownerId || null,
+      type,
+      status: isInternalProject ? null : normalizeSingleValue(values.status),
+      stage: isInternalProject ? null : normalizeSingleValue(values.stage),
+      clientId: isInternalProject ? null : normalizeSingleValue(values.clientId),
+      ownerId: normalizeSingleValue(values.ownerId),
     };
 
-    await fetch("/api/projects", {
+    const res = await fetch("/api/projects", {
       method: isEdit ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
@@ -64,6 +91,11 @@ const ProjectFormModal = ({
           : payload
       ),
     });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || "保存项目失败");
+    }
 
     onSuccess();
   };

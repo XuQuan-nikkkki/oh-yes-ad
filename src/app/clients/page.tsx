@@ -1,26 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Table, Button, Card, Tag } from "antd";
+import { Button, Card } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import ClientFormModal from "@/components/ClientFormModal";
-import Link from "next/link";
-import TableActions from "@/components/TableActions";
-
-type Client = {
-  id: string;
-  name: string;
-  industry: string;
-  remark?: string | null;
-};
+import ClientTable, { Client } from "@/components/ClientTable";
 
 const ClientsPage = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-
-  const industryOptions = Array.from(new Set(clients.map((c) => c.industry)));
 
   const fetchClients = async () => {
     setLoading(true);
@@ -38,75 +28,14 @@ const ClientsPage = () => {
   }, []);
 
   const handleDelete = async (id: string) => {
-    await fetch("/api/clients", {
+    await fetch(`/api/clients/${id}`, {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
     });
 
     fetchClients();
   };
 
-  const columns = [
-    {
-      title: "名称",
-      dataIndex: "name",
-      width: 160,
-      ellipsis: true,
-      filters: clients.map((c) => ({
-        text: c.name,
-        value: c.name,
-      })),
-      filterSearch: true,
-      onFilter: (value, record) => record.name.includes(value as string),
-      sorter: (a, b) => a.name.localeCompare(b.name),
-      render: (value: string, record: Client) => (
-        <Link href={`/clients/${record.id}`} style={{ color: "#1677ff" }}>
-          {value}
-        </Link>
-      ),
-    },
-    {
-      title: "行业",
-      dataIndex: "industry",
-      filters: industryOptions.map((item) => ({
-        text: item,
-        value: item,
-      })),
-      onFilter: (value, record) => record.industry === value,
-      sorter: (a, b) => a.industry.localeCompare(b.industry),
-      render: (value: string) => (
-        <Tag
-          style={{
-            borderRadius: 6,
-            padding: "2px 10px",
-            fontWeight: 500,
-          }}
-        >
-          {value}
-        </Tag>
-      ),
-    },
-    {
-      title: "备注",
-      dataIndex: "remark",
-      render: (value: string | null) => value ?? "-",
-    },
-    {
-      title: "操作",
-      width: 300,
-      render: (_: any, record: Client) => (
-        <TableActions
-          onEdit={() => {
-            setEditingClient(record);
-            setOpen(true);
-          }}
-          onDelete={() => handleDelete(record.id)}
-          deleteTitle="确定删除这个客户？"
-        />
-      ),
-    },
-  ];
+  const industryOptions = Array.from(new Set(clients.map((c) => c.industry)));
 
   return (
     <Card
@@ -124,12 +53,14 @@ const ClientsPage = () => {
         </Button>
       }
     >
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={clients}
+      <ClientTable
+        clients={clients}
         loading={loading}
-        pagination={{ pageSize: 10 }}
+        onEdit={(client) => {
+          setEditingClient(client);
+          setOpen(true);
+        }}
+        onDelete={handleDelete}
       />
       <ClientFormModal
         open={open}

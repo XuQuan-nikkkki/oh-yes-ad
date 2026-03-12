@@ -52,7 +52,7 @@ const ClientDetailPage = () => {
     try {
       setContactLoading(true);
 
-      const res = await fetch(`/api/client-contacts?clientId=${clientId}`);
+      const res = await fetch(`/api/clients/${clientId}/contacts`);
       const data = await res.json();
       setContacts(data);
     } finally {
@@ -65,7 +65,7 @@ const ClientDetailPage = () => {
 
     try {
       setProjectLoading(true);
-      const res = await fetch(`/api/projects?clientId=${clientId}`);
+      const res = await fetch(`/api/clients/${clientId}/projects`);
       const data = await res.json();
       setProjects(data);
     } catch (error) {
@@ -76,10 +76,8 @@ const ClientDetailPage = () => {
   }, [clientId]);
 
   const handleDeleteContact = async (id: string) => {
-    await fetch(`/api/client-contacts`, {
+    await fetch(`/api/client-contacts/${id}`, {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
     });
 
     await fetchContacts();

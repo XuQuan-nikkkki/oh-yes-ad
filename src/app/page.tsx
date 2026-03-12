@@ -37,7 +37,6 @@ export default function Home() {
 
   return (
     <div>
-      <h1>首页</h1>
       {modules.map((module) => (
         <div key={module.title} style={{ marginBottom: 32 }}>
           <h2 style={{ marginBottom: 16 }}>{module.title}</h2>
