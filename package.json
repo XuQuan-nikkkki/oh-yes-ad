@@ -8,12 +8,14 @@
     "build": "prisma generate && prisma db push && next build",
     "start": "next start",
     "lint": "eslint",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "sync:client-industry-colors": "tsx scripts/sync-client-industry-option-colors.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@ant-design/pro-components": "^2.8.10",
     "@notionhq/client": "^5.11.0",
     "@prisma/adapter-pg": "^7.4.1",
     "@prisma/client": "^7.4.1",
@@ -23,7 +25,8 @@
     "next": "16.1.6",
     "pg": "^8.18.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@types/node": "^20",

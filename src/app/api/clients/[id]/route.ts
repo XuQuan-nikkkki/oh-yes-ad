@@ -20,6 +20,9 @@ export async function GET(_req: NextRequest, context: RouteContext) {
 
   const client = await prisma.client.findUnique({
     where: { id },
+    include: {
+      industryOption: true,
+    },
   });
 
   if (!client) {
@@ -41,8 +44,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     where: { id },
     data: {
       name: body.name,
-      industry: body.industry,
+      industryOptionId: body.industryOptionId,
       remark: body.remark ?? null,
+    },
+    include: {
+      industryOption: true,
     },
   });
 

@@ -1,6 +1,5 @@
 import "dotenv/config";
 import { PageObjectResponse } from "@notionhq/client";
-import { Client } from "@prisma/client";
 import {
   getEmailValue,
   getPhoneValue,
@@ -11,19 +10,75 @@ import {
 } from "./parser";
 import { prisma, migrateDatabase } from "./migrate-notion";
 
+const notionColorToHex: Record<string, string> = {
+  default: "#d9d9d9",
+  gray: "#8c8c8c",
+  brown: "#8b5e3c",
+  orange: "#fa8c16",
+  yellow: "#faad14",
+  green: "#52c41a",
+  blue: "#1677ff",
+  purple: "#722ed1",
+  pink: "#eb2f96",
+  red: "#ff4d4f",
+};
+
+const normalizeNotionColor = (color?: string | null) => {
+  if (!color) return notionColorToHex.default;
+  if (color.startsWith("#")) return color;
+  return notionColorToHex[color] ?? notionColorToHex.default;
+};
+
+type NotionSelectProperty = {
+  type?: string;
+  select?: {
+    color?: string | null;
+  } | null;
+};
+
 const syncClient = async (client: PageObjectResponse) => {
   const { id } = client;
   const name = getTitleValue(client, "客户名称", true);
   const industry = getSelectValue(client, "行业", true);
+  const industryProperty = client.properties["行业"] as
+    | NotionSelectProperty
+    | undefined;
+  const industryColor =
+    industryProperty?.type === "select"
+      ? normalizeNotionColor(industryProperty.select?.color)
+      : notionColorToHex.default;
 
-  const data: Omit<Client, "id" | "createdAt" | "updatedAt"> = {
-    notionPageId: id,
-    name,
-    industry,
-    remark: "",
-  };
-  await prisma.client.create({
-    data,
+  const industryOption = await prisma.selectOption.upsert({
+    where: {
+      field_value: {
+        field: "client.industry",
+        value: industry,
+      },
+    },
+    update: {
+      color: industryColor,
+    },
+    create: {
+      field: "client.industry",
+      value: industry,
+      color: industryColor,
+    },
+  });
+
+  await prisma.client.upsert({
+    where: {
+      notionPageId: id,
+    },
+    create: {
+      notionPageId: id,
+      name,
+      industryOptionId: industryOption.id,
+      remark: "",
+    },
+    update: {
+      name,
+      industryOptionId: industryOption.id,
+    },
   });
 
   console.log("已同步客户:", name);

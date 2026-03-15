@@ -26,6 +26,7 @@ import {
   UserOutlined as UserAvatarOutlined,
 } from "@ant-design/icons";
 import { useEffect, useState } from "react";
+import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 
 const { Sider, Content, Header } = Layout;
 
@@ -54,6 +55,7 @@ export default function RootLayout({
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [passwordForm] = Form.useForm<ChangePasswordForm>();
+  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
   const isLoginPage = pathname === "/login";
   const menuKeyByPrefix = [
     "/project-segments",
@@ -165,6 +167,11 @@ export default function RootLayout({
     })();
   }, [isLoginPage, pathname, router]);
 
+  useEffect(() => {
+    if (isLoginPage) return;
+    void fetchAllOptions();
+  }, [isLoginPage, fetchAllOptions]);
+
   const accountMenu = {
     items: [
       { key: "change-password", label: "修改密码" },
@@ -220,7 +227,7 @@ export default function RootLayout({
               <Layout style={{ minHeight: "100vh", display: "flex" }}>
                 <Sider
                   theme="dark"
-                  collapsible="icon"
+                  collapsible
                   collapsed={collapsed}
                   onCollapse={(value) => setCollapsed(value)}
                   trigger={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}

@@ -1,41 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button, Card } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import ClientFormModal from "@/components/ClientFormModal";
 import ClientTable, { Client } from "@/components/ClientTable";
+import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import { useFetch } from "@/hooks/useFetch";
+
+const EMPTY_OPTIONS: {
+  id: string;
+  field: string;
+  value: string;
+  color?: string | null;
+  order?: number | null;
+  createdAt: string;
+}[] = [];
 
 const ClientsPage = () => {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-
-  const fetchClients = async () => {
-    setLoading(true);
-    const res = await fetch("/api/clients");
-    const data = await res.json();
-    setClients(data);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    const loadClients = async () => {
-      await fetchClients();
-    };
-    loadClients();
-  }, []);
+  const { data, loading, refetch } = useFetch<Client>("/api/clients");
+  const industryOptions = useSelectOptionsStore(
+    (state) => state.optionsByField["client.industry"] ?? EMPTY_OPTIONS,
+  );
 
   const handleDelete = async (id: string) => {
     await fetch(`/api/clients/${id}`, {
       method: "DELETE",
     });
 
-    fetchClients();
+    refetch();
   };
-
-  const industryOptions = Array.from(new Set(clients.map((c) => c.industry)));
 
   return (
     <Card
@@ -54,7 +50,7 @@ const ClientsPage = () => {
       }
     >
       <ClientTable
-        clients={clients}
+        clients={data}
         loading={loading}
         onEdit={(client) => {
           setEditingClient(client);
@@ -72,7 +68,7 @@ const ClientsPage = () => {
         onSuccess={async () => {
           setOpen(false);
           setEditingClient(null);
-          await fetchClients();
+          await refetch();
         }}
         industryOptions={industryOptions}
       />

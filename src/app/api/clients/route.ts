@@ -12,6 +12,9 @@ const prisma = new PrismaClient({
 // ==================== GET ====================
 export async function GET() {
   const clients = await prisma.client.findMany({
+    include: {
+      industryOption: true,
+    },
     orderBy: {
       createdAt: "desc",
     },
@@ -27,8 +30,11 @@ export async function POST(req: Request) {
   const client = await prisma.client.create({
     data: {
       name: body.name,
-      industry: body.industry,
+      industryOptionId: body.industryOptionId,
       remark: body.remark ?? null,
+    },
+    include: {
+      industryOption: true,
     },
   });
 

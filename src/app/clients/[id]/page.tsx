@@ -8,11 +8,15 @@ import ClientFormModal from "@/components/ClientFormModal";
 import ClientContactTable from "@/components/ClientContactTable";
 import ContactFormModal from "@/components/ContactFormModal";
 import ProjectsTable, { Project } from "@/components/ProjectsTable";
-
+import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 type Client = {
   id: string;
   name: string;
-  industry: string;
+  industryOptionId: string;
+  industryOption?: {
+    id: string;
+    value: string;
+  } | null;
   remark?: string | null;
 };
 
@@ -23,6 +27,15 @@ type Contact = {
   phone?: string | null;
   email?: string | null;
 };
+
+const EMPTY_OPTIONS: {
+  id: string;
+  field: string;
+  value: string;
+  color?: string | null;
+  order?: number | null;
+  createdAt: string;
+}[] = [];
 
 const ClientDetailPage = () => {
   const params = useParams();
@@ -37,6 +50,9 @@ const ClientDetailPage = () => {
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [contactLoading, setContactLoading] = useState(false);
+  const industryOptions = useSelectOptionsStore(
+    (state) => state.optionsByField["client.industry"] ?? EMPTY_OPTIONS,
+  );
 
   const fetchClient = useCallback(async () => {
     setLoading(true);
@@ -117,7 +133,7 @@ const ClientDetailPage = () => {
           <Descriptions column={3} size="small">
             <Descriptions.Item label="名称">{client.name}</Descriptions.Item>
             <Descriptions.Item label="行业">
-              {client.industry}
+              {client.industryOption?.value ?? "-"}
             </Descriptions.Item>
             <Descriptions.Item label="备注">
               {client.remark ?? "-"}
@@ -157,6 +173,7 @@ const ClientDetailPage = () => {
       <ClientFormModal
         open={open}
         initialValues={client}
+        industryOptions={industryOptions}
         onCancel={() => setOpen(false)}
         onSuccess={async () => {
           setOpen(false);

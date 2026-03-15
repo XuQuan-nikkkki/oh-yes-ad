@@ -2,19 +2,31 @@
 
 import { Modal } from "antd";
 import ClientForm, { ClientFormValues } from "@/components/ClientForm";
+import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 
 type Client = {
   id?: string;
   name?: string;
-  industry?: string;
+  industryOptionId?: string;
+  industryOption?: {
+    id: string;
+    value: string;
+  } | null;
   remark?: string | null;
+};
+
+type SelectOption = {
+  id: string;
+  value: string;
+  color?: string | null;
+  order?: number | null;
 };
 
 type Props = {
   open: boolean;
   onCancel: () => void;
   onSuccess: () => void;
-  industryOptions?: string[];
+  industryOptions?: SelectOption[];
   initialValues?: Client | null;
 };
 
@@ -26,19 +38,47 @@ const ClientFormModal = ({
   initialValues,
 }: Props) => {
   const isEdit = !!initialValues?.id;
+  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
 
   const handleSubmit = async (values: ClientFormValues) => {
-    const payload = {
-      ...values,
-      industry: Array.isArray(values.industry) ? values.industry[0] : "",
-    };
+    let industryOptionId = values.industryOptionId;
+    const newIndustryName = String(values.newIndustryName ?? "").trim();
+    const newIndustryColor = values.newIndustryColor ?? "#8c8c8c";
+
+    if (!industryOptionId && newIndustryName) {
+      const response = await fetch("/api/select-options", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          field: "client.industry",
+          value: newIndustryName,
+          color: newIndustryColor,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("创建行业选项失败");
+      }
+
+      const option = (await response.json()) as SelectOption;
+      industryOptionId = option.id;
+    }
+
+    if (!industryOptionId) {
+      throw new Error("请选择行业，或新增一个行业");
+    }
 
     await fetch(isEdit ? `/api/clients/${initialValues?.id}` : "/api/clients", {
       method: isEdit ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        name: values.name,
+        industryOptionId,
+        remark: values.remark ?? null,
+      }),
     });
 
+    await fetchAllOptions(true);
     onSuccess();
   };
 

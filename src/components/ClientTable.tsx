@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import TableActions from "@/components/TableActions";
@@ -8,7 +9,14 @@ import AppLink from "@/components/AppLink";
 export type Client = {
   id: string;
   name: string;
-  industry: string;
+  industryOptionId: string;
+  industryOption?: {
+    id: string;
+    field: string;
+    value: string;
+    color?: string | null;
+    order?: number | null;
+  } | null;
   remark?: string | null;
 };
 
@@ -20,13 +28,17 @@ type Props = {
 };
 
 const ClientTable = ({ clients, loading = false, onEdit, onDelete }: Props) => {
-  const industryOptions = Array.from(new Set(clients.map((c) => c.industry)));
+  const [current, setCurrent] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const industryOptions = Array.from(
+    new Set(clients.map((c) => c.industryOption?.value).filter(Boolean)),
+  ) as string[];
 
   const columns: ColumnsType<Client> = [
     {
       title: "名称",
       dataIndex: "name",
-      width: 160,
       ellipsis: true,
       filters: clients.map((c) => ({
         text: c.name,
@@ -36,29 +48,32 @@ const ClientTable = ({ clients, loading = false, onEdit, onDelete }: Props) => {
       onFilter: (value, record) => record.name.includes(String(value)),
       sorter: (a, b) => a.name.localeCompare(b.name),
       render: (value: string, record) => (
-        <AppLink href={`/clients/${record.id}`}>
-          {value}
-        </AppLink>
+        <AppLink href={`/clients/${record.id}`}>{value}</AppLink>
       ),
     },
     {
       title: "行业",
-      dataIndex: "industry",
+      dataIndex: ["industryOption", "value"],
       filters: industryOptions.map((item) => ({
         text: item,
         value: item,
       })),
-      onFilter: (value, record) => record.industry === value,
-      sorter: (a, b) => a.industry.localeCompare(b.industry),
-      render: (value: string) => (
+      onFilter: (value, record) =>
+        (record.industryOption?.value ?? "-") === value,
+      sorter: (a, b) =>
+        (a.industryOption?.value ?? "").localeCompare(
+          b.industryOption?.value ?? "",
+        ),
+      render: (_value: string | undefined, record) => (
         <Tag
+          color={record.industryOption?.color ?? "#8c8c8c"}
           style={{
             borderRadius: 6,
             padding: "2px 10px",
             fontWeight: 500,
           }}
         >
-          {value}
+          {record.industryOption?.value ?? "-"}
         </Tag>
       ),
     },
@@ -86,7 +101,17 @@ const ClientTable = ({ clients, loading = false, onEdit, onDelete }: Props) => {
       columns={columns}
       dataSource={clients}
       loading={loading}
-      pagination={{ pageSize: 10 }}
+      pagination={{
+        current,
+        pageSize,
+        showSizeChanger: true,
+        pageSizeOptions: [10, 20, 50, 100],
+        showTotal: (total) => `共 ${total} 条`,
+        onChange: (nextPage, nextPageSize) => {
+          setCurrent(nextPage);
+          setPageSize(nextPageSize);
+        },
+      }}
     />
   );
 };

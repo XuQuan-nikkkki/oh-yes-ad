@@ -126,7 +126,7 @@ const getResultStructure = async (databaseId: string) => {
       console.error("查询 Notion 数据源失败:", error);
     });
 };
-getResultStructure(process.env.NOTION_EMPLOYEE_SALARY_DB_ID!);
+// getResultStructure(process.env.NOTION_EMPLOYEE_SALARY_DB_ID!);
 
 const resetDatabases = async () => {
   console.log("重置数据库...");
@@ -170,4 +170,4 @@ const runMigrate = async () => {
   await syncWorkdayAdjustments();
 };
 
-// runMigrate().catch(console.error);
+runMigrate().catch(console.error);

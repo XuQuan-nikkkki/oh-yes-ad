@@ -95,11 +95,24 @@ async function grantAdminToXiaoHua() {
   }
 }
 
+async function ensureEmployeePhones() {
+  await prisma.employee.updateMany({
+    where: { name: "小花" },
+    data: { phone: "18600404232" },
+  });
+
+  await prisma.employee.updateMany({
+    where: { name: "珠珠" },
+    data: { phone: "18600404233" },
+  });
+}
+
 async function main() {
   await seedRoles();
   await replaceDesignerWithStaff();
   await ensureDefaultStaffRole();
   await grantAdminToXiaoHua();
+  await ensureEmployeePhones();
 }
 
 main()
