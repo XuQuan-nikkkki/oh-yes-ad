@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
+import { requireCrmWritePermission } from "@/lib/api-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -33,6 +34,9 @@ export async function GET(_req: NextRequest, context: RouteContext) {
 }
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
+  const denied = await requireCrmWritePermission();
+  if (denied) return denied;
+
   const { id } = await context.params;
   if (!id) {
     return new Response("Missing ID", { status: 400 });
@@ -45,7 +49,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     data: {
       name: body.name,
       industryOptionId: body.industryOptionId,
-      remark: body.remark ?? null,
     },
     include: {
       industryOption: true,
@@ -56,6 +59,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(_req: NextRequest, context: RouteContext) {
+  const denied = await requireCrmWritePermission();
+  if (denied) return denied;
+
   const { id } = await context.params;
   if (!id) {
     return new Response("Missing ID", { status: 400 });

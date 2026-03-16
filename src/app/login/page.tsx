@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { Button, Card, Form, Input, message, Typography } from "antd";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -9,7 +9,7 @@ type LoginFormValues = {
   password: string;
 };
 
-export default function LoginPage() {
+function LoginPageContent() {
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -87,5 +87,13 @@ export default function LoginPage() {
         </Form>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

@@ -23,6 +23,8 @@ const notionColorToHex: Record<string, string> = {
   red: "#ff4d4f",
 };
 
+const clientContactOrderCounter = new Map<string, number>();
+
 const normalizeNotionColor = (color?: string | null) => {
   if (!color) return notionColorToHex.default;
   if (color.startsWith("#")) return color;
@@ -73,7 +75,6 @@ const syncClient = async (client: PageObjectResponse) => {
       notionPageId: id,
       name,
       industryOptionId: industryOption.id,
-      remark: "",
     },
     update: {
       name,
@@ -113,9 +114,13 @@ const syncClientContact = async (contact: PageObjectResponse) => {
     throw new Error(`未找到对应的客户，Page ID: ${clientPageId}`);
   }
 
+  const nextOrderIndex = (clientContactOrderCounter.get(client.id) ?? 0) + 1;
+  clientContactOrderCounter.set(client.id, nextOrderIndex);
+
   const data = {
     notionPageId: id,
     name,
+    order: nextOrderIndex * 1000,
     title,
     scope,
     preference,
@@ -135,6 +140,7 @@ const syncClientContact = async (contact: PageObjectResponse) => {
 
 export const syncClientContacts = async () => {
   console.log("开始同步客户人员...", process.env.NOTION_CLIENT_CONTACT_DB_ID);
+  clientContactOrderCounter.clear();
   await migrateDatabase(
     process.env.NOTION_CLIENT_CONTACT_DB_ID!,
     syncClientContact,

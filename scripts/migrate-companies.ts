@@ -7,11 +7,11 @@ import { LegalEntity } from "@prisma/client";
 const syncLegalEntity = async (entity: PageObjectResponse) => {
   const { id } = entity;
   const name = getTitleValue(entity, "公司名称", true);
-  const fullName = getRichTextValue(entity, "公司全称");
+  const fullName = getRichTextValue(entity, "公司全称") ?? getRichTextValue(entity, "全称");
   const taxNumber = getRichTextValue(entity, "税号");
   const address = getRichTextValue(entity, "地址");
 
-  const data: Omit<LegalEntity, "id" | "createdAt" | "updatedAt" | "remark"> = {
+  const data: Omit<LegalEntity, "id" | "createdAt" | "updatedAt"> = {
     notionPageId: id,
     name,
     fullName,
@@ -19,8 +19,10 @@ const syncLegalEntity = async (entity: PageObjectResponse) => {
     address,
     isActive: true,
   };
-  await prisma.legalEntity.create({
-    data,
+  await prisma.legalEntity.upsert({
+    where: { notionPageId: id },
+    update: data,
+    create: data,
   });
 
   console.log("已同步客户:", name);

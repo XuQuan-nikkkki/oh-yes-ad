@@ -1,18 +1,57 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Card, Space, Descriptions, Button, Tag, Table, Popover } from "antd";
+import {
+  Card,
+  Space,
+  Descriptions,
+  Button,
+  Tag,
+  Popconfirm,
+  message,
+} from "antd";
 import { EditOutlined } from "@ant-design/icons";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import VendorFormModal from "@/components/VendorFormModal";
+import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import SelectOptionTag from "@/components/SelectOptionTag";
+import ProjectsTable, {
+  Project as ProjectRow,
+} from "@/components/ProjectsTable";
+import { useCrmPermission } from "@/hooks/useCrmPermission";
 
 type Vendor = {
   id: string;
   name: string;
   fullName?: string | null;
-  vendorType?: string | null;
-  businessType?: string | null;
-  services?: string[];
+  vendorTypeOptionId?: string | null;
+  businessTypeOptionIds?: string[];
+  businessTypeOptionId?: string | null;
+  cooperationStatusOptionId?: string | null;
+  ratingOptionId?: string | null;
+  serviceOptionIds?: string[];
+  vendorTypeOption?: {
+    id: string;
+    value: string;
+    color?: string | null;
+  } | null;
+  businessTypeOption?: {
+    id: string;
+    value: string;
+    color?: string | null;
+  } | null;
+  businessTypeOptions?: Array<{
+    id: string;
+    value: string;
+    color?: string | null;
+  }>;
+  cooperationStatusOption?: {
+    id: string;
+    value: string;
+    color?: string | null;
+  } | null;
+  ratingOption?: { id: string; value: string; color?: string | null } | null;
+  serviceOptions?: Array<{ id: string; value: string; color?: string | null }>;
   location?: string | null;
   contactName?: string | null;
   phone?: string | null;
@@ -24,36 +63,51 @@ type Vendor = {
   portfolioLink?: string | null;
   priceRange?: string | null;
   isBlacklisted: boolean;
-  cooperationStatus?: string | null;
-  rating?: string | null;
   lastCoopDate?: string | null;
   cooperatedProjects?: string | null;
-  projects?: {
-    id: string;
-    name: string;
-    type: string;
-  }[];
   milestones?: {
     id: string;
     name: string;
   }[];
 };
 
-type Project = {
+const EMPTY_OPTIONS: {
   id: string;
-  name: string;
-  type: string;
-};
-
+  field: string;
+  value: string;
+  color?: string | null;
+  order?: number | null;
+  createdAt: string;
+}[] = [];
 
 const VendorDetailPage = () => {
   const params = useParams();
+  const router = useRouter();
   const vendorId = params.id as string;
 
   const [vendor, setVendor] = useState<Vendor | null>(null);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [vendorProjects, setVendorProjects] = useState<ProjectRow[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const { canManageCrm } = useCrmPermission();
+  const vendorTypeOptions = useSelectOptionsStore(
+    (state) => state.optionsByField["vendor.vendorType"] ?? EMPTY_OPTIONS,
+  );
+  const businessTypeOptions = useSelectOptionsStore(
+    (state) => state.optionsByField["vendor.businessType"] ?? EMPTY_OPTIONS,
+  );
+  const servicesOptions = useSelectOptionsStore(
+    (state) => state.optionsByField["vendor.services"] ?? EMPTY_OPTIONS,
+  );
+  const cooperationStatusOptions = useSelectOptionsStore(
+    (state) =>
+      state.optionsByField["vendor.cooperationStatus"] ?? EMPTY_OPTIONS,
+  );
+  const ratingOptions = useSelectOptionsStore(
+    (state) => state.optionsByField["vendor.rating"] ?? EMPTY_OPTIONS,
+  );
 
   const fetchVendor = useCallback(async () => {
     setLoading(true);
@@ -66,92 +120,115 @@ const VendorDetailPage = () => {
     }
   }, [vendorId]);
 
-  const fetchAllVendors = useCallback(async () => {
+  const fetchVendorProjects = useCallback(async () => {
+    if (!vendorId) return;
+    setProjectsLoading(true);
     try {
-      const res = await fetch("/api/vendors");
+      const res = await fetch(`/api/projects?vendorId=${vendorId}`);
       const data = await res.json();
-      setVendors(data);
-    } catch (err) {
-      console.error("Failed to fetch vendors:", err);
+      setVendorProjects(Array.isArray(data) ? data : []);
+    } finally {
+      setProjectsLoading(false);
     }
-  }, []);
+  }, [vendorId]);
 
   useEffect(() => {
     if (!vendorId) return;
-    fetchVendor();
-    fetchAllVendors();
-  }, [vendorId, fetchVendor, fetchAllVendors]);
+    void Promise.all([fetchVendor(), fetchVendorProjects()]);
+  }, [vendorId, fetchVendor, fetchVendorProjects]);
 
-  const vendorTypeOptions = Array.from(
-    new Set(vendors.map((v) => v.vendorType).filter(Boolean) as string[])
-  );
-  const businessTypeOptions = Array.from(
-    new Set(
-      vendors.map((v) => (v as any).businessType).filter(Boolean) as string[]
-    )
-  );
-  const servicesOptions = Array.from(
-    new Set(
-      vendors
-        .flatMap((v) => (v as any).services || [])
-        .filter(Boolean) as string[]
-    )
-  );
-  const cooperationStatusOptions = Array.from(
-    new Set(
-      vendors.map((v) => (v as any).cooperationStatus).filter(Boolean) as string[]
-    )
-  );
-  const ratingOptions = Array.from(
-    new Set(vendors.map((v) => (v as any).rating).filter(Boolean) as string[])
-  );
+  const handleDelete = async () => {
+    if (!vendorId) return;
+    if (!canManageCrm) return;
+    setDeleting(true);
+    const res = await fetch("/api/vendors", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: vendorId }),
+    });
+    setDeleting(false);
+    if (!res.ok) {
+      message.error("删除失败");
+      return;
+    }
+    message.success("删除成功");
+    router.push("/vendors");
+  };
 
   return (
-    <Space orientation="vertical" size={8} style={{ width: "100%" }}>
-      {vendor && (
-        <>
-          {/* 1. 基础信息 */}
-          <Card
-            title="基础信息"
-            loading={loading}
-            extra={
-              <Button icon={<EditOutlined />} onClick={() => setOpen(true)}>
-                编辑
-              </Button>
-            }
-          >
-            <Descriptions column={2} size="small">
-              <Descriptions.Item label="供应商名称">
-                {vendor.name}
-              </Descriptions.Item>
-              <Descriptions.Item label="全称">
-                {vendor.fullName || "-"}
-              </Descriptions.Item>
-            </Descriptions>
-          </Card>
-
-          {/* 2. 公司情况 */}
-          <Card title="公司情况">
-            <Descriptions column={2} size="small">
+    <>
+      <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+        <Card
+          title={
+            vendor
+              ? vendor.name +
+                (vendor.fullName ? ` （全名：${vendor.fullName}）` : "")
+              : "供应商详情"
+          }
+          loading={loading}
+          extra={
+            vendor ? (
+              <Space>
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => setOpen(true)}
+                  disabled={!canManageCrm}
+                >
+                  编辑
+                </Button>
+                <Popconfirm
+                  title={`确定删除供应商「${vendor.name}」？`}
+                  okText="删除"
+                  cancelText="取消"
+                  onConfirm={() => void handleDelete()}
+                  okButtonProps={{ danger: true, loading: deleting }}
+                >
+                  <Button danger loading={deleting} disabled={!canManageCrm}>
+                    删除
+                  </Button>
+                </Popconfirm>
+              </Space>
+            ) : null
+          }
+        >
+          {vendor ? (
+            <Descriptions column={3} size="small">
               <Descriptions.Item label="供应商类型">
-                {vendor.vendorType ? <Tag>{vendor.vendorType}</Tag> : "-"}
+                {vendor.vendorTypeOption ? (
+                  <SelectOptionTag option={vendor.vendorTypeOption} />
+                ) : (
+                  "-"
+                )}
               </Descriptions.Item>
               <Descriptions.Item label="业务类型">
-                {vendor.businessType ? <Tag>{vendor.businessType}</Tag> : "-"}
+                {vendor.businessTypeOptions &&
+                vendor.businessTypeOptions.length > 0 ? (
+                  <Space size={4} wrap>
+                    {vendor.businessTypeOptions.map((item) => (
+                      <SelectOptionTag key={item.id} option={item} />
+                    ))}
+                  </Space>
+                ) : vendor.businessTypeOption ? (
+                  <SelectOptionTag option={vendor.businessTypeOption} />
+                ) : (
+                  "-"
+                )}
               </Descriptions.Item>
               <Descriptions.Item label="服务范围">
-                {vendor.services && vendor.services.length > 0
-                  ? vendor.services.map((service) => (
-                      <Tag key={service} style={{ marginRight: "4px" }}>
-                        {service}
-                      </Tag>
-                    ))
-                  : "-"}
+                {vendor.serviceOptions && vendor.serviceOptions.length > 0 ? (
+                  <Space size={4} wrap>
+                    {vendor.serviceOptions.map((service) => (
+                      <SelectOptionTag key={service.id} option={service} />
+                    ))}
+                  </Space>
+                ) : (
+                  "-"
+                )}
               </Descriptions.Item>
               <Descriptions.Item label="核心特色/擅长领域">
                 {vendor.strengths || "-"}
               </Descriptions.Item>
-              <Descriptions.Item label="公司简介" span={2}>
+              <Descriptions.Item label="公司简介">
                 {vendor.companyIntro || "-"}
               </Descriptions.Item>
               <Descriptions.Item label="代表作品">
@@ -160,6 +237,7 @@ const VendorDetailPage = () => {
                     href={vendor.portfolioLink}
                     target="_blank"
                     rel="noopener noreferrer"
+                    style={{ textDecoration: "underline", color: "gray" }}
                   >
                     {vendor.portfolioLink}
                   </a>
@@ -168,11 +246,65 @@ const VendorDetailPage = () => {
                 )}
               </Descriptions.Item>
             </Descriptions>
-          </Card>
+          ) : null}
+        </Card>
 
-          {/* 3. 联系方式 */}
-          <Card title="联系方式">
+        <Card loading={loading} title="合作情况">
+          {vendor ? (
             <Descriptions column={2} size="small">
+              {vendor.lastCoopDate ? (
+                <Descriptions.Item label="最近合作时间">
+                  {vendor.lastCoopDate}
+                </Descriptions.Item>
+              ) : null}
+              {vendor.cooperatedProjects ? (
+                <Descriptions.Item label="往期合作项目">
+                  {vendor.cooperatedProjects}
+                </Descriptions.Item>
+              ) : null}
+              <Descriptions.Item label="参考价区间">
+                <div style={{ whiteSpace: "pre-wrap" }}>
+                  {vendor.priceRange || "-"}
+                </div>
+              </Descriptions.Item>
+              <Descriptions.Item label="关键备注">
+                <div style={{ whiteSpace: "pre-wrap" }}>
+                  {vendor.notes || "-"}
+                </div>
+              </Descriptions.Item>
+            </Descriptions>
+          ) : null}
+        </Card>
+        <Card loading={loading} title="合作评价">
+          {vendor ? (
+            <Descriptions column={3} size="small">
+              <Descriptions.Item label="合作状态">
+                {vendor.cooperationStatusOption ? (
+                  <SelectOptionTag option={vendor.cooperationStatusOption} />
+                ) : (
+                  "-"
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="综合评级">
+                {vendor.ratingOption ? (
+                  <SelectOptionTag option={vendor.ratingOption} />
+                ) : (
+                  "-"
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="黑名单">
+                {vendor.isBlacklisted ? (
+                  <Tag color="red">是</Tag>
+                ) : (
+                  <Tag color="green">否</Tag>
+                )}
+              </Descriptions.Item>
+            </Descriptions>
+          ) : null}
+        </Card>
+        <Card loading={loading} title="联系方式">
+          {vendor ? (
+            <Descriptions column={3} size="small">
               <Descriptions.Item label="所在地">
                 {vendor.location || "-"}
               </Descriptions.Item>
@@ -189,59 +321,26 @@ const VendorDetailPage = () => {
                 {vendor.email || "-"}
               </Descriptions.Item>
             </Descriptions>
-          </Card>
+          ) : null}
+        </Card>
+        <Card loading={loading} styles={{ body: { padding: 2 } }}>
+          {vendor ? (
+            <ProjectsTable
+              headerTitle={<h4 style={{ margin: 0 }}>合作项目</h4>}
+              projects={vendorProjects}
+              loading={projectsLoading}
+              columnKeys={["name", "type", "status", "startDate", "endDate"]}
+            />
+          ) : null}
+        </Card>
+      </Space>
 
-          {/* 4. 合作情况 */}
-          <Card title="合作情况">
-            <Descriptions column={1} size="small">
-              <Descriptions.Item label="参考价区间">
-                {vendor.priceRange || "-"}
-              </Descriptions.Item>
-
-              <Descriptions.Item label="关键备注">
-                {vendor.notes || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="最近合作时间">
-                {vendor.lastCoopDate ?? "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="往期合作项目">
-                {vendor.cooperatedProjects || "-"}
-              </Descriptions.Item>
-            </Descriptions>
-          </Card>
-
-          {/* 5. 合作评价 */}
-          <Card title="合作评价">
-            <Descriptions column={1} size="small">
-              <Descriptions.Item label="合作状态">
-                {vendor.cooperationStatus ? (
-                  <Tag>{vendor.cooperationStatus}</Tag>
-                ) : (
-                  "-"
-                )}
-              </Descriptions.Item>
-              <Descriptions.Item label="综合评级">
-                {vendor.rating ? <Tag>{vendor.rating}</Tag> : "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="黑名单">
-                {vendor.isBlacklisted ? (
-                  <Tag color="red">是</Tag>
-                ) : (
-                  <Tag color="green">否</Tag>
-                )}
-              </Descriptions.Item>
-            </Descriptions>
-          </Card>
-        </>
-      )}
-
-      {/* 编辑供应商Modal */}
       <VendorFormModal
         open={open}
         onCancel={() => setOpen(false)}
         onSuccess={() => {
           setOpen(false);
-          fetchVendor();
+          void Promise.all([fetchVendor(), fetchVendorProjects()]);
         }}
         initialValues={vendor}
         vendorTypeOptions={vendorTypeOptions}
@@ -250,7 +349,7 @@ const VendorDetailPage = () => {
         cooperationStatusOptions={cooperationStatusOptions}
         ratingOptions={ratingOptions}
       />
-    </Space>
+    </>
   );
 };
 

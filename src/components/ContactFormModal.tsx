@@ -14,6 +14,10 @@ type Contact = {
   wechat?: string | null;
   address?: string | null;
   clientId: string;
+  client?: {
+    id: string;
+    name: string;
+  };
 };
 
 type Props = {
@@ -22,7 +26,7 @@ type Props = {
   clientEditable?: boolean; // 控制是否允许修改
   initialValues?: Contact | null;
   onCancel: () => void;
-  onSuccess: () => void;
+  onSuccess: (savedContact?: Contact) => void;
 };
 
 const ContactFormModal = ({
@@ -58,22 +62,25 @@ const ContactFormModal = ({
   }, [open, initialValues, clientId, form]);
 
   const handleSubmit = async (values: Contact) => {
+    let savedContact: Contact | undefined;
     if (isEdit) {
-      await fetch(`/api/client-contacts/${initialValues?.id}`, {
+      const res = await fetch(`/api/client-contacts/${initialValues?.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       });
+      savedContact = await res.json();
     } else {
-      await fetch("/api/client-contacts", {
+      const res = await fetch("/api/client-contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       });
+      savedContact = await res.json();
     }
 
     form.resetFields();
-    onSuccess();
+    onSuccess(savedContact);
   };
 
   return (
@@ -111,7 +118,14 @@ const ContactFormModal = ({
               label: c.name,
               value: c.id,
             }))}
+            showSearch
+            filterOption={(input, option) =>
+              String(option?.label ?? "")
+                .toLowerCase()
+                .includes(input.toLowerCase())
+            }
             disabled={!clientEditable}
+            placeholder="搜索并选择客户"
           />
         </Form.Item>
         <Form.Item label="职位" name="title">

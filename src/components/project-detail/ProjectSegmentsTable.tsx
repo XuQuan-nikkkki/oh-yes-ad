@@ -22,29 +22,39 @@ type Props = {
   onAddTask: (record: ProjectSegmentRow) => void;
   onEdit: (record: ProjectSegmentRow) => void;
   onDelete: (record: ProjectSegmentRow) => void;
+  columnKeys?: ColumnKey[];
 };
 
-const ProjectSegmentsTable = ({ data, onAddTask, onEdit, onDelete }: Props) => {
-  const columns: ColumnsType<ProjectSegmentRow> = [
-    {
+type ColumnKey = "name" | "status" | "owner" | "dueDate" | "actions";
+
+const ProjectSegmentsTable = ({
+  data,
+  onAddTask,
+  onEdit,
+  onDelete,
+  columnKeys = ["name", "status", "owner", "dueDate", "actions"],
+}: Props) => {
+  const allColumns: Record<ColumnKey, ColumnsType<ProjectSegmentRow>[number]> = {
+    name: {
       title: "环节名称",
       dataIndex: "name",
       width: "35%",
       sorter: (a, b) => a.name.localeCompare(b.name),
     },
-    {
+    status: {
       title: "状态",
       dataIndex: "status",
       width: "15%",
-      render: (value: string | null | undefined) => value ?? "-",
+      render: (value: string | null | undefined) =>
+        value || "-",
     },
-    {
+    owner: {
       title: "负责人",
       dataIndex: ["owner", "name"],
       width: "15%",
       render: (_value, record) => record.owner?.name ?? "-",
     },
-    {
+    dueDate: {
       title: "截止日期",
       dataIndex: "dueDate",
       width: "20%",
@@ -52,7 +62,7 @@ const ProjectSegmentsTable = ({ data, onAddTask, onEdit, onDelete }: Props) => {
       render: (value: string | null | undefined) =>
         value ? dayjs(value).format("YYYY-MM-DD") : "-",
     },
-    {
+    actions: {
       title: "操作",
       width: "15%",
       render: (_value, record) => (
@@ -73,10 +83,13 @@ const ProjectSegmentsTable = ({ data, onAddTask, onEdit, onDelete }: Props) => {
         </Space>
       ),
     },
-  ];
+  };
+  const columns: ColumnsType<ProjectSegmentRow> = columnKeys.map(
+    (key) => allColumns[key],
+  );
 
   return (
-    <Table
+    <Table tableLayout="auto"
       rowKey="id"
       columns={columns}
       dataSource={data}

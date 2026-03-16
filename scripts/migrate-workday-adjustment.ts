@@ -1,7 +1,6 @@
 import "dotenv/config";
 import { PageObjectResponse } from "@notionhq/client";
 import {
-  getDateValue,
   getDateRangeValue,
   getSelectValue,
   getTitleValue,
@@ -10,11 +9,37 @@ import {
 } from "./parser";
 import { prisma, migrateDatabase } from "./migrate-notion";
 
+const DEFAULT_COLOR = "#d9d9d9";
+
+const upsertSelectOption = async (field: string, value?: string | null) => {
+  const normalized = value?.trim();
+  if (!normalized) return null;
+  const option = await prisma.selectOption.upsert({
+    where: {
+      field_value: {
+        field,
+        value: normalized,
+      },
+    },
+    create: {
+      field,
+      value: normalized,
+      color: DEFAULT_COLOR,
+    },
+    update: {},
+  });
+  return option.id;
+};
+
 const syncWorkdayAdjustment = async (page: PageObjectResponse) => {
   const { id } = page;
 
   const name = getTitleValue(page, "名称") ?? getTitleValue(page, "标题");
   const changeType = getSelectValue(page, "变动类型", true);
+  const changeTypeOptionId = await upsertSelectOption(
+    "workdayAdjustment.changeType",
+    changeType,
+  );
 
   let startDate: string;
   let endDate: string;
@@ -31,11 +56,18 @@ const syncWorkdayAdjustment = async (page: PageObjectResponse) => {
     endDate = end ?? start!;
   }
 
-  await prisma.workdayAdjustment.create({
-    data: {
+  await prisma.workdayAdjustment.upsert({
+    where: { notionPageId: id },
+    update: {
+      name: name ?? null,
+      changeTypeOptionId: changeTypeOptionId ?? null,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+    },
+    create: {
       notionPageId: id,
       name: name ?? null,
-      changeType,
+      changeTypeOptionId: changeTypeOptionId ?? null,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
     },

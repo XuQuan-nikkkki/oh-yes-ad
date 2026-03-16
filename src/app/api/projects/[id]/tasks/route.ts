@@ -1,6 +1,8 @@
 import { PrismaClient } from "@prisma/client";
+import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
+import { requireProjectWritePermission } from "@/lib/api-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -13,12 +15,15 @@ type RouteContext = {
 };
 
 export async function POST(req: NextRequest, context: RouteContext) {
+  const denied = await requireProjectWritePermission();
+  if (denied) return denied;
+
   const { id: projectId } = await context.params;
   if (!projectId) {
     return new Response("Missing project ID", { status: 400 });
   }
 
-  const body = await req.json();
+  const body = await sanitizeRequestBody(req);
   if (!body?.name || typeof body.name !== "string") {
     return new Response("Invalid task name", { status: 400 });
   }
@@ -37,7 +42,6 @@ export async function POST(req: NextRequest, context: RouteContext) {
   const task = await prisma.projectTask.create({
     data: {
       name: body.name,
-      status: body.status ?? null,
       segmentId: body.segmentId,
       ownerId: body.ownerId ?? null,
       dueDate: body.dueDate ? new Date(body.dueDate) : null,

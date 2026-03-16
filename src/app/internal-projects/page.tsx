@@ -1,31 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Table, Button, Card, Tag } from "antd";
+import { Button, Card } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import ProjectFormModal from "@/components/ProjectFormModal";
-import TableActions from "@/components/TableActions";
-import AppLink from "@/components/AppLink";
-
-type Project = {
-  id: string;
-  name: string;
-  type: string;
-  status?: string | null;
-  stage?: string | null;
-  startDate?: string | null;
-  endDate?: string | null;
-  clientId?: string | null;
-  ownerId?: string | null;
-  client?: {
-    id: string;
-    name: string;
-  } | null;
-  owner?: {
-    id: string;
-    name: string;
-  } | null;
-};
+import ProjectsTable, { type Project } from "@/components/ProjectsTable";
+import { useProjectPermission } from "@/hooks/useProjectPermission";
 
 type Client = {
   id: string;
@@ -44,22 +24,7 @@ const InternalProjectsPage = () => {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-
-  const projectStatusOptions = {
-    PLANNING: "规划中",
-    IN_PROGRESS: "进行中",
-    COMPLETED: "已完成",
-    PAUSED: "已暂停",
-  };
-  
-  const projectTypeLabel = "内部项目";
-
-  const statusColors = {
-    PLANNING: "default",
-    IN_PROGRESS: "processing",
-    COMPLETED: "success",
-    PAUSED: "warning",
-  };
+  const { canManageProject } = useProjectPermission();
 
   const fetchProjects = async () => {
     setLoading(true);
@@ -80,7 +45,7 @@ const InternalProjectsPage = () => {
       const res = await fetch("/api/employees");
       const data = await res.json();
       setEmployees(data);
-    } catch (error) {
+    } catch {
       console.log("Employees API not available yet");
     }
   };
@@ -93,6 +58,7 @@ const InternalProjectsPage = () => {
   }, []);
 
   const handleDelete = async (id: string) => {
+    if (!canManageProject) return;
     await fetch("/api/projects", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -102,64 +68,37 @@ const InternalProjectsPage = () => {
     fetchProjects();
   };
 
-  const columns = [
-    {
-      title: "项目名称",
-      dataIndex: "name",
-      width: 180,
-      ellipsis: true,
-      filters: projects.map((p) => ({
-        text: p.name,
-        value: p.name,
-      })),
-      filterSearch: true,
-      onFilter: (value, record) => record.name.includes(value as string),
-      sorter: (a, b) => a.name.localeCompare(b.name),
-      render: (text: string, record: Project) => (
-        <AppLink href={`/projects/${record.id}`}>
-          {text}
-        </AppLink>
-      ),
-    },
-    {
-      title: "操作",
-      width: 200,
-      fixed: "right" as const,
-      render: (_: any, record: Project) => (
-        <TableActions
-          onEdit={() => {
-            setEditingProject(record);
-            setOpen(true);
-          }}
-          onDelete={() => handleDelete(record.id)}
-          deleteTitle="确定删除这个项目？"
-        />
-      ),
-    },
-  ];
-
   return (
-    <Card
-      title={<h3>内部项目</h3>}
-      extra={
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            setEditingProject(null);
-            setOpen(true);
-          }}
-        >
-          新建内部项目
-        </Button>
-      }
-    >
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={projects}
+    <Card styles={{ body: { padding: 12 } }}>
+      <ProjectsTable
+        headerTitle={<h3 style={{ margin: 0 }}>内部项目</h3>}
+        toolbarActions={[
+          <Button
+            key="create-internal-project"
+            type="primary"
+            icon={<PlusOutlined />}
+            disabled={!canManageProject}
+            onClick={() => {
+              setEditingProject(null);
+              setOpen(true);
+            }}
+          >
+            新建内部项目
+          </Button>,
+        ]}
+        enableColumnSetting
+        columnsStatePersistenceKey="internal-projects-table-columns-state"
+        projects={projects}
         loading={loading}
-        pagination={{ pageSize: 10 }}
+        columnKeys={["name", "owner", "isArchived", "actions"]}
+        defaultVisibleColumnKeys={["name", "owner", "isArchived", "actions"]}
+        onOptionUpdated={fetchProjects}
+        actionsDisabled={!canManageProject}
+        onEdit={(project) => {
+          setEditingProject(project);
+          setOpen(true);
+        }}
+        onDelete={handleDelete}
       />
       <ProjectFormModal
         open={open}

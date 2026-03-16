@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
+import { requireProjectWritePermission } from "@/lib/api-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -27,6 +28,9 @@ const findTaskInProject = async (projectId: string, taskId: string) => {
 };
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
+  const denied = await requireProjectWritePermission();
+  if (denied) return denied;
+
   const { id: projectId, taskId } = await context.params;
   if (!projectId || !taskId) {
     return new Response("Missing IDs", { status: 400 });
@@ -37,9 +41,14 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     return new Response("Not Found", { status: 404 });
   }
 
-  const body = await req.json();
+  const body = (await req.json()) as {
+    name?: unknown;
+    segmentId?: unknown;
+    ownerId?: unknown;
+    dueDate?: unknown;
+  };
 
-  if (body.segmentId) {
+  if (typeof body.segmentId === "string" && body.segmentId) {
     const targetSegment = await prisma.projectSegment.findFirst({
       where: { id: body.segmentId, projectId },
       select: { id: true },
@@ -52,11 +61,13 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const task = await prisma.projectTask.update({
     where: { id: taskId },
     data: {
-      name: body.name,
-      status: body.status ?? null,
-      segmentId: body.segmentId,
-      ownerId: body.ownerId ?? null,
-      dueDate: body.dueDate ? new Date(body.dueDate) : null,
+      name: typeof body.name === "string" ? body.name : undefined,
+      segmentId: typeof body.segmentId === "string" ? body.segmentId : undefined,
+      ownerId: typeof body.ownerId === "string" ? body.ownerId : null,
+      dueDate:
+        typeof body.dueDate === "string" && body.dueDate
+          ? new Date(body.dueDate)
+          : null,
     },
   });
 
@@ -64,6 +75,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(_req: NextRequest, context: RouteContext) {
+  const denied = await requireProjectWritePermission();
+  if (denied) return denied;
+
   const { id: projectId, taskId } = await context.params;
   if (!projectId || !taskId) {
     return new Response("Missing IDs", { status: 400 });

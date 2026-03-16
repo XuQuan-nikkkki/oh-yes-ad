@@ -12,6 +12,16 @@ datasource db {
   provider = "postgresql"
 }
 
+enum MilestoneDatePrecision {
+  DATE
+  DATETIME
+}
+
+enum LeaveRecordDatePrecision {
+  DATE
+  DATETIME
+}
+
 model Client {
   id           String  @id @default(uuid())
   notionPageId String? @unique
@@ -19,7 +29,6 @@ model Client {
   name             String
   industryOptionId String
   industryOption   SelectOption @relation(fields: [industryOptionId], references: [id])
-  remark           String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -29,7 +38,7 @@ model Client {
 }
 
 model SelectOption {
-  id    String @id @default(uuid())
+  id    String  @id @default(uuid())
   field String
   value String
   color String?
@@ -37,7 +46,30 @@ model SelectOption {
 
   createdAt DateTime @default(now())
 
-  clientsByIndustry Client[]
+  clientsByIndustry              Client[]
+  vendorsByVendorType            Vendor[]              @relation("VendorVendorType")
+  vendorsByBusinessType          Vendor[]              @relation("VendorBusinessType")
+  vendorBusinessTypeOptions      VendorBusinessTypeOption[]
+  vendorsByCooperationStatus     Vendor[]              @relation("VendorCooperationStatus")
+  vendorsByRating                Vendor[]              @relation("VendorRating")
+  vendorServiceOptions           VendorServiceOption[]
+  employeesByFunction            Employee[]            @relation("EmployeeFunction")
+  employeesByDepartmentLevel1    Employee[]            @relation("EmployeeDepartmentLevel1")
+  employeesByDepartmentLevel2    Employee[]            @relation("EmployeeDepartmentLevel2")
+  employeesByPosition            Employee[]            @relation("EmployeePosition")
+  employeesByEmploymentType      Employee[]            @relation("EmployeeEmploymentType")
+  employeesByEmploymentStatus    Employee[]            @relation("EmployeeEmploymentStatus")
+  leaveRecordsByType             LeaveRecord[]         @relation("LeaveRecordType")
+  workdayAdjustmentsByChangeType WorkdayAdjustment[]   @relation("WorkdayAdjustmentChangeType")
+  projectsByType                 Project[]             @relation("ProjectType")
+  projectsByStatus               Project[]             @relation("ProjectStatus")
+  projectsByStage                Project[]             @relation("ProjectStage")
+  projectSegmentsByStatus        ProjectSegment[]      @relation("ProjectSegmentStatus")
+  projectDocumentsByType         ProjectDocument[]     @relation("ProjectDocumentType")
+  projectMilestonesByType        ProjectMilestone[]    @relation("ProjectMilestoneType")
+  projectMilestonesByMethod      ProjectMilestone[]    @relation("ProjectMilestoneMethod")
+  plannedWorkEntriesByYear       PlannedWorkEntry[]    @relation("PlannedWorkEntryYear")
+  plannedWorkEntriesByWeekNumber PlannedWorkEntry[]    @relation("PlannedWorkEntryWeekNumber")
 
   @@unique([field, value])
   @@index([field, order])
@@ -48,6 +80,7 @@ model ClientContact {
   notionPageId String? @unique
 
   name       String
+  order      Int     @default(1000)
   title      String?
   scope      String?
   preference String?
@@ -64,6 +97,8 @@ model ClientContact {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([clientId, order])
 }
 
 model LegalEntity {
@@ -74,7 +109,6 @@ model LegalEntity {
   fullName  String?
   taxNumber String?
   address   String?
-  remark    String?
   isActive  Boolean @default(true)
 
   createdAt DateTime @default(now())
@@ -122,20 +156,27 @@ model Employee {
   id           String  @id @default(uuid())
   notionPageId String? @unique
 
-  name String
-  phone String? @unique
+  name     String
+  phone    String? @unique
   fullName String?
-  password String @default("admin123")
+  password String  @default("admin123")
 
-  function String?
-  position String?
-  level    String?
+  functionOptionId String?
+  functionOption   SelectOption? @relation("EmployeeFunction", fields: [functionOptionId], references: [id])
+  position         String?
+  positionOptionId String?
+  positionOption   SelectOption? @relation("EmployeePosition", fields: [positionOptionId], references: [id])
+  level            String?
 
-  departmentLevel1 String?
-  departmentLevel2 String?
+  departmentLevel1OptionId String?
+  departmentLevel1Option   SelectOption? @relation("EmployeeDepartmentLevel1", fields: [departmentLevel1OptionId], references: [id])
+  departmentLevel2OptionId String?
+  departmentLevel2Option   SelectOption? @relation("EmployeeDepartmentLevel2", fields: [departmentLevel2OptionId], references: [id])
 
-  employmentType   String?
-  employmentStatus String @default("在职")
+  employmentTypeOptionId   String?
+  employmentTypeOption     SelectOption? @relation("EmployeeEmploymentType", fields: [employmentTypeOptionId], references: [id])
+  employmentStatusOptionId String?
+  employmentStatusOption   SelectOption? @relation("EmployeeEmploymentStatus", fields: [employmentStatusOptionId], references: [id])
 
   entryDate DateTime?
   leaveDate DateTime?
@@ -156,21 +197,21 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  leaveRecords    LeaveRecord[]
-  ownedProjects   Project[]          @relation("ProjectOwner")
-  projects        Project[]          @relation("ProjectMembers")
-  projectSegments ProjectSegment[]
-  ownedTasks      ProjectTask[]      @relation("TaskOwner")
-  createdTasks    ProjectTask[]      @relation("TaskCreator")
-  milestones      ProjectMilestone[] @relation("MilestoneInternalParticipants")
+  leaveRecords      LeaveRecord[]
+  ownedProjects     Project[]          @relation("ProjectOwner")
+  projects          Project[]          @relation("ProjectMembers")
+  projectSegments   ProjectSegment[]
+  ownedTasks        ProjectTask[]      @relation("TaskOwner")
+  createdTasks      ProjectTask[]      @relation("TaskCreator")
+  milestones        ProjectMilestone[] @relation("MilestoneInternalParticipants")
   actualWorkEntries ActualWorkEntry[]
-  roles EmployeeRole[]
-  apiCallLogs ApiCallLog[]
+  roles             EmployeeRole[]
+  apiCallLogs       ApiCallLog[]
 }
 
 model Role {
-  id        String @id @default(uuid())
-  code      String @unique
+  id        String   @id @default(uuid())
+  code      String   @unique
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -194,9 +235,11 @@ model LeaveRecord {
   id           String  @id @default(uuid())
   notionPageId String? @unique
 
-  type      String // 以后可改 enum
-  startDate DateTime
-  endDate   DateTime
+  typeOptionId String?
+  typeOption   SelectOption? @relation("LeaveRecordType", fields: [typeOptionId], references: [id])
+  startAt      DateTime
+  endAt        DateTime?
+  datePrecision LeaveRecordDatePrecision @default(DATE)
 
   employeeId String
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -204,7 +247,7 @@ model LeaveRecord {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([employeeId, startDate])
+  @@index([employeeId, startAt])
 }
 
 // 工作日变动：管理每年的休假、调休等日期变动
@@ -212,10 +255,11 @@ model WorkdayAdjustment {
   id           String  @id @default(uuid())
   notionPageId String? @unique
 
-  name       String? // 名称/描述，如「春节调休」
-  changeType String  // 变动类型：上班、休假、调休
-  startDate  DateTime // 开始日期
-  endDate    DateTime // 结束日期
+  name               String? // 名称/描述，如「春节调休」
+  changeTypeOptionId String?
+  changeTypeOption   SelectOption? @relation("WorkdayAdjustmentChangeType", fields: [changeTypeOptionId], references: [id])
+  startDate          DateTime // 开始日期
+  endDate            DateTime // 结束日期
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -228,10 +272,14 @@ model Project {
   notionPageId String? @unique
 
   // 基础字段
-  name   String
-  type   String // CLIENT / INTERNAL（暂时字符串）
-  status String?
-  stage  String?
+  name           String
+  typeOptionId   String?
+  typeOption     SelectOption? @relation("ProjectType", fields: [typeOptionId], references: [id])
+  statusOptionId String?
+  statusOption   SelectOption? @relation("ProjectStatus", fields: [statusOptionId], references: [id])
+  stageOptionId  String?
+  stageOption    SelectOption? @relation("ProjectStage", fields: [stageOptionId], references: [id])
+  isArchived     Boolean       @default(false)
 
   startDate DateTime?
   endDate   DateTime?
@@ -254,9 +302,9 @@ model Project {
 
   segments ProjectSegment[]
 
-  documents  ProjectDocument[]
-  vendors    Vendor[]           @relation("ProjectVendors")
-  milestones ProjectMilestone[]
+  documents         ProjectDocument[]
+  vendors           Vendor[]           @relation("ProjectVendors")
+  milestones        ProjectMilestone[]
   actualWorkEntries ActualWorkEntry[]
 }
 
@@ -265,9 +313,10 @@ model ProjectSegment {
   notionPageId String? @unique
 
   // 基础字段
-  name    String
-  status  String?
-  dueDate DateTime?
+  name           String
+  statusOptionId String?
+  statusOption   SelectOption? @relation("ProjectSegmentStatus", fields: [statusOptionId], references: [id])
+  dueDate        DateTime?
 
   // relation
 
@@ -321,20 +370,23 @@ model ProjectDocument {
 
   // 基础字段
   name         String
-  type         String? // 资料类型
+  typeOptionId String?
+  typeOption   SelectOption? @relation("ProjectDocumentType", fields: [typeOptionId], references: [id])
   date         DateTime?
-  isFinal      Boolean   @default(false)
+  isFinal      Boolean       @default(false)
   internalLink String? // 内部盘链接
 
   // 所属项目
   projectId  String
   project    Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  milestones ProjectMilestone[] @relation("MilestoneDocuments")
+  milestoneId String?
+  milestone   ProjectMilestone? @relation("MilestoneDocuments", fields: [milestoneId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([projectId])
+  @@index([milestoneId])
 }
 
 model Vendor {
@@ -345,16 +397,17 @@ model Vendor {
   name     String
   fullName String?
 
-  vendorType   String?
-  businessType String?
-  services     String[]
-  location     String?
+  vendorTypeOptionId   String?
+  vendorTypeOption     SelectOption? @relation("VendorVendorType", fields: [vendorTypeOptionId], references: [id])
+  businessTypeOptionId String?
+  businessTypeOption   SelectOption? @relation("VendorBusinessType", fields: [businessTypeOptionId], references: [id])
+  location             String?
 
   // 联系方式
-  contactName  String?
-  phone        String?
-  email        String?
-  wechat       String?
+  contactName String?
+  phone       String?
+  email       String?
+  wechat      String?
 
   // 能力描述
   strengths     String?
@@ -367,10 +420,15 @@ model Vendor {
   isBlacklisted Boolean @default(false)
 
   // 合作状态
-  cooperationStatus String?
-  rating            String?
-  lastCoopDate      String?
-  cooperatedProjects   String?
+  cooperationStatusOptionId String?
+  cooperationStatusOption   SelectOption? @relation("VendorCooperationStatus", fields: [cooperationStatusOptionId], references: [id])
+  ratingOptionId            String?
+  ratingOption              SelectOption? @relation("VendorRating", fields: [ratingOptionId], references: [id])
+  lastCoopDate              String?
+  cooperatedProjects        String?
+
+  businessTypes VendorBusinessTypeOption[]
+  services VendorServiceOption[]
 
   // 项目多对多
   projects   Project[]          @relation("ProjectVendors")
@@ -380,16 +438,42 @@ model Vendor {
   updatedAt DateTime @updatedAt
 }
 
+model VendorServiceOption {
+  vendorId String
+  optionId String
+
+  vendor Vendor       @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  option SelectOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@id([vendorId, optionId])
+  @@index([optionId])
+}
+
+model VendorBusinessTypeOption {
+  vendorId String
+  optionId String
+
+  vendor Vendor       @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  option SelectOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@id([vendorId, optionId])
+  @@index([optionId])
+}
+
 model ProjectMilestone {
   id           String  @id @default(uuid())
   notionPageId String? @unique
 
   // 基础字段
-  name     String
-  type     String?
-  date     DateTime?
-  location String?
-  method   String?
+  name           String
+  typeOptionId   String?
+  typeOption     SelectOption? @relation("ProjectMilestoneType", fields: [typeOptionId], references: [id])
+  startAt        DateTime?
+  endAt          DateTime?
+  datePrecision  MilestoneDatePrecision @default(DATE)
+  location       String?
+  methodOptionId String?
+  methodOption   SelectOption? @relation("ProjectMilestoneMethod", fields: [methodOptionId], references: [id])
 
   // 所属项目
   projectId String
@@ -410,44 +494,46 @@ model ProjectMilestone {
 }
 
 model PlannedWorkEntry {
-  id           String   @id @default(uuid())
-  notionPageId String?  @unique
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
 
-  taskId       String
-  task         ProjectTask @relation(fields: [taskId], references: [id])
+  taskId String
+  task   ProjectTask @relation(fields: [taskId], references: [id])
 
-  year         Int
-  weekNumber   Int
-  plannedDays  Float
-  monday       Boolean @default(false)
-  tuesday      Boolean @default(false)
-  wednesday    Boolean @default(false)
-  thursday     Boolean @default(false)
-  friday       Boolean @default(false)
-  saturday     Boolean @default(false)
-  sunday       Boolean @default(false)
+  yearOptionId       String?
+  yearOption         SelectOption? @relation("PlannedWorkEntryYear", fields: [yearOptionId], references: [id])
+  weekNumberOptionId String?
+  weekNumberOption   SelectOption? @relation("PlannedWorkEntryWeekNumber", fields: [weekNumberOptionId], references: [id])
+  plannedDays        Float
+  monday             Boolean       @default(false)
+  tuesday            Boolean       @default(false)
+  wednesday          Boolean       @default(false)
+  thursday           Boolean       @default(false)
+  friday             Boolean       @default(false)
+  saturday           Boolean       @default(false)
+  sunday             Boolean       @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model ActualWorkEntry {
-  id            String   @id @default(uuid())
-  notionPageId  String?  @unique
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
 
-  title         String
+  title String
 
-  startDate     DateTime
-  endDate       DateTime
+  startDate DateTime
+  endDate   DateTime
 
-  employeeId    String
-  employee      Employee @relation(fields: [employeeId], references: [id])
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
 
-  projectId     String
-  project       Project  @relation(fields: [projectId], references: [id])
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([employeeId])
   @@index([projectId])

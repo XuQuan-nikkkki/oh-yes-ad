@@ -1,6 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import { Modal, Form, Input, Select, Button } from "antd";
+import SelectOptionSelector, {
+  type SelectOptionSelectorValue,
+} from "@/components/SelectOptionSelector";
+import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 
 type Project = {
   id?: string;
@@ -31,13 +36,14 @@ type Props = {
   clients?: Client[];
   employees?: Employee[];
   projectType?: string;
+  clientEditable?: boolean;
 };
 
 type ProjectFormValues = {
   name: string;
   type: string;
-  status?: string[] | string | null;
-  stage?: string[] | string | null;
+  status?: SelectOptionSelectorValue;
+  stage?: SelectOptionSelectorValue;
   clientId?: string | null;
   ownerId?: string | null;
 };
@@ -50,36 +56,79 @@ const ProjectFormModal = ({
   clients = [],
   employees = [],
   projectType,
+  clientEditable = true,
 }: Props) => {
-  const isEdit = !!initialValues?.id;
-  const isInternalProject = projectType === "内部项目" || initialValues?.type === "INTERNAL";
+  const [form] = Form.useForm<ProjectFormValues>();
+  const projectTypeValue = Form.useWatch("type", form);
+  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
+  const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
+  const statusOptions = optionsByField["project.status"] ?? [];
+  const stageOptions = optionsByField["project.stage"] ?? [];
 
-  const normalizeSingleValue = (value: unknown): string | null => {
-    if (Array.isArray(value)) {
-      const first = value[0];
-      return typeof first === "string" && first.trim() ? first : null;
-    }
+  const isEdit = !!initialValues?.id;
+  const normalizeTypeCode = (value?: string | null) => {
+    if (!value) return null;
+    if (value === "客户项目") return "CLIENT";
+    if (value === "内部项目") return "INTERNAL";
+    return value;
+  };
+  const fixedTypeCode = normalizeTypeCode(projectType);
+  const currentTypeCode = normalizeTypeCode(
+    (projectTypeValue as string | undefined) ?? initialValues?.type ?? projectType,
+  );
+  const isInternalProject = currentTypeCode === "INTERNAL";
+
+  useEffect(() => {
+    if (!open) return;
+    void fetchAllOptions();
+  }, [fetchAllOptions, open]);
+
+  const normalizeIdValue = (value: unknown): string | null => {
     return typeof value === "string" && value.trim() ? value : null;
   };
 
   const normalizeProjectType = (value: unknown): string | null => {
-    const normalized = normalizeSingleValue(value);
+    const normalized = typeof value === "string" ? value.trim() : "";
     if (!normalized) return null;
     if (normalized === "客户项目") return "CLIENT";
     if (normalized === "内部项目") return "INTERNAL";
     return normalized;
   };
 
+  const normalizeSelectOptionValue = (value: unknown) => {
+    if (typeof value === "string") {
+      const normalized = value.trim();
+      return normalized || null;
+    }
+    if (value && typeof value === "object") {
+      const candidateValue =
+        "value" in value && typeof value.value === "string"
+          ? value.value.trim()
+          : "";
+      const candidateColor =
+        "color" in value && typeof value.color === "string"
+          ? value.color.trim()
+          : "";
+      if (!candidateValue) return null;
+      return {
+        value: candidateValue,
+        color: candidateColor || null,
+      };
+    }
+    return null;
+  };
+
   const handleSubmit = async (values: ProjectFormValues) => {
     const type = normalizeProjectType(values.type);
+    const isInternal = type === "INTERNAL";
 
     const payload = {
       name: values.name,
       type,
-      status: isInternalProject ? null : normalizeSingleValue(values.status),
-      stage: isInternalProject ? null : normalizeSingleValue(values.stage),
-      clientId: isInternalProject ? null : normalizeSingleValue(values.clientId),
-      ownerId: normalizeSingleValue(values.ownerId),
+      status: isInternal ? null : normalizeSelectOptionValue(values.status),
+      stage: isInternal ? null : normalizeSelectOptionValue(values.stage),
+      clientId: isInternal ? null : normalizeIdValue(values.clientId),
+      ownerId: normalizeIdValue(values.ownerId),
     };
 
     const res = await fetch("/api/projects", {
@@ -109,27 +158,20 @@ const ProjectFormModal = ({
       destroyOnHidden
     >
       <Form
+        form={form}
         key={initialValues?.id || "new"}
         layout="horizontal"
         labelCol={{ span: 6 }}
         wrapperCol={{ span: 18 }}
         initialValues={{
           name: initialValues?.name,
-          type: initialValues?.type || projectType || undefined,
+          type: normalizeTypeCode(initialValues?.type) ?? fixedTypeCode ?? undefined,
           status: isInternalProject
-            ? []
-            : initialValues?.status
-            ? Array.isArray(initialValues.status)
-              ? initialValues.status
-              : [initialValues.status]
-            : [],
+            ? undefined
+            : initialValues?.status ?? undefined,
           stage: isInternalProject
-            ? []
-            : initialValues?.stage
-            ? Array.isArray(initialValues.stage)
-              ? initialValues.stage
-              : [initialValues.stage]
-            : [],
+            ? undefined
+            : initialValues?.stage ?? undefined,
           clientId: isInternalProject ? undefined : initialValues?.clientId,
           ownerId: initialValues?.ownerId,
         }}
@@ -154,7 +196,7 @@ const ProjectFormModal = ({
               { label: "内部项目", value: "INTERNAL" },
             ]}
             placeholder="选择项目类型"
-            disabled={!!projectType}
+            disabled={Boolean(fixedTypeCode)}
           />
         </Form.Item>
 
@@ -166,6 +208,7 @@ const ProjectFormModal = ({
                 value: c.id,
               }))}
               placeholder="选择客户"
+              disabled={!clientEditable}
             />
           </Form.Item>
         )}
@@ -185,51 +228,26 @@ const ProjectFormModal = ({
 
         {!isInternalProject && (
           <Form.Item label="项目状态" name="status">
-            <Select
-              mode="tags"
-              maxCount={1}
-              options={
-                [
-                  { label: "推进中", value: "推进中" },
-                  { label: "结算中", value: "结算中" },
-                  { label: "商务洽谈", value: "商务洽谈" },
-                  { label: "走流程", value: "走流程" },
-                  { label: "已结案", value: "已结案" },
-                  { label: "暂停", value: "暂停" },
-                ]
-              }
-              placeholder="选择或输入项目状态（可选）"
-              allowClear
+            <SelectOptionSelector
+              placeholder="选择或新增项目状态（可选）"
+              options={statusOptions.map((item) => ({
+                label: item.value,
+                value: item.value,
+                color: item.color ?? "#d9d9d9",
+              }))}
             />
           </Form.Item>
         )}
 
         {!isInternalProject && (
           <Form.Item label="项目阶段" name="stage">
-            <Select
-              mode="tags"
-              maxCount={1}
-              options={
-                [
-                  { label: "商务洽谈", value: "商务洽谈" },
-                  { label: "合同签订", value: "合同签订" },
-                  { label: "立项", value: "立项" },
-                  { label: "背景与需求", value: "背景与需求" },
-                  { label: "定义与设想", value: "定义与设想" },
-                  { label: "设计与原型（上）", value: "设计与原型（上）" },
-                  { label: "设计与原型（下）", value: "设计与原型（下）" },
-                  { label: "迭代与落地", value: "迭代与落地" },
-                  { label: "VIS手册提交", value: "VIS手册提交" },
-                  { label: "结案阶段", value: "结案阶段" },
-                  { label: "文件深化", value: "文件深化" },
-                  { label: "第三季度服务", value: "第三季度服务" },
-                  { label: "交付验收中", value: "交付验收中" },
-                  { label: "第四季度服务", value: "第四季度服务" },
-                  { label: "策划拍摄", value: "策划拍摄" },
-                ]
-              }
-              placeholder="选择或创建一个阶段"
-              allowClear
+            <SelectOptionSelector
+              placeholder="选择或新增项目阶段（可选）"
+              options={stageOptions.map((item) => ({
+                label: item.value,
+                value: item.value,
+                color: item.color ?? "#d9d9d9",
+              }))}
             />
           </Form.Item>
         )}

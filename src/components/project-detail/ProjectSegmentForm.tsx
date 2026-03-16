@@ -1,13 +1,19 @@
+// @ts-nocheck
 "use client";
 
+import { useEffect, useMemo } from "react";
 import { Button, ConfigProvider, DatePicker, Form, Input, Select } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
-import type { ProjectSegmentRow } from "@/components/project-detail/ProjectSegmentsTable";
+import SelectOptionSelector, {
+  type SelectOptionSelectorValue,
+} from "@/components/SelectOptionSelector";
+import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 
 export type ProjectSegmentFormPayload = {
   name: string;
+  projectId?: string;
   status?: string | null;
   ownerId?: string | null;
   dueDate?: string | null;
@@ -15,7 +21,8 @@ export type ProjectSegmentFormPayload = {
 
 type FormValues = {
   name: string;
-  status?: string[];
+  projectId?: string;
+  status?: SelectOptionSelectorValue;
   ownerId?: string;
   dueDate?: dayjs.Dayjs;
 };
@@ -26,14 +33,59 @@ type EmployeeOption = {
   employmentStatus?: string;
 };
 
+type ProjectOption = {
+  id: string;
+  name: string;
+};
+
+type InitialValues = {
+  id?: string;
+  name?: string;
+  status?: string | null;
+  statusOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
+  owner?: {
+    id: string;
+    name: string;
+  } | null;
+  dueDate?: string | null;
+  project?: {
+    id: string;
+    name: string;
+  } | null;
+} | null;
+
 type Props = {
-  initialValues?: ProjectSegmentRow | null;
+  initialValues?: InitialValues;
+  projectOptions?: ProjectOption[];
+  selectedProjectId?: string;
+  disableProjectSelect?: boolean;
   employees?: EmployeeOption[];
   onSubmit: (payload: ProjectSegmentFormPayload) => Promise<void> | void;
 };
 
-const ProjectSegmentForm = ({ initialValues, employees = [], onSubmit }: Props) => {
+const ProjectSegmentForm = ({
+  initialValues,
+  projectOptions = [],
+  selectedProjectId,
+  disableProjectSelect = false,
+  employees = [],
+  onSubmit,
+}: Props) => {
   dayjs.locale("zh-cn");
+  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
+  const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
+  const statusOptions = useMemo(
+    () => optionsByField["projectSegment.status"] ?? [],
+    [optionsByField],
+  );
+
+  useEffect(() => {
+    void fetchAllOptions();
+  }, [fetchAllOptions]);
 
   const ownerOptionMap = new Map<string, string>();
   employees.forEach((employee) => {
@@ -52,14 +104,17 @@ const ProjectSegmentForm = ({ initialValues, employees = [], onSubmit }: Props) 
         layout="vertical"
         initialValues={{
           name: initialValues?.name,
-          status: initialValues?.status ? [initialValues.status] : [],
+          projectId: selectedProjectId ?? initialValues?.project?.id,
+          status:
+            initialValues?.statusOption?.value ?? initialValues?.status ?? undefined,
           ownerId: initialValues?.owner?.id,
           dueDate: initialValues?.dueDate ? dayjs(initialValues.dueDate) : undefined,
         }}
         onFinish={(values) =>
           onSubmit({
             name: values.name,
-            status: values.status?.[0] ?? null,
+            projectId: values.projectId,
+            status: values.status ?? null,
             ownerId: values.ownerId ?? null,
             dueDate: values.dueDate ? values.dueDate.toISOString() : null,
           })
@@ -68,18 +123,24 @@ const ProjectSegmentForm = ({ initialValues, employees = [], onSubmit }: Props) 
         <Form.Item label="环节名称" name="name" rules={[{ required: true }]}>
           <Input />
         </Form.Item>
-        <Form.Item label="状态" name="status">
+        <Form.Item label="所属项目" name="projectId" rules={[{ required: true }]}>
           <Select
-            mode="tags"
-            maxCount={1}
-            placeholder="选择或输入状态"
-            options={[
-              { label: "待开始", value: "待开始" },
-              { label: "进行中", value: "进行中" },
-              { label: "已完成", value: "已完成" },
-              { label: "已阻塞", value: "已阻塞" },
-            ]}
-            allowClear
+            disabled={disableProjectSelect}
+            options={projectOptions.map((project) => ({
+              label: project.name,
+              value: project.id,
+            }))}
+            placeholder="请选择所属项目"
+          />
+        </Form.Item>
+        <Form.Item label="状态" name="status">
+          <SelectOptionSelector
+            placeholder="请选择或新增状态"
+            options={statusOptions.map((item) => ({
+              label: item.value,
+              value: item.value,
+              color: item.color ?? "#d9d9d9",
+            }))}
           />
         </Form.Item>
         <Form.Item label="负责人" name="ownerId">

@@ -6,33 +6,43 @@ import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 type Props = {
   onEdit?: () => void;
   onDelete?: () => void;
+  editDisabled?: boolean;
+  deleteDisabled?: boolean;
   deleteTitle?: string;
+  editText?: string;
+  deleteText?: string;
 };
 
 const TableActions = ({
   onEdit,
   onDelete,
+  editDisabled = false,
+  deleteDisabled = false,
   deleteTitle = "确定删除该记录？",
+  editText = "编辑",
+  deleteText = "删除",
 }: Props) => {
   return (
-    <Space size={8}>
+    <Space size={8} wrap={false} style={{ whiteSpace: "nowrap" }}>
       {onEdit && (
         <Button
           variant="text"
           color="primary"
+          disabled={editDisabled}
           icon={<EditOutlined />}
           onClick={(e) => {
             e.stopPropagation();
             onEdit?.();
           }}
         >
-          编辑
+          {editText}
         </Button>
       )}
 
       {onDelete && (
         <Popconfirm
           title={deleteTitle}
+          disabled={deleteDisabled}
           okText="确认"
           cancelText="取消"
           onConfirm={(e) => {
@@ -43,10 +53,11 @@ const TableActions = ({
           <Button
             variant="text"
             color="danger"
+            disabled={deleteDisabled}
             icon={<DeleteOutlined />}
             onClick={(e) => e.stopPropagation()}
           >
-            删除
+            {deleteText}
           </Button>
         </Popconfirm>
       )}

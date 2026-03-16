@@ -10,7 +10,10 @@ const AppLink = ({ children, style, ...props }: Props) => {
     <Link
       {...props}
       style={{
-        color: "#1677ff",
+        // color: "#1677ff",
+        fontWeight: 500,
+        textDecoration: "underline",
+        textDecorationColor: "rgb(69, 69, 69)",
         ...style,
       }}
     >

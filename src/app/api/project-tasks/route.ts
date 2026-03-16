@@ -1,6 +1,8 @@
 import { PrismaClient } from "@prisma/client";
+import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
+import { requireProjectWritePermission } from "@/lib/api-permissions";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -8,7 +10,6 @@ const prisma = new PrismaClient({
 
 export async function GET() {
   const items = await prisma.projectTask.findMany({
-    where: { segment: { project: { type: "内部项目" } } },
     include: {
       segment: {
         select: { id: true, name: true, project: { select: { id: true, name: true } } },
@@ -21,7 +22,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  const denied = await requireProjectWritePermission();
+  if (denied) return denied;
+
+  const body = await sanitizeRequestBody(req);
   if (!body?.name || typeof body.name !== "string") {
     return new Response("Invalid task name", { status: 400 });
   }
@@ -29,8 +33,8 @@ export async function POST(req: NextRequest) {
     return new Response("Invalid segment ID", { status: 400 });
   }
 
-  const segment = await prisma.projectSegment.findFirst({
-    where: { id: body.segmentId, project: { type: "内部项目" } },
+  const segment = await prisma.projectSegment.findUnique({
+    where: { id: body.segmentId },
     select: { id: true },
   });
   if (!segment) return new Response("Segment not found", { status: 400 });

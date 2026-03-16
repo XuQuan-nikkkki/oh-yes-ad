@@ -12,7 +12,6 @@ type Client = {
     id: string;
     value: string;
   } | null;
-  remark?: string | null;
 };
 
 type SelectOption = {
@@ -74,7 +73,6 @@ const ClientFormModal = ({
       body: JSON.stringify({
         name: values.name,
         industryOptionId,
-        remark: values.remark ?? null,
       }),
     });
 

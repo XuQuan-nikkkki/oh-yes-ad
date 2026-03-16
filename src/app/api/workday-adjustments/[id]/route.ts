@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const adapter = new PrismaPg({
@@ -7,23 +8,66 @@ const adapter = new PrismaPg({
 
 const prisma = new PrismaClient({ adapter });
 
+const CHANGE_TYPE_FIELD = "workdayAdjustment.changeType";
+
+const normalizeText = (value: unknown) => {
+  if (typeof value !== "string") return null;
+  const next = value.trim();
+  return next ? next : null;
+};
+
+const ensureChangeTypeOptionId = async (value: unknown) => {
+  const normalized = normalizeText(value);
+  if (!normalized) return null;
+
+  const option = await prisma.selectOption.upsert({
+    where: {
+      field_value: {
+        field: CHANGE_TYPE_FIELD,
+        value: normalized,
+      },
+    },
+    update: {},
+    create: {
+      field: CHANGE_TYPE_FIELD,
+      value: normalized,
+      color: "#d9d9d9",
+    },
+  });
+
+  return option.id;
+};
+
+type WorkdayAdjustmentPayload = Record<string, unknown> & {
+  changeTypeOption?: { id: string; value: string; color?: string | null } | null;
+};
+
+const serializeWorkdayAdjustment = (record: WorkdayAdjustmentPayload) => ({
+  ...record,
+  changeType: record.changeTypeOption?.value ?? null,
+});
+
 export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const body = await req.json();
+    const body = await sanitizeRequestBody(req);
+    const changeTypeOptionId = await ensureChangeTypeOptionId(body.changeType);
     const record = await prisma.workdayAdjustment.update({
       where: { id },
       data: {
-        name: body.name ?? null,
-        changeType: body.changeType,
+        name: normalizeText(body.name),
+        changeTypeOptionId,
         startDate: new Date(body.startDate),
         endDate: new Date(body.endDate),
       },
+      include: {
+        changeTypeOption: true,
+      },
     });
-    return Response.json(record);
+    return Response.json(serializeWorkdayAdjustment(record));
   } catch (error) {
     console.error("PUT /api/workday-adjustments/[id] error:", error);
     return Response.json(

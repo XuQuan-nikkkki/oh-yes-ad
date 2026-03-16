@@ -30,13 +30,22 @@ export async function DELETE(req: Request) {
           select: {
             id: true,
             name: true,
-            function: true,
+            functionOption: {
+              select: {
+                value: true,
+              },
+            },
           },
         },
       },
     });
-
-    return Response.json(updated.members);
+    return Response.json(
+      updated.members.map((member) => ({
+        id: member.id,
+        name: member.name,
+        function: member.functionOption?.value ?? null,
+      })),
+    );
   } catch (error) {
     console.error("Error removing member:", error);
     return new Response("Failed to remove member", { status: 500 });

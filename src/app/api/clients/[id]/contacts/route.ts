@@ -25,7 +25,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     include: {
       client: true,
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
   });
 
   return Response.json(contacts);

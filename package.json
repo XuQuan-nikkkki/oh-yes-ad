@@ -2,14 +2,14 @@
   "name": "oh-yes-ad",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@10.9.2",
   "scripts": {
-    "migrate:workday-adjustment": "tsx scripts/migrate-workday-adjustment.ts",
     "dev": "next dev",
-    "build": "prisma generate && prisma db push && next build",
+    "build": "prisma generate && prisma db push && prisma db seed && next build && tsx scripts/auto-migrate-on-deploy.ts",
     "start": "next start",
     "lint": "eslint",
     "db:seed": "prisma db seed",
-    "sync:client-industry-colors": "tsx scripts/sync-client-industry-option-colors.ts"
+    "sync:new-select-option-colors": "tsx scripts/sync-new-select-option-colors.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -22,8 +22,10 @@
     "antd": "^6.3.1",
     "dayjs": "^1.11.19",
     "dotenv": "^17.3.1",
+    "exceljs": "^4.4.0",
     "next": "16.1.6",
     "pg": "^8.18.0",
+    "rc-field-form": "^2.7.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "zustand": "^5.0.11"

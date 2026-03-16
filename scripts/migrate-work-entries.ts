@@ -10,6 +10,28 @@ import {
 } from "./parser";
 import { prisma, migrateDatabase } from "./migrate-notion";
 
+const DEFAULT_COLOR = "#d9d9d9";
+
+const upsertSelectOption = async (field: string, value?: string | null) => {
+  const normalized = value?.trim();
+  if (!normalized) return null;
+  const option = await prisma.selectOption.upsert({
+    where: {
+      field_value: {
+        field,
+        value: normalized,
+      },
+    },
+    create: {
+      field,
+      value: normalized,
+      color: DEFAULT_COLOR,
+    },
+    update: {},
+  });
+  return option.id;
+};
+
 const syncPlannedWorkEntry = async (page: PageObjectResponse) => {
   const { id } = page;
 
@@ -30,7 +52,14 @@ const syncPlannedWorkEntry = async (page: PageObjectResponse) => {
 
   const yearStr = getSelectValue(page, "年份", true);
   const weekNumber = getNumberValue(page, "第n周", true);
+  if (weekNumber === null || weekNumber === undefined) {
+    throw new Error(`计划工时缺少第n周，notionPageId=${id}`);
+  }
+  const weekNumberStr = String(weekNumber);
   const plannedDays = getNumberValue(page, "工时(天)", true);
+  if (plannedDays === null || plannedDays === undefined) {
+    throw new Error(`计划工时缺少工时(天)，notionPageId=${id}`);
+  }
   const monday = getCheckboxValue(page, "周一") ?? false;
   const tuesday = getCheckboxValue(page, "周二") ?? false;
   const wednesday = getCheckboxValue(page, "周三") ?? false;
@@ -39,12 +68,31 @@ const syncPlannedWorkEntry = async (page: PageObjectResponse) => {
   const saturday = getCheckboxValue(page, "周六") ?? false;
   const sunday = getCheckboxValue(page, "周天") ?? false;
 
-  await prisma.plannedWorkEntry.create({
-    data: {
+  const [yearOptionId, weekNumberOptionId] = await Promise.all([
+    upsertSelectOption("plannedWorkEntry.year", yearStr),
+    upsertSelectOption("plannedWorkEntry.weekNumber", weekNumberStr),
+  ]);
+
+  await prisma.plannedWorkEntry.upsert({
+    where: { notionPageId: id },
+    update: {
+      taskId: task.id,
+      yearOptionId: yearOptionId ?? null,
+      weekNumberOptionId: weekNumberOptionId ?? null,
+      plannedDays,
+      monday,
+      tuesday,
+      wednesday,
+      thursday,
+      friday,
+      saturday,
+      sunday,
+    },
+    create: {
       notionPageId: id,
       taskId: task.id,
-      year: Number(yearStr),
-      weekNumber,
+      yearOptionId: yearOptionId ?? null,
+      weekNumberOptionId: weekNumberOptionId ?? null,
       plannedDays,
       monday,
       tuesday,

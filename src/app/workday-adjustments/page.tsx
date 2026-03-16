@@ -2,21 +2,22 @@
 
 import { useEffect, useState } from "react";
 import {
-  Table,
   Card,
-  Tag,
   Button,
   Modal,
   Form,
   Input,
   Radio,
   DatePicker,
+  Calendar,
+  ConfigProvider,
+  Spin,
+  Tag,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
 import zhCN from "antd/locale/zh_CN";
-import TableActions from "@/components/TableActions";
 import type { Dayjs } from "dayjs";
 
 dayjs.locale("zh-cn");
@@ -100,7 +101,11 @@ const WorkdayAdjustmentsPage = () => {
     setEditingRecord(null);
   };
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: {
+    name: string;
+    changeType: "上班" | "休息";
+    dateRange: [Dayjs, Dayjs];
+  }) => {
     try {
       setSubmitting(true);
       const [startDate, endDate] = values.dateRange;
@@ -146,58 +151,23 @@ const WorkdayAdjustmentsPage = () => {
       setSubmitting(false);
     }
   };
-
-  const changeTypeOptions = Array.from(
-    new Set(records.map((r) => r.changeType).filter(Boolean))
+  const recordsByDate = records.reduce<Record<string, WorkdayAdjustment[]>>(
+    (acc, record) => {
+      let cursor = dayjs(record.startDate).startOf("day");
+      const end = dayjs(record.endDate).startOf("day");
+      while (cursor.isBefore(end) || cursor.isSame(end)) {
+        const key = cursor.format("YYYY-MM-DD");
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(record);
+        cursor = cursor.add(1, "day");
+      }
+      return acc;
+    },
+    {}
   );
 
-  const columns = [
-    {
-      title: "名称",
-      dataIndex: "name",
-      width: 140,
-      ellipsis: true,
-      render: (value: string | null) => value ?? "-",
-    },
-    {
-      title: "变动类型",
-      dataIndex: "changeType",
-      width: 140,
-      filters: changeTypeOptions.map((t) => ({ text: t, value: t })),
-      onFilter: (value: string | number | boolean, record: WorkdayAdjustment) =>
-        record.changeType === value,
-      render: (value: string) => (
-        <Tag style={{ borderRadius: 6, padding: "2px 10px", fontWeight: 500 }}>
-          {value}
-        </Tag>
-      ),
-    },
-    {
-      title: "开始日期",
-      dataIndex: "startDate",
-      sorter: (a: WorkdayAdjustment, b: WorkdayAdjustment) =>
-        a.startDate.localeCompare(b.startDate),
-      render: (value: string) => dayjs(value).format("YYYY-MM-DD"),
-    },
-    {
-      title: "结束日期",
-      dataIndex: "endDate",
-      sorter: (a: WorkdayAdjustment, b: WorkdayAdjustment) =>
-        a.endDate.localeCompare(b.endDate),
-      render: (value: string) => dayjs(value).format("YYYY-MM-DD"),
-    },
-    {
-      title: "操作",
-      fixed: "right" as const,
-      render: (_: any, record: WorkdayAdjustment) => (
-        <TableActions
-          onEdit={() => handleEditRecord(record)}
-          onDelete={() => handleDeleteRecord(record.id)}
-          deleteTitle="确定删除这个工作日变动？"
-        />
-      ),
-    },
-  ];
+  const getTypeColor = (changeType: string) =>
+    changeType === "上班" ? "#52c41a" : "#ff4d4f";
 
   return (
     <Card
@@ -212,14 +182,36 @@ const WorkdayAdjustmentsPage = () => {
         </Button>
       }
     >
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={records}
-        loading={loading}
-        pagination={{ pageSize: 10 }}
-        locale={{ emptyText: "暂无工作日变动" }}
-      />
+      <ConfigProvider locale={zhCN}>
+        <Spin spinning={loading}>
+          <Calendar
+            cellRender={(current) => {
+              const dateKey = current.format("YYYY-MM-DD");
+              const items = recordsByDate[dateKey] ?? [];
+              if (items.length === 0) return null;
+              return (
+                <div style={{ marginTop: 6 }}>
+                  {items.map((item) => (
+                    <div key={`${dateKey}-${item.id}`} style={{ marginBottom: 4 }}>
+                      <span
+                        style={{ cursor: "pointer", display: "block" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditRecord(item);
+                        }}
+                      >
+                        <Tag color={getTypeColor(item.changeType)}>
+                          {`${item.name || "未命名"} · ${item.changeType}`}
+                        </Tag>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            }}
+          />
+        </Spin>
+      </ConfigProvider>
 
       <Modal
         title={editingRecord ? "编辑工作日变动" : "添加工作日变动"}
@@ -227,6 +219,29 @@ const WorkdayAdjustmentsPage = () => {
         onCancel={handleCloseModal}
         onOk={() => form.submit()}
         confirmLoading={submitting}
+        okText="保存"
+        cancelText="取消"
+        afterClose={() => {
+          setEditingRecord(null);
+        }}
+        footer={(_, { OkBtn, CancelBtn }) => (
+          <>
+            {editingRecord ? (
+              <Button
+                danger
+                onClick={async () => {
+                  if (!editingRecord) return;
+                  await handleDeleteRecord(editingRecord.id);
+                  handleCloseModal();
+                }}
+              >
+                删除
+              </Button>
+            ) : null}
+            <CancelBtn />
+            <OkBtn />
+          </>
+        )}
       >
         <Form
           form={form}

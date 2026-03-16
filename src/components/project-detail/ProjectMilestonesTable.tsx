@@ -14,6 +14,9 @@ export type ProjectMilestoneRow = {
   id: string;
   name: string;
   type?: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
+  datePrecision?: "DATE" | "DATETIME" | null;
   date?: string | null;
   location?: string | null;
   method?: string | null;
@@ -22,35 +25,84 @@ export type ProjectMilestoneRow = {
   vendorParticipants?: Participant[];
 };
 
+const formatMilestoneDate = (row: ProjectMilestoneRow) => {
+  const start = row.startAt ?? row.date ?? null;
+  const end = row.endAt ?? null;
+  if (!start) return "-";
+  const startAt = dayjs(start);
+  const withTime = row.datePrecision === "DATETIME";
+  const fmt = withTime ? "YYYY-MM-DD HH:mm" : "YYYY-MM-DD";
+  const startText = startAt.format(fmt);
+  if (!end) return startText;
+
+  const endAt = dayjs(end);
+  if (endAt.valueOf() === startAt.valueOf()) return startText;
+
+  if (withTime && endAt.isSame(startAt, "day")) {
+    return `${startAt.format("YYYY-MM-DD HH:mm")} ~ ${endAt.format("HH:mm")}`;
+  }
+
+  if (!withTime && endAt.isSame(startAt, "day")) return startText;
+  return `${startText} ~ ${endAt.format(fmt)}`;
+};
+
 type Props = {
   data: ProjectMilestoneRow[];
   onEdit: (record: ProjectMilestoneRow) => void;
   onDelete: (record: ProjectMilestoneRow) => void;
+  columnKeys?: ColumnKey[];
 };
 
-const ProjectMilestonesTable = ({ data, onEdit, onDelete }: Props) => {
-  const columns: ColumnsType<ProjectMilestoneRow> = [
-    {
+type ColumnKey =
+  | "name"
+  | "type"
+  | "date"
+  | "internalParticipants"
+  | "clientParticipants"
+  | "vendorParticipants"
+  | "location"
+  | "method"
+  | "actions";
+
+const ProjectMilestonesTable = ({
+  data,
+  onEdit,
+  onDelete,
+  columnKeys = [
+    "name",
+    "type",
+    "date",
+    "internalParticipants",
+    "clientParticipants",
+    "vendorParticipants",
+    "location",
+    "method",
+    "actions",
+  ],
+}: Props) => {
+  const allColumns: Record<ColumnKey, ColumnsType<ProjectMilestoneRow>[number]> = {
+    name: {
       title: "里程碑名称",
       dataIndex: "name",
       width: "15%",
       sorter: (a, b) => a.name.localeCompare(b.name),
     },
-    {
+    type: {
       title: "类型",
       dataIndex: "type",
       width: "10%",
-      render: (value: string | null | undefined) => value ?? "-",
+      render: (value: string | null | undefined) =>
+        value || "-",
     },
-    {
+    date: {
       title: "截止日期",
       dataIndex: "date",
       width: "12%",
-      sorter: (a, b) => (a.date || "").localeCompare(b.date || ""),
-      render: (value: string | null | undefined) =>
-        value ? dayjs(value).format("YYYY-MM-DD") : "-",
+      sorter: (a, b) =>
+        (a.startAt ?? a.date ?? "").localeCompare(b.startAt ?? b.date ?? ""),
+      render: (_value, record) => formatMilestoneDate(record),
     },
-    {
+    internalParticipants: {
       title: "内部参与人员",
       dataIndex: "internalParticipants",
       width: "13%",
@@ -59,7 +111,7 @@ const ProjectMilestonesTable = ({ data, onEdit, onDelete }: Props) => {
           ? participants.map((p) => p.name).join(", ")
           : "-",
     },
-    {
+    clientParticipants: {
       title: "客户参与人员",
       dataIndex: "clientParticipants",
       width: "13%",
@@ -68,7 +120,7 @@ const ProjectMilestonesTable = ({ data, onEdit, onDelete }: Props) => {
           ? participants.map((p) => p.name).join(", ")
           : "-",
     },
-    {
+    vendorParticipants: {
       title: "供应商",
       dataIndex: "vendorParticipants",
       width: "9%",
@@ -77,21 +129,21 @@ const ProjectMilestonesTable = ({ data, onEdit, onDelete }: Props) => {
           ? vendors.map((v) => v.name).join(", ")
           : "-",
     },
-    {
+    location: {
       title: "地点",
       dataIndex: "location",
       width: "12%",
       render: (value: string | null | undefined) => value ?? "-",
     },
-    {
+    method: {
       title: "方式",
       dataIndex: "method",
       width: "10%",
-      render: (value: string | null | undefined) => value ?? "-",
+      render: (value: string | null | undefined) =>
+        value || "-",
     },
-    {
+    actions: {
       title: "操作",
-      width: 160,
       render: (_value, record) => (
         <TableActions
           onEdit={() => onEdit(record)}
@@ -100,10 +152,13 @@ const ProjectMilestonesTable = ({ data, onEdit, onDelete }: Props) => {
         />
       ),
     },
-  ];
+  };
+  const columns: ColumnsType<ProjectMilestoneRow> = columnKeys.map(
+    (key) => allColumns[key],
+  );
 
   return (
-    <Table
+    <Table tableLayout="auto"
       rowKey="id"
       columns={columns}
       dataSource={data}

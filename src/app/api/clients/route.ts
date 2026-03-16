@@ -1,5 +1,7 @@
 import { PrismaClient } from "@prisma/client";
+import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { requireCrmWritePermission } from "@/lib/api-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -25,13 +27,15 @@ export async function GET() {
 
 // ==================== POST ====================
 export async function POST(req: Request) {
-  const body = await req.json();
+  const denied = await requireCrmWritePermission();
+  if (denied) return denied;
+
+  const body = await sanitizeRequestBody(req);
 
   const client = await prisma.client.create({
     data: {
       name: body.name,
       industryOptionId: body.industryOptionId,
-      remark: body.remark ?? null,
     },
     include: {
       industryOption: true,

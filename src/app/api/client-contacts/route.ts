@@ -1,6 +1,8 @@
 import { PrismaClient } from "@prisma/client";
+import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
+import { requireCrmWritePermission } from "@/lib/api-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
@@ -22,7 +24,7 @@ export async function GET(req: NextRequest) {
     include: {
       client: true,
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ clientId: "asc" }, { order: "asc" }, { createdAt: "asc" }],
   });
 
   return Response.json(contacts);
@@ -30,11 +32,21 @@ export async function GET(req: NextRequest) {
 
 // ================= POST =================
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  const denied = await requireCrmWritePermission();
+  if (denied) return denied;
+
+  const body = await sanitizeRequestBody(req);
+  const minOrder = await prisma.clientContact.aggregate({
+    where: { clientId: body.clientId },
+    _min: { order: true },
+  });
+  const nextOrder =
+    minOrder._min.order === null ? 1000 : minOrder._min.order - 1000;
 
   const contact = await prisma.clientContact.create({
     data: {
       name: body.name,
+      order: nextOrder,
       title: body.title,
       scope: body.scope,
       preference: body.preference,
@@ -43,6 +55,9 @@ export async function POST(req: NextRequest) {
       wechat: body.wechat,
       address: body.address,
       clientId: body.clientId,
+    },
+    include: {
+      client: true,
     },
   });
 

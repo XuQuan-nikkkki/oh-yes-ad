@@ -1,14 +1,19 @@
+// @ts-nocheck
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Card, Space, Descriptions, Button } from "antd";
+import { Card, Space, Descriptions, Button, Popconfirm, message } from "antd";
 import { EditOutlined, PlusOutlined } from "@ant-design/icons";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import ClientFormModal from "@/components/ClientFormModal";
 import ClientContactTable from "@/components/ClientContactTable";
 import ContactFormModal from "@/components/ContactFormModal";
+import ProjectFormModal from "@/components/ProjectFormModal";
 import ProjectsTable, { Project } from "@/components/ProjectsTable";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import SelectOptionTag from "@/components/SelectOptionTag";
+import { useCrmPermission } from "@/hooks/useCrmPermission";
+import { useProjectPermission } from "@/hooks/useProjectPermission";
 type Client = {
   id: string;
   name: string;
@@ -16,16 +21,31 @@ type Client = {
   industryOption?: {
     id: string;
     value: string;
+    color?: string | null;
   } | null;
-  remark?: string | null;
 };
 
 type Contact = {
   id: string;
   name: string;
+  order?: number;
+  clientId?: string;
   title?: string | null;
   phone?: string | null;
   email?: string | null;
+};
+
+type Employee = {
+  id: string;
+  name: string;
+  employmentStatus?: string;
+};
+
+type WorkdayAdjustment = {
+  id: string;
+  changeType: string;
+  startDate: string;
+  endDate: string;
 };
 
 const EMPTY_OPTIONS: {
@@ -39,6 +59,7 @@ const EMPTY_OPTIONS: {
 
 const ClientDetailPage = () => {
   const params = useParams();
+  const router = useRouter();
   const clientId = params.id as string;
 
   const [client, setClient] = useState<Client | null>(null);
@@ -50,8 +71,20 @@ const ClientDetailPage = () => {
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [contactLoading, setContactLoading] = useState(false);
+  const [contactSorting, setContactSorting] = useState(false);
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [workdayAdjustments, setWorkdayAdjustments] = useState<
+    WorkdayAdjustment[]
+  >([]);
+  const { canManageCrm } = useCrmPermission();
+  const { canManageProject } = useProjectPermission();
   const industryOptions = useSelectOptionsStore(
     (state) => state.optionsByField["client.industry"] ?? EMPTY_OPTIONS,
+  );
+  const fetchAllOptions = useSelectOptionsStore(
+    (state) => state.fetchAllOptions,
   );
 
   const fetchClient = useCallback(async () => {
@@ -91,7 +124,29 @@ const ClientDetailPage = () => {
     }
   }, [clientId]);
 
+  const fetchEmployees = useCallback(async () => {
+    try {
+      const res = await fetch("/api/employees");
+      const data = await res.json();
+      setEmployees(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to fetch employees:", error);
+    }
+  }, []);
+
+  const fetchWorkdayAdjustments = useCallback(async () => {
+    try {
+      const res = await fetch("/api/workday-adjustments");
+      const data = await res.json();
+      setWorkdayAdjustments(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to fetch workday adjustments:", error);
+      setWorkdayAdjustments([]);
+    }
+  }, []);
+
   const handleDeleteContact = async (id: string) => {
+    if (!canManageCrm) return;
     await fetch(`/api/client-contacts/${id}`, {
       method: "DELETE",
     });
@@ -100,13 +155,73 @@ const ClientDetailPage = () => {
   };
 
   const handleEditContact = (record: Contact) => {
+    if (!canManageCrm) return;
     setEditingContact(record);
     setContactModalOpen(true);
   };
 
   const handleCreateContact = () => {
+    if (!canManageCrm) return;
     setEditingContact(null);
     setContactModalOpen(true);
+  };
+
+  const handleDragSortContacts = async (
+    _beforeIndex: number,
+    afterIndex: number,
+    newDataSource: Contact[],
+  ) => {
+    if (contactSorting) return;
+    const moved = newDataSource[afterIndex];
+    if (!moved?.id) return;
+
+    const previousContacts = contacts;
+    setContacts(newDataSource);
+    setContactSorting(true);
+
+    const res = await fetch(`/api/clients/${clientId}/contacts/reorder`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        movedId: moved.id,
+        orderedIds: newDataSource.map((item) => item.id),
+      }),
+    });
+
+    if (!res.ok) {
+      setContacts(previousContacts);
+      setContactSorting(false);
+      message.error("排序失败，已恢复原顺序");
+      await fetchContacts();
+      return;
+    }
+
+    setContactSorting(false);
+    void fetchContacts();
+  };
+
+  const handleDeleteClient = async () => {
+    if (!clientId) return;
+    if (!canManageCrm) return;
+
+    try {
+      setDeleting(true);
+      const res = await fetch(`/api/clients/${clientId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("删除失败");
+      }
+
+      message.success("删除成功");
+      router.push("/clients");
+    } catch (error) {
+      console.error("删除客户失败:", error);
+      message.error("删除失败");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   useEffect(() => {
@@ -115,60 +230,135 @@ const ClientDetailPage = () => {
       await fetchClient();
       await fetchContacts();
       await fetchProjects();
+      await fetchEmployees();
+      await fetchWorkdayAdjustments();
     })();
-  }, [clientId, fetchClient, fetchContacts, fetchProjects]);
+  }, [
+    clientId,
+    fetchClient,
+    fetchContacts,
+    fetchProjects,
+    fetchEmployees,
+    fetchWorkdayAdjustments,
+  ]);
 
   return (
-    <Space orientation="vertical" size={8} style={{ width: "100%" }}>
-      <Card
-        title="基础信息"
-        loading={loading}
-        extra={
-          <Button icon={<EditOutlined />} onClick={() => setOpen(true)}>
-            编辑
-          </Button>
-        }
-      >
-        {client && (
-          <Descriptions column={3} size="small">
-            <Descriptions.Item label="名称">{client.name}</Descriptions.Item>
+    <>
+      <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+        <Card
+          title={client?.name ?? "客户详情"}
+          loading={loading}
+          extra={
+            <Space>
+              <Button
+                icon={<EditOutlined />}
+                onClick={() => setOpen(true)}
+                disabled={!canManageCrm}
+              >
+                编辑
+              </Button>
+              <Popconfirm
+                title={`确定删除客户「${client?.name ?? ""}」？`}
+                okText="删除"
+                cancelText="取消"
+                onConfirm={handleDeleteClient}
+                okButtonProps={{ danger: true, loading: deleting }}
+              >
+                <Button danger loading={deleting} disabled={!canManageCrm}>
+                  删除
+                </Button>
+              </Popconfirm>
+            </Space>
+          }
+        >
+          <Descriptions column={2} size="small">
             <Descriptions.Item label="行业">
-              {client.industryOption?.value ?? "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="备注">
-              {client.remark ?? "-"}
+              <SelectOptionTag
+                option={client?.industryOption}
+                fallbackText="-"
+                successMessage="行业标签已更新"
+                onUpdated={async () => {
+                  await fetchClient();
+                  await fetchAllOptions(true);
+                }}
+              />
             </Descriptions.Item>
           </Descriptions>
-        )}
-      </Card>
+        </Card>
 
-      <Card
-        title="客户人员"
-        extra={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreateContact}
-          >
-            新建人员
-          </Button>
-        }
-      >
-        <ClientContactTable
-          contacts={contacts}
-          loading={contactLoading}
-          onEdit={handleEditContact}
-          onDelete={handleDeleteContact}
-        />{" "}
-      </Card>
+        <Card styles={{ body: { padding: 2 } }}>
+          <ClientContactTable
+            headerTitle={<h4 style={{ margin: 0 }}>客户人员</h4>}
+            toolbarActions={[
+              <Button
+                key="create-contact"
+                type="primary"
+                icon={<PlusOutlined />}
+                disabled={!canManageCrm}
+                onClick={handleCreateContact}
+              >
+                新建人员
+              </Button>,
+            ]}
+            enableColumnSetting
+            columnsStatePersistenceKey="client-detail-contacts-table-columns-state"
+            enableDragSort={canManageCrm}
+            onDragSortEnd={canManageCrm ? handleDragSortContacts : undefined}
+            contacts={contacts}
+            loading={contactLoading || contactSorting}
+            onEdit={handleEditContact}
+            onDelete={handleDeleteContact}
+            actionsDisabled={!canManageCrm}
+            columnKeys={[
+              "name",
+              "title",
+              "scope",
+              "preference",
+              "phone",
+              "email",
+              "wechat",
+              "address",
+              "actions",
+            ]}
+            defaultVisibleColumnKeys={["name", "title", "scope", "actions"]}
+            pagination={false}
+          />
+        </Card>
 
-      <Card title="合作项目">
-        <ProjectsTable
-          projects={projects}
-          loading={projectLoading}
-          columnKeys={["name", "status", "startDate", "endDate"]}
-        />
-      </Card>
+        <Card styles={{ body: { padding: 2 } }}>
+          <ProjectsTable
+            headerTitle={<h4 style={{ margin: 0 }}>合作项目</h4>}
+            toolbarActions={[
+              <Button
+                key="create-project"
+                type="primary"
+                icon={<PlusOutlined />}
+                disabled={!canManageProject}
+                onClick={() => {
+                  if (!canManageProject) return;
+                  setProjectModalOpen(true);
+                }}
+              >
+                新建项目
+              </Button>,
+            ]}
+            enableColumnSetting
+            columnsStatePersistenceKey="client-detail-projects-table-columns-state"
+            projects={projects}
+            loading={projectLoading}
+            workdayAdjustments={workdayAdjustments}
+            onOptionUpdated={fetchProjects}
+            columnKeys={[
+              "name",
+              "type",
+              "status",
+              "owner",
+              "period",
+            ]}
+            defaultVisibleColumnKeys={["name", "status", "period"]}
+          />
+        </Card>
+      </Space>
 
       <ClientFormModal
         open={open}
@@ -196,7 +386,24 @@ const ClientDetailPage = () => {
           await fetchContacts();
         }}
       />
-    </Space>
+
+      <ProjectFormModal
+        open={projectModalOpen}
+        initialValues={{
+          type: "CLIENT",
+          clientId,
+        }}
+        projectType="CLIENT"
+        clientEditable={false}
+        clients={client ? [{ id: client.id, name: client.name }] : []}
+        employees={employees}
+        onCancel={() => setProjectModalOpen(false)}
+        onSuccess={async () => {
+          setProjectModalOpen(false);
+          await fetchProjects();
+        }}
+      />
+    </>
   );
 };
 

@@ -1,15 +1,63 @@
+// @ts-nocheck
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Card, Empty, Segmented, Space, Spin, Table, Tag, Typography } from "antd";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import {
+  Card,
+  Collapse,
+  Empty,
+  Modal,
+  Segmented,
+  Space,
+  Spin,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ClockCircleOutlined } from "@ant-design/icons";
-import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import dayjs from "dayjs";
+import isoWeek from "dayjs/plugin/isoWeek";
+import SelectOptionTag from "@/components/SelectOptionTag";
+import AppLink from "@/components/AppLink";
+import ClientProjectSchedulePane from "@/components/schedule/ClientProjectSchedulePane";
+import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import ProjectMilestoneForm, {
+  ProjectMilestoneFormPayload,
+} from "@/components/project-detail/ProjectMilestoneForm";
+import ProjectSegmentForm, {
+  ProjectSegmentFormPayload,
+} from "@/components/project-detail/ProjectSegmentForm";
+import ProjectTaskForm, {
+  ProjectTaskFormPayload,
+} from "@/components/project-detail/ProjectTaskForm";
+import PlannedWorkEntryForm, {
+  PlannedWorkEntryFormPayload,
+} from "@/components/project-detail/PlannedWorkEntryForm";
+import ProjectMilestoneSection from "@/components/project-detail/ProjectMilestoneSection";
+import ProjectProgressNestedTable from "@/components/project-detail/ProjectProgressNestedTable";
+import { useProjectPermission } from "@/hooks/useProjectPermission";
+
+dayjs.extend(isoWeek);
 
 type ProjectListItem = {
   id: string;
   name: string;
+  type?: string | null;
+  typeOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
+  status?: string | null;
+  isArchived?: boolean | null;
+  statusOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
 };
 
 type Participant = {
@@ -17,10 +65,28 @@ type Participant = {
   name: string;
 };
 
+type EmployeeListItem = {
+  id: string;
+  name: string;
+  function?: string | null;
+  functionOption?: {
+    id: string;
+    value: string;
+    color?: string | null;
+  } | null;
+  employmentStatus?: string | null;
+  employmentStatusOption?: {
+    id: string;
+    value: string;
+    color?: string | null;
+  } | null;
+};
+
 type ClientParticipant = {
   id: string;
   name: string;
   title?: string | null;
+  order?: number | null;
 };
 
 type PlannedWorkEntry = {
@@ -37,13 +103,65 @@ type PlannedWorkEntry = {
   sunday: boolean;
 };
 
+type WeeklyPlannedEntry = {
+  id: string;
+  plannedDays: number;
+  monday: boolean;
+  tuesday: boolean;
+  wednesday: boolean;
+  thursday: boolean;
+  friday: boolean;
+  saturday: boolean;
+  sunday: boolean;
+  year?: number | null;
+  weekNumber?: number | null;
+  task?: {
+    id: string;
+    name: string;
+    owner?: {
+      id: string;
+      name: string;
+    } | null;
+    segment?: {
+      id: string;
+      name: string;
+      project?: {
+        id: string;
+        name: string;
+        client?: {
+          id: string;
+          name: string;
+        } | null;
+      } | null;
+    } | null;
+  } | null;
+};
+
 type ProjectDetail = {
   id: string;
   name: string;
+  client?: {
+    id: string;
+    name: string;
+  } | null;
+  members?: {
+    id: string;
+    name: string;
+    employmentStatus?: string | null;
+  }[];
+  vendors?: {
+    id: string;
+    name: string;
+  }[];
   milestones?: {
     id: string;
     name: string;
     type?: string | null;
+    typeOption?: {
+      id?: string;
+      value?: string | null;
+      color?: string | null;
+    } | null;
     date?: string | null;
     internalParticipants?: Participant[];
     clientParticipants?: ClientParticipant[];
@@ -53,6 +171,11 @@ type ProjectDetail = {
     id: string;
     name: string;
     status?: string | null;
+    statusOption?: {
+      id?: string;
+      value?: string | null;
+      color?: string | null;
+    } | null;
     dueDate?: string | null;
     owner?: {
       id: string;
@@ -76,23 +199,32 @@ type SegmentRow = {
   id: string;
   name: string;
   status?: string | null;
+  statusOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
   ownerName: string;
+  ownerId?: string | null;
   dueDate?: string | null;
+  tasks: TaskRow[];
 };
 
 type TaskRow = {
   id: string;
+  segmentId: string;
   segmentName: string;
   name: string;
   status?: string | null;
   ownerName: string;
+  ownerId?: string | null;
   dueDate?: string | null;
+  plannedEntries?: TaskPlannedRow[];
 };
 
-type WorkRow = {
+type TaskPlannedRow = {
   id: string;
-  taskName: string;
-  ownerName: string;
+  taskId: string;
   year: number;
   weekNumber: number;
   plannedDays: number;
@@ -105,57 +237,151 @@ type WorkRow = {
   sunday: boolean;
 };
 
-const formatDate = (value?: string | null) =>
-  value ? dayjs(value).format("YYYY/MM/DD") : "-";
-
-const formatCountdown = (value?: string | null) => {
-  if (!value) {
-    return { text: "暂无日期", urgent: false };
-  }
-  const target = dayjs(value).startOf("day");
-  const today = dayjs().startOf("day");
-  const diffDays = target.diff(today, "day");
-  const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-  const weekday = weekdays[target.day()];
-
-  if (diffDays < 0) {
-    return {
-      text: `${target.format("YYYY年MM月DD日")} ${weekday}，已超期 ${Math.abs(diffDays)} 天`,
-      urgent: true,
-    };
-  }
-
-  if (diffDays === 0) {
-    return {
-      text: `${target.format("YYYY年MM月DD日")} ${weekday}，今天`,
-      urgent: true,
-    };
-  }
-
-  return {
-    text: `${target.format("YYYY年MM月DD日")} ${weekday}，还有 ${diffDays} 天`,
-    urgent: diffDays <= 3,
-  };
+type WeeklyTaskItem = {
+  clientName: string;
+  taskName: string;
 };
 
-const renderPeople = (participants?: Participant[]) =>
-  participants && participants.length > 0
-    ? participants.map((person) => person.name).join("、")
-    : "-";
+type WeeklyProjectSummary = {
+  projectId: string | null;
+  projectName: string;
+  days: number;
+  tasks: Array<{
+    taskId: string | null;
+    taskName: string;
+    days: number;
+  }>;
+};
 
-const renderClientPeople = (participants?: ClientParticipant[]) =>
-  participants && participants.length > 0
-    ? participants
-        .map((person) => (person.title ? `${person.name}(${person.title})` : person.name))
-        .join("、")
-    : "-";
+type WeeklyEmployeeRow = {
+  key: string;
+  name: string;
+  hasSchedule: boolean;
+  totalDays: number;
+  functionLabel: string;
+  functionOption: EmployeeListItem["functionOption"];
+  projectSummaries: WeeklyProjectSummary[];
+  dailyMap: Record<
+    | "monday"
+    | "tuesday"
+    | "wednesday"
+    | "thursday"
+    | "friday"
+    | "saturday"
+    | "sunday",
+    WeeklyTaskItem[]
+  >;
+};
 
-export default function SchedulePage() {
+type WeeklyMetricRow = {
+  key:
+    | "function"
+    | "totalDays"
+    | "distribution"
+    | "projectTaskDistribution"
+    | "dailyTasks";
+  metricLabel: string;
+};
+
+type ProjectTaskListRow = {
+  id: string;
+  name: string;
+  segmentId: string;
+  segmentName: string;
+  ownerId?: string | null;
+  ownerName: string;
+  dueDate?: string | null;
+};
+
+const DAY_KEYS = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+] as const;
+
+const DAY_LABELS: Record<(typeof DAY_KEYS)[number], string> = {
+  monday: "周一",
+  tuesday: "周二",
+  wednesday: "周三",
+  thursday: "周四",
+  friday: "周五",
+  saturday: "周六",
+  sunday: "周日",
+};
+const WEEKEND_DAY_KEYS = new Set<(typeof DAY_KEYS)[number]>([
+  "saturday",
+  "sunday",
+]);
+
+const FUNCTION_GROUP_PRIORITY: Record<string, number> = {
+  设计组: 1,
+  品牌组: 2,
+  项目组: 3,
+};
+const CONDITIONAL_VISIBLE_EMPLOYEES = new Set([
+  "Johnny",
+  "张弛",
+  "小花",
+  "Icy",
+  "Dona",
+]);
+const SCHEDULE_TAB_KEYS = new Set([
+  "weekly-tasks",
+  "client-project-schedule",
+  "internal-project-schedule",
+]);
+
+const toDisplayDays = (value: number) =>
+  `${Number(value.toFixed(2)).toString().replace(/\.0$/, "")}天`;
+
+function SchedulePageContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [loadingProjects, setLoadingProjects] = useState(true);
-  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [projectDetailsRefreshSeed, setProjectDetailsRefreshSeed] = useState(0);
+  const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const [allProjects, setAllProjects] = useState<ProjectListItem[]>([]);
-  const [projectDetails, setProjectDetails] = useState<Record<string, ProjectDetail>>({});
-  const [tableView, setTableView] = useState<"segments" | "tasks" | "work">("segments");
+  const [projectDetails, setProjectDetails] = useState<
+    Record<string, ProjectDetail>
+  >({});
+  const [employees, setEmployees] = useState<EmployeeListItem[]>([]);
+  const [weeklyPlannedEntries, setWeeklyPlannedEntries] = useState<
+    WeeklyPlannedEntry[]
+  >([]);
+  const [loadingWeekly, setLoadingWeekly] = useState(false);
+  const [clientContacts, setClientContacts] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [milestoneProjectId, setMilestoneProjectId] = useState<string | null>(
+    null,
+  );
+  const [milestoneModalOpen, setMilestoneModalOpen] = useState(false);
+  const [segmentModalOpen, setSegmentModalOpen] = useState(false);
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [plannedWorkModalOpen, setPlannedWorkModalOpen] = useState(false);
+  const [milestoneSubmitting, setMilestoneSubmitting] = useState(false);
+  const [segmentSubmitting, setSegmentSubmitting] = useState(false);
+  const [taskSubmitting, setTaskSubmitting] = useState(false);
+  const [plannedWorkSubmitting, setPlannedWorkSubmitting] = useState(false);
+  const [projectProgressViewById, setProjectProgressViewById] = useState<
+    Record<string, "progress" | "tasks">
+  >({});
+  const { canManageProject } = useProjectPermission();
+  const [editingSegment, setEditingSegment] = useState<SegmentRow | null>(null);
+  const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
+  const [editingPlannedEntry, setEditingPlannedEntry] =
+    useState<TaskPlannedRow | null>(null);
+  const [taskDefaultSegmentId, setTaskDefaultSegmentId] = useState<
+    string | undefined
+  >(undefined);
+  const [plannedDefaultTaskId, setPlannedDefaultTaskId] = useState<
+    string | undefined
+  >(undefined);
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -172,224 +398,937 @@ export default function SchedulePage() {
     void fetchProjects();
   }, []);
 
-  const ningjiProjects = useMemo(
-    () => allProjects.filter((project) => project.name.includes("柠季")),
+  useEffect(() => {
+    const fetchWeeklyData = async () => {
+      setLoadingWeekly(true);
+      try {
+        const now = dayjs();
+        const currentYear = String(now.year());
+        const currentWeek = String(now.isoWeek());
+
+        const [employeesRes, plannedRes] = await Promise.all([
+          fetch("/api/employees", { cache: "no-store" }),
+          fetch(
+            `/api/planned-work-entries?page=1&pageSize=1000&year=${currentYear}&weekNumber=${currentWeek}`,
+            { cache: "no-store" },
+          ),
+        ]);
+
+        const employeePayload = await employeesRes.json();
+        const plannedPayload = await plannedRes.json();
+
+        const nextEmployees = Array.isArray(employeePayload)
+          ? employeePayload
+          : [];
+        const nextEntries = Array.isArray(plannedPayload?.data)
+          ? plannedPayload.data
+          : [];
+
+        setEmployees(nextEmployees as EmployeeListItem[]);
+        setWeeklyPlannedEntries(nextEntries as WeeklyPlannedEntry[]);
+      } finally {
+        setLoadingWeekly(false);
+      }
+    };
+
+    void fetchWeeklyData();
+  }, []);
+
+  const visibleProjects = useMemo(
+    () =>
+      allProjects
+        .filter((project) => {
+          if (Boolean(project.isArchived)) return false;
+          const typeValue =
+            project.typeOption?.value?.trim() || project.type?.trim() || "";
+          return typeValue !== "INTERNAL" && typeValue !== "内部项目";
+        })
+        .sort((left, right) => left.name.localeCompare(right.name, "zh-CN")),
     [allProjects],
   );
 
+  const internalVisibleProjects = useMemo(
+    () =>
+      allProjects
+        .filter((project) => {
+          if (Boolean(project.isArchived)) return false;
+          const typeValue =
+            project.typeOption?.value?.trim() || project.type?.trim() || "";
+          if (typeValue !== "INTERNAL" && typeValue !== "内部项目") return false;
+          if (project.name.includes("中台")) return false;
+          return true;
+        })
+        .sort((left, right) => {
+          const leftSegmentCount =
+            projectDetails[left.id]?.segments?.length ?? 0;
+          const rightSegmentCount =
+            projectDetails[right.id]?.segments?.length ?? 0;
+          if (leftSegmentCount !== rightSegmentCount) {
+            return rightSegmentCount - leftSegmentCount;
+          }
+          return left.name.localeCompare(right.name, "zh-CN");
+        }),
+    [allProjects, projectDetails],
+  );
+
+  const groupedVisibleProjects = useMemo(() => {
+    const groups = new Map<string, ProjectListItem[]>();
+    for (const project of visibleProjects) {
+      const status =
+        project.statusOption?.value?.trim() ||
+        project.status?.trim() ||
+        "未设置状态";
+      const list = groups.get(status) ?? [];
+      list.push(project);
+      groups.set(status, list);
+    }
+
+    return Array.from(groups.entries())
+      .map(([status, projects]) => ({
+        status,
+        projects: [...projects].sort((left, right) =>
+          left.name.localeCompare(right.name, "zh-CN"),
+        ),
+      }))
+      .sort((left, right) => left.status.localeCompare(right.status, "zh-CN"));
+  }, [visibleProjects]);
+
+  const plannedYearOptionMap = useMemo(() => {
+    const map = new Map<
+      string,
+      { id: string; value: string; color?: string | null }
+    >();
+    for (const option of optionsByField["plannedWorkEntry.year"] ?? []) {
+      map.set(option.value, {
+        id: option.id,
+        value: option.value,
+        color: option.color ?? null,
+      });
+    }
+    return map;
+  }, [optionsByField]);
+
+  const plannedWeekOptionMap = useMemo(() => {
+    const map = new Map<
+      string,
+      { id: string; value: string; color?: string | null }
+    >();
+    for (const option of optionsByField["plannedWorkEntry.weekNumber"] ?? []) {
+      map.set(option.value, {
+        id: option.id,
+        value: option.value,
+        color: option.color ?? null,
+      });
+    }
+    return map;
+  }, [optionsByField]);
+
+  const defaultClientProjectId = useMemo(() => {
+    const inProgressGroup = groupedVisibleProjects.find(
+      (group) => group.status === "推进中",
+    );
+    if (inProgressGroup?.projects?.length) {
+      return inProgressGroup.projects[0].id;
+    }
+    return visibleProjects[0]?.id ?? null;
+  }, [groupedVisibleProjects, visibleProjects]);
+
+  const activeClientProjectId = useMemo(() => {
+    const projectId = searchParams.get("projectId");
+    if (
+      projectId &&
+      visibleProjects.some((project) => project.id === projectId)
+    ) {
+      return projectId;
+    }
+    if (projectId && loadingProjects) {
+      return projectId;
+    }
+    return defaultClientProjectId;
+  }, [defaultClientProjectId, loadingProjects, searchParams, visibleProjects]);
+
+  const selectedClientProject = useMemo(
+    () =>
+      activeClientProjectId
+        ? (visibleProjects.find(
+            (project) => project.id === activeClientProjectId,
+          ) ?? null)
+        : null,
+    [activeClientProjectId, visibleProjects],
+  );
+
+  const selectedClientProjectDetail = useMemo(
+    () =>
+      selectedClientProject
+        ? (projectDetails[selectedClientProject.id] ?? null)
+        : null,
+    [projectDetails, selectedClientProject],
+  );
+
+  const scheduleDetailProjectIds = useMemo(() => {
+    return allProjects
+      .filter((project) => {
+        if (Boolean(project.isArchived)) return false;
+        const typeValue =
+          project.typeOption?.value?.trim() || project.type?.trim() || "";
+        const isInternal = typeValue === "INTERNAL" || typeValue === "内部项目";
+        if (isInternal && project.name.includes("中台")) return false;
+        return true;
+      })
+      .map((project) => project.id)
+      .sort((left, right) => left.localeCompare(right));
+  }, [allProjects]);
+
+  const activeMilestoneProjectId = useMemo(
+    () => milestoneProjectId ?? selectedClientProject?.id ?? null,
+    [milestoneProjectId, selectedClientProject?.id],
+  );
+
+  const activeMilestoneProjectDetail = useMemo(
+    () =>
+      activeMilestoneProjectId
+        ? (projectDetails[activeMilestoneProjectId] ?? null)
+        : null,
+    [activeMilestoneProjectId, projectDetails],
+  );
+
+  const selectedProjectSegmentOptions = useMemo(
+    () =>
+      (selectedClientProjectDetail?.segments ?? []).map((segment) => ({
+        id: segment.id,
+        name: segment.name,
+      })),
+    [selectedClientProjectDetail],
+  );
+
+  const selectedProjectTaskOptions = useMemo(
+    () =>
+      (selectedClientProjectDetail?.segments ?? []).flatMap((segment) =>
+        (segment.projectTasks ?? []).map((task) => ({
+          id: task.id,
+          projectId: selectedClientProject?.id ?? "",
+          segmentId: segment.id,
+          segmentName: segment.name,
+          name: task.name,
+        })),
+      ),
+    [selectedClientProject?.id, selectedClientProjectDetail],
+  );
+
   useEffect(() => {
-    const fetchNingjiDetails = async () => {
-      if (ningjiProjects.length === 0) {
+    const clientId = activeMilestoneProjectDetail?.client?.id;
+    if (!clientId) {
+      setClientContacts([]);
+      return;
+    }
+    const fetchClientContacts = async () => {
+      try {
+        const response = await fetch(`/api/clients/${clientId}/contacts`, {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          setClientContacts([]);
+          return;
+        }
+        const data = await response.json();
+        setClientContacts(Array.isArray(data) ? data : []);
+      } catch {
+        setClientContacts([]);
+      }
+    };
+    void fetchClientContacts();
+  }, [activeMilestoneProjectDetail?.client?.id]);
+
+  useEffect(() => {
+    if (loadingProjects) {
+      return;
+    }
+
+    const currentProjectId = searchParams.get("projectId");
+    const nextProjectId = selectedClientProject?.id ?? null;
+    if ((currentProjectId ?? null) === nextProjectId) {
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextProjectId) {
+      params.set("projectId", nextProjectId);
+    } else {
+      params.delete("projectId");
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, {
+      scroll: false,
+    });
+  }, [loadingProjects, pathname, router, searchParams, selectedClientProject]);
+
+  useEffect(() => {
+    const fetchProjectDetails = async () => {
+      if (scheduleDetailProjectIds.length === 0) {
         setProjectDetails({});
         return;
       }
 
-      setLoadingDetails(true);
-      try {
-        const results = await Promise.all(
-          ningjiProjects.map(async (project) => {
-            const response = await fetch(`/api/projects/${project.id}`, { cache: "no-store" });
-            const detail = (await response.json()) as ProjectDetail;
-            return [project.id, detail] as const;
-          }),
-        );
+      const results = await Promise.all(
+        scheduleDetailProjectIds.map(async (projectId) => {
+          const response = await fetch(`/api/projects/${projectId}`, {
+            cache: "no-store",
+          });
+          const detail = (await response.json()) as ProjectDetail;
+          return [projectId, detail] as const;
+        }),
+      );
 
-        setProjectDetails(Object.fromEntries(results));
-      } finally {
-        setLoadingDetails(false);
-      }
+      setProjectDetails(Object.fromEntries(results));
     };
 
-    void fetchNingjiDetails();
-  }, [ningjiProjects]);
+    void fetchProjectDetails();
+  }, [projectDetailsRefreshSeed, scheduleDetailProjectIds]);
 
-  const segmentColumns: ColumnsType<SegmentRow> = [
-    {
-      title: "环节名称",
-      dataIndex: "name",
-      width: "35%",
-    },
-    {
-      title: "环节状态",
-      dataIndex: "status",
-      width: "20%",
-      render: (value?: string | null) => value ?? "-",
-    },
-    {
-      title: "环节负责人",
-      dataIndex: "ownerName",
-      width: "20%",
-    },
-    {
-      title: "截止日期",
-      dataIndex: "dueDate",
-      width: "25%",
-      render: (value?: string | null) => formatDate(value),
-    },
+  const refreshProjectDetails = () => {
+    setProjectDetailsRefreshSeed((value) => value + 1);
+  };
+
+  const handleSubmitMilestone = async (
+    payload: ProjectMilestoneFormPayload,
+  ) => {
+    if (!canManageProject) return;
+    if (!activeMilestoneProjectId) {
+      message.error("未选择项目");
+      return;
+    }
+    try {
+      setMilestoneSubmitting(true);
+      const res = await fetch(
+        `/api/projects/${activeMilestoneProjectId}/milestones`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "保存里程碑失败");
+      }
+      message.success("里程碑已创建");
+      setMilestoneModalOpen(false);
+      setMilestoneProjectId(null);
+      refreshProjectDetails();
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "保存里程碑失败";
+      message.error(text);
+    } finally {
+      setMilestoneSubmitting(false);
+    }
+  };
+
+  const openEditSegmentModal = (segment: SegmentRow) => {
+    if (!canManageProject) return;
+    setEditingSegment(segment);
+    setSegmentModalOpen(true);
+  };
+
+  const openCreateTaskModal = (defaultSegmentId?: string) => {
+    if (!canManageProject) return;
+    setEditingTask(null);
+    setTaskDefaultSegmentId(defaultSegmentId);
+    setTaskModalOpen(true);
+  };
+
+  const openEditTaskModal = (task: TaskRow) => {
+    if (!canManageProject) return;
+    setEditingTask(task);
+    setTaskDefaultSegmentId(undefined);
+    setTaskModalOpen(true);
+  };
+
+  const openCreatePlannedWorkModal = (defaultTaskId?: string) => {
+    setEditingPlannedEntry(null);
+    setPlannedDefaultTaskId(defaultTaskId);
+    setPlannedWorkModalOpen(true);
+  };
+
+  const openEditPlannedWorkModal = (entry: TaskPlannedRow) => {
+    setEditingPlannedEntry(entry);
+    setPlannedDefaultTaskId(undefined);
+    setPlannedWorkModalOpen(true);
+  };
+
+  const handleDeleteSegment = async (segmentId: string) => {
+    if (!canManageProject) return;
+    try {
+      const res = await fetch(`/api/project-segments/${segmentId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "删除环节失败");
+      }
+      message.success("环节已删除");
+      refreshProjectDetails();
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "删除环节失败";
+      message.error(text);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!canManageProject) return;
+    try {
+      const res = await fetch(`/api/project-tasks/${taskId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "删除任务失败");
+      }
+      message.success("任务已删除");
+      refreshProjectDetails();
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "删除任务失败";
+      message.error(text);
+    }
+  };
+
+  const handleDeletePlannedEntry = async (entryId: string) => {
+    try {
+      const res = await fetch(`/api/planned-work-entries/${entryId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "删除计划工时失败");
+      }
+      message.success("计划工时已删除");
+      refreshProjectDetails();
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "删除计划工时失败";
+      message.error(text);
+    }
+  };
+
+  const handleSubmitSegment = async (payload: ProjectSegmentFormPayload) => {
+    if (!canManageProject) return;
+    if (!selectedClientProject?.id) {
+      message.error("未选择项目");
+      return;
+    }
+    try {
+      setSegmentSubmitting(true);
+      const endpoint = editingSegment
+        ? `/api/project-segments/${editingSegment.id}`
+        : `/api/projects/${selectedClientProject.id}/segments`;
+      const method = editingSegment ? "PATCH" : "POST";
+      const res = await fetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...payload,
+          projectId: selectedClientProject.id,
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "保存环节失败");
+      }
+      message.success(editingSegment ? "环节已更新" : "环节已创建");
+      setSegmentModalOpen(false);
+      setEditingSegment(null);
+      refreshProjectDetails();
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "保存环节失败";
+      message.error(text);
+    } finally {
+      setSegmentSubmitting(false);
+    }
+  };
+
+  const handleSubmitTask = async (payload: ProjectTaskFormPayload) => {
+    if (!canManageProject) return;
+    if (!selectedClientProject?.id) {
+      message.error("未选择项目");
+      return;
+    }
+    try {
+      setTaskSubmitting(true);
+      const endpoint = editingTask
+        ? `/api/project-tasks/${editingTask.id}`
+        : `/api/projects/${selectedClientProject.id}/tasks`;
+      const method = editingTask ? "PATCH" : "POST";
+      const res = await fetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "保存任务失败");
+      }
+      message.success(editingTask ? "任务已更新" : "任务已创建");
+      setTaskModalOpen(false);
+      setEditingTask(null);
+      setTaskDefaultSegmentId(undefined);
+      refreshProjectDetails();
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "保存任务失败";
+      message.error(text);
+    } finally {
+      setTaskSubmitting(false);
+    }
+  };
+
+  const handleSubmitPlannedWork = async (
+    payload: PlannedWorkEntryFormPayload,
+  ) => {
+    try {
+      setPlannedWorkSubmitting(true);
+      const endpoint = editingPlannedEntry
+        ? `/api/planned-work-entries/${editingPlannedEntry.id}`
+        : "/api/planned-work-entries";
+      const method = editingPlannedEntry ? "PATCH" : "POST";
+      const res = await fetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "保存计划工时失败");
+      }
+      message.success(
+        editingPlannedEntry ? "计划工时已更新" : "计划工时已创建",
+      );
+      setPlannedWorkModalOpen(false);
+      setEditingPlannedEntry(null);
+      setPlannedDefaultTaskId(undefined);
+      refreshProjectDetails();
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "保存计划工时失败";
+      message.error(text);
+    } finally {
+      setPlannedWorkSubmitting(false);
+    }
+  };
+
+  const activeEmployees = useMemo(
+    () =>
+      employees.filter(
+        (employee) =>
+          employee.employmentStatus !== "离职" &&
+          employee.employmentStatusOption?.value !== "离职",
+      ),
+    [employees],
+  );
+
+  const employeeFunctionById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const employee of employees) {
+      const functionLabel =
+        employee.functionOption?.value?.trim() || employee.function?.trim() || "";
+      if (functionLabel) map.set(employee.id, functionLabel);
+    }
+    return map;
+  }, [employees]);
+
+  const weeklyEntriesByEmployee = useMemo(() => {
+    const map = new Map<string, WeeklyPlannedEntry[]>();
+    for (const entry of weeklyPlannedEntries) {
+      const ownerId = entry.task?.owner?.id;
+      if (!ownerId) continue;
+      const list = map.get(ownerId) ?? [];
+      list.push(entry);
+      map.set(ownerId, list);
+    }
+    return map;
+  }, [weeklyPlannedEntries]);
+
+  const weeklyRows = useMemo(() => {
+    const rows = activeEmployees
+      .map((employee) => {
+        const entries = weeklyEntriesByEmployee.get(employee.id) ?? [];
+        const totalDays = entries.reduce(
+          (sum, entry) => sum + (entry.plannedDays ?? 0),
+          0,
+        );
+        const dailyMap: Record<(typeof DAY_KEYS)[number], WeeklyTaskItem[]> = {
+          monday: [],
+          tuesday: [],
+          wednesday: [],
+          thursday: [],
+          friday: [],
+          saturday: [],
+          sunday: [],
+        };
+        const projectMap = new Map<string, WeeklyProjectSummary>();
+
+        for (const entry of entries) {
+          const clientName =
+            entry.task?.segment?.project?.client?.name ?? "内部项目";
+          const taskName = entry.task?.name ?? "未命名任务";
+          const projectId =
+            entry.task?.segment?.project?.id ?? "unknown-project";
+          const projectName =
+            entry.task?.segment?.project?.name ?? "未命名项目";
+          const days = entry.plannedDays ?? 0;
+
+          if (!projectMap.has(projectId)) {
+            projectMap.set(projectId, {
+              projectId: entry.task?.segment?.project?.id ?? null,
+              projectName,
+              days: 0,
+              tasks: [],
+            });
+          }
+          const projectSummary = projectMap.get(projectId)!;
+          projectSummary.days += days;
+          const taskId = entry.task?.id ?? null;
+          const existingTask = projectSummary.tasks.find(
+            (task) => task.taskId === taskId,
+          );
+          if (existingTask) {
+            existingTask.days += days;
+          } else {
+            projectSummary.tasks.push({
+              taskId,
+              taskName,
+              days,
+            });
+          }
+
+          for (const dayKey of DAY_KEYS) {
+            if (entry[dayKey]) {
+              dailyMap[dayKey].push({ clientName, taskName });
+            }
+          }
+        }
+
+        const hasSchedule =
+          totalDays > 0 ||
+          DAY_KEYS.some((dayKey) => dailyMap[dayKey].length > 0);
+        const functionLabel =
+          employee.functionOption?.value?.trim() ||
+          employee.function?.trim() ||
+          "未设置职能";
+        const projectSummaries = Array.from(projectMap.values()).sort(
+          (left, right) => right.days - left.days,
+        );
+
+        return {
+          key: employee.id,
+          name: employee.name,
+          hasSchedule,
+          totalDays,
+          functionLabel,
+          functionOption: employee.functionOption ?? null,
+          projectSummaries,
+          dailyMap,
+        } as WeeklyEmployeeRow;
+      })
+      .filter((row) => {
+        const shouldHideWhenNoSchedule =
+          CONDITIONAL_VISIBLE_EMPLOYEES.has(row.name) ||
+          row.name.includes("外协");
+        if (!shouldHideWhenNoSchedule) {
+          return true;
+        }
+        return row.hasSchedule;
+      });
+
+    return rows.sort((left, right) => {
+      const leftPriority = FUNCTION_GROUP_PRIORITY[left.functionLabel] ?? 999;
+      const rightPriority = FUNCTION_GROUP_PRIORITY[right.functionLabel] ?? 999;
+      if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+
+      const functionCompare = left.functionLabel.localeCompare(
+        right.functionLabel,
+        "zh-CN",
+      );
+      if (functionCompare !== 0) return functionCompare;
+
+      if (left.hasSchedule !== right.hasSchedule) {
+        return left.hasSchedule ? -1 : 1;
+      }
+
+      return left.name.localeCompare(right.name, "zh-CN");
+    });
+  }, [activeEmployees, weeklyEntriesByEmployee]);
+
+  const weeklyMetricRows: WeeklyMetricRow[] = [
+    { key: "function", metricLabel: "职能" },
+    { key: "totalDays", metricLabel: "总工时" },
+    { key: "distribution", metricLabel: "工时分布" },
+    { key: "projectTaskDistribution", metricLabel: "项目 & 任务分布" },
+    { key: "dailyTasks", metricLabel: "每日任务情况" },
   ];
 
-  const taskColumns: ColumnsType<TaskRow> = [
-    {
-      title: "所属环节",
-      dataIndex: "segmentName",
-      width: "26%",
-    },
-    {
-      title: "任务名称",
-      dataIndex: "name",
-      width: "28%",
-    },
-    {
-      title: "任务状态",
-      dataIndex: "status",
-      width: "14%",
-      render: (value?: string | null) => value ?? "-",
-    },
-    {
-      title: "任务负责人",
-      dataIndex: "ownerName",
-      width: "16%",
-    },
-    {
-      title: "截止日期",
-      dataIndex: "dueDate",
-      width: "16%",
-      render: (value?: string | null) => formatDate(value),
-    },
-  ];
+  const renderWeeklyEmployeeMetric = (
+    employeeRow: WeeklyEmployeeRow,
+    metricKey: WeeklyMetricRow["key"],
+  ) => {
+    if (metricKey === "function") {
+      return (
+        <SelectOptionTag
+          option={
+            employeeRow.functionOption?.id
+              ? {
+                  id: employeeRow.functionOption.id,
+                  value: employeeRow.functionOption.value,
+                  color: employeeRow.functionOption.color,
+                }
+              : null
+          }
+          fallbackText={employeeRow.functionLabel}
+        />
+      );
+    }
 
-  const workColumns: ColumnsType<WorkRow> = [
-    {
-      title: "任务",
-      dataIndex: "taskName",
-      width: 240,
-      fixed: "left",
-    },
-    {
-      title: "任务责任人",
-      dataIndex: "ownerName",
-      width: 140,
-      fixed: "left",
-    },
-    {
-      title: "年份",
-      dataIndex: "year",
-      width: 100,
-    },
-    {
-      title: "周数",
-      dataIndex: "weekNumber",
-      width: 90,
-    },
-    {
-      title: "计划天数",
-      dataIndex: "plannedDays",
-      width: 110,
-    },
-    {
-      title: "一",
-      dataIndex: "monday",
-      width: 70,
-      align: "center",
-      render: (value: boolean) => (value ? "✓" : "-"),
-    },
-    {
-      title: "二",
-      dataIndex: "tuesday",
-      width: 70,
-      align: "center",
-      render: (value: boolean) => (value ? "✓" : "-"),
-    },
-    {
-      title: "三",
-      dataIndex: "wednesday",
-      width: 70,
-      align: "center",
-      render: (value: boolean) => (value ? "✓" : "-"),
-    },
-    {
-      title: "四",
-      dataIndex: "thursday",
-      width: 70,
-      align: "center",
-      render: (value: boolean) => (value ? "✓" : "-"),
-    },
-    {
-      title: "五",
-      dataIndex: "friday",
-      width: 70,
-      align: "center",
-      render: (value: boolean) => (value ? "✓" : "-"),
-    },
-    {
-      title: "六",
-      dataIndex: "saturday",
-      width: 70,
-      align: "center",
-      render: (value: boolean) => (value ? "✓" : "-"),
-    },
-    {
-      title: "日",
-      dataIndex: "sunday",
-      width: 70,
-      align: "center",
-      render: (value: boolean) => (value ? "✓" : "-"),
-    },
-  ];
+    if (metricKey === "totalDays") {
+      return employeeRow.hasSchedule ? (
+        <Typography.Text style={{ fontSize: 12 }}>
+          {toDisplayDays(employeeRow.totalDays)}
+        </Typography.Text>
+      ) : (
+        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+          -
+        </Typography.Text>
+      );
+    }
 
-  return (
-    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-      <Card>
-        <Space orientation="vertical" size={4} style={{ width: "100%" }}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            项目排期
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            已加载全部项目 {allProjects.length} 个，当前示例展示名称包含“柠季”的项目。
-          </Typography.Text>
+    if (metricKey === "distribution") {
+      return employeeRow.hasSchedule ? (
+        <Space wrap size={[4, 4]}>
+          {DAY_KEYS.map((dayKey) => {
+            const hasTasks = employeeRow.dailyMap[dayKey].length > 0;
+            if (WEEKEND_DAY_KEYS.has(dayKey) && !hasTasks) {
+              return null;
+            }
+            return (
+              <Tag
+                key={`${employeeRow.key}-${dayKey}`}
+                color={hasTasks ? "green" : undefined}
+                style={{
+                  marginInlineEnd: 0,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  lineHeight: "14px",
+                  padding: "0 4px",
+                  ...(hasTasks
+                    ? {}
+                    : {
+                        color: "#8c8c8c",
+                        background: "#f5f5f5",
+                        borderColor: "#f0f0f0",
+                      }),
+                }}
+              >
+                {DAY_LABELS[dayKey]}
+              </Tag>
+            );
+          })}
         </Space>
-      </Card>
+      ) : (
+        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+          -
+        </Typography.Text>
+      );
+    }
 
-      {loadingProjects ? (
+    if (metricKey === "projectTaskDistribution") {
+      return employeeRow.hasSchedule ? (
+        employeeRow.projectSummaries.length === 0 ? (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            未安排任务
+          </Typography.Text>
+        ) : (
+          <Space orientation="vertical" size={2} style={{ width: "100%" }}>
+            {employeeRow.projectSummaries.map((projectSummary) => (
+              <div key={`${employeeRow.key}-${projectSummary.projectName}`}>
+                <Space wrap size={[6, 6]}>
+                  <Tag
+                    color="default"
+                    style={{
+                      marginInlineEnd: 0,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      lineHeight: "14px",
+                      padding: "0 6px",
+                    }}
+                  >
+                    {projectSummary.projectName}
+                  </Tag>
+                  <Tag
+                    color="processing"
+                    style={{
+                      marginInlineEnd: 0,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      lineHeight: "14px",
+                      padding: "0 4px",
+                    }}
+                  >
+                    {toDisplayDays(projectSummary.days)}
+                  </Tag>
+                </Space>
+                <div style={{ marginTop: 1, lineHeight: "14px" }}>
+                  {projectSummary.tasks.map((task) => (
+                    <div key={task.taskId}>
+                      <Typography.Text
+                        style={{
+                          fontSize: 12,
+                          paddingLeft: 6,
+                          fontWeight: 500,
+                        }}
+                      >
+                        - {task.taskName}{" "}
+                        <Tag
+                          style={{
+                            marginInlineEnd: 0,
+                            fontSize: 10,
+                            lineHeight: "14px",
+                            padding: "0 4px",
+                            fontWeight: 600,
+                          }}
+                          color="gold"
+                        >
+                          {toDisplayDays(task.days)}
+                        </Tag>
+                      </Typography.Text>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </Space>
+        )
+      ) : (
+        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+          -
+        </Typography.Text>
+      );
+    }
+
+    return employeeRow.hasSchedule ? (
+      <div>
+        {DAY_KEYS.filter((dayKey) => {
+          const tasks = employeeRow.dailyMap[dayKey];
+          return !(WEEKEND_DAY_KEYS.has(dayKey) && tasks.length === 0);
+        }).map((dayKey) => {
+          const tasks = employeeRow.dailyMap[dayKey];
+          return (
+            <div key={`${employeeRow.key}-daily-${dayKey}`}>
+              <Tag
+                color={tasks.length ? "green" : "default"}
+                style={{ fontSize: 10, fontWeight: 600 }}
+              >
+                {DAY_LABELS[dayKey]}
+              </Tag>
+              {tasks.length === 0 ? (
+                <div>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    - 未安排任务
+                  </Typography.Text>
+                </div>
+              ) : (
+                tasks.map((item, index) => (
+                  <div
+                    key={`${employeeRow.key}-${dayKey}-${item.clientName}-${item.taskName}-${index}`}
+                    style={{ lineHeight: "14px" }}
+                  >
+                    <Typography.Text style={{ fontSize: 12 }}>
+                      - [{item.clientName}] {item.taskName}
+                    </Typography.Text>
+                  </div>
+                ))
+              )}
+            </div>
+          );
+        })}
+      </div>
+    ) : (
+      <Typography.Text
+        type="secondary"
+        style={{ fontSize: 11, fontWeight: 600 }}
+      >
+        本周无安排
+      </Typography.Text>
+    );
+  };
+
+  const weeklyColumns: ColumnsType<WeeklyMetricRow> = [
+    {
+      title: "维度",
+      dataIndex: "metricLabel",
+      fixed: "left",
+      width: 120,
+      render: (value: string) => (
+        <Typography.Text strong style={{ fontSize: 12 }}>
+          {value}
+        </Typography.Text>
+      ),
+    },
+    ...weeklyRows.map((employeeRow) => ({
+      title: employeeRow.name,
+      dataIndex: employeeRow.key,
+      key: employeeRow.key,
+      width: 260,
+      render: (_value: unknown, metricRow: WeeklyMetricRow) =>
+        renderWeeklyEmployeeMetric(employeeRow, metricRow.key),
+    })),
+  ];
+
+  const weeklyContent = (
+    <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+      {loadingWeekly ? (
         <Card>
           <Spin />
         </Card>
-      ) : ningjiProjects.length === 0 ? (
+      ) : weeklyRows.length === 0 ? (
         <Card>
-          <Empty description="未找到名称包含“柠季”的项目" />
+          <Empty description="暂无本周安排" />
         </Card>
       ) : (
-        ningjiProjects.map((project) => {
-          const detail = projectDetails[project.id];
+        <Table
+          rowKey="key"
+          columns={weeklyColumns}
+          dataSource={weeklyMetricRows}
+          pagination={false}
+          tableLayout="auto"
+          scroll={{ x: "max-content" }}
+        />
+      )}
+    </Space>
+  );
 
-          const segmentRows: SegmentRow[] =
-            detail?.segments?.map((segment) => ({
-              id: segment.id,
-              name: segment.name,
-              status: segment.status,
-              ownerName: segment.owner?.name ?? "-",
-              dueDate: segment.dueDate,
-            })) ?? [];
+  const renderProjectScheduleContent = (project: ProjectListItem) => {
+    const detail = projectDetails[project.id];
+    const progressView = projectProgressViewById[project.id] ?? "progress";
 
-          const taskRows: TaskRow[] =
-            detail?.segments?.flatMap((segment) =>
-              (segment.projectTasks ?? []).map((task) => ({
-                id: task.id,
-                segmentName: segment.name,
-                name: task.name,
-                status: task.status,
-                ownerName: task.owner?.name ?? "-",
-                dueDate: task.dueDate,
-              })),
-            ) ?? [];
-
-          const workRows: WorkRow[] =
-            detail?.segments?.flatMap((segment) =>
-              (segment.projectTasks ?? []).flatMap((task) =>
-                (task.plannedWorkEntries ?? []).map((entry) => ({
+    const segmentRows: SegmentRow[] =
+      detail?.segments
+        ?.map((segment) => ({
+          id: segment.id,
+          name: segment.name,
+          status: segment.status,
+          statusOption: segment.statusOption ?? null,
+          ownerName: segment.owner?.name ?? "-",
+          ownerId: segment.owner?.id ?? null,
+          dueDate: segment.dueDate,
+          tasks: (segment.projectTasks ?? [])
+            .filter((task) => !(task.status ?? "").includes("完成"))
+            .map((task) => ({
+              id: task.id,
+              segmentId: segment.id,
+              segmentName: segment.name,
+              name: task.name,
+              status: task.status,
+              ownerName: task.owner?.name ?? "-",
+              ownerId: task.owner?.id ?? null,
+              dueDate: task.dueDate,
+              plannedEntries: (task.plannedWorkEntries ?? [])
+                .map((entry) => ({
                   id: entry.id,
-                  taskName: task.name,
-                  ownerName: task.owner?.name ?? "-",
+                  taskId: task.id,
                   year: entry.year,
                   weekNumber: entry.weekNumber,
                   plannedDays: entry.plannedDays,
@@ -400,173 +1339,463 @@ export default function SchedulePage() {
                   friday: entry.friday,
                   saturday: entry.saturday,
                   sunday: entry.sunday,
-                })),
+                }))
+                .sort((left, right) => {
+                  if (left.year !== right.year) return right.year - left.year;
+                  return right.weekNumber - left.weekNumber;
+                }),
+            })),
+        }))
+        ?.sort((left, right) => {
+          const isLeftDone = (left.status ?? "").includes("完成");
+          const isRightDone = (right.status ?? "").includes("完成");
+          if (isLeftDone !== isRightDone) {
+            return isLeftDone ? 1 : -1;
+          }
+          return left.name.localeCompare(right.name, "zh-CN");
+        }) ?? [];
+
+    const designGroupTasks: ProjectTaskListRow[] =
+      detail?.segments
+        ?.flatMap((segment) =>
+          (segment.projectTasks ?? [])
+            .filter((task) => !(task.status ?? "").includes("完成"))
+            .filter((task) => {
+              const ownerId = task.owner?.id;
+              if (!ownerId) return false;
+              return employeeFunctionById.get(ownerId) === "设计组";
+            })
+            .map((task) => ({
+              id: task.id,
+              name: task.name,
+              segmentId: segment.id,
+              segmentName: segment.name,
+              ownerId: task.owner?.id ?? null,
+              ownerName: task.owner?.name ?? "-",
+              dueDate: task.dueDate ?? null,
+            })),
+        )
+        ?.sort((left, right) => {
+          const leftDate = left.dueDate
+            ? dayjs(left.dueDate).valueOf()
+            : Number.MAX_SAFE_INTEGER;
+          const rightDate = right.dueDate
+            ? dayjs(right.dueDate).valueOf()
+            : Number.MAX_SAFE_INTEGER;
+          if (leftDate !== rightDate) return leftDate - rightDate;
+          return left.name.localeCompare(right.name, "zh-CN");
+        }) ?? [];
+
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          minWidth: 0,
+          width: "100%",
+          maxWidth: "100%",
+          overflowX: "hidden",
+        }}
+      >
+        <ProjectMilestoneSection
+          milestones={detail?.milestones ?? []}
+          showAddButton={canManageProject}
+          onAdd={() => {
+            if (!canManageProject) return;
+            setMilestoneProjectId(project.id);
+            setMilestoneModalOpen(true);
+          }}
+        />
+        <Card
+          title={
+            <Segmented
+              value={progressView}
+              options={[
+                { label: "项目进度", value: "progress" },
+                { label: "项目任务", value: "tasks" },
+              ]}
+              onChange={(value) => {
+                setProjectProgressViewById((previous) => ({
+                  ...previous,
+                  [project.id]: value as "progress" | "tasks",
+                }));
+              }}
+            />
+          }
+          style={{
+            width: "100%",
+            minWidth: 0,
+            maxWidth: "100%",
+            overflow: "hidden",
+          }}
+          styles={{
+            body: {
+              width: "100%",
+              minWidth: 0,
+              overflowX: "hidden",
+            },
+          }}
+        >
+          {progressView === "progress" ? (
+            <ProjectProgressNestedTable
+              data={segmentRows}
+              segmentHeaderTitle={`项目环节（${segmentRows.length}）/任务（${segmentRows.reduce(
+                (sum, segment) => sum + segment.tasks.length,
+                0,
+              )}）`}
+              pageSize={8}
+              plannedYearOptionMap={plannedYearOptionMap}
+              plannedWeekOptionMap={plannedWeekOptionMap}
+              actionsDisabled={!canManageProject}
+              onAddTask={(segment) => openCreateTaskModal(segment.id)}
+              onEditSegment={(segment) => openEditSegmentModal(segment)}
+              onDeleteSegment={(segment) => {
+                void handleDeleteSegment(segment.id);
+              }}
+              onAddPlannedWork={(task) => openCreatePlannedWorkModal(task.id)}
+              onEditTask={(task) => openEditTaskModal(task)}
+              onDeleteTask={(task) => {
+                void handleDeleteTask(task.id);
+              }}
+              onEditPlannedWork={(entry) => openEditPlannedWorkModal(entry)}
+              onDeletePlannedWork={(entry) => {
+                void handleDeletePlannedEntry(entry.id);
+              }}
+            />
+          ) : (
+            <Table<ProjectTaskListRow>
+              rowKey="id"
+              size="small"
+              dataSource={designGroupTasks}
+              pagination={{ pageSize: 8, position: ["bottomLeft"] }}
+              locale={{ emptyText: "暂无符合条件的任务" }}
+              columns={[
+                {
+                  title: "任务名称",
+                  dataIndex: "name",
+                  render: (_value, row) => (
+                    <AppLink href={`/project-tasks/${row.id}`}>{row.name}</AppLink>
+                  ),
+                },
+                {
+                  title: "所属环节",
+                  dataIndex: "segmentName",
+                  render: (_value, row) => (
+                    <AppLink href={`/project-segments/${row.segmentId}`}>
+                      {row.segmentName}
+                    </AppLink>
+                  ),
+                },
+                {
+                  title: "负责人",
+                  dataIndex: "ownerName",
+                  render: (_value, row) =>
+                    row.ownerId ? (
+                      <AppLink href={`/employees/${row.ownerId}`}>{row.ownerName}</AppLink>
+                    ) : (
+                      "-"
+                    ),
+                },
+                {
+                  title: "截止日期",
+                  dataIndex: "dueDate",
+                  render: (value?: string | null) =>
+                    value && dayjs(value).isValid()
+                      ? dayjs(value).format("YYYY/MM/DD")
+                      : "",
+                },
+              ]}
+            />
+          )}
+        </Card>
+      </div>
+    );
+  };
+
+  const customerScheduleContent = loadingProjects ? (
+    <Card>
+      <Spin />
+    </Card>
+  ) : visibleProjects.length === 0 ? (
+    <Card>
+      <Empty description="暂无项目" />
+    </Card>
+  ) : !selectedClientProject ? (
+    <Card>
+      <Empty description="请选择项目" />
+    </Card>
+  ) : (
+    renderProjectScheduleContent(selectedClientProject)
+  );
+
+  const internalScheduleContent = loadingProjects ? (
+    <Card>
+      <Spin />
+    </Card>
+  ) : internalVisibleProjects.length === 0 ? (
+    <Card>
+      <Empty description="暂无内部项目" />
+    </Card>
+  ) : (
+    <Collapse
+      ghost
+      items={internalVisibleProjects.map((project) => ({
+        key: project.id,
+        label: <AppLink href={`/projects/${project.id}`}>{project.name}</AppLink>,
+        children: renderProjectScheduleContent(project),
+      }))}
+    />
+  );
+
+  const activeScheduleTab = useMemo(() => {
+    const tab = searchParams.get("tab");
+    if (tab && SCHEDULE_TAB_KEYS.has(tab)) {
+      return tab;
+    }
+    return "client-project-schedule";
+  }, [searchParams]);
+
+  const handleScheduleTabChange = (nextTab: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", nextTab);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, {
+      scroll: false,
+    });
+  };
+
+  const handleClientProjectSelect = (projectId: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("projectId", projectId);
+    params.set("tab", "client-project-schedule");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, {
+      scroll: false,
+    });
+  };
+
+  return (
+    <>
+      <Card>
+        <Tabs
+          activeKey={activeScheduleTab}
+          onChange={handleScheduleTabChange}
+          items={[
+            {
+              key: "client-project-schedule",
+              label: "客户项目排期",
+              children: (
+                <ClientProjectSchedulePane
+                  visibleProjectCount={visibleProjects.length}
+                  groupedVisibleProjects={groupedVisibleProjects}
+                  selectedClientProject={selectedClientProject}
+                  customerScheduleContent={customerScheduleContent}
+                  onSelectProject={handleClientProjectSelect}
+                />
               ),
-            ) ?? [];
+            },
+            {
+              key: "internal-project-schedule",
+              label: "内部项目排期",
+              children: internalScheduleContent,
+            },
+            {
+              key: "weekly-tasks",
+              label: "本周任务安排",
+              children: weeklyContent,
+            },
+          ]}
+        />
+      </Card>
 
-          return (
-            <Card key={project.id} title={project.name} loading={loadingDetails && !detail}>
-              <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-                <Typography.Title level={5} style={{ margin: 0 }}>
-                  项目里程碑
-                </Typography.Title>
-
-                {!detail?.milestones ||
-                detail.milestones.filter((milestone) => {
-                  if (!milestone.date) return false;
-                  return !dayjs(milestone.date).startOf("day").isBefore(dayjs().startOf("day"), "day");
-                }).length === 0 ? (
-                  <Empty description="暂无里程碑" />
-                ) : (
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-                      gap: 16,
-                    }}
-                  >
-                    {detail.milestones
-                      .filter((milestone) => {
-                        if (!milestone.date) return false;
-                        return !dayjs(milestone.date).startOf("day").isBefore(dayjs().startOf("day"), "day");
-                      })
-                      .sort((a, b) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf())
-                      .map((milestone) => {
-                      const countdown = formatCountdown(milestone.date);
-                      return (
-                        <Link
-                          key={milestone.id}
-                          href={`/project-milestones/${milestone.id}`}
-                          style={{ color: "inherit" }}
-                        >
-                          <Card hoverable size="small" style={{ borderRadius: 16 }}>
-                            <Space
-                              orientation="vertical"
-                              size={12}
-                              style={{ width: "100%", fontSize: 12 }}
-                            >
-                              <Space size={10} align="start">
-                                <Typography.Text style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
-                                  {milestone.name}
-                                </Typography.Text>
-                              </Space>
-
-                              <Tag color="blue" style={{ width: "fit-content", margin: 0, fontSize: 12 }}>
-                                {milestone.type || "未分类"}
-                              </Tag>
-
-                              {milestone.clientParticipants && milestone.clientParticipants.length > 0 ? (
-                                <div>
-                                  <Tag
-                                    color="red"
-                                    style={{ marginBottom: 6, fontSize: 12, fontWeight: 600 }}
-                                  >
-                                    客户人员
-                                  </Tag>
-                                  <Typography.Text style={{ display: "block", fontSize: 12 }}>
-                                    {renderClientPeople(milestone.clientParticipants)}
-                                  </Typography.Text>
-                                </div>
-                              ) : null}
-
-                              {milestone.internalParticipants && milestone.internalParticipants.length > 0 ? (
-                                <div>
-                                  <Tag
-                                    color="red"
-                                    style={{ marginBottom: 6, fontSize: 12, fontWeight: 600 }}
-                                  >
-                                    项目人员
-                                  </Tag>
-                                  <Typography.Text style={{ display: "block", fontSize: 12 }}>
-                                    {renderPeople(milestone.internalParticipants)}
-                                  </Typography.Text>
-                                </div>
-                              ) : null}
-
-                              {milestone.vendorParticipants && milestone.vendorParticipants.length > 0 ? (
-                                <div>
-                                  <Tag
-                                    color="red"
-                                    style={{ marginBottom: 6, fontSize: 12, fontWeight: 600 }}
-                                  >
-                                    供应商
-                                  </Tag>
-                                  <Typography.Text style={{ display: "block", fontSize: 12 }}>
-                                    {renderPeople(milestone.vendorParticipants)}
-                                  </Typography.Text>
-                                </div>
-                              ) : null}
-
-                              <Tag
-                                color={countdown.urgent ? "red" : "green"}
-                                style={{
-                                  width: "fit-content",
-                                  margin: 0,
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                }}
-                                icon={<ClockCircleOutlined />}
-                              >
-                                {countdown.text}
-                              </Tag>
-                            </Space>
-                          </Card>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <Card
-                  size="small"
-                  title={
-                    <Segmented
-                      value={tableView}
-                      onChange={(value) => setTableView(value as "segments" | "tasks" | "work")}
-                      options={[
-                        { label: "项目环节", value: "segments" },
-                        { label: "项目任务", value: "tasks" },
-                        { label: "项目工时", value: "work" },
-                      ]}
-                    />
+      {segmentModalOpen ? (
+        <Modal
+          title={editingSegment ? "编辑环节" : "新增环节"}
+          open={segmentModalOpen}
+          onCancel={() => {
+            setSegmentModalOpen(false);
+            setEditingSegment(null);
+          }}
+          footer={null}
+          confirmLoading={segmentSubmitting}
+          destroyOnHidden
+        >
+          <ProjectSegmentForm
+            initialValues={
+              editingSegment
+                ? {
+                    id: editingSegment.id,
+                    name: editingSegment.name,
+                    status: editingSegment.status ?? null,
+                    statusOption: editingSegment.statusOption ?? null,
+                    dueDate: editingSegment.dueDate ?? null,
+                    owner: editingSegment.ownerId
+                      ? {
+                          id: editingSegment.ownerId,
+                          name: editingSegment.ownerName,
+                        }
+                      : null,
+                    project: selectedClientProject
+                      ? {
+                          id: selectedClientProject.id,
+                          name: selectedClientProject.name,
+                        }
+                      : null,
                   }
-                >
-                  {tableView === "segments" ? (
-                    <Table
-                      rowKey="id"
-                      columns={segmentColumns}
-                      dataSource={segmentRows}
-                      pagination={{ pageSize: 8 }}
-                      locale={{ emptyText: "暂无项目环节" }}
-                    />
-                  ) : null}
+                : null
+            }
+            projectOptions={
+              selectedClientProject
+                ? [
+                    {
+                      id: selectedClientProject.id,
+                      name: selectedClientProject.name,
+                    },
+                  ]
+                : []
+            }
+            selectedProjectId={selectedClientProject?.id}
+            disableProjectSelect
+            employees={employees}
+            onSubmit={handleSubmitSegment}
+          />
+        </Modal>
+      ) : null}
 
-                  {tableView === "tasks" ? (
-                    <Table
-                      rowKey="id"
-                      columns={taskColumns}
-                      dataSource={taskRows}
-                      pagination={{ pageSize: 8 }}
-                      locale={{ emptyText: "暂无项目任务" }}
-                    />
-                  ) : null}
+      {milestoneModalOpen ? (
+        <Modal
+          title="新增里程碑"
+          open={milestoneModalOpen}
+          onCancel={() => {
+            setMilestoneModalOpen(false);
+            setMilestoneProjectId(null);
+          }}
+          footer={null}
+          confirmLoading={milestoneSubmitting}
+          destroyOnHidden
+        >
+          <ProjectMilestoneForm
+            projectMembers={activeMilestoneProjectDetail?.members ?? []}
+            allEmployees={employees}
+            clientParticipants={clientContacts}
+            vendors={activeMilestoneProjectDetail?.vendors ?? []}
+            projectOptions={
+              activeMilestoneProjectId && activeMilestoneProjectDetail
+                ? [
+                    {
+                      id: activeMilestoneProjectId,
+                      name: activeMilestoneProjectDetail.name,
+                    },
+                  ]
+                : []
+            }
+            selectedProjectId={activeMilestoneProjectId ?? undefined}
+            disableProjectSelect
+            onSubmit={handleSubmitMilestone}
+          />
+        </Modal>
+      ) : null}
 
-                  {tableView === "work" ? (
-                    <Table
-                      rowKey="id"
-                      columns={workColumns}
-                      dataSource={workRows}
-                      pagination={{ pageSize: 8 }}
-                      locale={{ emptyText: "暂无项目工时" }}
-                      scroll={{ x: "max-content" }}
-                    />
-                  ) : null}
-                </Card>
-              </Space>
-            </Card>
-          );
-        })
-      )}
-    </Space>
+      {taskModalOpen ? (
+        <Modal
+          title={editingTask ? "编辑任务" : "新增任务"}
+          open={taskModalOpen}
+          onCancel={() => {
+            setTaskModalOpen(false);
+            setEditingTask(null);
+            setTaskDefaultSegmentId(undefined);
+          }}
+          footer={null}
+          confirmLoading={taskSubmitting}
+          destroyOnHidden
+        >
+          <ProjectTaskForm
+            segmentOptions={selectedProjectSegmentOptions}
+            defaultSegmentId={taskDefaultSegmentId}
+            employees={employees}
+            initialValues={
+              editingTask
+                ? {
+                    id: editingTask.id,
+                    name: editingTask.name,
+                    segmentId: editingTask.segmentId,
+                    segmentName: editingTask.segmentName,
+                    status: editingTask.status ?? null,
+                    dueDate: editingTask.dueDate ?? null,
+                    owner: editingTask.ownerId
+                      ? { id: editingTask.ownerId, name: editingTask.ownerName }
+                      : null,
+                  }
+                : null
+            }
+            onSubmit={handleSubmitTask}
+          />
+        </Modal>
+      ) : null}
+
+      {plannedWorkModalOpen ? (
+        <Modal
+          title={editingPlannedEntry ? "编辑计划工时" : "新增计划工时"}
+          open={plannedWorkModalOpen}
+          onCancel={() => {
+            setPlannedWorkModalOpen(false);
+            setEditingPlannedEntry(null);
+            setPlannedDefaultTaskId(undefined);
+          }}
+          footer={null}
+          confirmLoading={plannedWorkSubmitting}
+          destroyOnHidden
+        >
+          <PlannedWorkEntryForm
+            projectOptions={
+              selectedClientProject
+                ? [
+                    {
+                      id: selectedClientProject.id,
+                      name: selectedClientProject.name,
+                    },
+                  ]
+                : []
+            }
+            selectedProjectId={selectedClientProject?.id}
+            disableProjectSelect
+            disableSegmentSelect={Boolean(editingPlannedEntry)}
+            disableTaskSelect={Boolean(editingPlannedEntry)}
+            taskOptions={selectedProjectTaskOptions}
+            defaultTaskId={plannedDefaultTaskId}
+            initialValues={
+              editingPlannedEntry
+                ? {
+                    id: editingPlannedEntry.id,
+                    taskId: editingPlannedEntry.taskId,
+                    year: editingPlannedEntry.year,
+                    weekNumber: editingPlannedEntry.weekNumber,
+                    yearOption: String(editingPlannedEntry.year),
+                    weekNumberOption: String(editingPlannedEntry.weekNumber),
+                    plannedDays: editingPlannedEntry.plannedDays,
+                    monday: editingPlannedEntry.monday,
+                    tuesday: editingPlannedEntry.tuesday,
+                    wednesday: editingPlannedEntry.wednesday,
+                    thursday: editingPlannedEntry.thursday,
+                    friday: editingPlannedEntry.friday,
+                    saturday: editingPlannedEntry.saturday,
+                    sunday: editingPlannedEntry.sunday,
+                  }
+                : null
+            }
+            onSubmit={handleSubmitPlannedWork}
+          />
+        </Modal>
+      ) : null}
+    </>
+  );
+}
+
+export default function SchedulePage() {
+  return (
+    <Suspense fallback={<Card loading />}>
+      <SchedulePageContent />
+    </Suspense>
   );
 }

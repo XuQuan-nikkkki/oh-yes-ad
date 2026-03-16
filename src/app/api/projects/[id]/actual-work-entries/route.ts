@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     return new Response("Missing project ID", { status: 400 });
   }
 
-  const body = await req.json();
+  const body = await sanitizeRequestBody(req);
   if (!body?.title || typeof body.title !== "string") {
     return new Response("Invalid title", { status: 400 });
   }

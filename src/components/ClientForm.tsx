@@ -9,7 +9,6 @@ export type ClientFormValues = {
   industryOptionId?: string;
   newIndustryName?: string;
   newIndustryColor?: string;
-  remark?: string | null;
 };
 
 type ClientFormInitialValues = {
@@ -20,7 +19,6 @@ type ClientFormInitialValues = {
     id: string;
     value: string;
   } | null;
-  remark?: string | null;
 };
 
 type SelectOption = {
@@ -69,17 +67,6 @@ const ClientForm = ({
         : false,
     [normalizedSearchText, selectOptions],
   );
-
-  const getTagTextColor = (color?: string) => {
-    if (!color || !color.startsWith("#") || color.length !== 7) {
-      return "#262626";
-    }
-    const r = parseInt(color.slice(1, 3), 16);
-    const g = parseInt(color.slice(3, 5), 16);
-    const b = parseInt(color.slice(5, 7), 16);
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-    return brightness > 160 ? "#262626" : "#ffffff";
-  };
 
   const activateCreateIndustry = (name?: string) => {
     const value = (name ?? normalizedSearchText).trim();
@@ -151,14 +138,7 @@ const ClientForm = ({
             optionRender={(option) => {
               const data = option.data as DefaultOptionType & { color?: string };
               return (
-                <Tag
-                  style={{
-                    backgroundColor: data.color ?? "#d9d9d9",
-                    color: getTagTextColor(data.color),
-                    borderColor: data.color ?? "#bfbfbf",
-                    borderRadius: 6,
-                  }}
-                >
+                <Tag color={data.color ?? "#d9d9d9"} style={{ borderRadius: 6 }}>
                   {String(data.label ?? "")}
                 </Tag>
               );
@@ -230,10 +210,6 @@ const ClientForm = ({
           </Form.Item>
         </Space>
       ) : null}
-
-      <Form.Item label="备注" name="remark">
-        <Input.TextArea rows={3} />
-      </Form.Item>
 
       <Button type="primary" htmlType="submit" block>
         {submitText}

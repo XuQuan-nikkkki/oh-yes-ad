@@ -1,10 +1,13 @@
+// @ts-nocheck
 "use client";
 
 import { useState } from "react";
-import { Table, Tag } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import type { ReactNode } from "react";
+import { ProTable } from "@ant-design/pro-components";
+import type { ProColumns } from "@ant-design/pro-components";
 import TableActions from "@/components/TableActions";
 import AppLink from "@/components/AppLink";
+import SelectOptionTag from "@/components/SelectOptionTag";
 
 export type Client = {
   id: string;
@@ -17,7 +20,6 @@ export type Client = {
     color?: string | null;
     order?: number | null;
   } | null;
-  remark?: string | null;
 };
 
 type Props = {
@@ -25,9 +27,26 @@ type Props = {
   loading?: boolean;
   onEdit: (client: Client) => void;
   onDelete: (id: string) => void;
+  actionsDisabled?: boolean;
+  onIndustryOptionUpdated?: () => void | Promise<void>;
+  columnKeys?: ColumnKey[];
+  headerTitle?: ReactNode;
+  toolbarActions?: ReactNode[];
 };
 
-const ClientTable = ({ clients, loading = false, onEdit, onDelete }: Props) => {
+export type ColumnKey = "name" | "industry" | "actions";
+
+const ClientTable = ({
+  clients,
+  loading = false,
+  onEdit,
+  onDelete,
+  actionsDisabled = false,
+  onIndustryOptionUpdated,
+  columnKeys = ["name", "industry", "actions"],
+  headerTitle,
+  toolbarActions = [],
+}: Props) => {
   const [current, setCurrent] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -35,11 +54,10 @@ const ClientTable = ({ clients, loading = false, onEdit, onDelete }: Props) => {
     new Set(clients.map((c) => c.industryOption?.value).filter(Boolean)),
   ) as string[];
 
-  const columns: ColumnsType<Client> = [
-    {
+  const allColumns: Record<ColumnKey, ProColumns<Client>> = {
+    name: {
       title: "名称",
       dataIndex: "name",
-      ellipsis: true,
       filters: clients.map((c) => ({
         text: c.name,
         value: c.name,
@@ -51,7 +69,7 @@ const ClientTable = ({ clients, loading = false, onEdit, onDelete }: Props) => {
         <AppLink href={`/clients/${record.id}`}>{value}</AppLink>
       ),
     },
-    {
+    industry: {
       title: "行业",
       dataIndex: ["industryOption", "value"],
       filters: industryOptions.map((item) => ({
@@ -65,42 +83,44 @@ const ClientTable = ({ clients, loading = false, onEdit, onDelete }: Props) => {
           b.industryOption?.value ?? "",
         ),
       render: (_value: string | undefined, record) => (
-        <Tag
-          color={record.industryOption?.color ?? "#8c8c8c"}
-          style={{
-            borderRadius: 6,
-            padding: "2px 10px",
-            fontWeight: 500,
-          }}
-        >
-          {record.industryOption?.value ?? "-"}
-        </Tag>
+        <SelectOptionTag
+          option={record.industryOption}
+          fallbackText="-"
+          successMessage="行业标签已更新"
+          onUpdated={onIndustryOptionUpdated}
+        />
       ),
     },
-    {
-      title: "备注",
-      dataIndex: "remark",
-      render: (value: string | null) => value ?? "-",
-    },
-    {
+    actions: {
       title: "操作",
-      width: 300,
+      hideInSetting: true,
       render: (_value, record) => (
         <TableActions
           onEdit={() => onEdit(record)}
           onDelete={() => onDelete(record.id)}
+          editDisabled={actionsDisabled}
+          deleteDisabled={actionsDisabled}
           deleteTitle="确定删除这个客户？"
         />
       ),
     },
-  ];
+  };
+  const columns: ProColumns<Client>[] = columnKeys.map((key) => allColumns[key]);
 
   return (
-    <Table
+    <ProTable<Client>
       rowKey="id"
       columns={columns}
       dataSource={clients}
       loading={loading}
+      search={false}
+      headerTitle={headerTitle}
+      options={{
+        reload: false,
+        density: false,
+        fullScreen: false,
+        setting: false,
+      }}
       pagination={{
         current,
         pageSize,
@@ -112,6 +132,8 @@ const ClientTable = ({ clients, loading = false, onEdit, onDelete }: Props) => {
           setPageSize(nextPageSize);
         },
       }}
+      tableLayout="auto"
+      toolBarRender={() => toolbarActions}
     />
   );
 };

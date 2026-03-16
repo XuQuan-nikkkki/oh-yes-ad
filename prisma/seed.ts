@@ -7,112 +7,91 @@ const prisma = new PrismaClient({
 });
 
 const ROLE_SEEDS = [
-  { id: "role_admin", code: "ADMIN", name: "管理员" },
-  { id: "role_project_manager", code: "PROJECT_MANAGER", name: "项目经理" },
-  { id: "role_hr", code: "HR", name: "人事" },
-  { id: "role_finance", code: "FINANCE", name: "财务" },
-  { id: "role_staff", code: "STAFF", name: "员工" },
+  { code: "ADMIN", name: "管理员" },
+  { code: "PROJECT_MANAGER", name: "项目经理" },
+  { code: "HR", name: "人事" },
+  { code: "FINANCE", name: "财务" },
+  { code: "STAFF", name: "员工" },
 ] as const;
 
 async function seedRoles() {
   for (const role of ROLE_SEEDS) {
-    await prisma.role.upsert({
+    const exists = await prisma.role.findUnique({
       where: { code: role.code },
-      create: {
-        id: role.id,
+      select: { id: true },
+    });
+    if (exists) continue;
+
+    await prisma.role.create({
+      data: {
         code: role.code,
         name: role.name,
       },
-      update: {
-        name: role.name,
+    });
+  }
+}
+
+async function ensureXiaoHua() {
+  const TARGET_NAME = "小花";
+  const TARGET_PHONE = "18600404232";
+  const REQUIRED_ROLE_CODES = ["ADMIN", "STAFF"] as const;
+
+  let xiaoHua = await prisma.employee.findFirst({
+    where: { name: TARGET_NAME },
+    select: { id: true, phone: true },
+  });
+
+  if (!xiaoHua) {
+    xiaoHua = await prisma.employee.create({
+      data: {
+        name: TARGET_NAME,
+        phone: TARGET_PHONE,
       },
-    });
-  }
-}
-
-async function replaceDesignerWithStaff() {
-  const staff = await prisma.role.findUnique({ where: { code: "STAFF" }, select: { id: true } });
-  const designer = await prisma.role.findUnique({ where: { code: "DESIGNER" }, select: { id: true } });
-
-  if (!staff || !designer) return;
-
-  const designerLinks = await prisma.employeeRole.findMany({
-    where: { roleId: designer.id },
-    select: { employeeId: true },
-  });
-
-  if (designerLinks.length > 0) {
-    await prisma.employeeRole.createMany({
-      data: designerLinks.map((link) => ({ employeeId: link.employeeId, roleId: staff.id })),
-      skipDuplicates: true,
+      select: { id: true, phone: true },
     });
   }
 
-  await prisma.employeeRole.deleteMany({ where: { roleId: designer.id } });
-  await prisma.role.delete({ where: { id: designer.id } });
-}
+  if (xiaoHua.phone !== TARGET_PHONE) {
+    await prisma.employee.update({
+      where: { id: xiaoHua.id },
+      data: { phone: TARGET_PHONE },
+    });
+  }
 
-async function ensureDefaultStaffRole() {
-  const staff = await prisma.role.findUnique({ where: { code: "STAFF" }, select: { id: true } });
-  if (!staff) return;
-
-  const employeesWithoutRoles = await prisma.employee.findMany({
-    where: { roles: { none: {} } },
-    select: { id: true },
+  const requiredRoles = await prisma.role.findMany({
+    where: {
+      code: {
+        in: [...REQUIRED_ROLE_CODES],
+      },
+    },
+    select: {
+      id: true,
+      code: true,
+    },
   });
 
-  if (employeesWithoutRoles.length === 0) return;
-
-  await prisma.employeeRole.createMany({
-    data: employeesWithoutRoles.map((employee) => ({ employeeId: employee.id, roleId: staff.id })),
-    skipDuplicates: true,
-  });
-}
-
-async function grantAdminToXiaoHua() {
-  const admin = await prisma.role.findUnique({ where: { code: "ADMIN" }, select: { id: true } });
-  if (!admin) return;
-
-  const employees = await prisma.employee.findMany({
-    where: { name: "小花" },
-    select: { id: true },
-  });
-
-  for (const employee of employees) {
+  for (const roleCode of REQUIRED_ROLE_CODES) {
+    const role = requiredRoles.find((item) => item.code === roleCode);
+    if (!role) continue;
     await prisma.employeeRole.upsert({
       where: {
         employeeId_roleId: {
-          employeeId: employee.id,
-          roleId: admin.id,
+          employeeId: xiaoHua.id,
+          roleId: role.id,
         },
       },
       create: {
-        employeeId: employee.id,
-        roleId: admin.id,
+        employeeId: xiaoHua.id,
+        roleId: role.id,
       },
       update: {},
     });
   }
 }
 
-async function ensureEmployeePhones() {
-  await prisma.employee.updateMany({
-    where: { name: "小花" },
-    data: { phone: "18600404232" },
-  });
-
-  await prisma.employee.updateMany({
-    where: { name: "珠珠" },
-    data: { phone: "18600404233" },
-  });
-}
-
 async function main() {
   await seedRoles();
-  await replaceDesignerWithStaff();
-  await ensureDefaultStaffRole();
-  await grantAdminToXiaoHua();
-  await ensureEmployeePhones();
+  await ensureXiaoHua();
 }
 
 main()

@@ -8,14 +8,27 @@ const prisma = new PrismaClient({
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-const whereByScope = (id: string, allowAllProjects: boolean) =>
-  allowAllProjects ? { id } : { id, project: { type: "内部项目" } };
+const INTERNAL_PROJECT_TYPE_VALUES = ["内部项目", "INTERNAL"] as const;
+const isInternalOnly = (projectType?: string | null) =>
+  projectType === "internal";
+
+const whereByScope = (id: string, internalOnly: boolean) =>
+  internalOnly
+    ? {
+        id,
+        project: {
+          typeOption: {
+            value: { in: INTERNAL_PROJECT_TYPE_VALUES as unknown as string[] },
+          },
+        },
+      }
+    : { id };
 
 export async function GET(req: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-  const allowAllProjects = req.nextUrl.searchParams.get("projectType") === "all";
+  const internalOnly = isInternalOnly(req.nextUrl.searchParams.get("projectType"));
   const item = await prisma.actualWorkEntry.findFirst({
-    where: whereByScope(id, allowAllProjects),
+    where: whereByScope(id, internalOnly),
     include: {
       project: { select: { id: true, name: true } },
       employee: { select: { id: true, name: true } },
@@ -28,11 +41,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
 export async function PATCH(req: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const body = await req.json();
-  const allowAllProjects =
-    req.nextUrl.searchParams.get("projectType") === "all" || body?.projectType === "all";
+  const internalOnly =
+    isInternalOnly(req.nextUrl.searchParams.get("projectType")) ||
+    isInternalOnly(body?.projectType);
 
   const found = await prisma.actualWorkEntry.findFirst({
-    where: whereByScope(id, allowAllProjects),
+    where: whereByScope(id, internalOnly),
     select: { id: true },
   });
   if (!found) return new Response("Not Found", { status: 404 });
@@ -43,7 +57,14 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   if (body.projectId) {
     const project = await prisma.project.findFirst({
-      where: allowAllProjects ? { id: body.projectId } : { id: body.projectId, type: "内部项目" },
+      where: internalOnly
+        ? {
+            id: body.projectId,
+            typeOption: {
+              value: { in: INTERNAL_PROJECT_TYPE_VALUES as unknown as string[] },
+            },
+          }
+        : { id: body.projectId },
       select: { id: true },
     });
     if (!project) return new Response("Project not found", { status: 400 });
@@ -69,9 +90,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
 export async function DELETE(req: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-  const allowAllProjects = req.nextUrl.searchParams.get("projectType") === "all";
+  const internalOnly = isInternalOnly(req.nextUrl.searchParams.get("projectType"));
   const found = await prisma.actualWorkEntry.findFirst({
-    where: whereByScope(id, allowAllProjects),
+    where: whereByScope(id, internalOnly),
     select: { id: true },
   });
   if (!found) return new Response("Not Found", { status: 404 });

@@ -6,7 +6,6 @@ import type { ProjectTaskRow } from "@/components/project-detail/ProjectTasksTab
 
 export type ProjectTaskFormPayload = {
   name: string;
-  status?: string | null;
   segmentId: string;
   ownerId?: string | null;
   dueDate?: string | null;
@@ -14,7 +13,6 @@ export type ProjectTaskFormPayload = {
 
 type FormValues = {
   name: string;
-  status?: string[];
   segmentId: string;
   ownerId?: string;
   dueDate?: dayjs.Dayjs;
@@ -62,7 +60,6 @@ const ProjectTaskForm = ({
       layout="vertical"
       initialValues={{
         name: initialValues?.name,
-        status: initialValues?.status ? [initialValues.status] : [],
         segmentId: initialValues?.segmentId ?? defaultSegmentId,
         ownerId: initialValues?.owner?.id,
         dueDate: initialValues?.dueDate ? dayjs(initialValues.dueDate) : undefined,
@@ -70,7 +67,6 @@ const ProjectTaskForm = ({
       onFinish={(values) =>
         onSubmit({
           name: values.name,
-          status: values.status?.[0] ?? null,
           segmentId: values.segmentId,
           ownerId: values.ownerId ?? null,
           dueDate: values.dueDate ? values.dueDate.toISOString() : null,
@@ -87,20 +83,6 @@ const ProjectTaskForm = ({
             value: segment.id,
           }))}
           placeholder="请选择所属环节"
-        />
-      </Form.Item>
-      <Form.Item label="状态" name="status">
-        <Select
-          mode="tags"
-          maxCount={1}
-          placeholder="选择或输入状态"
-          options={[
-            { label: "待开始", value: "待开始" },
-            { label: "进行中", value: "进行中" },
-            { label: "已完成", value: "已完成" },
-            { label: "已阻塞", value: "已阻塞" },
-          ]}
-          allowClear
         />
       </Form.Item>
       <Form.Item label="负责人" name="ownerId">

@@ -100,6 +100,42 @@ export const getTitleValue = (
   return getTypedProperty(response, key, "title", required);
 };
 
+export const getTitleMentionPageId = (
+  response: PageObjectResponse,
+  key: string,
+  required = false,
+): string | null => {
+  const property = response.properties[key];
+  if (!property) {
+    if (required) throw new Error(`字段 '${key}' 未获取到`);
+    return null;
+  }
+  if (property.type !== "title") {
+    throw new Error(`字段 '${key}' 类型错误，应为 title，实际为 ${property.type}`);
+  }
+
+  const first = property.title?.[0];
+  const mentionPageId =
+    first?.type === "mention" && first.mention?.type === "page"
+      ? first.mention.page?.id ?? null
+      : null;
+
+  if (mentionPageId) return mentionPageId;
+
+  const href = first?.href ?? "";
+  const decoded = decodeURIComponent(href);
+  const matched =
+    decoded.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] ??
+    decoded.match(/[0-9a-f]{32}/i)?.[0] ??
+    null;
+
+  if (required && !matched) {
+    throw new Error(`字段 '${key}' 未包含可用的成员 page id`);
+  }
+
+  return matched;
+};
+
 export const getSelectValue = (
   response: PageObjectResponse,
   key: string,
@@ -162,9 +198,20 @@ export const getDateRangeValue = (
     return { start: null, end: null };
   }
   const start = property.date?.start ?? null;
-  const end = property.date?.end ?? property.date?.start ?? null;
+  const end = property.date?.end ?? null;
   if (required && !start) throw new Error(`字段 '${key}' 为空`);
   return { start, end };
+};
+
+export const getDatePrecisionValue = (
+  response: PageObjectResponse,
+  key: string,
+): "DATE" | "DATETIME" => {
+  const property = response.properties[key];
+  if (!property || property.type !== "date") return "DATE";
+  const start = property.date?.start ?? "";
+  // Notion all-day date is usually `YYYY-MM-DD`; datetime contains `T`.
+  return start.includes("T") ? "DATETIME" : "DATE";
 };
 
 export const getStatusValue = (
@@ -196,7 +243,11 @@ export const getNumberValue = (
   key: string,
   required = false,
 ) => {
-  return getTypedProperty(response, key, "number", required) as number;
+  const value = getTypedProperty(response, key, "number", required) as
+    | number
+    | null;
+  if (value === null || value === undefined) return value;
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 };
 
 export const getStartDateValue = (

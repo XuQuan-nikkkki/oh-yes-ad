@@ -1,0 +1,2 @@
+ALTER TABLE "Client" DROP COLUMN IF EXISTS "remark";
+ALTER TABLE "LegalEntity" DROP COLUMN IF EXISTS "remark";

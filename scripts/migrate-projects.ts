@@ -2,6 +2,8 @@ import "dotenv/config";
 import { PageObjectResponse } from "@notionhq/client";
 import {
   getCheckboxValue,
+  getDatePrecisionValue,
+  getDateRangeValue,
   getDateValue,
   getRelationValue,
   getRichTextValue,
@@ -10,7 +12,28 @@ import {
   getTitleValue,
 } from "./parser";
 import { prisma, migrateDatabase } from "./migrate-notion";
-import { Project } from "@prisma/client";
+
+const DEFAULT_COLOR = "#d9d9d9";
+
+const upsertSelectOption = async (field: string, value?: string | null) => {
+  const normalized = value?.trim();
+  if (!normalized) return null;
+  const option = await prisma.selectOption.upsert({
+    where: {
+      field_value: {
+        field,
+        value: normalized,
+      },
+    },
+    create: {
+      field,
+      value: normalized,
+      color: DEFAULT_COLOR,
+    },
+    update: {},
+  });
+  return option.id;
+};
 
 const syncProject = async (project: PageObjectResponse) => {
   const { id } = project;
@@ -18,9 +41,17 @@ const syncProject = async (project: PageObjectResponse) => {
   const status = getStatusValue(project, "项目状态"); // 你需要有 getStatusValue
   const stage = getSelectValue(project, "项目阶段");
   const isInternal = getCheckboxValue(project, "是内部项目");
+  const isArchived = Boolean(getCheckboxValue(project, "待归档"));
+  const type = isInternal ? "内部项目" : "客户项目";
 
   const startDate = getDateValue(project, "开始日期");
   const endDate = getDateValue(project, "结束日期");
+
+  const [typeOptionId, statusOptionId, stageOptionId] = await Promise.all([
+    upsertSelectOption("project.type", type),
+    upsertSelectOption("project.status", status),
+    upsertSelectOption("project.stage", stage),
+  ]);
 
   const clientRelation = getRelationValue(project, "所属客户");
   let clientId: string | null = null;
@@ -54,6 +85,19 @@ const syncProject = async (project: PageObjectResponse) => {
   }
 
   const memberRelation = getRelationValue(project, "项目成员");
+  const projectProperties = project.properties as Record<string, { type?: string }>;
+  const vendorRelationKeyCandidates = [
+    "供应商",
+    "合作供应商",
+    "关联供应商",
+    "参与供应商",
+  ];
+  const vendorRelationKey = vendorRelationKeyCandidates.find(
+    (key) => projectProperties[key]?.type === "relation",
+  );
+  const vendorRelation = vendorRelationKey
+    ? getRelationValue(project, vendorRelationKey)
+    : [];
 
   const members = await Promise.all(
     (memberRelation ?? []).map(async (rel) => {
@@ -68,25 +112,61 @@ const syncProject = async (project: PageObjectResponse) => {
       return { id: emp.id };
     }),
   );
+  const vendorNotionIds = Array.from(
+    new Set((vendorRelation ?? []).map((rel) => rel.id)),
+  );
+  const vendors = vendorNotionIds.length
+    ? await prisma.vendor.findMany({
+        where: { notionPageId: { in: vendorNotionIds } },
+        select: { id: true, notionPageId: true },
+      })
+    : [];
+  const vendorLinks = vendors.map((vendor) => ({ id: vendor.id }));
+  if (vendorNotionIds.length > vendors.length) {
+    const found = new Set(vendors.map((vendor) => vendor.notionPageId));
+    const missing = vendorNotionIds.filter((notionId) => !found.has(notionId));
+    console.warn(
+      `项目 ${name} 存在未匹配到本地供应商的 relation: ${missing.join(", ")}`,
+    );
+  }
 
-  const data: Partial<Project> = {
-    notionPageId: id,
-    name,
-    type: isInternal ? "内部项目" : "客户项目",
-    status,
-    stage,
-    startDate: startDate ? new Date(startDate) : null,
-    endDate: endDate ? new Date(endDate) : null,
-
-    clientId,
-    ownerId,
-
-    members: {
-      connect: members,
+  await prisma.project.upsert({
+    where: { notionPageId: id },
+    update: {
+      name,
+      typeOptionId: typeOptionId ?? null,
+      statusOptionId: statusOptionId ?? null,
+      stageOptionId: stageOptionId ?? null,
+      isArchived,
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
+      clientId,
+      ownerId,
+      members: {
+        set: members,
+      },
+      vendors: {
+        set: vendorLinks,
+      },
     },
-  };
-  await prisma.project.create({
-    data,
+    create: {
+      notionPageId: id,
+      name,
+      typeOptionId: typeOptionId ?? null,
+      statusOptionId: statusOptionId ?? null,
+      stageOptionId: stageOptionId ?? null,
+      isArchived,
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
+      clientId,
+      ownerId,
+      members: {
+        connect: members,
+      },
+      vendors: {
+        connect: vendorLinks,
+      },
+    },
   });
 
   console.log("已同步项目:", name);
@@ -105,6 +185,7 @@ const syncSegment = async (segment: PageObjectResponse) => {
   const name = getTitleValue(segment, "环节名称", true);
   const status = getStatusValue(segment, "环节状态");
   const dueDate = getDateValue(segment, "截止日期");
+  const statusOptionId = await upsertSelectOption("projectSegment.status", status);
 
   // ===== 所属项目 =====
   const projectRelation = getRelationValue(segment, "所属项目");
@@ -142,7 +223,7 @@ const syncSegment = async (segment: PageObjectResponse) => {
     data: {
       notionPageId: id,
       name,
-      status,
+      statusOptionId: statusOptionId ?? null,
       dueDate: dueDate ? new Date(dueDate) : null,
 
       projectId: project.id,
@@ -168,7 +249,7 @@ const syncTask = async (task: PageObjectResponse) => {
 
   // ===== 基础字段 =====
   const name = getTitleValue(task, "任务名称", true);
-  const status = getStatusValue(task, "任务状态");
+  getStatusValue(task, "任务状态");
   const dueDate = getDateValue(task, "截止日期");
 
   // ===== 所属环节 =====
@@ -261,6 +342,7 @@ const syncProjectDocument = async (doc: PageObjectResponse) => {
   const date = getDateValue(doc, "日期");
   const isFinal = getCheckboxValue(doc, "是最终版");
   const internalLink = getRichTextValue(doc, "内部盘链接");
+  const typeOptionId = await upsertSelectOption("projectDocument.type", type);
 
   // ===== 所属项目 =====
   const projectRelation = getRelationValue(doc, "所属项目");
@@ -277,17 +359,62 @@ const syncProjectDocument = async (doc: PageObjectResponse) => {
     throw new Error("未找到对应项目");
   }
 
-  // ===== 创建 =====
-  await prisma.projectDocument.create({
-    data: {
-      notionPageId: id,
+  // ===== 关联里程碑（最多一个）=====
+  const documentProperties = doc.properties as Record<string, { type?: string }>;
+  const milestoneRelationKeyCandidates = ["关联里程碑", "里程碑"];
+  const milestoneRelationKey =
+    milestoneRelationKeyCandidates.find(
+      (key) => documentProperties[key]?.type === "relation",
+    ) ??
+    Object.keys(documentProperties).find(
+      (key) =>
+        documentProperties[key]?.type === "relation" && key.includes("里程碑"),
+    );
+
+  const milestoneRelation = milestoneRelationKey
+    ? getRelationValue(doc, milestoneRelationKey)
+    : [];
+
+  let milestoneId: string | null = null;
+  if (milestoneRelation?.length) {
+    const linkedMilestone = await prisma.projectMilestone.findFirst({
+      where: {
+        notionPageId: milestoneRelation[0].id,
+        projectId: project.id,
+      },
+      select: { id: true },
+    });
+
+    if (!linkedMilestone) {
+      console.warn(
+        `项目资料 ${name} 关联里程碑未匹配到本地数据: ${milestoneRelation[0].id}`,
+      );
+    } else {
+      milestoneId = linkedMilestone.id;
+    }
+  }
+
+  // ===== 创建或更新 =====
+  await prisma.projectDocument.upsert({
+    where: { notionPageId: id },
+    update: {
       name,
-      type,
+      typeOptionId: typeOptionId ?? null,
       date: date ? new Date(date) : null,
       isFinal: isFinal ?? false,
       internalLink,
-
       projectId: project.id,
+      milestoneId,
+    },
+    create: {
+      notionPageId: id,
+      name,
+      typeOptionId: typeOptionId ?? null,
+      date: date ? new Date(date) : null,
+      isFinal: isFinal ?? false,
+      internalLink,
+      projectId: project.id,
+      milestoneId,
     },
   });
 
@@ -310,9 +437,14 @@ const syncProjectMilestone = async (milestone: PageObjectResponse) => {
   // ===== 基础字段 =====
   const name = getTitleValue(milestone, "里程碑名称", true);
   const type = getSelectValue(milestone, "类型");
-  const date = getDateValue(milestone, "日期");
+  const dateRange = getDateRangeValue(milestone, "日期");
+  const datePrecision = getDatePrecisionValue(milestone, "日期");
   const location = getRichTextValue(milestone, "地点");
   const method = getSelectValue(milestone, "方式");
+  const [typeOptionId, methodOptionId] = await Promise.all([
+    upsertSelectOption("projectMilestone.type", type),
+    upsertSelectOption("projectMilestone.method", method),
+  ]);
 
   // ===== 所属项目 =====
   const projectRelation = getRelationValue(milestone, "所属项目");
@@ -360,10 +492,12 @@ const syncProjectMilestone = async (milestone: PageObjectResponse) => {
     where: { notionPageId: id },
     update: {
       name,
-      type,
-      date: date ? new Date(date) : null,
+      typeOptionId: typeOptionId ?? null,
+      startAt: dateRange.start ? new Date(dateRange.start) : null,
+      endAt: dateRange.end ? new Date(dateRange.end) : null,
+      datePrecision,
       location,
-      method,
+      methodOptionId: methodOptionId ?? null,
       projectId: project.id,
       internalParticipants: {
         set: internalParticipants.map((p) => ({ id: p.id })),
@@ -378,10 +512,12 @@ const syncProjectMilestone = async (milestone: PageObjectResponse) => {
     create: {
       notionPageId: id,
       name,
-      type,
-      date: date ? new Date(date) : null,
+      typeOptionId: typeOptionId ?? null,
+      startAt: dateRange.start ? new Date(dateRange.start) : null,
+      endAt: dateRange.end ? new Date(dateRange.end) : null,
+      datePrecision,
       location,
-      method,
+      methodOptionId: methodOptionId ?? null,
       projectId: project.id,
       internalParticipants: {
         connect: internalParticipants.map((p) => ({ id: p.id })),

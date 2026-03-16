@@ -1,19 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Card, DatePicker, Form, Input, Modal, Select, Table } from "antd";
+import { Button, Card, DatePicker, Form, Input, Modal, Select } from "antd";
 import dayjs from "dayjs";
-import AppLink from "@/components/AppLink";
-import TableActions from "@/components/TableActions";
+import ProjectSegmentsProTable, {
+  type ProjectSegmentsProTableRow,
+} from "@/components/ProjectSegmentsProTable";
+import SelectOptionSelector, {
+  type SelectOptionSelectorValue,
+} from "@/components/SelectOptionSelector";
+import { useProjectPermission } from "@/hooks/useProjectPermission";
+import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 
-type Row = {
-  id: string;
-  name: string;
-  status?: string | null;
-  dueDate?: string | null;
-  project?: { id: string; name: string };
-  owner?: { id: string; name: string } | null;
-};
+type Row = ProjectSegmentsProTableRow;
 
 type Option = { id: string; name: string };
 
@@ -21,7 +20,7 @@ type FormValues = {
   name: string;
   projectId: string;
   ownerId?: string;
-  status?: string;
+  status?: SelectOptionSelectorValue;
   dueDate?: dayjs.Dayjs;
 };
 
@@ -32,11 +31,15 @@ export default function ProjectSegmentsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [form] = Form.useForm<FormValues>();
+  const { canManageProject } = useProjectPermission();
+  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
+  const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
+  const statusOptions = optionsByField["projectSegment.status"] ?? [];
 
   const fetchData = async () => {
     const [segmentsRes, projectsRes, employeesRes] = await Promise.all([
       fetch("/api/project-segments"),
-      fetch("/api/projects?type=%E5%86%85%E9%83%A8%E9%A1%B9%E7%9B%AE"),
+      fetch("/api/projects"),
       fetch("/api/employees"),
     ]);
     setRows(await segmentsRes.json());
@@ -47,33 +50,45 @@ export default function ProjectSegmentsPage() {
   useEffect(() => {
     (async () => {
       await fetchData();
+      await fetchAllOptions();
     })();
-  }, []);
+  }, [fetchAllOptions]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!editing) {
+      form.resetFields();
+      return;
+    }
+    form.setFieldsValue({
+      name: editing.name,
+      projectId: editing.project?.id,
+      ownerId: editing.owner?.id,
+      status: editing.statusOption?.value ?? editing.status ?? undefined,
+      dueDate: editing.dueDate ? dayjs(editing.dueDate) : undefined,
+    });
+  }, [editing, form, open]);
 
   const onCreate = () => {
+    if (!canManageProject) return;
     setEditing(null);
-    form.resetFields();
     setOpen(true);
   };
 
   const onEdit = (row: Row) => {
+    if (!canManageProject) return;
     setEditing(row);
-    form.setFieldsValue({
-      name: row.name,
-      projectId: row.project?.id,
-      ownerId: row.owner?.id,
-      status: row.status ?? undefined,
-      dueDate: row.dueDate ? dayjs(row.dueDate) : undefined,
-    });
     setOpen(true);
   };
 
   const onDelete = async (id: string) => {
+    if (!canManageProject) return;
     await fetch(`/api/project-segments/${id}`, { method: "DELETE" });
     await fetchData();
   };
 
   const onSubmit = async (values: FormValues) => {
+    if (!canManageProject) return;
     const payload = {
       name: values.name,
       projectId: values.projectId,
@@ -101,40 +116,18 @@ export default function ProjectSegmentsPage() {
   };
 
   return (
-    <Card
-      title="项目环节"
-      extra={<Button type="primary" onClick={onCreate}>新增环节</Button>}
-    >
-      <Table
-        rowKey="id"
-        dataSource={rows}
-        pagination={{ pageSize: 10 }}
-        columns={[
-          {
-            title: "环节名称",
-            dataIndex: "name",
-            render: (value: string, record: Row) => (
-              <AppLink href={`/project-segments/${record.id}`}>{value}</AppLink>
-            ),
-          },
-          { title: "所属项目", dataIndex: ["project", "name"], render: (v: string | null) => v ?? "-" },
-          { title: "负责人", dataIndex: ["owner", "name"], render: (v: string | null) => v ?? "-" },
-          { title: "状态", dataIndex: "status", render: (v: string | null) => v ?? "-" },
-          {
-            title: "截止日期",
-            dataIndex: "dueDate",
-            render: (v: string | null) => (v ? dayjs(v).format("YYYY-MM-DD") : "-"),
-          },
-          {
-            title: "操作",
-            render: (_: unknown, record: Row) => (
-              <TableActions
-                onEdit={() => onEdit(record)}
-                onDelete={() => onDelete(record.id)}
-                deleteTitle={`确定删除环节「${record.name}」？`}
-              />
-            ),
-          },
+    <Card styles={{ body: { padding: 12 } }}>
+      <ProjectSegmentsProTable
+        rows={rows}
+        headerTitle={<h3 style={{ margin: 0 }}>项目环节</h3>}
+        columnsStatePersistenceKey="project-segments-table-columns-state"
+        onEdit={onEdit}
+        onDelete={(id) => void onDelete(id)}
+        actionsDisabled={!canManageProject}
+        toolbarActions={[
+          <Button key="create" type="primary" onClick={onCreate} disabled={!canManageProject}>
+            新增环节
+          </Button>,
         ]}
       />
 
@@ -143,6 +136,7 @@ export default function ProjectSegmentsPage() {
         open={open}
         onCancel={() => setOpen(false)}
         footer={null}
+        forceRender
         destroyOnHidden
       >
         <Form layout="vertical" form={form} onFinish={onSubmit}>
@@ -156,7 +150,14 @@ export default function ProjectSegmentsPage() {
             <Select allowClear options={employees.map((e) => ({ label: e.name, value: e.id }))} />
           </Form.Item>
           <Form.Item label="状态" name="status">
-            <Input />
+            <SelectOptionSelector
+              placeholder="请选择或新增状态"
+              options={statusOptions.map((item) => ({
+                label: item.value,
+                value: item.value,
+                color: item.color ?? "#d9d9d9",
+              }))}
+            />
           </Form.Item>
           <Form.Item label="截止日期" name="dueDate">
             <DatePicker style={{ width: "100%" }} />

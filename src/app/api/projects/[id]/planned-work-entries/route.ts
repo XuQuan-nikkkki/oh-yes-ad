@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 
@@ -24,13 +25,35 @@ const ensureTaskInProject = async (projectId: string, taskId: string) => {
   });
 };
 
+const ensureOptionId = async (field: string, value: number | string) => {
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+
+  const option = await prisma.selectOption.upsert({
+    where: {
+      field_value: {
+        field,
+        value: normalized,
+      },
+    },
+    update: {},
+    create: {
+      field,
+      value: normalized,
+      color: "#d9d9d9",
+    },
+  });
+
+  return option.id;
+};
+
 export async function POST(req: NextRequest, context: RouteContext) {
   const { id: projectId } = await context.params;
   if (!projectId) {
     return new Response("Missing project ID", { status: 400 });
   }
 
-  const body = await req.json();
+  const body = await sanitizeRequestBody(req);
 
   if (!body?.taskId || typeof body.taskId !== "string") {
     return new Response("Invalid task ID", { status: 400 });
@@ -50,11 +73,16 @@ export async function POST(req: NextRequest, context: RouteContext) {
     return new Response("Task not in project", { status: 400 });
   }
 
+  const [yearOptionId, weekNumberOptionId] = await Promise.all([
+    ensureOptionId("plannedWorkEntry.year", Math.trunc(body.year)),
+    ensureOptionId("plannedWorkEntry.weekNumber", Math.trunc(body.weekNumber)),
+  ]);
+
   const entry = await prisma.plannedWorkEntry.create({
     data: {
       taskId: body.taskId,
-      year: Math.trunc(body.year),
-      weekNumber: Math.trunc(body.weekNumber),
+      yearOptionId,
+      weekNumberOptionId,
       plannedDays: body.plannedDays,
       monday: Boolean(body.monday),
       tuesday: Boolean(body.tuesday),

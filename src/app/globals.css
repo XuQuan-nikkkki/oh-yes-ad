@@ -51,3 +51,47 @@ a {
 .ant-modal-root .ant-modal-body {
   overflow-y: auto;
 }
+
+.app-sider.ant-layout-sider {
+  overflow: hidden;
+}
+
+.app-sider .ant-layout-sider-children {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.app-sider-menu-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 56px;
+}
+
+.table-filter-single-select .ant-select-selector {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  min-height: 32px !important;
+}
+
+.table-filter-single-select .ant-select-selection-wrap {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  min-width: 0;
+}
+
+.work-log-entry-card .ant-card-actions > li {
+  margin: 8px 0 !important;
+}
+
+.work-log-entry-card .ant-card-actions > li > span {
+  min-height: 20px;
+  line-height: 20px;
+}

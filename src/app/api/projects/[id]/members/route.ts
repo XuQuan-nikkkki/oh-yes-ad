@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const adapter = new PrismaPg({
@@ -11,7 +12,7 @@ export async function POST(req: Request) {
   const { pathname } = new URL(req.url);
   const parts = pathname.split("/");
   const projectId = parts[parts.indexOf("projects") + 1];
-  const body = await req.json();
+  const body = await sanitizeRequestBody(req);
   const memberId = body;
 
   if (!projectId) {
@@ -51,13 +52,22 @@ export async function POST(req: Request) {
           select: {
             id: true,
             name: true,
-            function: true,
+            functionOption: {
+              select: {
+                value: true,
+              },
+            },
           },
         },
       },
     });
-
-    return Response.json(updated.members);
+    return Response.json(
+      updated.members.map((member) => ({
+        id: member.id,
+        name: member.name,
+        function: member.functionOption?.value ?? null,
+      })),
+    );
   } catch (error) {
     console.error("Error adding member:", error);
     return new Response("Failed to add member", { status: 500 });

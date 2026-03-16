@@ -7,6 +7,7 @@ import ClientFormModal from "@/components/ClientFormModal";
 import ClientTable, { Client } from "@/components/ClientTable";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import { useFetch } from "@/hooks/useFetch";
+import { useCrmPermission } from "@/hooks/useCrmPermission";
 
 const EMPTY_OPTIONS: {
   id: string;
@@ -20,12 +21,15 @@ const EMPTY_OPTIONS: {
 const ClientsPage = () => {
   const [open, setOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const { canManageCrm } = useCrmPermission();
   const { data, loading, refetch } = useFetch<Client>("/api/clients");
   const industryOptions = useSelectOptionsStore(
     (state) => state.optionsByField["client.industry"] ?? EMPTY_OPTIONS,
   );
+  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
 
   const handleDelete = async (id: string) => {
+    if (!canManageCrm) return;
     await fetch(`/api/clients/${id}`, {
       method: "DELETE",
     });
@@ -34,29 +38,35 @@ const ClientsPage = () => {
   };
 
   return (
-    <Card
-      title={<h3>客户管理</h3>}
-      extra={
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            setEditingClient(null);
-            setOpen(true);
-          }}
-        >
-          新建客户
-        </Button>
-      }
-    >
+    <Card styles={{ body: { padding: 12 } }}>
       <ClientTable
+        headerTitle={<h3 style={{ margin: 0 }}>客户管理</h3>}
+        toolbarActions={[
+          <Button
+            key="create-client"
+            type="primary"
+            icon={<PlusOutlined />}
+            disabled={!canManageCrm}
+            onClick={() => {
+              setEditingClient(null);
+              setOpen(true);
+            }}
+          >
+            新建客户
+          </Button>,
+        ]}
         clients={data}
         loading={loading}
+        actionsDisabled={!canManageCrm}
         onEdit={(client) => {
           setEditingClient(client);
           setOpen(true);
         }}
         onDelete={handleDelete}
+        onIndustryOptionUpdated={async () => {
+          await refetch();
+          await fetchAllOptions(true);
+        }}
       />
       <ClientFormModal
         open={open}

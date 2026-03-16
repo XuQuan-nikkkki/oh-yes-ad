@@ -1,117 +1,321 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Button, Card, DatePicker, Form, Input, Modal, Select, Table } from "antd";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Button, Calendar, Card, Modal, Radio, Space, Tag, Tooltip } from "antd";
 import dayjs from "dayjs";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import ProjectMilestonesTable, {
+  ProjectMilestoneRow,
+} from "@/components/ProjectMilestonesTable";
 import AppLink from "@/components/AppLink";
-import TableActions from "@/components/TableActions";
+import ProjectMilestoneForm, {
+  ProjectMilestoneFormPayload,
+} from "@/components/project-detail/ProjectMilestoneForm";
+import { useProjectPermission } from "@/hooks/useProjectPermission";
 
-type Row = {
+type Option = {
   id: string;
   name: string;
-  type?: string | null;
-  date?: string | null;
-  location?: string | null;
-  method?: string | null;
-  project?: { id: string; name: string };
+  employmentStatus?: string;
 };
 
-type FormValues = {
-  name: string;
-  projectId: string;
-  type?: string;
-  date?: dayjs.Dayjs;
-  location?: string;
-  method?: string;
+type ProjectContext = {
+  members: Option[];
+  vendors: Option[];
+  clientParticipants: Option[];
 };
 
-export default function Page() {
-  const [rows, setRows] = useState<Row[]>([]);
+const EMPTY_CONTEXT: ProjectContext = {
+  members: [],
+  vendors: [],
+  clientParticipants: [],
+};
+
+function ProjectMilestonesPageContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [rows, setRows] = useState<ProjectMilestoneRow[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [allEmployees, setAllEmployees] = useState<Option[]>([]);
+  const [viewMode, setViewMode] = useState<"table" | "calendar">("table");
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Row | null>(null);
-  const [form] = Form.useForm<FormValues>();
+  const [editing, setEditing] = useState<ProjectMilestoneRow | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(
+    undefined,
+  );
+  const [projectContext, setProjectContext] = useState<ProjectContext>(EMPTY_CONTEXT);
+  const { canManageProject } = useProjectPermission();
 
-  const fetchData = async () => {
-    const [res1, res2] = await Promise.all([
+  const fetchData = useCallback(async () => {
+    const [res1, res2, res3] = await Promise.all([
       fetch("/api/project-milestones"),
-      fetch("/api/projects?type=%E5%86%85%E9%83%A8%E9%A1%B9%E7%9B%AE"),
+      fetch("/api/projects"),
+      fetch("/api/employees"),
     ]);
     setRows(await res1.json());
     setProjects(await res2.json());
-  };
-
-  useEffect(() => {
-    (async () => {
-      await fetchData();
-    })();
+    setAllEmployees(await res3.json());
   }, []);
 
-  const onEdit = (r: Row) => {
-    setEditing(r);
-    form.setFieldsValue({
-      name: r.name,
-      projectId: r.project?.id,
-      type: r.type ?? undefined,
-      date: r.date ? dayjs(r.date) : undefined,
-      location: r.location ?? undefined,
-      method: r.method ?? undefined,
+  const fetchProjectContext = useCallback(async (projectId?: string) => {
+    if (!projectId) {
+      setProjectContext(EMPTY_CONTEXT);
+      return;
+    }
+    const projectRes = await fetch(`/api/projects/${projectId}`);
+    if (!projectRes.ok) {
+      setProjectContext(EMPTY_CONTEXT);
+      return;
+    }
+
+    const project = (await projectRes.json()) as {
+      members?: Option[];
+      vendors?: Option[];
+      client?: { id: string } | null;
+    };
+
+    let clientParticipants: Option[] = [];
+    if (project.client?.id) {
+      const contactsRes = await fetch(`/api/clients/${project.client.id}/contacts`);
+      if (contactsRes.ok) {
+        const contacts = (await contactsRes.json()) as Array<{ id: string; name: string }>;
+        clientParticipants = contacts.map((item) => ({
+          id: item.id,
+          name: item.name,
+        }));
+      }
+    }
+
+    setProjectContext({
+      members: project.members ?? [],
+      vendors: project.vendors ?? [],
+      clientParticipants,
     });
+  }, []);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
+
+  const viewModeFromSearchParams = useMemo<"table" | "calendar">(() => {
+    return searchParams.get("view") === "calendar" ? "calendar" : "table";
+  }, [searchParams]);
+
+  useEffect(() => {
+    setViewMode(viewModeFromSearchParams);
+  }, [viewModeFromSearchParams]);
+
+  useEffect(() => {
+    if (!open) return;
+    void fetchProjectContext(selectedProjectId);
+  }, [fetchProjectContext, open, selectedProjectId]);
+
+  const onEdit = (row: ProjectMilestoneRow) => {
+    if (!canManageProject) return;
+    setEditing(row);
+    setSelectedProjectId(row.project?.id);
     setOpen(true);
   };
 
   const onDelete = async (id: string) => {
+    if (!canManageProject) return;
     await fetch(`/api/project-milestones/${id}`, { method: "DELETE" });
     await fetchData();
   };
 
-  const onSubmit = async (v: FormValues) => {
-    const payload = {
-      name: v.name,
-      projectId: v.projectId,
-      type: v.type ?? null,
-      date: v.date ? v.date.toISOString() : null,
-      location: v.location ?? null,
-      method: v.method ?? null,
+  const onSubmit = async (payload: ProjectMilestoneFormPayload) => {
+    if (!canManageProject) return;
+    const projectId = payload.projectId ?? selectedProjectId;
+    if (!projectId) return;
+
+    const body = {
+      ...payload,
+      projectId,
     };
+
     if (editing) {
-      await fetch(`/api/project-milestones/${editing.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      await fetch(`/api/project-milestones/${editing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
     } else {
-      await fetch("/api/project-milestones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      await fetch("/api/project-milestones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
     }
     setOpen(false);
     setEditing(null);
     await fetchData();
   };
 
-  return (
-    <Card title="项目里程碑" extra={<Button type="primary" onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}>新增里程碑</Button>}>
-      <Table
-        rowKey="id"
-        dataSource={rows}
-        pagination={{ pageSize: 10 }}
-        columns={[
-          { title: "名称", dataIndex: "name", render: (v: string, r: Row) => <AppLink href={`/project-milestones/${r.id}`}>{v}</AppLink> },
-          { title: "所属项目", dataIndex: ["project", "name"], render: (v: string | null) => v ?? "-" },
-          { title: "类型", dataIndex: "type", render: (v: string | null) => v ?? "-" },
-          { title: "日期", dataIndex: "date", render: (v: string | null) => (v ? dayjs(v).format("YYYY-MM-DD") : "-") },
-          { title: "地点", dataIndex: "location", render: (v: string | null) => v ?? "-" },
-          { title: "方式", dataIndex: "method", render: (v: string | null) => v ?? "-" },
-          { title: "操作", render: (_: unknown, r: Row) => <TableActions onEdit={() => onEdit(r)} onDelete={() => onDelete(r.id)} deleteTitle={`确定删除里程碑「${r.name}」？`} /> },
-        ]}
-      />
+  const milestonesByDate = rows.reduce<Record<string, ProjectMilestoneRow[]>>(
+    (acc, row) => {
+      const startRaw = row.startAt ?? row.date;
+      if (!startRaw) return acc;
 
-      <Modal title={editing ? "编辑里程碑" : "新增里程碑"} open={open} onCancel={() => setOpen(false)} footer={null} destroyOnHidden>
-        <Form layout="vertical" form={form} onFinish={onSubmit}>
-          <Form.Item label="名称" name="name" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item label="所属项目" name="projectId" rules={[{ required: true }]}><Select options={projects.map((p) => ({ label: p.name, value: p.id }))} /></Form.Item>
-          <Form.Item label="类型" name="type"><Input /></Form.Item>
-          <Form.Item label="日期" name="date"><DatePicker style={{ width: "100%" }} /></Form.Item>
-          <Form.Item label="地点" name="location"><Input /></Form.Item>
-          <Form.Item label="方式" name="method"><Input /></Form.Item>
-          <Button block type="primary" htmlType="submit">保存</Button>
-        </Form>
-      </Modal>
+      const start = dayjs(startRaw).startOf("day");
+      if (!start.isValid()) return acc;
+
+      const endRaw = row.endAt ?? null;
+      const end = endRaw ? dayjs(endRaw).startOf("day") : start;
+      if (!end.isValid()) return acc;
+
+      const rangeEnd = end.isBefore(start) ? start : end;
+      let cursor = start;
+      while (cursor.isBefore(rangeEnd) || cursor.isSame(rangeEnd, "day")) {
+        const key = cursor.format("YYYY-MM-DD");
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(row);
+        cursor = cursor.add(1, "day");
+      }
+      return acc;
+    },
+    {},
+  );
+
+  const getMilestoneTooltipContent = (item: ProjectMilestoneRow) => (
+    <div>
+      <div>里程碑：{item.name || "-"}</div>
+      <div>客户：{item.project?.client?.name ?? "-"}</div>
+      <div>项目：{item.project?.name ?? "-"}</div>
+      <div>类型：{item.typeOption?.value ?? item.type ?? "-"}</div>
+    </div>
+  );
+
+  const toolbarActions = [
+    <Radio.Group
+      key="view-mode"
+      optionType="button"
+      value={viewMode}
+      onChange={(event) => {
+        const nextViewMode = event.target.value as "table" | "calendar";
+        setViewMode(nextViewMode);
+        const nextSearchParams = new URLSearchParams(searchParams.toString());
+        if (nextViewMode === "table") {
+          nextSearchParams.delete("view");
+        } else {
+          nextSearchParams.set("view", nextViewMode);
+        }
+        const nextQuery = nextSearchParams.toString();
+        router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
+          scroll: false,
+        });
+      }}
+      options={[
+        { label: "表格", value: "table" },
+        { label: "日历", value: "calendar" },
+      ]}
+    />,
+    <Button
+      key="create-project-milestone"
+      type="primary"
+      disabled={!canManageProject}
+      onClick={() => {
+        if (!canManageProject) return;
+        setEditing(null);
+        setSelectedProjectId(projects[0]?.id);
+        setOpen(true);
+      }}
+    >
+      新增里程碑
+    </Button>,
+  ];
+
+  return (
+    <Card styles={{ body: { padding: 12 } }}>
+      {viewMode === "table" ? (
+        <ProjectMilestonesTable
+          rows={rows}
+          onEdit={onEdit}
+          onDelete={(id) => {
+            void onDelete(id);
+          }}
+          actionsDisabled={!canManageProject}
+          headerTitle={<h3 style={{ margin: 0 }}>项目里程碑</h3>}
+          toolbarActions={toolbarActions}
+        />
+      ) : (
+        <>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 12,
+            }}
+          >
+            <h3 style={{ margin: 0 }}>项目里程碑</h3>
+            <Space size={8}>{toolbarActions}</Space>
+          </div>
+          <Calendar
+            cellRender={(current) => {
+              const items = milestonesByDate[current.format("YYYY-MM-DD")] ?? [];
+              if (items.length === 0) return null;
+              return (
+                <div style={{ marginTop: 6 }}>
+                  {items.map((item) => (
+                    <div
+                      key={`${item.id}-${current.format("YYYY-MM-DD")}`}
+                      style={{ marginBottom: 4 }}
+                    >
+                      <Tag
+                        color={item.typeOption?.color ?? "#d9d9d9"}
+                        style={{ borderRadius: 6, marginInlineEnd: 0 }}
+                      >
+                        <Tooltip title={getMilestoneTooltipContent(item)}>
+                          <span>
+                            <AppLink href={`/project-milestones/${item.id}`}>
+                              {item.name}
+                            </AppLink>
+                          </span>
+                        </Tooltip>
+                      </Tag>
+                    </div>
+                  ))}
+                </div>
+              );
+            }}
+          />
+        </>
+      )}
+
+      {open ? (
+        <Modal
+          title={editing ? "编辑里程碑" : "新增里程碑"}
+          open={open}
+          onCancel={() => {
+            setOpen(false);
+            setEditing(null);
+          }}
+          footer={null}
+          destroyOnHidden
+        >
+          <ProjectMilestoneForm
+            initialValues={editing}
+            projectMembers={projectContext.members}
+            allEmployees={allEmployees}
+            clientParticipants={projectContext.clientParticipants}
+            vendors={projectContext.vendors}
+            projectOptions={projects}
+            selectedProjectId={selectedProjectId}
+            disableProjectSelect={false}
+            onProjectChange={(projectId) => setSelectedProjectId(projectId)}
+            onSubmit={onSubmit}
+          />
+        </Modal>
+      ) : null}
     </Card>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<Card loading />}>
+      <ProjectMilestonesPageContent />
+    </Suspense>
   );
 }

@@ -1,43 +1,30 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Table, Card, Tag, Button, message } from "antd";
+import { Card, Button, message, Select } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import EmployeeFormModal from "@/components/EmployeeFormModal";
-import TableActions from "@/components/TableActions";
-import AppLink from "@/components/AppLink";
+import EmployeesTable, {
+  Employee,
+  EmployeeColumnKey,
+} from "@/components/EmployeesTable";
 
-type Employee = {
-  id: string;
-  name: string;
-  phone?: string | null;
-  fullName?: string | null;
-  roles?: {
-    role: {
-      id: string;
-      code: "ADMIN" | "PROJECT_MANAGER" | "HR" | "FINANCE" | "STAFF";
-      name: string;
-    };
-  }[];
-  function?: string | null;
-  position?: string | null;
-  level?: string | null;
-  departmentLevel1?: string | null;
-  departmentLevel2?: string | null;
-  employmentType?: string | null;
-  employmentStatus?: string | null;
-  entryDate?: string | null;
-  leaveDate?: string | null;
-};
+type EmployeeViewMode = "basic" | "role" | "position";
+type RoleCode = "ADMIN" | "PROJECT_MANAGER" | "HR" | "FINANCE" | "STAFF";
 
 const EmployeesPage = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [legalEntityOptions, setLegalEntityOptions] = useState<
+    { id: string; name: string; fullName?: string | null }[]
+  >([]);
   const [roleOptions, setRoleOptions] = useState<
-    { id: string; code: string; name: string }[]
+    { id: string; code: RoleCode; name: string }[]
   >([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [viewMode, setViewMode] = useState<EmployeeViewMode>("basic");
+  const [roleCodes, setRoleCodes] = useState<string[]>([]);
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
@@ -64,14 +51,82 @@ const EmployeesPage = () => {
 
   useEffect(() => {
     (async () => {
-      const res = await fetch("/api/roles");
-      const data = await res.json();
-      setRoleOptions(Array.isArray(data) ? data : []);
+      const [rolesRes, legalEntitiesRes] = await Promise.all([
+        fetch("/api/roles"),
+        fetch("/api/legal-entities"),
+      ]);
+      const rolesData = await rolesRes.json();
+      const legalEntitiesData = await legalEntitiesRes.json();
+      setRoleOptions(Array.isArray(rolesData) ? rolesData : []);
+      setLegalEntityOptions(
+        Array.isArray(legalEntitiesData) ? legalEntitiesData : [],
+      );
     })();
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        if (!res.ok) {
+          setRoleCodes([]);
+          return;
+        }
+        const me = (await res.json()) as {
+          roles?: Array<{
+            role?: {
+              code?: string | null;
+            } | null;
+          }> | null;
+        };
+        const codes = (me.roles ?? [])
+          .map((item) => item?.role?.code)
+          .filter((code): code is string => Boolean(code));
+        setRoleCodes(codes);
+      } catch {
+        setRoleCodes([]);
+      }
+    })();
+  }, []);
+
+  const isAdmin = roleCodes.includes("ADMIN");
+  const canUseRoleView = isAdmin;
+  const canUsePositionView =
+    isAdmin || roleCodes.includes("HR") || roleCodes.includes("FINANCE");
+
+  useEffect(() => {
+    if (viewMode === "role" && !canUseRoleView) {
+      setViewMode("basic");
+      return;
+    }
+    if (viewMode === "position" && !canUsePositionView) {
+      setViewMode("basic");
+    }
+  }, [viewMode, canUseRoleView, canUsePositionView]);
+
   const functionOptions = Array.from(
     new Set(employees.map((e) => e.function).filter(Boolean) as string[]),
+  );
+  const positionOptions = Array.from(
+    new Set(employees.map((e) => e.position).filter(Boolean) as string[]),
+  );
+  const departmentLevel1Options = Array.from(
+    new Set(
+      employees.map((e) => e.departmentLevel1).filter(Boolean) as string[],
+    ),
+  );
+  const departmentLevel2Options = Array.from(
+    new Set(
+      employees.map((e) => e.departmentLevel2).filter(Boolean) as string[],
+    ),
+  );
+  const employmentTypeOptions = Array.from(
+    new Set(employees.map((e) => e.employmentType).filter(Boolean) as string[]),
+  );
+  const employmentStatusOptions = Array.from(
+    new Set(
+      employees.map((e) => e.employmentStatus).filter(Boolean) as string[],
+    ),
   );
 
   const handleAddEmployee = () => {
@@ -111,113 +166,71 @@ const EmployeesPage = () => {
     fetchEmployees();
   };
 
-  const columns = [
-    {
-      title: "姓名",
-      dataIndex: "name",
-      filters: employees.map((e) => ({ text: e.name, value: e.name })),
-      onFilter: (value: string | number | boolean, record: Employee) =>
-        record.name === value,
-      render: (value: string, record: Employee) => (
-        <AppLink href={`/employees/${record.id}`}>
-          {value}
-        </AppLink>
-      ),
-    },
-    {
-      title: "手机号",
-      dataIndex: "phone",
-      render: (value: string | null) => value ?? "-",
-    },
-    {
-      title: "全名",
-      dataIndex: "fullName",
-      render: (value: string | null) => value ?? "-",
-    },
-    {
-      title: "角色",
-      filters: roleOptions.map((item) => ({ text: item.name, value: item.code })),
-      onFilter: (value: string | number | boolean, record: Employee) =>
-        Boolean(record.roles?.some((item) => item.role.code === value)),
-      render: (_: unknown, record: Employee) =>
-        record.roles && record.roles.length > 0 ? (
-          <>
-            {record.roles.map((item) => (
-              <Tag color="blue" key={item.role.id}>
-                {item.role.name}
-              </Tag>
-            ))}
-          </>
-        ) : (
-          "-"
-        ),
-    },
-    {
-      title: "职能",
-      dataIndex: "function",
-      filters: functionOptions.map((t) => ({ text: t, value: t })),
-      onFilter: (value: string | number | boolean, record: Employee) =>
-        record.function === value,
-      render: (value: string | null) =>
-        value ? (
-          <Tag
-            style={{ borderRadius: 6, padding: "2px 10px", fontWeight: 500 }}
-          >
-            {value}
-          </Tag>
-        ) : (
-          "-"
-        ),
-    },
-    {
-      title: "用工状态",
-      dataIndex: "employmentStatus",
-      filters: [
-        { text: "在职", value: "在职" },
-        { text: "离职", value: "离职" },
-      ],
-      onFilter: (value: string | number | boolean, record: Employee) =>
-        record.employmentStatus === value,
-      render: (value: string | null) =>
-        value ? (
-          <Tag color={value === "在职" ? "green" : "default"}>{value}</Tag>
-        ) : (
-          "-"
-        ),
-    },
-    {
-      title: "操作",
-      render: (_: unknown, record: Employee) => (
-        <TableActions
-          onEdit={() => handleEdit(record)}
-          onDelete={() => handleDelete(record.id)}
-          deleteTitle="确定删除这个团队成员？"
-        />
-      ),
-    },
-  ];
+  const columnKeysByMode: Record<EmployeeViewMode, EmployeeColumnKey[]> = {
+    basic: ["name", "fullName", "function", "employmentStatus", "actions"],
+    role: ["name", "roles", "actions"],
+    position: [
+      "name",
+      "fullName",
+      "function",
+      "legalEntity",
+      "departmentLevel1",
+      "departmentLevel2",
+      "position",
+      "level",
+      "employmentType",
+      "employmentStatus",
+      "entryDate",
+      "leaveDate",
+      "salary",
+      "socialSecurity",
+      "providentFund",
+      "workstationCost",
+      "utilityCost",
+      "bankAccountNumber",
+      "bankName",
+      "bankBranch",
+      "actions",
+    ],
+  };
 
   return (
     <>
-      <Card
-        title={<h3>团队成员</h3>}
-        extra={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleAddEmployee}
-          >
-            新增成员
-          </Button>
-        }
-      >
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={employees}
+      <Card styles={{ body: { padding: 12 } }}>
+        <EmployeesTable
+          employees={employees}
+          roleOptions={roleOptions}
+          columnKeys={columnKeysByMode[viewMode]}
+          columnsStatePersistenceKey={`employees-table-columns-state-${viewMode}`}
           loading={loading}
-          pagination={{ pageSize: 10 }}
-          locale={{ emptyText: "暂无团队成员" }}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onOptionUpdated={fetchEmployees}
+          toolbarActions={[
+            <Select
+              key="employees-view-mode"
+              value={viewMode}
+              style={{ minWidth: 140 }}
+              options={[
+                { label: "基础信息", value: "basic" },
+                { label: "角色信息", value: "role", disabled: !canUseRoleView },
+                {
+                  label: "岗位信息",
+                  value: "position",
+                  disabled: !canUsePositionView,
+                },
+              ]}
+              onChange={(value: EmployeeViewMode) => setViewMode(value)}
+            />,
+            <Button
+              key="create-employee"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleAddEmployee}
+            >
+              新增成员
+            </Button>,
+          ]}
         />
       </Card>
 
@@ -225,7 +238,14 @@ const EmployeesPage = () => {
         open={open}
         onCancel={handleModalCancel}
         onSuccess={handleModalSuccess}
+        viewMode={viewMode}
         functionOptions={functionOptions}
+        positionOptions={positionOptions}
+        departmentLevel1Options={departmentLevel1Options}
+        departmentLevel2Options={departmentLevel2Options}
+        employmentTypeOptions={employmentTypeOptions}
+        employmentStatusOptions={employmentStatusOptions}
+        legalEntityOptions={legalEntityOptions}
         roleOptions={roleOptions}
         initialValues={editingEmployee}
       />

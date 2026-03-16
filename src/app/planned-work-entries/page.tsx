@@ -1,65 +1,119 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Button, Card, Checkbox, Modal, Table } from "antd";
-import AppLink from "@/components/AppLink";
-import TableActions from "@/components/TableActions";
-import PlannedWorkEntryForm, { PlannedWorkEntryFormPayload } from "@/components/project-detail/PlannedWorkEntryForm";
-
-type Row = {
-  id: string;
-  year: number;
-  weekNumber: number;
-  plannedDays: number;
-  monday: boolean;
-  tuesday: boolean;
-  wednesday: boolean;
-  thursday: boolean;
-  friday: boolean;
-  saturday: boolean;
-  sunday: boolean;
-  task?: {
-    id: string;
-    name: string;
-    owner?: { id: string; name: string } | null;
-    segment?: { id: string; name: string; project?: { id: string; name: string } };
-  };
-};
+import { useCallback, useEffect, useState } from "react";
+import { Button, Card, Modal } from "antd";
+import PlannedWorkEntryForm, {
+  PlannedWorkEntryFormPayload,
+} from "@/components/project-detail/PlannedWorkEntryForm";
+import PlannedWorkEntriesTable, {
+  PlannedWorkEntryRow,
+} from "@/components/PlannedWorkEntriesTable";
 
 export default function Page() {
-  const [rows, setRows] = useState<Row[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [tasks, setTasks] = useState<{ id: string; name: string; projectId: string }[]>([]);
+  const [tasks, setTasks] = useState<
+    { id: string; name: string; projectId: string; segmentId?: string; segmentName?: string }[]
+  >([]);
+  const [workdayAdjustments, setWorkdayAdjustments] = useState<
+    { startDate: string; endDate: string; changeType?: string | null }[]
+  >([]);
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Row | null>(null);
+  const [editing, setEditing] = useState<PlannedWorkEntryRow | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const fetchData = async () => {
-    const [res1, res2, res3] = await Promise.all([
-      fetch("/api/planned-work-entries"),
-      fetch("/api/projects?type=%E5%86%85%E9%83%A8%E9%A1%B9%E7%9B%AE"),
+  const fetchOptions = useCallback(async () => {
+    const [res2, res3, res4] = await Promise.all([
+      fetch("/api/projects"),
       fetch("/api/project-tasks"),
+      fetch("/api/workday-adjustments"),
     ]);
-    const entries = await res1.json();
     const projectList = await res2.json();
     const taskList = await res3.json();
-    setRows(entries);
-    setProjects(projectList.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })));
-    setTasks(taskList.map((t: { id: string; name: string; segment?: { project?: { id: string } } }) => ({
-      id: t.id,
-      name: t.name,
-      projectId: t.segment?.project?.id,
-    })));
-  };
+    const workdayList = await res4.json();
+    setProjects(
+      projectList.map((p: { id: string; name: string }) => ({
+        id: p.id,
+        name: p.name,
+      })),
+    );
+    setTasks(
+      taskList.map(
+        (t: {
+          id: string;
+          name: string;
+          segment?: { id?: string; name?: string; project?: { id: string } };
+        }) => ({
+          id: t.id,
+          name: t.name,
+          projectId: t.segment?.project?.id,
+          segmentId: t.segment?.id,
+          segmentName: t.segment?.name,
+        }),
+      ),
+    );
+    setWorkdayAdjustments(
+      Array.isArray(workdayList) ? workdayList : [],
+    );
+  }, []);
+
+  const fetchRows = useCallback(
+    async (params: {
+      current: number;
+      pageSize: number;
+      filters: {
+        projectName?: string;
+        segmentName?: string;
+        taskName?: string;
+        ownerName?: string;
+        year?: string;
+        weekNumber?: string;
+      };
+    }) => {
+      const query = new URLSearchParams({
+        page: String(params.current),
+        pageSize: String(params.pageSize),
+      });
+      if (params.filters.projectName)
+        query.set("projectName", params.filters.projectName);
+      if (params.filters.segmentName)
+        query.set("segmentName", params.filters.segmentName);
+      if (params.filters.taskName) query.set("taskName", params.filters.taskName);
+      if (params.filters.ownerName)
+        query.set("ownerName", params.filters.ownerName);
+      if (params.filters.year) query.set("year", params.filters.year);
+      if (params.filters.weekNumber)
+        query.set("weekNumber", params.filters.weekNumber);
+
+      const res = await fetch(`/api/planned-work-entries?${query.toString()}`);
+      const payload = await res.json();
+      if (Array.isArray(payload)) {
+        return {
+          data: payload,
+          total: payload.length,
+        };
+      }
+      return {
+        data: Array.isArray(payload?.data) ? payload.data : [],
+        total:
+          typeof payload?.total === "number"
+            ? payload.total
+            : Array.isArray(payload?.data)
+              ? payload.data.length
+              : 0,
+      };
+    },
+    [],
+  );
 
   useEffect(() => {
     (async () => {
-      await fetchData();
+      await fetchOptions();
     })();
-  }, []);
+  }, [fetchOptions]);
 
   const onDelete = async (id: string) => {
     await fetch(`/api/planned-work-entries/${id}`, { method: "DELETE" });
-    await fetchData();
+    setRefreshKey((prev) => prev + 1);
   };
 
   const onSubmit = async (payload: PlannedWorkEntryFormPayload) => {
@@ -78,65 +132,68 @@ export default function Page() {
     }
     setOpen(false);
     setEditing(null);
-    await fetchData();
+    setRefreshKey((prev) => prev + 1);
   };
 
-  const checkbox = (checked: boolean) => (
-    <Checkbox checked={checked} onChange={() => {}} style={{ pointerEvents: "none" }} />
-  );
-
   return (
-    <Card title="计划工时" extra={<Button type="primary" onClick={() => { setEditing(null); setOpen(true); }}>新增计划工时</Button>}>
-      <Table
-        rowKey="id"
-        dataSource={rows}
-        pagination={{ pageSize: 10 }}
-        scroll={{ x: "max-content" }}
-        columns={[
-          { title: "任务", render: (_: unknown, r: Row) => r.task ? <AppLink href={`/planned-work-entries/${r.id}`}>{r.task.name}</AppLink> : "-" },
-          { title: "任务责任人", render: (_: unknown, r: Row) => r.task?.owner?.name ?? "-" },
-          { title: "所属项目", render: (_: unknown, r: Row) => r.task?.segment?.project?.name ?? "-" },
-          { title: "年份", dataIndex: "year" },
-          { title: "周数", dataIndex: "weekNumber" },
-          { title: "计划天数", dataIndex: "plannedDays" },
-          { title: "周一", render: (_: unknown, r: Row) => checkbox(r.monday) },
-          { title: "周二", render: (_: unknown, r: Row) => checkbox(r.tuesday) },
-          { title: "周三", render: (_: unknown, r: Row) => checkbox(r.wednesday) },
-          { title: "周四", render: (_: unknown, r: Row) => checkbox(r.thursday) },
-          { title: "周五", render: (_: unknown, r: Row) => checkbox(r.friday) },
-          { title: "周六", render: (_: unknown, r: Row) => checkbox(r.saturday) },
-          { title: "周天", render: (_: unknown, r: Row) => checkbox(r.sunday) },
-          {
-            title: "操作",
-            render: (_: unknown, r: Row) => (
-              <TableActions
-                onEdit={() => { setEditing(r); setOpen(true); }}
-                onDelete={() => onDelete(r.id)}
-                deleteTitle="确定删除该条计划工时？"
-              />
-            ),
-          },
+    <Card styles={{ body: { padding: 12 } }}>
+      <PlannedWorkEntriesTable
+        requestData={fetchRows}
+        headerTitle={<h3 style={{ margin: 0 }}>计划工时</h3>}
+        toolbarActions={[
+          <Button
+            key="create-planned-work-entry"
+            type="primary"
+            onClick={() => {
+              setEditing(null);
+              setOpen(true);
+            }}
+          >
+            新增计划工时
+          </Button>,
         ]}
+        workdayAdjustments={workdayAdjustments}
+        onEdit={(row) => {
+          setEditing(row);
+          setOpen(true);
+        }}
+        onDelete={(id) => {
+          void onDelete(id);
+        }}
+        refreshKey={refreshKey}
       />
 
-      <Modal title={editing ? "编辑计划工时" : "新增计划工时"} open={open} onCancel={() => setOpen(false)} footer={null} destroyOnHidden>
+      <Modal
+        title={editing ? "编辑计划工时" : "新增计划工时"}
+        open={open}
+        onCancel={() => setOpen(false)}
+        footer={null}
+        destroyOnHidden
+      >
         <PlannedWorkEntryForm
           projectOptions={projects}
           taskOptions={tasks}
-          initialValues={editing ? {
-            id: editing.id,
-            taskId: editing.task?.id ?? "",
-            year: editing.year,
-            weekNumber: editing.weekNumber,
-            plannedDays: editing.plannedDays,
-            monday: editing.monday,
-            tuesday: editing.tuesday,
-            wednesday: editing.wednesday,
-            thursday: editing.thursday,
-            friday: editing.friday,
-            saturday: editing.saturday,
-            sunday: editing.sunday,
-          } : null}
+          initialValues={
+            editing
+              ? {
+                  id: editing.id,
+                  taskId: editing.task?.id ?? "",
+                  yearOption:
+                    editing.yearOption?.value ?? String(editing.year ?? ""),
+                  weekNumberOption:
+                    editing.weekNumberOption?.value ??
+                    String(editing.weekNumber ?? ""),
+                  plannedDays: editing.plannedDays,
+                  monday: editing.monday,
+                  tuesday: editing.tuesday,
+                  wednesday: editing.wednesday,
+                  thursday: editing.thursday,
+                  friday: editing.friday,
+                  saturday: editing.saturday,
+                  sunday: editing.sunday,
+                }
+              : null
+          }
           onSubmit={onSubmit}
         />
       </Modal>
