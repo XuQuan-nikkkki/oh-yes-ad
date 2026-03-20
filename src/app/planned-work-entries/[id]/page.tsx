@@ -81,6 +81,7 @@ export default function Page() {
   >([]);
   const [optionsLoaded, setOptionsLoaded] = useState(false);
   const [optionsLoading, setOptionsLoading] = useState(false);
+  const [messageApi, contextHolder] = message.useMessage();
 
   const fetchDetail = useCallback(async () => {
     if (!id) return;
@@ -151,10 +152,10 @@ export default function Page() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      message.error("更新失败");
+      messageApi.error("更新失败");
       return;
     }
-    message.success("更新成功");
+    messageApi.success("更新成功");
     setOpen(false);
     await fetchDetail();
   };
@@ -164,10 +165,10 @@ export default function Page() {
     const res = await fetch(`/api/planned-work-entries/${id}`, { method: "DELETE" });
     setDeleting(false);
     if (!res.ok) {
-      message.error("删除失败");
+      messageApi.error("删除失败");
       return;
     }
-    message.success("删除成功");
+    messageApi.success("删除成功");
     router.push("/planned-work-entries");
   };
 
@@ -176,12 +177,13 @@ export default function Page() {
       await fetchOptions();
       setOpen(true);
     } catch {
-      message.error("加载项目和任务失败");
+      messageApi.error("加载项目和任务失败");
     }
   };
 
   return (
     <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+      {contextHolder}
       <Card
         title={data?.task?.name || "计划工时详情"}
         extra={

@@ -8,6 +8,8 @@ import EmployeesTable, {
   Employee,
   EmployeeColumnKey,
 } from "@/components/EmployeesTable";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
+import { useEmployeesStore } from "@/stores/employeesStore";
 
 type EmployeeViewMode = "basic" | "role" | "position";
 type RoleCode = "ADMIN" | "PROJECT_MANAGER" | "HR" | "FINANCE" | "STAFF";
@@ -24,26 +26,23 @@ const EmployeesPage = () => {
   const [open, setOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [viewMode, setViewMode] = useState<EmployeeViewMode>("basic");
-  const [roleCodes, setRoleCodes] = useState<string[]>([]);
+  const [messageApi, contextHolder] = message.useMessage();
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const roleCodes = getRoleCodesFromUser(currentUser);
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
 
-  const fetchEmployees = useCallback(async () => {
+  const fetchEmployees = useCallback(async (force = false) => {
     setLoading(true);
     try {
-      const res = await fetch("/api/employees?list=full");
-      const text = await res.text();
-      const data = text ? JSON.parse(text) : [];
-      if (!res.ok)
-        throw new Error(
-          typeof data === "object" && data?.error ? data.error : res.statusText,
-        );
-      setEmployees(Array.isArray(data) ? data : []);
+      const data = await fetchEmployeesFromStore({ full: true, force });
+      setEmployees(Array.isArray(data) ? (data as Employee[]) : []);
     } catch (err) {
       console.error("获取团队成员失败:", err);
       setEmployees([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchEmployeesFromStore]);
 
   useEffect(() => {
     fetchEmployees();
@@ -61,31 +60,6 @@ const EmployeesPage = () => {
       setLegalEntityOptions(
         Array.isArray(legalEntitiesData) ? legalEntitiesData : [],
       );
-    })();
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
-        if (!res.ok) {
-          setRoleCodes([]);
-          return;
-        }
-        const me = (await res.json()) as {
-          roles?: Array<{
-            role?: {
-              code?: string | null;
-            } | null;
-          }> | null;
-        };
-        const codes = (me.roles ?? [])
-          .map((item) => item?.role?.code)
-          .filter((code): code is string => Boolean(code));
-        setRoleCodes(codes);
-      } catch {
-        setRoleCodes([]);
-      }
     })();
   }, []);
 
@@ -147,11 +121,11 @@ const EmployeesPage = () => {
         body: JSON.stringify({ id }),
       });
       if (!res.ok) throw new Error("删除失败");
-      message.success("删除成功");
-      fetchEmployees();
+      messageApi.success("删除成功");
+      fetchEmployees(true);
     } catch (err) {
       console.error("删除团队成员失败:", err);
-      message.error("删除失败");
+      messageApi.error("删除失败");
     }
   };
 
@@ -163,7 +137,7 @@ const EmployeesPage = () => {
   const handleModalSuccess = () => {
     setOpen(false);
     setEditingEmployee(null);
-    fetchEmployees();
+    fetchEmployees(true);
   };
 
   const columnKeysByMode: Record<EmployeeViewMode, EmployeeColumnKey[]> = {
@@ -196,6 +170,7 @@ const EmployeesPage = () => {
 
   return (
     <>
+      {contextHolder}
       <Card styles={{ body: { padding: 12 } }}>
         <EmployeesTable
           employees={employees}

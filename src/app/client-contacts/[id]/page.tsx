@@ -35,6 +35,7 @@ const ClientContactDetailPage = () => {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [messageApi, contextHolder] = message.useMessage();
   const { canManageCrm } = useCrmPermission();
 
   const fetchContact = useCallback(async () => {
@@ -68,11 +69,11 @@ const ClientContactDetailPage = () => {
         throw new Error("删除失败");
       }
 
-      message.success("删除成功");
+      messageApi.success("删除成功");
       router.push("/client-contacts");
     } catch (error) {
       console.error("删除客户人员失败:", error);
-      message.error("删除失败");
+      messageApi.error("删除失败");
     } finally {
       setDeleting(false);
     }
@@ -80,6 +81,7 @@ const ClientContactDetailPage = () => {
 
   return (
     <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+      {contextHolder}
       <Card
         title={contact?.name || "客户人员详情"}
         loading={loading}

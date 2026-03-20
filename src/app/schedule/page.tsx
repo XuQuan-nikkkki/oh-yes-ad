@@ -39,6 +39,7 @@ import PlannedWorkEntryForm, {
 import ProjectMilestoneSection from "@/components/project-detail/ProjectMilestoneSection";
 import ProjectProgressNestedTable from "@/components/project-detail/ProjectProgressNestedTable";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
+import { useEmployeesStore } from "@/stores/employeesStore";
 
 dayjs.extend(isoWeek);
 
@@ -342,6 +343,7 @@ function SchedulePageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [messageApi, contextHolder] = message.useMessage();
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [projectDetailsRefreshSeed, setProjectDetailsRefreshSeed] = useState(0);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
@@ -372,6 +374,7 @@ function SchedulePageContent() {
     Record<string, "progress" | "tasks">
   >({});
   const { canManageProject } = useProjectPermission();
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const [editingSegment, setEditingSegment] = useState<SegmentRow | null>(null);
   const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
   const [editingPlannedEntry, setEditingPlannedEntry] =
@@ -406,19 +409,18 @@ function SchedulePageContent() {
         const currentYear = String(now.year());
         const currentWeek = String(now.isoWeek());
 
-        const [employeesRes, plannedRes] = await Promise.all([
-          fetch("/api/employees", { cache: "no-store" }),
+        const [employeesPayload, plannedRes] = await Promise.all([
+          fetchEmployeesFromStore(),
           fetch(
             `/api/planned-work-entries?page=1&pageSize=1000&year=${currentYear}&weekNumber=${currentWeek}`,
             { cache: "no-store" },
           ),
         ]);
 
-        const employeePayload = await employeesRes.json();
         const plannedPayload = await plannedRes.json();
 
-        const nextEmployees = Array.isArray(employeePayload)
-          ? employeePayload
+        const nextEmployees = Array.isArray(employeesPayload)
+          ? employeesPayload
           : [];
         const nextEntries = Array.isArray(plannedPayload?.data)
           ? plannedPayload.data
@@ -432,7 +434,7 @@ function SchedulePageContent() {
     };
 
     void fetchWeeklyData();
-  }, []);
+  }, [fetchEmployeesFromStore]);
 
   const visibleProjects = useMemo(
     () =>
@@ -694,7 +696,7 @@ function SchedulePageContent() {
   ) => {
     if (!canManageProject) return;
     if (!activeMilestoneProjectId) {
-      message.error("未选择项目");
+      messageApi.error("未选择项目");
       return;
     }
     try {
@@ -711,13 +713,13 @@ function SchedulePageContent() {
         const text = await res.text();
         throw new Error(text || "保存里程碑失败");
       }
-      message.success("里程碑已创建");
+      messageApi.success("里程碑已创建");
       setMilestoneModalOpen(false);
       setMilestoneProjectId(null);
       refreshProjectDetails();
     } catch (error) {
       const text = error instanceof Error ? error.message : "保存里程碑失败";
-      message.error(text);
+      messageApi.error(text);
     } finally {
       setMilestoneSubmitting(false);
     }
@@ -765,11 +767,11 @@ function SchedulePageContent() {
         const text = await res.text();
         throw new Error(text || "删除环节失败");
       }
-      message.success("环节已删除");
+      messageApi.success("环节已删除");
       refreshProjectDetails();
     } catch (error) {
       const text = error instanceof Error ? error.message : "删除环节失败";
-      message.error(text);
+      messageApi.error(text);
     }
   };
 
@@ -783,11 +785,11 @@ function SchedulePageContent() {
         const text = await res.text();
         throw new Error(text || "删除任务失败");
       }
-      message.success("任务已删除");
+      messageApi.success("任务已删除");
       refreshProjectDetails();
     } catch (error) {
       const text = error instanceof Error ? error.message : "删除任务失败";
-      message.error(text);
+      messageApi.error(text);
     }
   };
 
@@ -800,18 +802,18 @@ function SchedulePageContent() {
         const text = await res.text();
         throw new Error(text || "删除计划工时失败");
       }
-      message.success("计划工时已删除");
+      messageApi.success("计划工时已删除");
       refreshProjectDetails();
     } catch (error) {
       const text = error instanceof Error ? error.message : "删除计划工时失败";
-      message.error(text);
+      messageApi.error(text);
     }
   };
 
   const handleSubmitSegment = async (payload: ProjectSegmentFormPayload) => {
     if (!canManageProject) return;
     if (!selectedClientProject?.id) {
-      message.error("未选择项目");
+      messageApi.error("未选择项目");
       return;
     }
     try {
@@ -832,13 +834,13 @@ function SchedulePageContent() {
         const text = await res.text();
         throw new Error(text || "保存环节失败");
       }
-      message.success(editingSegment ? "环节已更新" : "环节已创建");
+      messageApi.success(editingSegment ? "环节已更新" : "环节已创建");
       setSegmentModalOpen(false);
       setEditingSegment(null);
       refreshProjectDetails();
     } catch (error) {
       const text = error instanceof Error ? error.message : "保存环节失败";
-      message.error(text);
+      messageApi.error(text);
     } finally {
       setSegmentSubmitting(false);
     }
@@ -847,7 +849,7 @@ function SchedulePageContent() {
   const handleSubmitTask = async (payload: ProjectTaskFormPayload) => {
     if (!canManageProject) return;
     if (!selectedClientProject?.id) {
-      message.error("未选择项目");
+      messageApi.error("未选择项目");
       return;
     }
     try {
@@ -865,14 +867,14 @@ function SchedulePageContent() {
         const text = await res.text();
         throw new Error(text || "保存任务失败");
       }
-      message.success(editingTask ? "任务已更新" : "任务已创建");
+      messageApi.success(editingTask ? "任务已更新" : "任务已创建");
       setTaskModalOpen(false);
       setEditingTask(null);
       setTaskDefaultSegmentId(undefined);
       refreshProjectDetails();
     } catch (error) {
       const text = error instanceof Error ? error.message : "保存任务失败";
-      message.error(text);
+      messageApi.error(text);
     } finally {
       setTaskSubmitting(false);
     }
@@ -896,7 +898,7 @@ function SchedulePageContent() {
         const text = await res.text();
         throw new Error(text || "保存计划工时失败");
       }
-      message.success(
+      messageApi.success(
         editingPlannedEntry ? "计划工时已更新" : "计划工时已创建",
       );
       setPlannedWorkModalOpen(false);
@@ -905,7 +907,7 @@ function SchedulePageContent() {
       refreshProjectDetails();
     } catch (error) {
       const text = error instanceof Error ? error.message : "保存计划工时失败";
-      message.error(text);
+      messageApi.error(text);
     } finally {
       setPlannedWorkSubmitting(false);
     }
@@ -1577,6 +1579,7 @@ function SchedulePageContent() {
 
   return (
     <>
+      {contextHolder}
       <Card>
         <Tabs
           activeKey={activeScheduleTab}

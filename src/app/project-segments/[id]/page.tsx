@@ -16,6 +16,7 @@ import ProjectTasksProTable, {
 } from "@/components/ProjectTasksProTable";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import { useEmployeesStore } from "@/stores/employeesStore";
 
 type SelectOptionValue = {
   id?: string;
@@ -63,6 +64,7 @@ export default function ProjectSegmentDetailPage() {
   const [messageApi, contextHolder] = message.useMessage();
   const { canManageProject } = useProjectPermission();
   const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const statusOptions = optionsByField["projectSegment.status"] ?? [];
 
@@ -77,14 +79,14 @@ export default function ProjectSegmentDetailPage() {
   }, [id]);
 
   const fetchOptions = useCallback(async () => {
-    const [projectsRes, employeesRes] = await Promise.all([
+    const [projectsRes, employeeRows] = await Promise.all([
       fetch("/api/projects"),
-      fetch("/api/employees"),
+      fetchEmployeesFromStore(),
     ]);
     setProjects(await projectsRes.json());
-    setEmployees(await employeesRes.json());
+    setEmployees(Array.isArray(employeeRows) ? employeeRows : []);
     await fetchAllOptions();
-  }, [fetchAllOptions]);
+  }, [fetchAllOptions, fetchEmployeesFromStore]);
 
   useEffect(() => {
     if (!id) return;

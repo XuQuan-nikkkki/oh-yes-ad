@@ -7,6 +7,7 @@ import ProjectTasksListTable, {
   type ProjectTaskListRow,
 } from "@/components/ProjectTasksListTable";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
+import { useEmployeesStore } from "@/stores/employeesStore";
 
 type Row = ProjectTaskListRow;
 
@@ -29,16 +30,17 @@ export default function ProjectTasksPage() {
   const [editing, setEditing] = useState<Row | null>(null);
   const [form] = Form.useForm<FormValues>();
   const { canManageProject } = useProjectPermission();
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
 
   const fetchData = async () => {
-    const [tasksRes, segmentsRes, employeesRes] = await Promise.all([
+    const [tasksRes, segmentsRes, employeeRows] = await Promise.all([
       fetch("/api/project-tasks"),
       fetch("/api/project-segments"),
-      fetch("/api/employees"),
+      fetchEmployeesFromStore(),
     ]);
     setRows(await tasksRes.json());
     setSegments(await segmentsRes.json());
-    setEmployees(await employeesRes.json());
+    setEmployees(Array.isArray(employeeRows) ? employeeRows : []);
   };
 
   useEffect(() => {

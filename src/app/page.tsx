@@ -23,14 +23,16 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import WorkLogsPanel from "@/components/work-logs/WorkLogsPanel";
 import ProjectsTable, { type Project } from "@/components/ProjectsTable";
 import { type ProjectTaskListRow } from "@/components/ProjectTasksListTable";
-import SystemOperationsPanel from "@/components/system/SystemOperationsPanel";
 import HomeParticipationNestedTable from "@/components/home/HomeParticipationNestedTable";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
+import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
+import { useProjectsStore } from "@/stores/projectsStore";
 
 const HOME_TAB_SITE_MAP = "site-map";
 const HOME_TAB_OWNED_PROJECTS = "owned-projects";
 const HOME_TAB_WORK_LOGS = "work-logs";
 const HOME_TAB_PARTICIPATION = "participation";
-const HOME_TAB_SYSTEM_OPERATIONS = "system-operations";
+const WORK_LOG_VIEW_PARAM = "workLogView";
 
 const validHomeTab = (tab: string | null, allowedTabs: string[]) => {
   if (tab && allowedTabs.includes(tab)) {
@@ -54,85 +56,109 @@ function HomePageContent() {
   const [myOwnedProjects, setMyOwnedProjects] = useState<Project[]>([]);
   const [myProjects, setMyProjects] = useState<Project[]>([]);
   const [myTasks, setMyTasks] = useState<ProjectTaskListRow[]>([]);
-  const [roleCodes, setRoleCodes] = useState<string[]>([]);
+  const [participationLoadedUserId, setParticipationLoadedUserId] = useState<
+    string | null
+  >(null);
   const [workdayAdjustments, setWorkdayAdjustments] = useState<
     WorkdayAdjustment[]
   >([]);
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const fetchAdjustmentsFromStore = useWorkdayAdjustmentsStore(
+    (state) => state.fetchAdjustments,
+  );
+  const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
+  const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
   const isAdmin = roleCodes.includes("ADMIN");
   const canViewCompanyFinance =
     isAdmin || roleCodes.includes("HR") || roleCodes.includes("FINANCE");
   const canViewOwnedProjectsTab = roleCodes.includes("PROJECT_MANAGER");
-  const canViewSystemOperationsTab = isAdmin;
   const availableHomeTabs = useMemo(
     () => [
       HOME_TAB_SITE_MAP,
       ...(canViewOwnedProjectsTab ? [HOME_TAB_OWNED_PROJECTS] : []),
       HOME_TAB_PARTICIPATION,
       HOME_TAB_WORK_LOGS,
-      ...(canViewSystemOperationsTab ? [HOME_TAB_SYSTEM_OPERATIONS] : []),
     ],
-    [canViewOwnedProjectsTab, canViewSystemOperationsTab],
+    [canViewOwnedProjectsTab],
   );
   const activeTab = validHomeTab(searchParams.get("tab"), availableHomeTabs);
 
   useEffect(() => {
     (async () => {
+      if (!currentUser?.id) {
+        setMyProjects([]);
+        setMyOwnedProjects([]);
+        setMyTasks([]);
+        setWorkdayAdjustments([]);
+        setParticipationLoadedUserId(null);
+        return;
+      }
+      const needParticipationData =
+        activeTab === HOME_TAB_OWNED_PROJECTS ||
+        activeTab === HOME_TAB_PARTICIPATION;
+      if (!needParticipationData) return;
+      if (participationLoadedUserId === currentUser.id) return;
       setParticipationLoading(true);
       try {
-        const meRes = await fetch("/api/auth/me", { cache: "no-store" });
-        if (!meRes.ok) {
-          setMyProjects([]);
-          setMyTasks([]);
-          return;
-        }
-        const me = (await meRes.json()) as {
-          id: string;
-          roles?: Array<{
-            role?: {
-              code?: string | null;
-            } | null;
-          }> | null;
-        };
-        const codes = (me.roles ?? [])
-          .map((item) => item?.role?.code)
-          .filter((code): code is string => Boolean(code));
-        setRoleCodes(codes);
-        const [employeeRes, tasksRes, projectsRes, workdayRes] =
+        const needOwnedProjectsData = activeTab === HOME_TAB_OWNED_PROJECTS;
+        const [tasksRes, ownedProjectsRes, workdayData] =
           await Promise.all([
-            fetch(`/api/employees/${me.id}`, { cache: "no-store" }),
-            fetch("/api/project-tasks", { cache: "no-store" }),
-            fetch("/api/projects", { cache: "no-store" }),
-            fetch("/api/workday-adjustments", { cache: "no-store" }),
+            fetch(
+              `/api/project-tasks?ownerId=${encodeURIComponent(currentUser.id)}`,
+              { cache: "no-store" },
+            ),
+            needOwnedProjectsData
+              ? fetchProjectsFromStore({ ownerId: currentUser.id })
+              : Promise.resolve(null),
+            fetchAdjustmentsFromStore(),
           ]);
-        const employeeData = employeeRes.ok ? await employeeRes.json() : null;
         const tasksData = tasksRes.ok ? await tasksRes.json() : [];
-        const projectsData = projectsRes.ok ? await projectsRes.json() : [];
-        const workdayData = workdayRes.ok ? await workdayRes.json() : [];
+        const ownedProjectsData = ownedProjectsRes;
 
+        const myProjectMap = new Map<string, Project>();
+        if (Array.isArray(tasksData)) {
+          for (const task of tasksData as ProjectTaskListRow[]) {
+            const project = task?.segment?.project;
+            if (project?.id && project?.name && !myProjectMap.has(project.id)) {
+              myProjectMap.set(project.id, {
+                id: project.id,
+                name: project.name,
+              } as Project);
+            }
+          }
+        }
         setMyProjects(
-          Array.isArray(employeeData?.projects) ? employeeData.projects : [],
+          Array.from(myProjectMap.values()),
         );
         setMyOwnedProjects(
-          Array.isArray(projectsData)
-            ? projectsData.filter(
-                (item: Project) =>
-                  item?.owner?.id === me.id || item?.ownerId === me.id,
-              )
+          Array.isArray(ownedProjectsData)
+            ? ownedProjectsData
+                .filter(
+                  (
+                    item,
+                  ): item is Project & { id: string; name: string } =>
+                    Boolean(item?.id) && typeof item?.name === "string",
+                )
             : [],
         );
         setMyTasks(
           Array.isArray(tasksData)
-            ? tasksData.filter(
-                (item: ProjectTaskListRow) => item?.owner?.id === me.id,
-              )
+            ? tasksData
             : [],
         );
         setWorkdayAdjustments(Array.isArray(workdayData) ? workdayData : []);
+        setParticipationLoadedUserId(currentUser.id);
       } finally {
         setParticipationLoading(false);
       }
     })();
-  }, []);
+  }, [
+    activeTab,
+    currentUser?.id,
+    fetchAdjustmentsFromStore,
+    fetchProjectsFromStore,
+    participationLoadedUserId,
+  ]);
 
   const modules = [
     {
@@ -258,6 +284,9 @@ function HomePageContent() {
         onChange={(nextTab) => {
           const query = new URLSearchParams(searchParams.toString());
           query.set("tab", validHomeTab(nextTab, availableHomeTabs));
+          if (nextTab !== HOME_TAB_WORK_LOGS) {
+            query.delete(WORK_LOG_VIEW_PARAM);
+          }
           router.replace(`${pathname}?${query.toString()}`, { scroll: false });
         }}
         items={[
@@ -332,15 +361,6 @@ function HomePageContent() {
             label: "工时记录",
             children: <WorkLogsPanel />,
           },
-          ...(canViewSystemOperationsTab
-            ? [
-                {
-                  key: HOME_TAB_SYSTEM_OPERATIONS,
-                  label: "系统操作",
-                  children: <SystemOperationsPanel />,
-                },
-              ]
-            : []),
         ]}
       />
     </Card>

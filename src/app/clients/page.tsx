@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
 import ClientFormModal from "@/components/ClientFormModal";
 import ClientTable, { Client } from "@/components/ClientTable";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import { useFetch } from "@/hooks/useFetch";
 import { useCrmPermission } from "@/hooks/useCrmPermission";
+import CreateButton from "@/components/actions/CreateButton";
+import ListPageContainer from "@/components/ListPageContainer";
 
 const EMPTY_OPTIONS: {
   id: string;
@@ -26,7 +26,9 @@ const ClientsPage = () => {
   const industryOptions = useSelectOptionsStore(
     (state) => state.optionsByField["client.industry"] ?? EMPTY_OPTIONS,
   );
-  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
+  const fetchAllOptions = useSelectOptionsStore(
+    (state) => state.fetchAllOptions,
+  );
 
   const handleDelete = async (id: string) => {
     if (!canManageCrm) return;
@@ -37,24 +39,28 @@ const ClientsPage = () => {
     refetch();
   };
 
+  const renderCreateClientBtn = () => (
+    <CreateButton
+      key="create-client"
+      disabled={!canManageCrm}
+      onClick={() => {
+        setEditingClient(null);
+        setOpen(true);
+      }}
+      btnText="新建客户"
+    />
+  );
+
+  const onReset = () => {
+    setOpen(false);
+    setEditingClient(null);
+  };
+
   return (
-    <Card styles={{ body: { padding: 12 } }}>
+    <ListPageContainer>
       <ClientTable
         headerTitle={<h3 style={{ margin: 0 }}>客户管理</h3>}
-        toolbarActions={[
-          <Button
-            key="create-client"
-            type="primary"
-            icon={<PlusOutlined />}
-            disabled={!canManageCrm}
-            onClick={() => {
-              setEditingClient(null);
-              setOpen(true);
-            }}
-          >
-            新建客户
-          </Button>,
-        ]}
+        toolbarActions={[renderCreateClientBtn()]}
         clients={data}
         loading={loading}
         actionsDisabled={!canManageCrm}
@@ -71,18 +77,14 @@ const ClientsPage = () => {
       <ClientFormModal
         open={open}
         initialValues={editingClient}
-        onCancel={() => {
-          setOpen(false);
-          setEditingClient(null);
-        }}
+        onCancel={onReset}
         onSuccess={async () => {
-          setOpen(false);
-          setEditingClient(null);
+          onReset();
           await refetch();
         }}
         industryOptions={industryOptions}
       />
-    </Card>
+    </ListPageContainer>
   );
 };
 

@@ -2,6 +2,7 @@
 
 import { Button, DatePicker, Form, Input, Select } from "antd";
 import dayjs from "dayjs";
+import type { DefaultOptionType } from "antd/es/select";
 
 export type ActualWorkEntryFormPayload = {
   projectId: string;
@@ -21,6 +22,10 @@ type ProjectOption = {
   id: string;
   name: string;
 };
+type ProjectOptionGroup = {
+  label: string;
+  options: ProjectOption[];
+};
 
 type InitialValues = ActualWorkEntryFormPayload & {
   id: string;
@@ -35,6 +40,7 @@ type FormValues = {
 
 type Props = {
   projectOptions: ProjectOption[];
+  projectOptionGroups?: ProjectOptionGroup[];
   selectedProjectId?: string;
   disableProjectSelect?: boolean;
   disableEmployeeSelect?: boolean;
@@ -45,6 +51,7 @@ type Props = {
 
 const ActualWorkEntryForm = ({
   projectOptions,
+  projectOptionGroups,
   selectedProjectId,
   disableProjectSelect = false,
   disableEmployeeSelect = false,
@@ -55,8 +62,27 @@ const ActualWorkEntryForm = ({
   const employeeOptions = employees
     .filter((employee) => employee.employmentStatus !== "离职")
     .map((employee) => ({ label: employee.name, value: employee.id }));
+  const flattenedProjects =
+    projectOptionGroups && projectOptionGroups.length > 0
+      ? projectOptionGroups.flatMap((group) => group.options)
+      : projectOptions;
   const initialProjectId =
-    selectedProjectId ?? initialValues?.projectId ?? projectOptions[0]?.id;
+    selectedProjectId ?? initialValues?.projectId ?? flattenedProjects[0]?.id;
+  const selectOptions: DefaultOptionType[] =
+    projectOptionGroups && projectOptionGroups.length > 0
+      ? projectOptionGroups
+          .filter((group) => group.options.length > 0)
+          .map((group) => ({
+            label: group.label,
+            options: group.options.map((project) => ({
+              label: project.name,
+              value: project.id,
+            })),
+          }))
+      : projectOptions.map((project) => ({
+          label: project.name,
+          value: project.id,
+        }));
 
   return (
     <Form<FormValues>
@@ -90,10 +116,7 @@ const ActualWorkEntryForm = ({
         <Select
           disabled={disableProjectSelect}
           placeholder="请选择项目"
-          options={projectOptions.map((project) => ({
-            label: project.name,
-            value: project.id,
-          }))}
+          options={selectOptions}
         />
       </Form.Item>
       <Form.Item label="事件" name="title" rules={[{ required: true, message: "请输入事件" }]}>

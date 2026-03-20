@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
 import ActualWorkEntryForm, { ActualWorkEntryFormPayload } from "@/components/project-detail/ActualWorkEntryForm";
+import { useEmployeesStore } from "@/stores/employeesStore";
 
 type Detail = {
   id: string;
@@ -34,6 +35,8 @@ export default function Page() {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [employees, setEmployees] = useState<{ id: string; name: string; employmentStatus?: string }[]>([]);
   const [dayTotalHours, setDayTotalHours] = useState(0);
+  const [messageApi, contextHolder] = message.useMessage();
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const getWorkDateKey = (start: string) => dayjs(start).format("YYYY-MM-DD");
 
   const fetchDetail = useCallback(async () => {
@@ -65,12 +68,20 @@ export default function Page() {
   }, [id]);
 
   const fetchOptions = async () => {
-    const [projectsRes, employeesRes] = await Promise.all([
+    const [projectsRes, employeesData] = await Promise.all([
       fetch("/api/projects"),
-      fetch("/api/employees"),
+      fetchEmployeesFromStore(),
     ]);
     setProjects(await projectsRes.json());
-    setEmployees(await employeesRes.json());
+    setEmployees(
+      Array.isArray(employeesData)
+        ? employeesData.map((row) => ({
+            id: row.id,
+            name: row.name,
+            employmentStatus: row.employmentStatus ?? undefined,
+          }))
+        : [],
+    );
   };
 
   useEffect(() => {
@@ -91,10 +102,10 @@ export default function Page() {
       }),
     });
     if (!res.ok) {
-      message.error("更新失败");
+      messageApi.error("更新失败");
       return;
     }
-    message.success("更新成功");
+    messageApi.success("更新成功");
     setOpen(false);
     await fetchDetail();
   };
@@ -104,10 +115,10 @@ export default function Page() {
     const res = await fetch(`/api/actual-work-entries/${id}?projectType=all`, { method: "DELETE" });
     setDeleting(false);
     if (!res.ok) {
-      message.error("删除失败");
+      messageApi.error("删除失败");
       return;
     }
-    message.success("删除成功");
+    messageApi.success("删除成功");
     router.push("/actual-work-entries");
   };
 
@@ -133,6 +144,7 @@ export default function Page() {
 
   return (
     <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+      {contextHolder}
       <Card
         title={data?.title || "实际工时详情"}
         extra={

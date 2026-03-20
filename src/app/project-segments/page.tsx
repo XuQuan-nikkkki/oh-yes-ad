@@ -11,6 +11,7 @@ import SelectOptionSelector, {
 } from "@/components/SelectOptionSelector";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import { useEmployeesStore } from "@/stores/employeesStore";
 
 type Row = ProjectSegmentsProTableRow;
 
@@ -33,18 +34,24 @@ export default function ProjectSegmentsPage() {
   const [form] = Form.useForm<FormValues>();
   const { canManageProject } = useProjectPermission();
   const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const statusOptions = optionsByField["projectSegment.status"] ?? [];
 
   const fetchData = async () => {
-    const [segmentsRes, projectsRes, employeesRes] = await Promise.all([
+    const [segmentsRes, projectsRes, employeeRows] = await Promise.all([
       fetch("/api/project-segments"),
       fetch("/api/projects"),
-      fetch("/api/employees"),
+      fetchEmployeesFromStore(),
     ]);
     setRows(await segmentsRes.json());
     setProjects((await projectsRes.json()).map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })));
-    setEmployees((await employeesRes.json()).map((e: { id: string; name: string }) => ({ id: e.id, name: e.name })));
+    setEmployees(
+      (Array.isArray(employeeRows) ? employeeRows : []).map((e: { id: string; name: string }) => ({
+        id: e.id,
+        name: e.name,
+      })),
+    );
   };
 
   useEffect(() => {

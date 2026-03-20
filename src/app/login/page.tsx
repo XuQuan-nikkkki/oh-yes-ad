@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { Button, Card, Form, Input, message, Typography } from "antd";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAuthStore } from "@/stores/authStore";
 
 type LoginFormValues = {
   phone: string;
@@ -14,6 +15,8 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/";
+  const [messageApi, contextHolder] = message.useMessage();
+  const fetchMe = useAuthStore((state) => state.fetchMe);
 
   const handleSubmit = async (values: LoginFormValues) => {
     setSubmitting(true);
@@ -29,12 +32,13 @@ function LoginPageContent() {
         throw new Error(text || "登录失败");
       }
 
-      message.success("登录成功");
+      await fetchMe(true);
+      messageApi.success("登录成功");
       router.replace(nextPath);
       router.refresh();
     } catch (error) {
       const text = error instanceof Error ? error.message : "登录失败";
-      message.error(text);
+      messageApi.error(text);
     } finally {
       setSubmitting(false);
     }
@@ -51,6 +55,7 @@ function LoginPageContent() {
         padding: 16,
       }}
     >
+      {contextHolder}
       <Card style={{ width: 380 }}>
         <Typography.Title level={3} style={{ marginBottom: 4 }}>
           系统登录

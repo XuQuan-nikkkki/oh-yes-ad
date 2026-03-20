@@ -6,6 +6,8 @@ import { PlusOutlined } from "@ant-design/icons";
 import ProjectFormModal from "@/components/ProjectFormModal";
 import ProjectsTable, { type Project } from "@/components/ProjectsTable";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
+import { useEmployeesStore } from "@/stores/employeesStore";
+import { useProjectsStore } from "@/stores/projectsStore";
 
 type Client = {
   id: string;
@@ -25,12 +27,13 @@ const InternalProjectsPage = () => {
   const [open, setOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const { canManageProject } = useProjectPermission();
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (force = false) => {
     setLoading(true);
-    const res = await fetch("/api/projects?type=%E5%86%85%E9%83%A8%E9%A1%B9%E7%9B%AE");
-    const data = await res.json();
-    setProjects(data);
+    const data = await fetchProjectsFromStore({ type: "内部项目", force });
+    setProjects(Array.isArray(data) ? (data as Project[]) : []);
     setLoading(false);
   };
 
@@ -42,8 +45,7 @@ const InternalProjectsPage = () => {
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch("/api/employees");
-      const data = await res.json();
+      const data = await fetchEmployeesFromStore();
       setEmployees(data);
     } catch {
       console.log("Employees API not available yet");
@@ -65,7 +67,7 @@ const InternalProjectsPage = () => {
       body: JSON.stringify({ id }),
     });
 
-    fetchProjects();
+    fetchProjects(true);
   };
 
   return (
@@ -110,7 +112,7 @@ const InternalProjectsPage = () => {
         onSuccess={async () => {
           setOpen(false);
           setEditingProject(null);
-          await fetchProjects();
+          await fetchProjects(true);
         }}
         clients={clients}
         employees={employees}

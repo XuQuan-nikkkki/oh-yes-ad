@@ -8,6 +8,7 @@ import PlannedWorkEntryForm, {
 import PlannedWorkEntriesTable, {
   PlannedWorkEntryRow,
 } from "@/components/PlannedWorkEntriesTable";
+import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
 
 export default function Page() {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
@@ -20,16 +21,18 @@ export default function Page() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<PlannedWorkEntryRow | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const fetchAdjustmentsFromStore = useWorkdayAdjustmentsStore(
+    (state) => state.fetchAdjustments,
+  );
 
   const fetchOptions = useCallback(async () => {
-    const [res2, res3, res4] = await Promise.all([
+    const [res2, res3, workdayList] = await Promise.all([
       fetch("/api/projects"),
       fetch("/api/project-tasks"),
-      fetch("/api/workday-adjustments"),
+      fetchAdjustmentsFromStore(),
     ]);
     const projectList = await res2.json();
     const taskList = await res3.json();
-    const workdayList = await res4.json();
     setProjects(
       projectList.map((p: { id: string; name: string }) => ({
         id: p.id,
@@ -54,7 +57,7 @@ export default function Page() {
     setWorkdayAdjustments(
       Array.isArray(workdayList) ? workdayList : [],
     );
-  }, []);
+  }, [fetchAdjustmentsFromStore]);
 
   const fetchRows = useCallback(
     async (params: {

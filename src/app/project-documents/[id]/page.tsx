@@ -62,6 +62,7 @@ export default function Page() {
   const [typeSearch, setTypeSearch] = useState("");
   const [creatingType, setCreatingType] = useState(false);
   const [form] = Form.useForm<FormValues>();
+  const [messageApi, contextHolder] = message.useMessage();
   const fetchAllOptions = useSelectOptionsStore(
     (state) => state.fetchAllOptions,
   );
@@ -109,9 +110,9 @@ export default function Page() {
       await fetchAllOptions(true);
       form.setFieldValue("typeOption", value);
       setTypeSearch("");
-      message.success("类型已新增");
+      messageApi.success("类型已新增");
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "新增类型失败");
+      messageApi.error(error instanceof Error ? error.message : "新增类型失败");
     } finally {
       setCreatingType(false);
     }
@@ -158,10 +159,10 @@ export default function Page() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      message.error("更新失败");
+      messageApi.error("更新失败");
       return;
     }
-    message.success("更新成功");
+    messageApi.success("更新成功");
     setOpen(false);
     await fetchDetail();
   };
@@ -173,15 +174,16 @@ export default function Page() {
     });
     setDeleting(false);
     if (!res.ok) {
-      message.error("删除失败");
+      messageApi.error("删除失败");
       return;
     }
-    message.success("删除成功");
+    messageApi.success("删除成功");
     router.push("/project-documents");
   };
 
   return (
     <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+      {contextHolder}
       <Card
         title={"项目资料：" + (data?.name || "资料详情")}
         extra={

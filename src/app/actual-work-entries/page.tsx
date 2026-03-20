@@ -6,6 +6,7 @@ import ActualWorkEntryForm, {
   ActualWorkEntryFormPayload,
 } from "@/components/project-detail/ActualWorkEntryForm";
 import ActualWorkEntriesTable from "@/components/ActualWorkEntriesTable";
+import { useEmployeesStore } from "@/stores/employeesStore";
 
 export default function Page() {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
@@ -22,15 +23,24 @@ export default function Page() {
     project?: { id: string; name: string };
   } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
 
   const fetchOptions = useCallback(async () => {
-    const [res2, res3] = await Promise.all([
+    const [res2, employeeRows] = await Promise.all([
       fetch("/api/projects"),
-      fetch("/api/employees"),
+      fetchEmployeesFromStore(),
     ]);
     setProjects(await res2.json());
-    setEmployees(await res3.json());
-  }, []);
+    setEmployees(
+      Array.isArray(employeeRows)
+        ? employeeRows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            employmentStatus: row.employmentStatus ?? undefined,
+          }))
+        : [],
+    );
+  }, [fetchEmployeesFromStore]);
 
   const fetchRows = useCallback(
     async (params: {

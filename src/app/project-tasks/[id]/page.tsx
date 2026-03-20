@@ -26,6 +26,8 @@ import PlannedWorkEntryForm, {
   type PlannedWorkEntryFormPayload,
 } from "@/components/project-detail/PlannedWorkEntryForm";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
+import { useEmployeesStore } from "@/stores/employeesStore";
+import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
 
 type Detail = {
   id: string;
@@ -78,7 +80,12 @@ export default function ProjectTaskDetailPage() {
     useState<PlannedEntryInitialValues | null>(null);
   const [plannedRefreshKey, setPlannedRefreshKey] = useState(0);
   const [form] = Form.useForm<FormValues>();
+  const [messageApi, contextHolder] = message.useMessage();
   const { canManageProject } = useProjectPermission();
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const fetchAdjustmentsFromStore = useWorkdayAdjustmentsStore(
+    (state) => state.fetchAdjustments,
+  );
 
   const fetchDetail = useCallback(async () => {
     if (!id) return;
@@ -91,15 +98,17 @@ export default function ProjectTaskDetailPage() {
   }, [id]);
 
   const fetchOptions = useCallback(async () => {
-    const [segmentsRes, employeesRes, adjustmentsRes] = await Promise.all([
+    const [segmentsRes, employeesData, adjustmentsData] = await Promise.all([
       fetch("/api/project-segments"),
-      fetch("/api/employees"),
-      fetch("/api/workday-adjustments"),
+      fetchEmployeesFromStore(),
+      fetchAdjustmentsFromStore(),
     ]);
     setSegments(await segmentsRes.json());
-    setEmployees(await employeesRes.json());
-    setWorkdayAdjustments(adjustmentsRes.ok ? await adjustmentsRes.json() : []);
-  }, []);
+    setEmployees(Array.isArray(employeesData) ? employeesData : []);
+    setWorkdayAdjustments(
+      Array.isArray(adjustmentsData) ? adjustmentsData : [],
+    );
+  }, [fetchEmployeesFromStore, fetchAdjustmentsFromStore]);
 
   useEffect(() => {
     if (!id) return;
@@ -139,10 +148,10 @@ export default function ProjectTaskDetailPage() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      message.error("更新失败");
+      messageApi.error("更新失败");
       return;
     }
-    message.success("更新成功");
+    messageApi.success("更新成功");
     setOpen(false);
     await fetchDetail();
   };
@@ -153,10 +162,10 @@ export default function ProjectTaskDetailPage() {
     const res = await fetch(`/api/project-tasks/${id}`, { method: "DELETE" });
     setDeleting(false);
     if (!res.ok) {
-      message.error("删除失败");
+      messageApi.error("删除失败");
       return;
     }
-    message.success("删除成功");
+    messageApi.success("删除成功");
     router.push("/project-tasks");
   };
 
@@ -247,10 +256,10 @@ export default function ProjectTaskDetailPage() {
       method: "DELETE",
     });
     if (!res.ok) {
-      message.error("删除失败");
+      messageApi.error("删除失败");
       return;
     }
-    message.success("删除成功");
+    messageApi.success("删除成功");
     setPlannedRefreshKey((prev) => prev + 1);
   };
 
@@ -270,11 +279,11 @@ export default function ProjectTaskDetailPage() {
     });
 
     if (!res.ok) {
-      message.error(editingPlanned ? "更新失败" : "创建失败");
+      messageApi.error(editingPlanned ? "更新失败" : "创建失败");
       return;
     }
 
-    message.success(editingPlanned ? "更新成功" : "创建成功");
+    messageApi.success(editingPlanned ? "更新成功" : "创建成功");
     setPlannedOpen(false);
     setEditingPlanned(null);
     setPlannedRefreshKey((prev) => prev + 1);
@@ -298,6 +307,7 @@ export default function ProjectTaskDetailPage() {
 
   return (
     <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+      {contextHolder}
       <Card
         title={data?.name || "任务详情"}
         extra={

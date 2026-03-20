@@ -7,6 +7,7 @@ import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import TableActions from "@/components/TableActions";
 import EmployeesTable, { Employee } from "@/components/EmployeesTable";
+import { useEmployeesStore } from "@/stores/employeesStore";
 
 type RoleRecord = {
   id: string;
@@ -48,6 +49,7 @@ const RolesPage = () => {
   const [memberRoleSubmitting, setMemberRoleSubmitting] = useState(false);
   const [editingMember, setEditingMember] = useState<RoleMember | null>(null);
   const [memberRoleForm] = Form.useForm<MemberRoleFormValues>();
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
 
   const isEditRole = Boolean(editingRole?.id);
 
@@ -66,22 +68,22 @@ const RolesPage = () => {
     }
   }, [messageApi]);
 
-  const fetchEmployees = useCallback(async () => {
+  const fetchEmployees = useCallback(async (force = false) => {
     try {
-      const res = await fetch("/api/employees?list=full", {
-        cache: "no-store",
-      });
-      const data = await res.json();
+      const data = await fetchEmployeesFromStore({ full: true, force });
       setEmployees(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("获取成员失败:", error);
       setEmployees([]);
     }
-  }, []);
+  }, [fetchEmployeesFromStore]);
 
-  const refreshAll = useCallback(async () => {
-    await Promise.all([fetchRoles(), fetchEmployees()]);
-  }, [fetchRoles, fetchEmployees]);
+  const refreshAll = useCallback(
+    async (forceEmployees = false) => {
+      await Promise.all([fetchRoles(), fetchEmployees(forceEmployees)]);
+    },
+    [fetchRoles, fetchEmployees],
+  );
 
   useEffect(() => {
     void refreshAll();
@@ -148,7 +150,7 @@ const RolesPage = () => {
 
       messageApi.success(isEditRole ? "角色已更新" : "角色已新增");
       closeRoleModal();
-      await refreshAll();
+      await refreshAll(true);
     } catch (error) {
       if (error instanceof Error && error.message) {
         messageApi.error(error.message);
@@ -170,7 +172,7 @@ const RolesPage = () => {
         throw new Error(text || "删除失败");
       }
       messageApi.success("角色已删除");
-      await refreshAll();
+      await refreshAll(true);
     } catch (error) {
       if (error instanceof Error && error.message) {
         messageApi.error(error.message);
@@ -253,7 +255,7 @@ const RolesPage = () => {
       }
       messageApi.success("成员角色已更新");
       closeEditMemberRolesModal();
-      await refreshAll();
+      await refreshAll(true);
     } catch (error) {
       if (error instanceof Error && error.message) {
         messageApi.error(error.message);

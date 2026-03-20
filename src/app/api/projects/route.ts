@@ -126,6 +126,7 @@ export async function GET(req: Request) {
   const type = url.searchParams.get("type");
   const clientId = url.searchParams.get("clientId");
   const vendorId = url.searchParams.get("vendorId");
+  const ownerId = url.searchParams.get("ownerId");
 
   const where: Prisma.ProjectWhereInput = {};
   if (type) {
@@ -142,6 +143,9 @@ export async function GET(req: Request) {
         id: vendorId,
       },
     };
+  }
+  if (ownerId) {
+    where.ownerId = ownerId;
   }
 
   const projects = await prisma.project.findMany({

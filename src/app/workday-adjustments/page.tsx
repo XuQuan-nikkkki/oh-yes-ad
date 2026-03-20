@@ -19,6 +19,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
 import zhCN from "antd/locale/zh_CN";
 import type { Dayjs } from "dayjs";
+import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
 
 dayjs.locale("zh-cn");
 
@@ -39,14 +40,14 @@ const WorkdayAdjustmentsPage = () => {
   );
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
+  const fetchAdjustmentsFromStore = useWorkdayAdjustmentsStore(
+    (state) => state.fetchAdjustments,
+  );
 
   const fetchRecords = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/workday-adjustments");
-      const text = await res.text();
-      const data = text ? JSON.parse(text) : [];
-      if (!res.ok) throw new Error(data?.error || res.statusText);
+      const data = await fetchAdjustmentsFromStore();
       setRecords(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("获取工作日变动失败:", err);
@@ -89,6 +90,7 @@ const WorkdayAdjustmentsPage = () => {
         throw new Error("删除失败");
       }
 
+      await fetchAdjustmentsFromStore({ force: true });
       await fetchRecords();
     } catch (error) {
       console.error("删除工作日变动失败:", error);
@@ -143,6 +145,7 @@ const WorkdayAdjustmentsPage = () => {
         }
       }
 
+      await fetchAdjustmentsFromStore({ force: true });
       await fetchRecords();
       handleCloseModal();
     } catch (error) {

@@ -13,6 +13,9 @@ import ProjectsTable, { type Project } from "@/components/ProjectsTable";
 import ActualWorkEntriesTable, {
   type ActualWorkEntryRow,
 } from "@/components/ActualWorkEntriesTable";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
+import { useEmployeesStore } from "@/stores/employeesStore";
+import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
 
 type EmployeeDetail = {
   id: string;
@@ -157,7 +160,13 @@ const EmployeeDetailPage = () => {
   const [legalEntityOptions, setLegalEntityOptions] = useState<
     { id: string; name: string; fullName?: string | null }[]
   >([]);
-  const [roleCodes, setRoleCodes] = useState<string[]>([]);
+  const [messageApi, contextHolder] = message.useMessage();
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const roleCodes = getRoleCodesFromUser(currentUser);
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const fetchAdjustmentsFromStore = useWorkdayAdjustmentsStore(
+    (state) => state.fetchAdjustments,
+  );
 
   const fetchEmployee = useCallback(async () => {
     if (!id) return;
@@ -182,25 +191,24 @@ const EmployeeDetailPage = () => {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/workday-adjustments");
-        const data = await res.json();
+        const data = await fetchAdjustmentsFromStore();
         setWorkdayAdjustments(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Failed to fetch workday adjustments:", error);
         setWorkdayAdjustments([]);
       }
     })();
-  }, []);
+  }, [fetchAdjustmentsFromStore]);
 
   useEffect(() => {
     (async () => {
       const [rolesRes, employeesRes, legalEntitiesRes] = await Promise.all([
         fetch("/api/roles"),
-        fetch("/api/employees?list=full"),
+        fetchEmployeesFromStore({ full: true }),
         fetch("/api/legal-entities"),
       ]);
       setRoleOptions(await rolesRes.json());
-      const allEmployees = await employeesRes.json();
+      const allEmployees = employeesRes;
       const employeeList = Array.isArray(allEmployees) ? allEmployees : [];
       const getOptions = (field: string) =>
         Array.from(
@@ -220,31 +228,6 @@ const EmployeeDetailPage = () => {
 
       const legalEntities = await legalEntitiesRes.json();
       setLegalEntityOptions(Array.isArray(legalEntities) ? legalEntities : []);
-    })();
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
-        if (!res.ok) {
-          setRoleCodes([]);
-          return;
-        }
-        const me = (await res.json()) as {
-          roles?: Array<{
-            role?: {
-              code?: string | null;
-            } | null;
-          }> | null;
-        };
-        const codes = (me.roles ?? [])
-          .map((item) => item?.role?.code)
-          .filter((code): code is string => Boolean(code));
-        setRoleCodes(codes);
-      } catch {
-        setRoleCodes([]);
-      }
     })();
   }, []);
 
@@ -269,10 +252,10 @@ const EmployeeDetailPage = () => {
     });
     setDeleting(false);
     if (!res.ok) {
-      message.error("删除失败");
+      messageApi.error("删除失败");
       return;
     }
-    message.success("删除成功");
+    messageApi.success("删除成功");
     router.push("/employees");
   };
 
@@ -339,6 +322,7 @@ const EmployeeDetailPage = () => {
 
   return (
     <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+      {contextHolder}
       <Card
         title={employee?.name || "成员详情"}
         loading={loading}
@@ -589,10 +573,10 @@ const EmployeeDetailPage = () => {
                       method: "DELETE",
                     });
                     if (!res.ok) {
-                      message.error("删除实际工时失败");
+                      messageApi.error("删除实际工时失败");
                       return;
                     }
-                    message.success(`已删除实际工时「${title}」`);
+                    messageApi.success(`已删除实际工时「${title}」`);
                     setActualWorkRefreshKey((prev) => prev + 1);
                   }}
                 />
@@ -643,7 +627,7 @@ const EmployeeDetailPage = () => {
         onSuccess={async () => {
           setOpen(false);
           await fetchEmployee();
-          message.success("更新成功");
+          messageApi.success("更新成功");
         }}
         viewMode="position"
         functionOptions={functionOptions}

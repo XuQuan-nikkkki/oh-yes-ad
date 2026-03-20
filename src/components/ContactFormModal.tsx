@@ -24,6 +24,7 @@ type Props = {
   open: boolean;
   clientId?: string;
   clientEditable?: boolean; // 控制是否允许修改
+  clientOptions?: { id: string; name: string }[];
   initialValues?: Contact | null;
   onCancel: () => void;
   onSuccess: (savedContact?: Contact) => void;
@@ -36,21 +37,31 @@ const ContactFormModal = ({
   onCancel,
   onSuccess,
   clientEditable = false,
+  clientOptions = [],
 }: Props) => {
   const [form] = Form.useForm();
   const isEdit = !!initialValues?.id;
 
-  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const [clients, setClients] =
+    useState<{ id: string; name: string }[]>(clientOptions);
 
   useEffect(() => {
+    setClients(clientOptions);
+  }, [clientOptions]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!clientEditable) return;
+    if (clients.length > 0) return;
+
     const fetchClients = async () => {
       const res = await fetch("/api/clients");
       const data = await res.json();
-      setClients(data);
+      setClients(Array.isArray(data) ? data : []);
     };
 
-    fetchClients();
-  }, []);
+    void fetchClients();
+  }, [open, clientEditable, clients.length]);
 
   useEffect(() => {
     if (open) {

@@ -8,6 +8,8 @@ type Props = {
   onDelete?: () => void;
   editDisabled?: boolean;
   deleteDisabled?: boolean;
+  editLoading?: boolean;
+  deleteLoading?: boolean;
   deleteTitle?: string;
   editText?: string;
   deleteText?: string;
@@ -18,6 +20,8 @@ const TableActions = ({
   onDelete,
   editDisabled = false,
   deleteDisabled = false,
+  editLoading = false,
+  deleteLoading = false,
   deleteTitle = "确定删除该记录？",
   editText = "编辑",
   deleteText = "删除",
@@ -29,6 +33,7 @@ const TableActions = ({
           variant="text"
           color="primary"
           disabled={editDisabled}
+          loading={editLoading}
           icon={<EditOutlined />}
           onClick={(e) => {
             e.stopPropagation();
@@ -54,6 +59,7 @@ const TableActions = ({
             variant="text"
             color="danger"
             disabled={deleteDisabled}
+            loading={deleteLoading}
             icon={<DeleteOutlined />}
             onClick={(e) => e.stopPropagation()}
           >

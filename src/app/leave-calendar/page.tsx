@@ -22,6 +22,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
 import zhCN from "antd/locale/zh_CN";
 import type { Dayjs } from "dayjs";
+import { useEmployeesStore } from "@/stores/employeesStore";
 
 dayjs.locale("zh-cn");
 
@@ -60,6 +61,7 @@ const LeaveCalendarPage = () => {
   const [typeFilters, setTypeFilters] = useState<string[]>([]);
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
 
   const leaveTypeOptions = ["调休", "年假", "病假"];
 
@@ -76,8 +78,7 @@ const LeaveCalendarPage = () => {
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch("/api/employees");
-      const data = await res.json();
+      const data = await fetchEmployeesFromStore();
       setEmployees(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("获取员工列表失败:", error);

@@ -8,8 +8,10 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const ownerId = req.nextUrl.searchParams.get("ownerId")?.trim() ?? "";
   const items = await prisma.projectTask.findMany({
+    where: ownerId ? { ownerId } : undefined,
     include: {
       segment: {
         select: { id: true, name: true, project: { select: { id: true, name: true } } },

@@ -57,6 +57,8 @@ import ProjectProgressNestedTable, {
   ProjectProgressSegmentRow,
 } from "@/components/project-detail/ProjectProgressNestedTable";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
+import { useEmployeesStore } from "@/stores/employeesStore";
+import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
 
 type PeriodInfo = {
   period: string;
@@ -337,7 +339,12 @@ const ProjectDetailPage = () => {
   const [noticeTemplateModalOpen, setNoticeTemplateModalOpen] = useState(false);
   const [showNextWeekMilestones, setShowNextWeekMilestones] = useState(false);
   const [showFollowingMilestones, setShowFollowingMilestones] = useState(false);
+  const [messageApi, contextHolder] = message.useMessage();
   const { canManageProject } = useProjectPermission();
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const fetchAdjustmentsFromStore = useWorkdayAdjustmentsStore(
+    (state) => state.fetchAdjustments,
+  );
 
   const projectTypeMap: Record<string, string> = {
     CLIENT: "客户项目",
@@ -450,9 +457,8 @@ const ProjectDetailPage = () => {
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch("/api/employees");
-      const data = await res.json();
-      setEmployees(data);
+      const data = await fetchEmployeesFromStore();
+      setEmployees(Array.isArray(data) ? data : []);
     } catch {
       console.log("Employees API not available yet");
     }
@@ -460,8 +466,7 @@ const ProjectDetailPage = () => {
 
   const fetchWorkdayAdjustments = async () => {
     try {
-      const res = await fetch("/api/workday-adjustments");
-      const data = await res.json();
+      const data = await fetchAdjustmentsFromStore();
       setWorkdayAdjustments(data);
     } catch (error) {
       console.error("Failed to fetch workday adjustments:", error);
@@ -1230,10 +1235,10 @@ const ProjectDetailPage = () => {
     });
     setDeletingProject(false);
     if (!res.ok) {
-      message.error("删除失败");
+      messageApi.error("删除失败");
       return;
     }
-    message.success("删除成功");
+    messageApi.success("删除成功");
     router.push(
       project?.type === "INTERNAL" ? "/internal-projects" : "/client-projects",
     );
@@ -1243,14 +1248,15 @@ const ProjectDetailPage = () => {
     if (!milestoneNoticeTemplate) return;
     try {
       await navigator.clipboard.writeText(milestoneNoticeTemplate);
-      message.success("通知模板已复制");
+      messageApi.success("通知模板已复制");
     } catch {
-      message.error("复制失败，请手动复制");
+      messageApi.error("复制失败，请手动复制");
     }
   };
 
   return (
     <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+      {contextHolder}
       <Card
         title={project?.name || "项目信息"}
         loading={loading}

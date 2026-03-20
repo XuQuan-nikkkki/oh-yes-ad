@@ -8,6 +8,8 @@ import dayjs from "dayjs";
 import ActualWorkEntriesTable, {
   type ActualWorkEntryRow,
 } from "@/components/ActualWorkEntriesTable";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
+import { useEmployeesStore } from "@/stores/employeesStore";
 
 type ActualWorkEntry = {
   id: string;
@@ -114,7 +116,9 @@ export default function WorkHoursAnalysisPage() {
   >([]);
   const [loading, setLoading] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
-  const [roleCodes, setRoleCodes] = useState<string[]>([]);
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const [exporting, setExporting] = useState(false);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
@@ -138,31 +142,17 @@ export default function WorkHoursAnalysisPage() {
     (async () => {
       setLoading(true);
       try {
-        const [entriesRes, employeesRes, projectsRes, meRes] = await Promise.all([
+        const [entriesRes, employeesRes, projectsRes] = await Promise.all([
           fetch("/api/actual-work-entries", { cache: "no-store" }),
-          fetch("/api/employees?list=full", { cache: "no-store" }),
+          fetchEmployeesFromStore({ full: true }),
           fetch("/api/projects", { cache: "no-store" }),
-          fetch("/api/auth/me", { cache: "no-store" }),
         ]);
         const entriesData = entriesRes.ok ? await entriesRes.json() : [];
-        const employeesData = employeesRes.ok ? await employeesRes.json() : [];
+        const employeesData = Array.isArray(employeesRes) ? employeesRes : [];
         const projectsData = projectsRes.ok ? await projectsRes.json() : [];
-        const meData = meRes.ok ? await meRes.json() : null;
         setEntries(Array.isArray(entriesData) ? entriesData : []);
         setEmployees(Array.isArray(employeesData) ? employeesData : []);
         setProjects(Array.isArray(projectsData) ? projectsData : []);
-        const codes = Array.isArray(meData?.roles)
-          ? meData.roles
-              .map(
-                (item: {
-                  role?: {
-                    code?: string | null;
-                  } | null;
-                }) => item?.role?.code,
-              )
-              .filter((code: string | null | undefined): code is string => Boolean(code))
-          : [];
-        setRoleCodes(codes);
       } finally {
         setLoading(false);
       }

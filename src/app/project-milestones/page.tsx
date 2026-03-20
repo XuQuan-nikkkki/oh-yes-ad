@@ -12,6 +12,7 @@ import ProjectMilestoneForm, {
   ProjectMilestoneFormPayload,
 } from "@/components/project-detail/ProjectMilestoneForm";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
+import { useEmployeesStore } from "@/stores/employeesStore";
 
 type Option = {
   id: string;
@@ -46,17 +47,26 @@ function ProjectMilestonesPageContent() {
   );
   const [projectContext, setProjectContext] = useState<ProjectContext>(EMPTY_CONTEXT);
   const { canManageProject } = useProjectPermission();
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
 
   const fetchData = useCallback(async () => {
-    const [res1, res2, res3] = await Promise.all([
+    const [res1, res2, employees] = await Promise.all([
       fetch("/api/project-milestones"),
       fetch("/api/projects"),
-      fetch("/api/employees"),
+      fetchEmployeesFromStore(),
     ]);
     setRows(await res1.json());
     setProjects(await res2.json());
-    setAllEmployees(await res3.json());
-  }, []);
+    setAllEmployees(
+      Array.isArray(employees)
+        ? employees.map((item) => ({
+            id: item.id,
+            name: item.name,
+            employmentStatus: item.employmentStatus ?? undefined,
+          }))
+        : [],
+    );
+  }, [fetchEmployeesFromStore]);
 
   const fetchProjectContext = useCallback(async (projectId?: string) => {
     if (!projectId) {

@@ -2,18 +2,21 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Card, Space, Descriptions, Button, Popconfirm, message } from "antd";
-import { EditOutlined, PlusOutlined } from "@ant-design/icons";
+import { Card, Space, Descriptions, Button, message } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
 import { useParams, useRouter } from "next/navigation";
 import ClientFormModal from "@/components/ClientFormModal";
 import ClientContactTable from "@/components/ClientContactTable";
 import ContactFormModal from "@/components/ContactFormModal";
 import ProjectFormModal from "@/components/ProjectFormModal";
 import ProjectsTable, { Project } from "@/components/ProjectsTable";
+import TableActions from "@/components/TableActions";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import { useCrmPermission } from "@/hooks/useCrmPermission";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
+import { useEmployeesStore } from "@/stores/employeesStore";
+import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
 type Client = {
   id: string;
   name: string;
@@ -74,10 +77,15 @@ const ClientDetailPage = () => {
   const [contactSorting, setContactSorting] = useState(false);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [messageApi, contextHolder] = message.useMessage();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [workdayAdjustments, setWorkdayAdjustments] = useState<
     WorkdayAdjustment[]
   >([]);
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const fetchAdjustmentsFromStore = useWorkdayAdjustmentsStore(
+    (state) => state.fetchAdjustments,
+  );
   const { canManageCrm } = useCrmPermission();
   const { canManageProject } = useProjectPermission();
   const industryOptions = useSelectOptionsStore(
@@ -126,24 +134,22 @@ const ClientDetailPage = () => {
 
   const fetchEmployees = useCallback(async () => {
     try {
-      const res = await fetch("/api/employees");
-      const data = await res.json();
+      const data = await fetchEmployeesFromStore();
       setEmployees(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to fetch employees:", error);
     }
-  }, []);
+  }, [fetchEmployeesFromStore]);
 
   const fetchWorkdayAdjustments = useCallback(async () => {
     try {
-      const res = await fetch("/api/workday-adjustments");
-      const data = await res.json();
+      const data = await fetchAdjustmentsFromStore();
       setWorkdayAdjustments(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to fetch workday adjustments:", error);
       setWorkdayAdjustments([]);
     }
-  }, []);
+  }, [fetchAdjustmentsFromStore]);
 
   const handleDeleteContact = async (id: string) => {
     if (!canManageCrm) return;
@@ -191,7 +197,7 @@ const ClientDetailPage = () => {
     if (!res.ok) {
       setContacts(previousContacts);
       setContactSorting(false);
-      message.error("排序失败，已恢复原顺序");
+      messageApi.error("排序失败，已恢复原顺序");
       await fetchContacts();
       return;
     }
@@ -214,11 +220,11 @@ const ClientDetailPage = () => {
         throw new Error("删除失败");
       }
 
-      message.success("删除成功");
+      messageApi.success("删除成功");
       router.push("/clients");
     } catch (error) {
       console.error("删除客户失败:", error);
-      message.error("删除失败");
+      messageApi.error("删除失败");
     } finally {
       setDeleting(false);
     }
@@ -244,31 +250,21 @@ const ClientDetailPage = () => {
 
   return (
     <>
+      {contextHolder}
       <Space orientation="vertical" size={8} style={{ width: "100%" }}>
         <Card
           title={client?.name ?? "客户详情"}
           loading={loading}
           extra={
-            <Space>
-              <Button
-                icon={<EditOutlined />}
-                onClick={() => setOpen(true)}
-                disabled={!canManageCrm}
-              >
-                编辑
-              </Button>
-              <Popconfirm
-                title={`确定删除客户「${client?.name ?? ""}」？`}
-                okText="删除"
-                cancelText="取消"
-                onConfirm={handleDeleteClient}
-                okButtonProps={{ danger: true, loading: deleting }}
-              >
-                <Button danger loading={deleting} disabled={!canManageCrm}>
-                  删除
-                </Button>
-              </Popconfirm>
-            </Space>
+            <TableActions
+              onEdit={() => setOpen(true)}
+              onDelete={handleDeleteClient}
+              editDisabled={!canManageCrm}
+              deleteDisabled={!canManageCrm}
+              deleteLoading={deleting}
+              deleteTitle={`确定删除客户「${client?.name ?? ""}」？`}
+              deleteText="删除"
+            />
           }
         >
           <Descriptions column={2} size="small">
@@ -375,6 +371,7 @@ const ClientDetailPage = () => {
         open={contactModalOpen}
         clientId={clientId}
         clientEditable={false}
+        clientOptions={client ? [{ id: client.id, name: client.name }] : []}
         initialValues={editingContact}
         onCancel={() => {
           setContactModalOpen(false);

@@ -91,6 +91,7 @@ const VendorDetailPage = () => {
   const [deleting, setDeleting] = useState(false);
   const [vendorProjects, setVendorProjects] = useState<ProjectRow[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
+  const [messageApi, contextHolder] = message.useMessage();
   const { canManageCrm } = useCrmPermission();
   const vendorTypeOptions = useSelectOptionsStore(
     (state) => state.optionsByField["vendor.vendorType"] ?? EMPTY_OPTIONS,
@@ -148,15 +149,16 @@ const VendorDetailPage = () => {
     });
     setDeleting(false);
     if (!res.ok) {
-      message.error("删除失败");
+      messageApi.error("删除失败");
       return;
     }
-    message.success("删除成功");
+    messageApi.success("删除成功");
     router.push("/vendors");
   };
 
   return (
     <>
+      {contextHolder}
       <Space orientation="vertical" size={8} style={{ width: "100%" }}>
         <Card
           title={

@@ -1,42 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { canManageCrmResourcesByRoles } from "@/lib/role-permissions";
-
-type MePayload = {
-  roles?: Array<{
-    role?: {
-      code?: string | null;
-    } | null;
-  }>;
-};
+import { useAuthStore } from "@/stores/authStore";
 
 export const useCrmPermission = () => {
-  const [canManageCrm, setCanManageCrm] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
-        if (!res.ok) {
-          if (active) setCanManageCrm(false);
-          return;
-        }
-        const me = (await res.json()) as MePayload;
-        if (active) {
-          setCanManageCrm(canManageCrmResourcesByRoles(me));
-        }
-      } catch {
-        if (active) setCanManageCrm(false);
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const canManageCrm = useMemo(
+    () => canManageCrmResourcesByRoles(currentUser),
+    [currentUser],
+  );
 
   return { canManageCrm };
 };
