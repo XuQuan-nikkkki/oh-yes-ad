@@ -1,10 +1,10 @@
-// @ts-nocheck
 "use client";
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { DragSortTable, ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
+import type { TablePaginationConfig } from "antd";
 import TableActions from "./TableActions";
 import AppLink from "@/components/AppLink";
 
@@ -52,7 +52,6 @@ type Props = {
   toolbarActions?: ReactNode[];
   enableColumnSetting?: boolean;
   columnsStatePersistenceKey?: string;
-  enableDragSort?: boolean;
   onDragSortEnd?: (
     beforeIndex: number,
     afterIndex: number,
@@ -86,7 +85,6 @@ const ClientContactTable = ({
   toolbarActions = [],
   enableColumnSetting = false,
   columnsStatePersistenceKey,
-  enableDragSort = false,
   onDragSortEnd,
 }: Props) => {
   const [current, setCurrent] = useState(1);
@@ -207,8 +205,7 @@ const ClientContactTable = ({
         <TableActions
           onEdit={onEdit ? () => onEdit(record) : undefined}
           onDelete={() => onDelete(record.id)}
-          editDisabled={actionsDisabled}
-          deleteDisabled={actionsDisabled}
+          disabled={actionsDisabled}
           deleteTitle={actionDeleteTitle}
           deleteText={actionDeleteText}
         />
@@ -216,14 +213,30 @@ const ClientContactTable = ({
     },
   };
 
+  const dragSortEnabled =
+    !actionsDisabled && !pagination && Boolean(onDragSortEnd);
   const columns: ProColumns<ClientContact>[] = columnKeys.map(
     (key) => allColumns[key],
   );
-  const allowColumnSetting = enableColumnSetting && !enableDragSort;
+  const allowColumnSetting = enableColumnSetting && !dragSortEnabled;
   const visibleColumnKeys = defaultVisibleColumnKeys ?? columnKeys;
   const columnsStateDefaultValue = Object.fromEntries(
     columnKeys.map((key) => [key, { show: visibleColumnKeys.includes(key) }]),
   );
+
+  const paginationConfig: false | TablePaginationConfig = pagination
+    ? {
+        current: currentForRender,
+        pageSize,
+        showSizeChanger: true,
+        pageSizeOptions: [10, 20, 50, 100],
+        showTotal: (total: number) => `共 ${total} 条`,
+        onChange: (nextPage: number, nextPageSize: number) => {
+          setCurrent(nextPage);
+          setPageSize(nextPageSize);
+        },
+      }
+    : false;
 
   const commonProps = {
     rowKey: "id" as const,
@@ -248,25 +261,13 @@ const ClientContactTable = ({
           persistenceType: "localStorage" as const,
         }
       : undefined,
-    pagination: pagination
-      ? {
-          current: currentForRender,
-          pageSize,
-          showSizeChanger: true,
-          pageSizeOptions: [10, 20, 50, 100],
-          showTotal: (total: number) => `共 ${total} 条`,
-          onChange: (nextPage: number, nextPageSize: number) => {
-            setCurrent(nextPage);
-            setPageSize(nextPageSize);
-          },
-        }
-      : false,
+    pagination: paginationConfig,
     tableLayout: "auto" as const,
     scroll: { x: "max-content" as const },
     toolBarRender: () => toolbarActions,
   };
 
-  if (enableDragSort && !pagination) {
+  if (dragSortEnabled) {
     return (
       <DragSortTable<ClientContact>
         {...commonProps}

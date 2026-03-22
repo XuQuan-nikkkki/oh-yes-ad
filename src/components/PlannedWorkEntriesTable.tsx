@@ -1,14 +1,16 @@
-// @ts-nocheck
 "use client";
 
 import { Button, Input, Space, Tag } from "antd";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
+import type { Key } from "react";
 import AppLink from "@/components/AppLink";
 import TableActions from "@/components/TableActions";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
+import { DEFAULT_COLOR } from "@/lib/constants";
+import type { WorkdayAdjustmentRange } from "@/types/workdayAdjustment";
 
 dayjs.extend(isoWeek);
 
@@ -59,11 +61,7 @@ type Props = {
   onDelete: (id: string) => void;
   headerTitle?: React.ReactNode;
   toolbarActions?: React.ReactNode[];
-  workdayAdjustments?: Array<{
-    startDate: string;
-    endDate: string;
-    changeType?: string | null;
-  }>;
+  workdayAdjustments?: WorkdayAdjustmentRange[];
   refreshKey?: number;
   showTableOptions?: boolean;
   actionsDisabled?: boolean;
@@ -104,8 +102,8 @@ const PlannedWorkEntriesTable = ({
 }: Props) => {
   const renderTextFilterDropdown = (
     placeholder: string,
-    selectedKeys: (string | number)[],
-    setSelectedKeys: (keys: (string | number)[]) => void,
+    selectedKeys: Key[],
+    setSelectedKeys: (keys: Key[]) => void,
     confirm: () => void,
     clearFilters?: () => void,
   ) => (
@@ -185,7 +183,7 @@ const PlannedWorkEntriesTable = ({
     return (
       <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
         <Tag
-          color={isCurrentWeek ? "#ff4d4f" : "#d9d9d9"}
+          color={isCurrentWeek ? "#ff4d4f" : DEFAULT_COLOR}
           style={{ marginInlineEnd: 0, fontWeight: 600 }}
         >
           {`W${week}`}
@@ -200,7 +198,7 @@ const PlannedWorkEntriesTable = ({
           return (
             <Tag
               key={`${row.id}-${item.key}`}
-              color={checked ? "#52c41a" : "#d9d9d9"}
+              color={checked ? "#52c41a" : DEFAULT_COLOR}
               style={{ marginInlineEnd: 0, fontWeight: 600 }}
             >
               {item.label}
@@ -388,8 +386,8 @@ const PlannedWorkEntriesTable = ({
       title: "计划天数",
       key: "plannedDays",
       dataIndex: "plannedDays",
-      render: (value: number | null | undefined) =>
-        typeof value === "number" ? `${value}d` : "-",
+      render: (_dom, row) =>
+        typeof row.plannedDays === "number" ? `${row.plannedDays}d` : "-",
     },
     actions: {
       title: "操作",
@@ -400,8 +398,7 @@ const PlannedWorkEntriesTable = ({
           key={row.id}
           onEdit={() => onEdit(row)}
           onDelete={() => onDelete(row.id)}
-          editDisabled={actionsDisabled}
-          deleteDisabled={actionsDisabled}
+          disabled={actionsDisabled}
           deleteTitle="确定删除该条计划工时？"
         />,
       ],
@@ -421,22 +418,22 @@ const PlannedWorkEntriesTable = ({
           pageSize: params.pageSize ?? 10,
           filters: {
             projectName: Array.isArray(filter.projectName)
-              ? String(filter.projectName[0] ?? "")
+              ? String((filter.projectName as Key[])[0] ?? "")
               : undefined,
             segmentName: Array.isArray(filter.segmentName)
-              ? String(filter.segmentName[0] ?? "")
+              ? String((filter.segmentName as Key[])[0] ?? "")
               : undefined,
             taskName: Array.isArray(filter.taskName)
-              ? String(filter.taskName[0] ?? "")
+              ? String((filter.taskName as Key[])[0] ?? "")
               : undefined,
             ownerName: Array.isArray(filter.ownerName)
-              ? String(filter.ownerName[0] ?? "")
+              ? String((filter.ownerName as Key[])[0] ?? "")
               : undefined,
             year: Array.isArray(filter.year)
-              ? String(filter.year[0] ?? "")
+              ? String((filter.year as Key[])[0] ?? "")
               : undefined,
             weekNumber: Array.isArray(filter.weekNumber)
-              ? String(filter.weekNumber[0] ?? "")
+              ? String((filter.weekNumber as Key[])[0] ?? "")
               : undefined,
           },
         });

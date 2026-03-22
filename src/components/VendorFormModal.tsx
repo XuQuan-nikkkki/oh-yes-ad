@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useMemo, useRef, useState } from "react";
@@ -12,8 +11,7 @@ import {
   ColorPicker,
   Tag,
 } from "antd";
-import type { DefaultOptionType } from "antd/es/select";
-import type { CustomTagProps } from "rc-select/lib/BaseSelect";
+import type { DefaultOptionType, SelectProps } from "antd/es/select";
 import {
   ProForm,
   ProFormCheckbox,
@@ -22,6 +20,7 @@ import {
   ProFormTextArea,
   StepsForm,
 } from "@ant-design/pro-components";
+import { DEFAULT_COLOR } from "@/lib/constants";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 
 type Vendor = {
@@ -99,6 +98,7 @@ type Props = {
   cooperationStatusOptions?: SelectOption[];
   ratingOptions?: SelectOption[];
   initialValues?: Vendor | null;
+  fixedProjectId?: string | null;
 };
 
 type CreateKey =
@@ -163,9 +163,10 @@ const VendorFormModal = ({
   cooperationStatusOptions = [],
   ratingOptions = [],
   initialValues,
+  fixedProjectId,
 }: Props) => {
   const isEdit = !!initialValues?.id;
-  const formRef = useRef<ProFormInstance<VendorFormValues>>();
+  const formRef = useRef<ProFormInstance<VendorFormValues> | null>(null);
   const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
 
   const [searchText, setSearchText] = useState<Record<CreateKey, string>>({
@@ -183,11 +184,11 @@ const VendorFormModal = ({
     rating: false,
   });
   const [createColors, setCreateColors] = useState<Record<CreateKey, string>>({
-    vendorType: "#8c8c8c",
-    businessType: "#8c8c8c",
-    services: "#8c8c8c",
-    cooperationStatus: "#8c8c8c",
-    rating: "#8c8c8c",
+    vendorType: DEFAULT_COLOR,
+    businessType: DEFAULT_COLOR,
+    services: DEFAULT_COLOR,
+    cooperationStatus: DEFAULT_COLOR,
+    rating: DEFAULT_COLOR,
   });
 
   const resetUiState = () => {
@@ -206,11 +207,11 @@ const VendorFormModal = ({
       rating: "",
     });
     setCreateColors({
-      vendorType: "#8c8c8c",
-      businessType: "#8c8c8c",
-      services: "#8c8c8c",
-      cooperationStatus: "#8c8c8c",
-      rating: "#8c8c8c",
+      vendorType: DEFAULT_COLOR,
+      businessType: DEFAULT_COLOR,
+      services: DEFAULT_COLOR,
+      cooperationStatus: DEFAULT_COLOR,
+      rating: DEFAULT_COLOR,
     });
   };
 
@@ -312,7 +313,7 @@ const VendorFormModal = ({
     items.map((item) => ({
       label: item.value,
       value: item.id,
-      color: item.color ?? "#d9d9d9",
+      color: item.color ?? DEFAULT_COLOR,
     }));
 
   const getOptionById = (options: SelectOption[], id: string | number) =>
@@ -333,7 +334,7 @@ const VendorFormModal = ({
     setShowCreate((prev) => ({ ...prev, [key]: true }));
 
     formRef.current?.setFieldValue(FIELD_NAME_MAP[key], undefined);
-    formRef.current?.setFieldValue(config.colorField, "#8c8c8c");
+    formRef.current?.setFieldValue(config.colorField, DEFAULT_COLOR);
     if (nextName) {
       formRef.current?.setFieldValue(config.nameField, nextName);
     }
@@ -361,7 +362,7 @@ const VendorFormModal = ({
       body: JSON.stringify({
         field,
         value,
-        color: color || "#8c8c8c",
+        color: color || DEFAULT_COLOR,
       }),
     });
 
@@ -443,12 +444,17 @@ const VendorFormModal = ({
       serviceOptionIds: Array.from(new Set(serviceOptionIds)),
     };
 
+    const requestBody = isEdit
+      ? { id: initialValues?.id, ...payload }
+      : {
+          ...payload,
+          ...(fixedProjectId ? { projectIds: [fixedProjectId] } : {}),
+        };
+
     await fetch("/api/vendors", {
       method: isEdit ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        isEdit ? { id: initialValues?.id, ...payload } : payload,
-      ),
+      body: JSON.stringify(requestBody),
     });
 
     await fetchAllOptions(true);
@@ -486,7 +492,7 @@ const VendorFormModal = ({
             <ProForm.Item
               label="颜色"
               name={config.colorField}
-              initialValue="#8c8c8c"
+              initialValue={DEFAULT_COLOR}
               style={{ marginBottom: 0 }}
             >
               <ColorPicker
@@ -524,7 +530,7 @@ const VendorFormModal = ({
           optionRender={(option) => {
             const data = option.data as DefaultOptionType & { color?: string };
             return (
-              <Tag color={data.color ?? "#d9d9d9"} style={{ borderRadius: 6 }}>
+              <Tag color={data.color ?? DEFAULT_COLOR} style={{ borderRadius: 6 }}>
                 {String(data.label ?? "")}
               </Tag>
             );
@@ -558,9 +564,9 @@ const VendorFormModal = ({
           allowClear
           tagRender={
             multiple
-              ? (props: CustomTagProps) => {
+              ? (props: Parameters<NonNullable<SelectProps["tagRender"]>>[0]) => {
                   const option = getOptionById(options, props.value);
-                  const color = option?.color ?? "#d9d9d9";
+                  const color = option?.color ?? DEFAULT_COLOR;
                   return (
                     <Tag
                       color={color}
@@ -602,13 +608,7 @@ const VendorFormModal = ({
       <StepsForm<VendorFormValues>
         formRef={formRef}
         onFinish={onFinish}
-        submitter={{
-          searchConfig: {
-            next: "下一步",
-            prev: "上一步",
-            submit: "保存",
-          },
-        }}
+        submitter={{}}
         stepsProps={{
           size: "small",
         }}

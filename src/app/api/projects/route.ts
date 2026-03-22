@@ -3,6 +3,8 @@ import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import type { Prisma } from "@prisma/client";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
+import { DEFAULT_COLOR } from "@/lib/constants";
+import type { NullableSelectOptionTextValue } from "@/types/selectOption";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -84,7 +86,7 @@ const upsertSelectOption = async (field: string, value: unknown) => {
     create: {
       field,
       value: normalized,
-      color: parsed.color ?? "#d9d9d9",
+      color: parsed.color ?? DEFAULT_COLOR,
     },
     update: {},
   });
@@ -92,15 +94,14 @@ const upsertSelectOption = async (field: string, value: unknown) => {
   return option.id;
 };
 
-type SelectOptionValue = { value?: string | null } | null | undefined;
 type ProjectOwnerPayload = {
-  functionOption?: SelectOptionValue;
-  employmentStatusOption?: SelectOptionValue;
+  functionOption?: NullableSelectOptionTextValue;
+  employmentStatusOption?: NullableSelectOptionTextValue;
 } & Record<string, unknown>;
 type ProjectPayload = {
-  typeOption?: SelectOptionValue;
-  statusOption?: SelectOptionValue;
-  stageOption?: SelectOptionValue;
+  typeOption?: NullableSelectOptionTextValue;
+  statusOption?: NullableSelectOptionTextValue;
+  stageOption?: NullableSelectOptionTextValue;
   owner?: ProjectOwnerPayload | null;
 } & Record<string, unknown>;
 

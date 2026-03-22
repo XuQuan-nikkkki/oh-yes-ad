@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { requireCrmWritePermission } from "@/lib/api-permissions";
+import { DEFAULT_COLOR } from "@/lib/constants";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -83,6 +84,21 @@ const normalizeText = (value: unknown) => {
   return next ? next : null;
 };
 
+const resolveProjectIds = (body: Record<string, unknown>) => {
+  const idsFromArray = Array.isArray(body.projectIds)
+    ? body.projectIds
+        .map((id) => normalizeText(id))
+        .filter((id): id is string => Boolean(id))
+    : [];
+
+  if (idsFromArray.length > 0) {
+    return Array.from(new Set(idsFromArray));
+  }
+
+  const idFromSingle = normalizeText(body.projectId);
+  return idFromSingle ? [idFromSingle] : [];
+};
+
 const ensureOptionId = async (
   field: string,
   optionId?: string | null,
@@ -103,7 +119,7 @@ const ensureOptionId = async (
     create: {
       field,
       value,
-      color: "#d9d9d9",
+      color: DEFAULT_COLOR,
     },
   });
 
@@ -217,6 +233,7 @@ const buildVendorWriteData = async (body: Record<string, unknown>) => {
     lastCoopDate: normalizeText(body.lastCoopDate),
     cooperatedProjects: normalizeText(body.cooperatedProjects),
     serviceOptionIds,
+    projectIds: resolveProjectIds(body),
   };
 };
 
@@ -295,6 +312,13 @@ export async function POST(req: Request) {
           optionId,
         })),
       },
+      ...(data.projectIds.length > 0
+        ? {
+            projects: {
+              connect: data.projectIds.map((id) => ({ id })),
+            },
+          }
+        : {}),
     },
     include: {
       vendorTypeOption: true,
@@ -324,6 +348,9 @@ export async function PUT(req: Request) {
 
   const body = (await sanitizeRequestBody(req)) as Record<string, unknown>;
   const data = await buildVendorWriteData(body);
+  const shouldSyncProjects =
+    Object.prototype.hasOwnProperty.call(body, "projectIds") ||
+    Object.prototype.hasOwnProperty.call(body, "projectId");
   const vendorId = normalizeText(body.id);
 
   if (!vendorId) {
@@ -369,6 +396,13 @@ export async function PUT(req: Request) {
           optionId,
         })),
       },
+      ...(shouldSyncProjects
+        ? {
+            projects: {
+              set: data.projectIds.map((id) => ({ id })),
+            },
+          }
+        : {}),
     },
     include: {
       vendorTypeOption: true,

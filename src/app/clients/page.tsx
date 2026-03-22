@@ -1,34 +1,62 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ClientFormModal from "@/components/ClientFormModal";
 import ClientTable, { Client } from "@/components/ClientTable";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
-import { useFetch } from "@/hooks/useFetch";
+import { useClientsStore } from "@/stores/clientsStore";
 import { useCrmPermission } from "@/hooks/useCrmPermission";
 import CreateButton from "@/components/actions/CreateButton";
 import ListPageContainer from "@/components/ListPageContainer";
-
-const EMPTY_OPTIONS: {
-  id: string;
-  field: string;
-  value: string;
-  color?: string | null;
-  order?: number | null;
-  createdAt: string;
-}[] = [];
+import { EMPTY_SELECT_OPTIONS } from "@/types/selectOption";
 
 const ClientsPage = () => {
   const [open, setOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const { canManageCrm } = useCrmPermission();
-  const { data, loading, refetch } = useFetch<Client>("/api/clients");
+  const data = useClientsStore((state) => state.clients);
+  const loading = useClientsStore((state) => state.loading);
+  const fetchClients = useClientsStore((state) => state.fetchClients);
   const industryOptions = useSelectOptionsStore(
-    (state) => state.optionsByField["client.industry"] ?? EMPTY_OPTIONS,
+    (state) => state.optionsByField["client.industry"] ?? EMPTY_SELECT_OPTIONS,
   );
   const fetchAllOptions = useSelectOptionsStore(
     (state) => state.fetchAllOptions,
   );
+  const normalizedClients = data.flatMap((item) => {
+    if (typeof item?.id !== "string" || typeof item?.name !== "string") {
+      return [];
+    }
+    return [
+      {
+        id: item.id,
+        name: item.name,
+        industryOptionId:
+          typeof item.industryOptionId === "string"
+            ? item.industryOptionId
+            : "",
+        industryOption: item.industryOption
+          ? {
+              id:
+                typeof item.industryOption.id === "string"
+                  ? item.industryOption.id
+                  : "",
+              field: "client.industry",
+              value:
+                typeof item.industryOption.value === "string"
+                  ? item.industryOption.value
+                  : "",
+              color:
+                typeof item.industryOption.color === "string"
+                  ? item.industryOption.color
+                  : null,
+              order: null,
+            }
+          : null,
+      },
+    ];
+  });
 
   const handleDelete = async (id: string) => {
     if (!canManageCrm) return;
@@ -36,8 +64,12 @@ const ClientsPage = () => {
       method: "DELETE",
     });
 
-    refetch();
+    await fetchClients(true);
   };
+
+  useEffect(() => {
+    void fetchClients();
+  }, [fetchClients]);
 
   const renderCreateClientBtn = () => (
     <CreateButton
@@ -59,9 +91,9 @@ const ClientsPage = () => {
   return (
     <ListPageContainer>
       <ClientTable
-        headerTitle={<h3 style={{ margin: 0 }}>客户管理</h3>}
+        headerTitle={<ProTableHeaderTitle>客户管理</ProTableHeaderTitle>}
         toolbarActions={[renderCreateClientBtn()]}
-        clients={data}
+        clients={normalizedClients}
         loading={loading}
         actionsDisabled={!canManageCrm}
         onEdit={(client) => {
@@ -70,7 +102,7 @@ const ClientsPage = () => {
         }}
         onDelete={handleDelete}
         onIndustryOptionUpdated={async () => {
-          await refetch();
+          await fetchClients(true);
           await fetchAllOptions(true);
         }}
       />
@@ -80,7 +112,7 @@ const ClientsPage = () => {
         onCancel={onReset}
         onSuccess={async () => {
           onReset();
-          await refetch();
+          await fetchClients(true);
         }}
         industryOptions={industryOptions}
       />

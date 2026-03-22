@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Modal, Form, Input, Select, Button } from "antd";
+import { DEFAULT_COLOR } from "@/lib/constants";
 import SelectOptionSelector, {
   type SelectOptionSelectorValue,
 } from "@/components/SelectOptionSelector";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import { useEmployeesStore } from "@/stores/employeesStore";
+import type { SimpleClient } from "@/types/client";
 
 type Project = {
   id?: string;
@@ -17,15 +20,10 @@ type Project = {
   ownerId?: string | null;
 };
 
-type Client = {
-  id: string;
-  name: string;
-};
-
 type Employee = {
   id: string;
   name: string;
-  employmentStatus?: string;
+  employmentStatus?: string | null;
 };
 
 type Props = {
@@ -33,7 +31,7 @@ type Props = {
   onCancel: () => void;
   onSuccess: () => void;
   initialValues?: Project | null;
-  clients?: Client[];
+  clients?: SimpleClient[];
   employees?: Employee[];
   projectType?: string;
   clientEditable?: boolean;
@@ -54,45 +52,63 @@ const ProjectFormModal = ({
   onSuccess,
   initialValues,
   clients = [],
-  employees = [],
+  employees: employeesFromProps = [],
   projectType,
   clientEditable = true,
 }: Props) => {
   const [form] = Form.useForm<ProjectFormValues>();
   const projectTypeValue = Form.useWatch("type", form);
-  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
+  const fetchAllOptions = useSelectOptionsStore(
+    (state) => state.fetchAllOptions,
+  );
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const statusOptions = optionsByField["project.status"] ?? [];
   const stageOptions = optionsByField["project.stage"] ?? [];
 
+  const fetchEmployeesFromStore = useEmployeesStore(
+    (state) => state.fetchEmployees,
+  );
+  const storedEmployeesRaw = useEmployeesStore((state) => state.employees);
+  const storedEmployees = useMemo(
+    () =>
+      storedEmployeesRaw.map(
+        (item): Employee => ({
+          id: item.id,
+          name: item.name,
+          employmentStatus: item.employmentStatus ?? undefined,
+        }),
+      ),
+    [storedEmployeesRaw],
+  );
+
+  // 优先使用 store 中的数据，如果 store 为空才使用传入的 props
+  const employees =
+    storedEmployees.length > 0 ? storedEmployees : employeesFromProps;
+
   const isEdit = !!initialValues?.id;
-  const normalizeTypeCode = (value?: string | null) => {
-    if (!value) return null;
-    if (value === "客户项目") return "CLIENT";
-    if (value === "内部项目") return "INTERNAL";
-    return value;
+  const normalizeProjectTypeCode = (value: unknown): string | null => {
+    const normalized = typeof value === "string" ? value.trim() : "";
+    if (!normalized) return null;
+    if (normalized === "客户项目") return "CLIENT";
+    if (normalized === "内部项目") return "INTERNAL";
+    return normalized;
   };
-  const fixedTypeCode = normalizeTypeCode(projectType);
-  const currentTypeCode = normalizeTypeCode(
-    (projectTypeValue as string | undefined) ?? initialValues?.type ?? projectType,
+  const fixedTypeCode = normalizeProjectTypeCode(projectType);
+  const currentTypeCode = normalizeProjectTypeCode(
+    (projectTypeValue as string | undefined) ??
+      initialValues?.type ??
+      projectType,
   );
   const isInternalProject = currentTypeCode === "INTERNAL";
 
   useEffect(() => {
     if (!open) return;
     void fetchAllOptions();
-  }, [fetchAllOptions, open]);
+    void fetchEmployeesFromStore();
+  }, [fetchAllOptions, fetchEmployeesFromStore, open]);
 
   const normalizeIdValue = (value: unknown): string | null => {
     return typeof value === "string" && value.trim() ? value : null;
-  };
-
-  const normalizeProjectType = (value: unknown): string | null => {
-    const normalized = typeof value === "string" ? value.trim() : "";
-    if (!normalized) return null;
-    if (normalized === "客户项目") return "CLIENT";
-    if (normalized === "内部项目") return "INTERNAL";
-    return normalized;
   };
 
   const normalizeSelectOptionValue = (value: unknown) => {
@@ -119,7 +135,7 @@ const ProjectFormModal = ({
   };
 
   const handleSubmit = async (values: ProjectFormValues) => {
-    const type = normalizeProjectType(values.type);
+    const type = normalizeProjectTypeCode(values.type);
     const isInternal = type === "INTERNAL";
 
     const payload = {
@@ -135,9 +151,7 @@ const ProjectFormModal = ({
       method: isEdit ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
-        isEdit
-          ? { id: initialValues?.id, ...payload }
-          : payload
+        isEdit ? { id: initialValues?.id, ...payload } : payload,
       ),
     });
 
@@ -165,13 +179,16 @@ const ProjectFormModal = ({
         wrapperCol={{ span: 18 }}
         initialValues={{
           name: initialValues?.name,
-          type: normalizeTypeCode(initialValues?.type) ?? fixedTypeCode ?? undefined,
+          type:
+            normalizeProjectTypeCode(initialValues?.type) ??
+            fixedTypeCode ??
+            undefined,
           status: isInternalProject
             ? undefined
-            : initialValues?.status ?? undefined,
+            : (initialValues?.status ?? undefined),
           stage: isInternalProject
             ? undefined
-            : initialValues?.stage ?? undefined,
+            : (initialValues?.stage ?? undefined),
           clientId: isInternalProject ? undefined : initialValues?.clientId,
           ownerId: initialValues?.ownerId,
         }}
@@ -201,7 +218,11 @@ const ProjectFormModal = ({
         </Form.Item>
 
         {!isInternalProject && (
-          <Form.Item label="所属客户" name="clientId" rules={[{ required: true, message: "请选择客户" }]}>
+          <Form.Item
+            label="所属客户"
+            name="clientId"
+            rules={[{ required: true, message: "请选择客户" }]}
+          >
             <Select
               options={clients.map((c) => ({
                 label: c.name,
@@ -233,7 +254,7 @@ const ProjectFormModal = ({
               options={statusOptions.map((item) => ({
                 label: item.value,
                 value: item.value,
-                color: item.color ?? "#d9d9d9",
+                color: item.color ?? DEFAULT_COLOR,
               }))}
             />
           </Form.Item>
@@ -246,7 +267,7 @@ const ProjectFormModal = ({
               options={stageOptions.map((item) => ({
                 label: item.value,
                 value: item.value,
-                color: item.color ?? "#d9d9d9",
+                color: item.color ?? DEFAULT_COLOR,
               }))}
             />
           </Form.Item>

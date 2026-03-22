@@ -18,7 +18,8 @@ import { EditOutlined, PlusOutlined } from "@ant-design/icons";
 import { useParams, useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
-import SelectOptionTag from "@/components/SelectOptionTag";
+import DetailPageContainer from "@/components/DetailPageContainer";
+import EmployeeFunctionValue from "@/components/employee/EmployeeFunctionValue";
 import PlannedWorkEntriesTable, {
   type PlannedWorkEntryRow,
 } from "@/components/PlannedWorkEntriesTable";
@@ -28,6 +29,7 @@ import PlannedWorkEntryForm, {
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
+import type { WorkdayAdjustmentRange } from "@/types/workdayAdjustment";
 
 type Detail = {
   id: string;
@@ -64,16 +66,18 @@ export default function ProjectTaskDetailPage() {
   const router = useRouter();
   const id = params.id as string;
   const [data, setData] = useState<Detail | null>(null);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [segments, setSegments] = useState<
     { id: string; name: string; project?: { name: string } }[]
   >([]);
+  const [segmentsLoading, setSegmentsLoading] = useState(false);
   const [employees, setEmployees] = useState<{ id: string; name: string }[]>(
     [],
   );
   const [workdayAdjustments, setWorkdayAdjustments] = useState<
-    Array<{ startDate: string; endDate: string; changeType?: string | null }>
+    WorkdayAdjustmentRange[]
   >([]);
   const [plannedOpen, setPlannedOpen] = useState(false);
   const [editingPlanned, setEditingPlanned] =
@@ -89,26 +93,60 @@ export default function ProjectTaskDetailPage() {
 
   const fetchDetail = useCallback(async () => {
     if (!id) return;
+    setLoading(true);
     const res = await fetch(`/api/project-tasks/${id}`);
     if (!res.ok) {
       setData(null);
+      setLoading(false);
       return;
     }
     setData(await res.json());
+    setLoading(false);
   }, [id]);
 
   const fetchOptions = useCallback(async () => {
-    const [segmentsRes, employeesData, adjustmentsData] = await Promise.all([
-      fetch("/api/project-segments"),
+    const [employeesData, adjustmentsData] = await Promise.all([
       fetchEmployeesFromStore(),
       fetchAdjustmentsFromStore(),
     ]);
-    setSegments(await segmentsRes.json());
     setEmployees(Array.isArray(employeesData) ? employeesData : []);
     setWorkdayAdjustments(
       Array.isArray(adjustmentsData) ? adjustmentsData : [],
     );
   }, [fetchEmployeesFromStore, fetchAdjustmentsFromStore]);
+
+  const fetchSegments = useCallback(async () => {
+    const projectId = data?.segment?.project?.id;
+    if (!projectId) {
+      setSegments([]);
+      return;
+    }
+    setSegmentsLoading(true);
+    const projectRes = await fetch(`/api/projects/${projectId}`);
+    if (!projectRes.ok) {
+      setSegments([]);
+      setSegmentsLoading(false);
+      return;
+    }
+    const project = (await projectRes.json()) as {
+      name?: string | null;
+      segments?: { id: string; name: string }[];
+    };
+    setSegments(
+      (project.segments ?? []).map((segment) => ({
+        id: segment.id,
+        name: segment.name,
+        project: { name: project.name ?? "" },
+      })),
+    );
+    setSegmentsLoading(false);
+  }, [data?.segment?.project?.id]);
+
+  const ensureSegmentsLoaded = useCallback(async () => {
+    if (segments.length > 0) return;
+    if (!data?.segment?.project?.id) return;
+    await fetchSegments();
+  }, [data?.segment?.project?.id, fetchSegments, segments.length]);
 
   useEffect(() => {
     if (!id) return;
@@ -121,7 +159,10 @@ export default function ProjectTaskDetailPage() {
   const onEdit = () => {
     if (!canManageProject) return;
     if (!data) return;
-    setOpen(true);
+    void (async () => {
+      await ensureSegmentsLoaded();
+      setOpen(true);
+    })();
   };
 
   useEffect(() => {
@@ -305,18 +346,34 @@ export default function ProjectTaskDetailPage() {
       ]
     : [];
 
+  if (loading) {
+    return (
+      <DetailPageContainer>
+        <Card title="任务详情" loading />
+      </DetailPageContainer>
+    );
+  }
+
+  if (!data) {
+    return (
+      <DetailPageContainer>
+        <Card title="任务详情">任务不存在</Card>
+      </DetailPageContainer>
+    );
+  }
+
   return (
-    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+    <DetailPageContainer>
       {contextHolder}
       <Card
-        title={data?.name || "任务详情"}
+        title={data.name}
         extra={
           <Space>
             <Button icon={<EditOutlined />} onClick={onEdit} disabled={!canManageProject}>
               编辑
             </Button>
             <Popconfirm
-              title={`确定删除任务「${data?.name ?? ""}」？`}
+              title={`确定删除任务「${data.name}」？`}
               okText="删除"
               cancelText="取消"
               onConfirm={() => void onDelete()}
@@ -329,8 +386,7 @@ export default function ProjectTaskDetailPage() {
           </Space>
         }
       >
-        {data && (
-          <Space orientation="vertical" size={20} style={{ width: "100%" }}>
+        <Space orientation="vertical" size={20} style={{ width: "100%" }}>
             <Descriptions column={2} size="small">
               <Descriptions.Item label="所属项目">
                 {data.segment?.project ? (
@@ -365,17 +421,9 @@ export default function ProjectTaskDetailPage() {
                   )}
                 </Descriptions.Item>
                 <Descriptions.Item label="负责人职能">
-                  {data.owner?.functionOption?.value ? (
-                    <SelectOptionTag
-                      option={{
-                        id: data.owner.functionOption.id ?? "",
-                        value: data.owner.functionOption.value,
-                        color: data.owner.functionOption.color ?? null,
-                      }}
-                    />
-                  ) : (
-                    "-"
-                  )}
+                  <EmployeeFunctionValue
+                    functionOption={data.owner?.functionOption}
+                  />
                 </Descriptions.Item>
               </Descriptions>
             </div>
@@ -389,8 +437,7 @@ export default function ProjectTaskDetailPage() {
                 </Descriptions.Item>
               </Descriptions>
             </div>
-          </Space>
-        )}
+        </Space>
       </Card>
 
       <Card styles={{ body: { padding: 2 } }}>
@@ -472,6 +519,7 @@ export default function ProjectTaskDetailPage() {
             rules={[{ required: true }]}
           >
             <Select
+              loading={segmentsLoading}
               options={segments.map((segment) => ({
                 label: `${segment.project?.name ?? ""}-${segment.name}`,
                 value: segment.id,
@@ -495,6 +543,6 @@ export default function ProjectTaskDetailPage() {
           </Button>
         </Form>
       </Modal>
-    </Space>
+    </DetailPageContainer>
   );
 }

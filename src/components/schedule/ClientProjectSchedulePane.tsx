@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Collapse, Space, Typography } from "antd";
 import { ProCard } from "@ant-design/pro-components";
 import AppLink from "@/components/AppLink";
+import SelectOptionTag from "@/components/SelectOptionTag";
 
 type ProjectListItemView = {
   id: string;
@@ -12,6 +13,11 @@ type ProjectListItemView = {
 
 type GroupedVisibleProject = {
   status: string;
+  statusOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
   projects: ProjectListItemView[];
 };
 
@@ -68,7 +74,29 @@ const ClientProjectSchedulePane = ({
               }}
               items={groupedVisibleProjects.map((group) => ({
                 key: group.status,
-                label: `${group.status}（${group.projects.length}）`,
+                label: (
+                  <Space size={6}>
+                    <SelectOptionTag
+                      option={
+                        group.statusOption?.value
+                          ? {
+                              id: group.statusOption.id ?? "",
+                              value: group.statusOption.value,
+                              color: group.statusOption.color ?? null,
+                            }
+                          : {
+                              id: "",
+                              value: group.status,
+                              color: null,
+                            }
+                      }
+                      fallbackText={group.status}
+                    />
+                    <Typography.Text type="secondary">
+                      （{group.projects.length}）
+                    </Typography.Text>
+                  </Space>
+                ),
                 style: {
                   marginBottom: 8,
                 },

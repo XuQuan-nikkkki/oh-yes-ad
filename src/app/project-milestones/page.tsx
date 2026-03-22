@@ -1,18 +1,22 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Calendar, Card, Modal, Radio, Space, Tag, Tooltip } from "antd";
+import { Button, Calendar, Card, Radio, Space, Spin, Tag, Tooltip } from "antd";
 import dayjs from "dayjs";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import ListPageContainer from "@/components/ListPageContainer";
 import ProjectMilestonesTable, {
   ProjectMilestoneRow,
 } from "@/components/ProjectMilestonesTable";
 import AppLink from "@/components/AppLink";
-import ProjectMilestoneForm, {
-  ProjectMilestoneFormPayload,
-} from "@/components/project-detail/ProjectMilestoneForm";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
+import type { ProjectMilestoneFormPayload } from "@/components/project-detail/ProjectMilestoneForm";
+import ProjectMilestoneFormModal from "@/components/project-detail/ProjectMilestoneFormModal";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { useProjectMilestonesStore } from "@/stores/projectMilestonesStore";
+import { useProjectsStore } from "@/stores/projectsStore";
+import { DEFAULT_COLOR } from "@/lib/constants";
 
 type Option = {
   id: string;
@@ -36,8 +40,7 @@ function ProjectMilestonesPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [rows, setRows] = useState<ProjectMilestoneRow[]>([]);
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [projectOptions, setProjectOptions] = useState<{ id: string; name: string }[]>([]);
   const [allEmployees, setAllEmployees] = useState<Option[]>([]);
   const [viewMode, setViewMode] = useState<"table" | "calendar">("table");
   const [open, setOpen] = useState(false);
@@ -47,16 +50,23 @@ function ProjectMilestonesPageContent() {
   );
   const [projectContext, setProjectContext] = useState<ProjectContext>(EMPTY_CONTEXT);
   const { canManageProject } = useProjectPermission();
+  const rows = useProjectMilestonesStore((state) => state.rows);
+  const rowsLoading = useProjectMilestonesStore((state) => state.loading);
+  const fetchMilestonesFromStore = useProjectMilestonesStore(
+    (state) => state.fetchMilestones,
+  );
+  const upsertMilestones = useProjectMilestonesStore(
+    (state) => state.upsertMilestones,
+  );
+  const removeMilestone = useProjectMilestonesStore((state) => state.removeMilestone);
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
 
   const fetchData = useCallback(async () => {
-    const [res1, res2, employees] = await Promise.all([
-      fetch("/api/project-milestones"),
-      fetch("/api/projects"),
+    const [, employees] = await Promise.all([
+      fetchMilestonesFromStore(),
       fetchEmployeesFromStore(),
     ]);
-    setRows(await res1.json());
-    setProjects(await res2.json());
     setAllEmployees(
       Array.isArray(employees)
         ? employees.map((item) => ({
@@ -66,7 +76,20 @@ function ProjectMilestonesPageContent() {
           }))
         : [],
     );
-  }, [fetchEmployeesFromStore]);
+  }, [fetchEmployeesFromStore, fetchMilestonesFromStore]);
+
+  const fetchProjectOptions = useCallback(async () => {
+    const projects = await fetchProjectsFromStore();
+    setProjectOptions(
+      Array.isArray(projects)
+        ? projects
+            .filter((item): item is { id: string; name: string } =>
+              Boolean(item.id && item.name),
+            )
+            .map((item) => ({ id: item.id, name: item.name }))
+        : [],
+    );
+  }, [fetchProjectsFromStore]);
 
   const fetchProjectContext = useCallback(async (projectId?: string) => {
     if (!projectId) {
@@ -121,6 +144,16 @@ function ProjectMilestonesPageContent() {
     void fetchProjectContext(selectedProjectId);
   }, [fetchProjectContext, open, selectedProjectId]);
 
+  useEffect(() => {
+    if (!open) return;
+    void fetchProjectOptions();
+  }, [fetchProjectOptions, open]);
+
+  useEffect(() => {
+    if (!open || selectedProjectId || projectOptions.length === 0) return;
+    setSelectedProjectId(projectOptions[0].id);
+  }, [open, projectOptions, selectedProjectId]);
+
   const onEdit = (row: ProjectMilestoneRow) => {
     if (!canManageProject) return;
     setEditing(row);
@@ -130,8 +163,9 @@ function ProjectMilestonesPageContent() {
 
   const onDelete = async (id: string) => {
     if (!canManageProject) return;
-    await fetch(`/api/project-milestones/${id}`, { method: "DELETE" });
-    await fetchData();
+    const res = await fetch(`/api/project-milestones/${id}`, { method: "DELETE" });
+    if (!res.ok) return;
+    removeMilestone(id);
   };
 
   const onSubmit = async (payload: ProjectMilestoneFormPayload) => {
@@ -144,14 +178,15 @@ function ProjectMilestonesPageContent() {
       projectId,
     };
 
+    let res: Response;
     if (editing) {
-      await fetch(`/api/project-milestones/${editing.id}`, {
+      res = await fetch(`/api/project-milestones/${editing.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
     } else {
-      await fetch("/api/project-milestones", {
+      res = await fetch("/api/project-milestones", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -159,7 +194,16 @@ function ProjectMilestonesPageContent() {
     }
     setOpen(false);
     setEditing(null);
-    await fetchData();
+    if (!res.ok) {
+      await fetchMilestonesFromStore(true);
+      return;
+    }
+    const next = (await res.json()) as ProjectMilestoneRow | null;
+    if (next?.id) {
+      upsertMilestones([next]);
+      return;
+    }
+    await fetchMilestonesFromStore(true);
   };
 
   const milestonesByDate = rows.reduce<Record<string, ProjectMilestoneRow[]>>(
@@ -227,7 +271,7 @@ function ProjectMilestonesPageContent() {
       onClick={() => {
         if (!canManageProject) return;
         setEditing(null);
-        setSelectedProjectId(projects[0]?.id);
+        setSelectedProjectId(undefined);
         setOpen(true);
       }}
     >
@@ -236,16 +280,17 @@ function ProjectMilestonesPageContent() {
   ];
 
   return (
-    <Card styles={{ body: { padding: 12 } }}>
+    <ListPageContainer>
       {viewMode === "table" ? (
         <ProjectMilestonesTable
           rows={rows}
+          loading={rowsLoading}
           onEdit={onEdit}
           onDelete={(id) => {
             void onDelete(id);
           }}
           actionsDisabled={!canManageProject}
-          headerTitle={<h3 style={{ margin: 0 }}>项目里程碑</h3>}
+          headerTitle={<ProTableHeaderTitle>项目里程碑</ProTableHeaderTitle>}
           toolbarActions={toolbarActions}
         />
       ) : (
@@ -258,67 +303,64 @@ function ProjectMilestonesPageContent() {
               marginBottom: 12,
             }}
           >
-            <h3 style={{ margin: 0 }}>项目里程碑</h3>
+            <ProTableHeaderTitle>项目里程碑</ProTableHeaderTitle>
             <Space size={8}>{toolbarActions}</Space>
           </div>
-          <Calendar
-            cellRender={(current) => {
-              const items = milestonesByDate[current.format("YYYY-MM-DD")] ?? [];
-              if (items.length === 0) return null;
-              return (
-                <div style={{ marginTop: 6 }}>
-                  {items.map((item) => (
-                    <div
-                      key={`${item.id}-${current.format("YYYY-MM-DD")}`}
-                      style={{ marginBottom: 4 }}
-                    >
-                      <Tag
-                        color={item.typeOption?.color ?? "#d9d9d9"}
-                        style={{ borderRadius: 6, marginInlineEnd: 0 }}
+          <Spin spinning={rowsLoading}>
+            <Calendar
+              cellRender={(current) => {
+                const items = milestonesByDate[current.format("YYYY-MM-DD")] ?? [];
+                if (items.length === 0) return null;
+                return (
+                  <div style={{ marginTop: 6 }}>
+                    {items.map((item) => (
+                      <div
+                        key={`${item.id}-${current.format("YYYY-MM-DD")}`}
+                        style={{ marginBottom: 4 }}
                       >
-                        <Tooltip title={getMilestoneTooltipContent(item)}>
-                          <span>
-                            <AppLink href={`/project-milestones/${item.id}`}>
-                              {item.name}
-                            </AppLink>
-                          </span>
-                        </Tooltip>
-                      </Tag>
-                    </div>
-                  ))}
-                </div>
-              );
-            }}
-          />
+                        <Tag
+                          color={item.typeOption?.color ?? DEFAULT_COLOR}
+                          style={{ borderRadius: 6, marginInlineEnd: 0 }}
+                        >
+                          <Tooltip title={getMilestoneTooltipContent(item)}>
+                            <span>
+                              <AppLink href={`/project-milestones/${item.id}`}>
+                                {item.name}
+                              </AppLink>
+                            </span>
+                          </Tooltip>
+                        </Tag>
+                      </div>
+                    ))}
+                  </div>
+                );
+              }}
+            />
+          </Spin>
         </>
       )}
 
       {open ? (
-        <Modal
+        <ProjectMilestoneFormModal
           title={editing ? "编辑里程碑" : "新增里程碑"}
           open={open}
           onCancel={() => {
             setOpen(false);
             setEditing(null);
           }}
-          footer={null}
-          destroyOnHidden
-        >
-          <ProjectMilestoneForm
-            initialValues={editing}
-            projectMembers={projectContext.members}
-            allEmployees={allEmployees}
-            clientParticipants={projectContext.clientParticipants}
-            vendors={projectContext.vendors}
-            projectOptions={projects}
-            selectedProjectId={selectedProjectId}
-            disableProjectSelect={false}
-            onProjectChange={(projectId) => setSelectedProjectId(projectId)}
-            onSubmit={onSubmit}
-          />
-        </Modal>
+          initialValues={editing}
+          projectMembers={projectContext.members}
+          allEmployees={allEmployees}
+          clientParticipants={projectContext.clientParticipants}
+          vendors={projectContext.vendors}
+          projectOptions={projectOptions}
+          selectedProjectId={selectedProjectId}
+          disableProjectSelect={false}
+          onProjectChange={(projectId) => setSelectedProjectId(projectId)}
+          onSubmit={onSubmit}
+        />
       ) : null}
-    </Card>
+    </ListPageContainer>
   );
 }
 

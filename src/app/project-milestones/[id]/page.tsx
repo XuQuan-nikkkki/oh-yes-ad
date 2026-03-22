@@ -21,7 +21,9 @@ import { useParams, useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
 import "dayjs/locale/zh-cn";
+import { DEFAULT_COLOR } from "@/lib/constants";
 import AppLink from "@/components/AppLink";
+import DetailPageContainer from "@/components/DetailPageContainer";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import SelectOptionSelector, {
   type SelectOptionSelectorValue,
@@ -36,16 +38,14 @@ import ProjectDocumentForm, {
   type ProjectDocumentFormPayload,
 } from "@/components/project-detail/ProjectDocumentForm";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
+import { useProjectMilestonesStore } from "@/stores/projectMilestonesStore";
+import { useProjectsStore } from "@/stores/projectsStore";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import type { NullableSelectOptionValue } from "@/types/selectOption";
+import type { ProjectMilestoneRow } from "@/components/ProjectMilestonesTable";
 
 dayjs.extend(isoWeek);
 dayjs.locale("zh-cn");
-
-type SelectOptionValue = {
-  id?: string;
-  value?: string | null;
-  color?: string | null;
-} | null;
 
 type ClientContact = {
   id: string;
@@ -58,14 +58,14 @@ type ClientContact = {
 type MilestoneDetail = {
   id: string;
   name: string;
-  typeOption?: SelectOptionValue;
+  typeOption?: NullableSelectOptionValue;
   startAt?: string | null;
   endAt?: string | null;
   datePrecision?: "DATE" | "DATETIME" | null;
   type?: string | null;
   date?: string | null;
   location?: string | null;
-  methodOption?: SelectOptionValue;
+  methodOption?: NullableSelectOptionValue;
   method?: string | null;
   project?: { id: string; name: string } | null;
   internalParticipants?: Employee[];
@@ -198,7 +198,7 @@ const formatCountdown = (milestone?: MilestoneDetail | null) => {
   };
 };
 
-const normalizeTagOption = (option?: SelectOptionValue) => {
+const normalizeTagOption = (option?: NullableSelectOptionValue) => {
   if (!option?.value) return null;
   return {
     id: option.id ?? "",
@@ -206,6 +206,26 @@ const normalizeTagOption = (option?: SelectOptionValue) => {
     color: option.color ?? null,
   };
 };
+
+const mapStoreMilestoneToDetail = (row: ProjectMilestoneRow): MilestoneDetail => ({
+  id: row.id,
+  name: row.name,
+  typeOption: row.typeOption ?? null,
+  startAt: row.startAt ?? null,
+  endAt: row.endAt ?? null,
+  datePrecision: row.datePrecision ?? null,
+  type: row.type ?? null,
+  date: row.date ?? null,
+  location: row.location ?? null,
+  methodOption: row.methodOption ?? null,
+  method: row.method ?? null,
+  project: row.project
+    ? {
+        id: row.project.id,
+        name: row.project.name,
+      }
+    : null,
+});
 
 const isEmployeeActive = (employee: Employee) =>
   employee.employmentStatus !== "离职" &&
@@ -220,9 +240,20 @@ export default function Page() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
+  const cachedMilestone = useProjectMilestonesStore((state) =>
+    id ? state.byId[id] : undefined,
+  );
 
-  const [data, setData] = useState<MilestoneDetail | null>(null);
+  const [data, setData] = useState<MilestoneDetail | null>(
+    cachedMilestone ? mapStoreMilestoneToDetail(cachedMilestone) : null,
+  );
+  const [loading, setLoading] = useState(false);
   const [context, setContext] = useState<ProjectContext>(EMPTY_CONTEXT);
+  const [contextProjectId, setContextProjectId] = useState<string | null>(null);
+  const [contextClientId, setContextClientId] = useState<string | null>(null);
+  const [clientContactsProjectId, setClientContactsProjectId] = useState<string | null>(
+    null,
+  );
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -242,6 +273,7 @@ export default function Page() {
   const [form] = Form.useForm<FormValues>();
   const [messageApi, contextHolder] = message.useMessage();
   const { canManageProject } = useProjectPermission();
+  const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
 
   const fetchAllOptions = useSelectOptionsStore(
     (state) => state.fetchAllOptions,
@@ -250,82 +282,65 @@ export default function Page() {
   const typeOptions = optionsByField["projectMilestone.type"] ?? [];
   const methodOptions = optionsByField["projectMilestone.method"] ?? [];
 
-  const fetchProjects = useCallback(async () => {
-    const res = await fetch("/api/projects");
-    if (!res.ok) return;
-    const rows = await res.json();
-    setProjects(Array.isArray(rows) ? rows : []);
-  }, []);
-
   const fetchDetail = useCallback(async () => {
     if (!id) return null;
-    const res = await fetch(`/api/project-milestones/${id}`);
-    if (!res.ok) {
-      setData(null);
-      return null;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/project-milestones/${id}`);
+      if (!res.ok) {
+        if (res.status === 404) {
+          setData(null);
+        }
+        return null;
+      }
+      const detail = (await res.json()) as MilestoneDetail;
+      setData(detail);
+      return detail;
+    } finally {
+      setLoading(false);
     }
-    const detail = (await res.json()) as MilestoneDetail;
-    setData(detail);
-    return detail;
   }, [id]);
 
-  const fetchProjectContext = useCallback(async (projectId?: string | null) => {
-    if (!projectId) {
-      setContext(EMPTY_CONTEXT);
-      return;
-    }
-
-    const [projectRes, vendorsRes] = await Promise.all([
-      fetch(`/api/projects/${projectId}`),
-      fetch("/api/vendors"),
-    ]);
-
-    if (!projectRes.ok) {
-      setContext(EMPTY_CONTEXT);
-      return;
-    }
-
-    const project = (await projectRes.json()) as {
-      members?: Employee[];
-      vendors?: Array<{ id: string }>;
-      client?: { id: string } | null;
-    };
-
-    const vendorIds = new Set((project.vendors ?? []).map((item) => item.id));
-    const vendorsPayload = vendorsRes.ok
-      ? ((await vendorsRes.json()) as Vendor[])
-      : [];
-    const scopedVendors = vendorsPayload.filter((item) =>
-      vendorIds.has(item.id),
+  const fetchProjects = useCallback(async () => {
+    const rows = await fetchProjectsFromStore();
+    setProjects(
+      Array.isArray(rows)
+        ? rows.filter(
+            (item): item is { id: string; name: string } =>
+              Boolean(item?.id && item?.name),
+          )
+        : [],
     );
-
-    let clientContacts: ClientContact[] = [];
-    if (project.client?.id) {
-      const clientRes = await fetch(
-        `/api/client-contacts?clientId=${project.client.id}`,
-      );
-      clientContacts = clientRes.ok
-        ? ((await clientRes.json()) as ClientContact[])
-        : [];
-    }
-
-    setContext({
-      members: project.members ?? [],
-      vendors: scopedVendors,
-      clientContacts,
-    });
-  }, []);
+  }, [fetchProjectsFromStore]);
 
   const refreshAll = useCallback(async () => {
     const detail = await fetchDetail();
-    await Promise.all([fetchProjects(), fetchAllOptions()]);
-    await fetchProjectContext(detail?.project?.id ?? null);
-  }, [fetchAllOptions, fetchDetail, fetchProjectContext, fetchProjects]);
+    if (!detail?.project?.id) {
+      setContext(EMPTY_CONTEXT);
+      setContextProjectId(null);
+      setContextClientId(null);
+      setClientContactsProjectId(null);
+    }
+    await fetchAllOptions();
+  }, [fetchAllOptions, fetchDetail]);
 
   useEffect(() => {
     if (!id) return;
     void refreshAll();
   }, [id, refreshAll]);
+
+  useEffect(() => {
+    if (!cachedMilestone) return;
+    const seeded = mapStoreMilestoneToDetail(cachedMilestone);
+    setData((previous) => {
+      if (!previous) return seeded;
+      if (previous.id !== seeded.id) return seeded;
+      return {
+        ...seeded,
+        ...previous,
+      };
+    });
+  }, [cachedMilestone]);
 
   useEffect(() => {
     setVendorPage(1);
@@ -349,6 +364,9 @@ export default function Page() {
   const onEdit = () => {
     if (!canManageProject) return;
     if (!data) return;
+    if (projects.length === 0) {
+      void fetchProjects();
+    }
     setOpen(true);
   };
 
@@ -368,6 +386,63 @@ export default function Page() {
       method: data.methodOption?.value ?? data.method ?? undefined,
     });
   }, [data, form, open]);
+
+  const ensureProjectContextLoaded = useCallback(async () => {
+    const projectId = data?.project?.id;
+    if (!projectId) return;
+    if (contextProjectId === projectId) return;
+
+    const projectRes = await fetch(`/api/projects/${projectId}`);
+    if (!projectRes.ok) {
+      setContext(EMPTY_CONTEXT);
+      setContextProjectId(null);
+      setContextClientId(null);
+      setClientContactsProjectId(null);
+      return;
+    }
+
+    const project = (await projectRes.json()) as {
+      members?: Employee[];
+      vendors?: Vendor[];
+      client?: { id: string } | null;
+    };
+    setContext({
+      members: project.members ?? [],
+      vendors: project.vendors ?? [],
+      clientContacts: [],
+    });
+    setContextProjectId(projectId);
+    setContextClientId(project.client?.id ?? null);
+    setClientContactsProjectId(null);
+  }, [contextProjectId, data?.project?.id]);
+
+  const ensureClientContactsLoaded = useCallback(async () => {
+    const projectId = data?.project?.id;
+    if (!projectId) return;
+
+    await ensureProjectContextLoaded();
+
+    if (clientContactsProjectId === projectId) return;
+    if (!contextClientId) {
+      setClientContactsProjectId(projectId);
+      return;
+    }
+
+    const clientRes = await fetch(`/api/client-contacts?clientId=${contextClientId}`);
+    const clientContacts = clientRes.ok
+      ? ((await clientRes.json()) as ClientContact[])
+      : [];
+    setContext((previous) => ({
+      ...previous,
+      clientContacts,
+    }));
+    setClientContactsProjectId(projectId);
+  }, [
+    clientContactsProjectId,
+    contextClientId,
+    data?.project?.id,
+    ensureProjectContextLoaded,
+  ]);
 
   const onSubmit = async (values: FormValues) => {
     try {
@@ -462,7 +537,10 @@ export default function Page() {
     () => context.vendors.filter((item) => !vendorIds.includes(item.id)),
     [context.vendors, vendorIds],
   );
-  const hasProjectVendors = context.vendors.length > 0;
+  const hasProjectVendors =
+    (data?.vendorParticipants?.length ?? 0) > 0 ||
+    context.vendors.length > 0 ||
+    Boolean(data?.project?.id);
   const countdown = formatCountdown(data);
 
   const updateRelationWithLoading = async (task: () => Promise<void>) => {
@@ -506,9 +584,10 @@ export default function Page() {
   };
 
   return (
-    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+    <DetailPageContainer>
       {contextHolder}
       <Card
+        loading={loading && !data}
         title={data?.name || "里程碑详情"}
         extra={
           <Space>
@@ -584,6 +663,7 @@ export default function Page() {
           employees={data?.internalParticipants ?? []}
           roleOptions={[]}
           columnKeys={["name", "function", "actions"]}
+          loading={loading}
           onDelete={(employeeId) => {
             void updateRelationWithLoading(async () => {
               await updateMilestone({
@@ -601,7 +681,11 @@ export default function Page() {
               key="add-internal"
               type="primary"
               icon={<PlusOutlined />}
-              onClick={() => setInternalAddOpen(true)}
+              onClick={() => {
+                void ensureProjectContextLoaded().then(() => {
+                  setInternalAddOpen(true);
+                });
+              }}
             >
               添加
             </Button>,
@@ -612,6 +696,7 @@ export default function Page() {
       <Card styles={{ body: { padding: 2 } }}>
         <ClientContactTable
           contacts={data?.clientParticipants ?? []}
+          loading={loading}
           onDelete={(contactId) => {
             void updateRelationWithLoading(async () => {
               await updateMilestone({
@@ -631,7 +716,11 @@ export default function Page() {
               key="add-client"
               type="primary"
               icon={<PlusOutlined />}
-              onClick={() => setClientAddOpen(true)}
+              onClick={() => {
+                void ensureClientContactsLoaded().then(() => {
+                  setClientAddOpen(true);
+                });
+              }}
             >
               添加
             </Button>,
@@ -644,6 +733,7 @@ export default function Page() {
           <VendorsTable
             headerTitle={<h4 style={{ margin: 0 }}>合作供应商</h4>}
             vendors={data?.vendorParticipants ?? []}
+            loading={loading}
             current={vendorPage}
             pageSize={vendorPageSize}
             onPageChange={(nextPage, nextPageSize) => {
@@ -674,7 +764,11 @@ export default function Page() {
                 key="add-vendor"
                 type="primary"
                 icon={<PlusOutlined />}
-                onClick={() => setVendorAddOpen(true)}
+                onClick={() => {
+                  void ensureProjectContextLoaded().then(() => {
+                    setVendorAddOpen(true);
+                  });
+                }}
               >
                 添加
               </Button>,
@@ -686,6 +780,7 @@ export default function Page() {
       <Card styles={{ body: { padding: 2 } }}>
         <ProjectDocumentsTable
           rows={data?.documents ?? []}
+          loading={loading}
           onDelete={(documentId) => {
             void updateRelationWithLoading(async () => {
               const res = await fetch(`/api/project-documents/${documentId}`, {
@@ -766,7 +861,7 @@ export default function Page() {
               options={typeOptions.map((item) => ({
                 label: item.value,
                 value: item.value,
-                color: item.color ?? "#d9d9d9",
+                color: item.color ?? DEFAULT_COLOR,
               }))}
             />
           </Form.Item>
@@ -844,7 +939,7 @@ export default function Page() {
               options={methodOptions.map((item) => ({
                 label: item.value,
                 value: item.value,
-                color: item.color ?? "#d9d9d9",
+                color: item.color ?? DEFAULT_COLOR,
               }))}
             />
           </Form.Item>
@@ -1008,6 +1103,6 @@ export default function Page() {
           />
         </Modal>
       ) : null}
-    </Space>
+    </DetailPageContainer>
   );
 }

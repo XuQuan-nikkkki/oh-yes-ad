@@ -1,28 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Card } from "antd";
+import { Button } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
+import ListPageContainer from "@/components/ListPageContainer";
 import ProjectFormModal from "@/components/ProjectFormModal";
 import ProjectsTable, { type Project } from "@/components/ProjectsTable";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useProjectsStore } from "@/stores/projectsStore";
-
-type Client = {
-  id: string;
-  name: string;
-};
-
-type Employee = {
-  id: string;
-  name: string;
-};
+import type { SimpleEmployee } from "@/types/employee";
 
 const InternalProjectsPage = () => {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employees, setEmployees] = useState<SimpleEmployee[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -37,12 +29,6 @@ const InternalProjectsPage = () => {
     setLoading(false);
   };
 
-  const fetchClients = async () => {
-    const res = await fetch("/api/clients");
-    const data = await res.json();
-    setClients(data);
-  };
-
   const fetchEmployees = async () => {
     try {
       const data = await fetchEmployeesFromStore();
@@ -54,9 +40,9 @@ const InternalProjectsPage = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      await Promise.all([fetchProjects(), fetchClients(), fetchEmployees()]);
+      await Promise.all([fetchProjects(), fetchEmployees()]);
     };
-    loadData();
+    void loadData();
   }, []);
 
   const handleDelete = async (id: string) => {
@@ -71,9 +57,9 @@ const InternalProjectsPage = () => {
   };
 
   return (
-    <Card styles={{ body: { padding: 12 } }}>
+    <ListPageContainer>
       <ProjectsTable
-        headerTitle={<h3 style={{ margin: 0 }}>内部项目</h3>}
+        headerTitle={<ProTableHeaderTitle>内部项目</ProTableHeaderTitle>}
         toolbarActions={[
           <Button
             key="create-internal-project"
@@ -95,7 +81,6 @@ const InternalProjectsPage = () => {
         columnKeys={["name", "owner", "isArchived", "actions"]}
         defaultVisibleColumnKeys={["name", "owner", "isArchived", "actions"]}
         onOptionUpdated={fetchProjects}
-        actionsDisabled={!canManageProject}
         onEdit={(project) => {
           setEditingProject(project);
           setOpen(true);
@@ -114,11 +99,11 @@ const InternalProjectsPage = () => {
           setEditingProject(null);
           await fetchProjects(true);
         }}
-        clients={clients}
+        clients={[]}
         employees={employees}
         projectType="内部项目"
       />
-    </Card>
+    </ListPageContainer>
   );
 };
 

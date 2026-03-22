@@ -1,0 +1,36 @@
+"use client";
+
+import SelectOptionTag from "@/components/SelectOptionTag";
+
+type Props = {
+  stage?: string | null;
+  stageOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
+};
+
+const ProjectStageValue = ({ stage, stageOption }: Props) => {
+  return (
+    <SelectOptionTag
+      option={
+        stageOption?.value
+          ? {
+              id: stageOption.id ?? "",
+              value: stageOption.value,
+              color: stageOption.color ?? null,
+            }
+          : stage
+            ? {
+                id: "",
+                value: stage,
+                color: null,
+              }
+            : null
+      }
+    />
+  );
+};
+
+export default ProjectStageValue;

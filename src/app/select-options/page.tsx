@@ -18,6 +18,7 @@ import type { ColumnsType } from "antd/es/table";
 import Modal from "antd/es/modal/Modal";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import TableActions from "@/components/TableActions";
+import { DEFAULT_COLOR } from "@/lib/constants";
 
 type SelectOptionRecord = {
   id: string;
@@ -38,8 +39,6 @@ type SelectOptionFormValues = {
   color?: string;
   order?: number | null;
 };
-
-const DEFAULT_COLOR = "#8c8c8c";
 
 const SelectOptionsPage = () => {
   const [messageApi, contextHolder] = message.useMessage();
@@ -64,12 +63,12 @@ const SelectOptionsPage = () => {
       setOptions(list);
     } catch (error) {
       console.error("获取选项失败:", error);
-      messageApi.error("获取选项失败");
+      message.error("获取选项失败");
       setOptions([]);
     } finally {
       setLoading(false);
     }
-  }, [messageApi]);
+  }, []);
 
   useEffect(() => {
     void fetchOptions();

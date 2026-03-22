@@ -6,8 +6,7 @@ import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 type Props = {
   onEdit?: () => void;
   onDelete?: () => void;
-  editDisabled?: boolean;
-  deleteDisabled?: boolean;
+  disabled?: boolean;
   editLoading?: boolean;
   deleteLoading?: boolean;
   deleteTitle?: string;
@@ -18,8 +17,7 @@ type Props = {
 const TableActions = ({
   onEdit,
   onDelete,
-  editDisabled = false,
-  deleteDisabled = false,
+  disabled = false,
   editLoading = false,
   deleteLoading = false,
   deleteTitle = "确定删除该记录？",
@@ -32,7 +30,7 @@ const TableActions = ({
         <Button
           variant="text"
           color="primary"
-          disabled={editDisabled}
+          disabled={disabled}
           loading={editLoading}
           icon={<EditOutlined />}
           onClick={(e) => {
@@ -47,7 +45,7 @@ const TableActions = ({
       {onDelete && (
         <Popconfirm
           title={deleteTitle}
-          disabled={deleteDisabled}
+          disabled={disabled}
           okText="确认"
           cancelText="取消"
           onConfirm={(e) => {
@@ -58,7 +56,7 @@ const TableActions = ({
           <Button
             variant="text"
             color="danger"
-            disabled={deleteDisabled}
+            disabled={disabled}
             loading={deleteLoading}
             icon={<DeleteOutlined />}
             onClick={(e) => e.stopPropagation()}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Modal, Form, Input, Button, Select } from "antd";
+import { useClientsStore } from "@/stores/clientsStore";
 
 type Contact = {
   id?: string;
@@ -13,7 +14,7 @@ type Contact = {
   email?: string | null;
   wechat?: string | null;
   address?: string | null;
-  clientId: string;
+  clientId?: string;
   client?: {
     id: string;
     name: string;
@@ -30,6 +31,8 @@ type Props = {
   onSuccess: (savedContact?: Contact) => void;
 };
 
+const EMPTY_CLIENT_OPTIONS: { id: string; name: string }[] = [];
+
 const ContactFormModal = ({
   open,
   clientId,
@@ -37,31 +40,35 @@ const ContactFormModal = ({
   onCancel,
   onSuccess,
   clientEditable = false,
-  clientOptions = [],
+  clientOptions = EMPTY_CLIENT_OPTIONS,
 }: Props) => {
   const [form] = Form.useForm();
   const isEdit = !!initialValues?.id;
-
-  const [clients, setClients] =
-    useState<{ id: string; name: string }[]>(clientOptions);
-
-  useEffect(() => {
-    setClients(clientOptions);
-  }, [clientOptions]);
+  const fetchClientsFromStore = useClientsStore((state) => state.fetchClients);
+  const storeClients = useClientsStore((state) => state.clients);
+  const clients = useMemo(() => {
+    if (clientOptions.length > 0) return clientOptions;
+    return storeClients
+      .filter(
+        (
+          item,
+        ): item is {
+          id: string;
+          name: string;
+        } => Boolean(item?.id) && typeof item?.name === "string",
+      )
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+      }));
+  }, [clientOptions, storeClients]);
 
   useEffect(() => {
     if (!open) return;
     if (!clientEditable) return;
     if (clients.length > 0) return;
-
-    const fetchClients = async () => {
-      const res = await fetch("/api/clients");
-      const data = await res.json();
-      setClients(Array.isArray(data) ? data : []);
-    };
-
-    void fetchClients();
-  }, [open, clientEditable, clients.length]);
+    void fetchClientsFromStore();
+  }, [open, clientEditable, clients.length, fetchClientsFromStore]);
 
   useEffect(() => {
     if (open) {

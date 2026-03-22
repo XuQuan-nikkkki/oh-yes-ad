@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
+import { DEFAULT_COLOR } from "@/lib/constants";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -40,7 +41,7 @@ const ensureOptionId = async (field: string, value: number | string) => {
     create: {
       field,
       value: normalized,
-      color: "#d9d9d9",
+      color: DEFAULT_COLOR,
     },
   });
 

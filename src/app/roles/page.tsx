@@ -61,12 +61,12 @@ const RolesPage = () => {
       setRoles(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("获取角色失败:", error);
-      messageApi.error("获取角色失败");
+      message.error("获取角色失败");
       setRoles([]);
     } finally {
       setLoading(false);
     }
-  }, [messageApi]);
+  }, []);
 
   const fetchEmployees = useCallback(async (force = false) => {
     try {

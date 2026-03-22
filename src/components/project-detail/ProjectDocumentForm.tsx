@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button, Checkbox, DatePicker, Form, Input, Select, Tag, message } from "antd";
 import type { DefaultOptionType } from "antd/es/select";
 import dayjs from "dayjs";
+import { DEFAULT_COLOR } from "@/lib/constants";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 
 export type ProjectDocumentFormPayload = {
@@ -132,7 +133,7 @@ const ProjectDocumentForm = ({
         body: JSON.stringify({
           field: "projectDocument.type",
           value,
-          color: "#d9d9d9",
+          color: DEFAULT_COLOR,
         }),
       });
       if (!response.ok) {
@@ -151,7 +152,7 @@ const ProjectDocumentForm = ({
   const selectOptions = typeOptions.map((option) => ({
     label: option.value,
     value: option.value,
-    color: option.color ?? "#d9d9d9",
+    color: option.color ?? DEFAULT_COLOR,
   }));
   const hasExactType = typeSearch.trim()
     ? selectOptions.some(
@@ -239,7 +240,7 @@ const ProjectDocumentForm = ({
             optionRender={(option) => {
               const data = option.data as DefaultOptionType & { color?: string };
               return (
-                <Tag color={data.color ?? "#d9d9d9"} style={{ borderRadius: 6 }}>
+                <Tag color={data.color ?? DEFAULT_COLOR} style={{ borderRadius: 6 }}>
                   {String(data.label ?? "")}
                 </Tag>
               );

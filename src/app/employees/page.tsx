@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Card, Button, message, Select } from "antd";
+import { Button, message, Select } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import EmployeeFormModal from "@/components/EmployeeFormModal";
 import EmployeesTable, {
   Employee,
   EmployeeColumnKey,
 } from "@/components/EmployeesTable";
+import ListPageContainer from "@/components/ListPageContainer";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 
@@ -171,7 +172,7 @@ const EmployeesPage = () => {
   return (
     <>
       {contextHolder}
-      <Card styles={{ body: { padding: 12 } }}>
+      <ListPageContainer>
         <EmployeesTable
           employees={employees}
           roleOptions={roleOptions}
@@ -207,7 +208,7 @@ const EmployeesPage = () => {
             </Button>,
           ]}
         />
-      </Card>
+      </ListPageContainer>
 
       <EmployeeFormModal
         open={open}

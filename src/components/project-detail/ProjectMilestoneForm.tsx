@@ -1,10 +1,10 @@
-// @ts-nocheck
 "use client";
 
 import { useEffect } from "react";
 import { StepsForm } from "@ant-design/pro-components";
 import { Checkbox, DatePicker, Form, Input, Select, Space } from "antd";
 import dayjs from "dayjs";
+import { DEFAULT_COLOR } from "@/lib/constants";
 import type { ProjectMilestoneRow } from "@/components/project-detail/ProjectMilestonesTable";
 import SelectOptionSelector, {
   type SelectOptionSelectorValue,
@@ -43,7 +43,7 @@ type FormValues = {
 type Option = {
   id: string;
   name: string;
-  employmentStatus?: string;
+  employmentStatus?: string | null;
 };
 
 type ProjectOption = {
@@ -187,7 +187,10 @@ const ProjectMilestoneForm = ({
         initialValues: {
           name: initialValues?.name,
           projectId:
-            selectedProjectId ?? initialValues?.project?.id ?? undefined,
+            selectedProjectId ??
+            initialValues?.projectId ??
+            initialValues?.project?.id ??
+            undefined,
           type: initialValues?.type ?? undefined,
           includeTime,
           isRange: rangeValue,
@@ -242,7 +245,7 @@ const ProjectMilestoneForm = ({
             options={typeOptions.map((item) => ({
               label: item.value,
               value: item.value,
-              color: item.color ?? "#d9d9d9",
+              color: item.color ?? DEFAULT_COLOR,
             }))}
           />
         </Form.Item>
@@ -322,7 +325,7 @@ const ProjectMilestoneForm = ({
             options={methodOptions.map((item) => ({
               label: item.value,
               value: item.value,
-              color: item.color ?? "#d9d9d9",
+              color: item.color ?? DEFAULT_COLOR,
             }))}
           />
         </Form.Item>

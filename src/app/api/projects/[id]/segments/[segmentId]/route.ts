@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
+import { DEFAULT_COLOR } from "@/lib/constants";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -27,7 +28,7 @@ const upsertSelectOption = async (field: string, value?: string | null) => {
     create: {
       field,
       value: normalized,
-      color: "#d9d9d9",
+      color: DEFAULT_COLOR,
     },
     update: {},
   });

@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { DEFAULT_COLOR } from "@/lib/constants";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 
@@ -27,7 +28,7 @@ const upsertSelectOption = async (field: string, value: unknown) => {
     create: {
       field,
       value: normalized,
-      color: "#d9d9d9",
+      color: DEFAULT_COLOR,
     },
     update: {},
   });

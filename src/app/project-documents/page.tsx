@@ -1,13 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Button, Card, Modal, message } from "antd";
+import { useCallback, useEffect, useState } from "react";
+import { Button, Modal, message } from "antd";
 import ProjectDocumentsTable, {
   ProjectDocumentRow,
 } from "@/components/ProjectDocumentsTable";
+import ListPageContainer from "@/components/ListPageContainer";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import ProjectDocumentForm, {
   type ProjectDocumentFormPayload,
 } from "@/components/project-detail/ProjectDocumentForm";
+import { useProjectDocumentsStore } from "@/stores/projectDocumentsStore";
+import { useProjectMilestonesStore } from "@/stores/projectMilestonesStore";
+import { useProjectsStore } from "@/stores/projectsStore";
 
 type MilestoneOption = {
   id: string;
@@ -19,38 +24,61 @@ type MilestoneOption = {
 
 export default function Page() {
   const [messageApi, contextHolder] = message.useMessage();
-  const [rows, setRows] = useState<ProjectDocumentRow[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [milestones, setMilestones] = useState<MilestoneOption[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ProjectDocumentRow | null>(null);
+  const rows = useProjectDocumentsStore((state) => state.rows);
+  const rowsLoading = useProjectDocumentsStore((state) => state.loading);
+  const fetchDocumentsFromStore = useProjectDocumentsStore(
+    (state) => state.fetchDocuments,
+  );
+  const upsertDocuments = useProjectDocumentsStore((state) => state.upsertDocuments);
+  const removeDocument = useProjectDocumentsStore((state) => state.removeDocument);
+  const milestones = useProjectMilestonesStore(
+    (state) => state.rows as MilestoneOption[],
+  );
+  const fetchMilestonesFromStore = useProjectMilestonesStore(
+    (state) => state.fetchMilestones,
+  );
+  const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
 
-  const fetchData = async () => {
-    const [documentsRes, projectsRes, milestonesRes] = await Promise.all([
-      fetch("/api/project-documents"),
-      fetch("/api/projects"),
-      fetch("/api/project-milestones"),
-    ]);
-    const milestonesPayload = await milestonesRes.json();
-    setRows(await documentsRes.json());
-    setProjects(await projectsRes.json());
-    setMilestones(Array.isArray(milestonesPayload) ? milestonesPayload : []);
-  };
+  const fetchData = useCallback(async () => {
+    await Promise.all([fetchDocumentsFromStore(), fetchMilestonesFromStore()]);
+  }, [fetchDocumentsFromStore, fetchMilestonesFromStore]);
+
+  const fetchProjectOptions = useCallback(async () => {
+    const projects = await fetchProjectsFromStore();
+    setProjects(
+      Array.isArray(projects)
+        ? projects
+            .filter(
+              (item): item is { id: string; name: string } =>
+                Boolean(item.id && item.name),
+            )
+            .map((item) => ({ id: item.id, name: item.name }))
+        : [],
+    );
+  }, [fetchProjectsFromStore]);
 
   useEffect(() => {
-    (async () => {
-      await fetchData();
-    })();
-  }, []);
+    const timer = setTimeout(() => {
+      void fetchData();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchData]);
 
   const onEdit = (row: ProjectDocumentRow) => {
+    if (projects.length === 0) {
+      void fetchProjectOptions();
+    }
     setEditing(row);
     setOpen(true);
   };
 
   const onDelete = async (id: string) => {
-    await fetch(`/api/project-documents/${id}`, { method: "DELETE" });
-    await fetchData();
+    const res = await fetch(`/api/project-documents/${id}`, { method: "DELETE" });
+    if (!res.ok) return;
+    removeDocument(id);
   };
 
   const onSubmit = async (payload: ProjectDocumentFormPayload) => {
@@ -69,14 +97,15 @@ export default function Page() {
       internalLink: payload.internalLink ?? null,
     };
 
+    let res: Response;
     if (editing) {
-      await fetch(`/api/project-documents/${editing.id}`, {
+      res = await fetch(`/api/project-documents/${editing.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
     } else {
-      await fetch("/api/project-documents", {
+      res = await fetch("/api/project-documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -85,32 +114,50 @@ export default function Page() {
 
     setOpen(false);
     setEditing(null);
-    await fetchData();
+    if (!res.ok) {
+      await fetchDocumentsFromStore(true);
+      return;
+    }
+    const next = (await res.json()) as ProjectDocumentRow | null;
+    if (next?.id) {
+      upsertDocuments([next]);
+      return;
+    }
+    await fetchDocumentsFromStore(true);
   };
+
+  const formProjectOptions =
+    editing?.project && !projects.some((item) => item.id === editing.project?.id)
+      ? [...projects, { id: editing.project.id, name: editing.project.name }]
+      : projects;
 
   return (
     <>
       {contextHolder}
-      <Card styles={{ body: { padding: 12 } }}>
+      <ListPageContainer>
         <ProjectDocumentsTable
           rows={rows}
+          loading={rowsLoading}
           onEdit={onEdit}
           onDelete={(id) => {
             void onDelete(id);
           }}
-          headerTitle={<h3 style={{ margin: 0 }}>项目资料</h3>}
+          headerTitle={<ProTableHeaderTitle>项目资料</ProTableHeaderTitle>}
           toolbarActions={[
             <Button
               key="create-project-document"
               type="primary"
               onClick={() => {
+                if (projects.length === 0) {
+                  void fetchProjectOptions();
+                }
                 setEditing(null);
                 setOpen(true);
               }}
             >
               新增资料
             </Button>,
-          ]}
+        ]}
         />
 
         <Modal
@@ -124,7 +171,7 @@ export default function Page() {
           <ProjectDocumentForm
             showProjectField
             showMilestoneField
-            projectOptions={projects}
+            projectOptions={formProjectOptions}
             milestoneOptions={milestones.map((item) => ({
               id: item.id,
               name: item.name,
@@ -147,7 +194,7 @@ export default function Page() {
             onSubmit={onSubmit}
           />
         </Modal>
-      </Card>
+      </ListPageContainer>
     </>
   );
 }

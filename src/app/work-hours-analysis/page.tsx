@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Radio, Select, Space, message } from "antd";
+import { Button, Radio, Select, Space, message } from "antd";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import dayjs from "dayjs";
 import ActualWorkEntriesTable, {
   type ActualWorkEntryRow,
 } from "@/components/ActualWorkEntriesTable";
+import ListPageContainer from "@/components/ListPageContainer";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { useProjectsStore } from "@/stores/projectsStore";
 
 type ActualWorkEntry = {
   id: string;
@@ -115,10 +118,10 @@ export default function WorkHoursAnalysisPage() {
     }>
   >([]);
   const [loading, setLoading] = useState(false);
-  const [messageApi, contextHolder] = message.useMessage();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
   const [exporting, setExporting] = useState(false);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
@@ -145,19 +148,46 @@ export default function WorkHoursAnalysisPage() {
         const [entriesRes, employeesRes, projectsRes] = await Promise.all([
           fetch("/api/actual-work-entries", { cache: "no-store" }),
           fetchEmployeesFromStore({ full: true }),
-          fetch("/api/projects", { cache: "no-store" }),
+          fetchProjectsFromStore(),
         ]);
         const entriesData = entriesRes.ok ? await entriesRes.json() : [];
         const employeesData = Array.isArray(employeesRes) ? employeesRes : [];
-        const projectsData = projectsRes.ok ? await projectsRes.json() : [];
+        const projectsData = Array.isArray(projectsRes) ? projectsRes : [];
         setEntries(Array.isArray(entriesData) ? entriesData : []);
         setEmployees(Array.isArray(employeesData) ? employeesData : []);
-        setProjects(Array.isArray(projectsData) ? projectsData : []);
+        setProjects(
+          Array.isArray(projectsData)
+            ? projectsData
+                .filter(
+                  (
+                    project,
+                  ): project is {
+                    id: string;
+                    name: string;
+                    type?: string | null;
+                    typeOption?: {
+                      id?: string;
+                      value?: string | null;
+                      color?: string | null;
+                    } | null;
+                  } =>
+                    typeof project?.id === "string" &&
+                    typeof project?.name === "string",
+                )
+                .map((project) => ({
+                  id: project.id,
+                  name: project.name,
+                  type:
+                    typeof project.type === "string" ? project.type : null,
+                  typeOption: project.typeOption ?? null,
+                }))
+            : [],
+        );
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [fetchEmployeesFromStore, fetchProjectsFromStore]);
 
   const projectMap = useMemo(() => {
     const map = new Map<
@@ -561,10 +591,10 @@ export default function WorkHoursAnalysisPage() {
       anchor.download = `工时分析_${now}.xlsx`;
       anchor.click();
       window.URL.revokeObjectURL(url);
-      messageApi.success("表格已下载");
+      message.success("表格已下载");
     } catch (error) {
       console.error(error);
-      messageApi.error("下载失败");
+      message.error("下载失败");
     } finally {
       setExporting(false);
     }
@@ -686,12 +716,11 @@ export default function WorkHoursAnalysisPage() {
   );
 
   return (
-    <Card styles={{ body: { padding: 12 } }}>
-      {contextHolder}
+    <ListPageContainer>
       {viewMode === "records" ? (
         <ActualWorkEntriesTable
           requestData={recordsRequestData}
-          headerTitle={<h3 style={{ margin: 0 }}>工时分析</h3>}
+          headerTitle={<ProTableHeaderTitle>工时分析</ProTableHeaderTitle>}
           toolbarActions={[toolbarFilters]}
           showTableOptions={false}
           employeeFilterOptions={employeeFilterOptions}
@@ -709,10 +738,10 @@ export default function WorkHoursAnalysisPage() {
           dataSource={dataSourceWithSummary}
           pagination={false}
           scroll={{ x: "max-content" }}
-          headerTitle={<h3 style={{ margin: 0 }}>工时分析</h3>}
+          headerTitle={<ProTableHeaderTitle>工时分析</ProTableHeaderTitle>}
           toolBarRender={() => [toolbarFilters]}
         />
       )}
-    </Card>
+    </ListPageContainer>
   );
 }

@@ -20,9 +20,10 @@ import {
   BankOutlined,
   WalletOutlined,
 } from "@ant-design/icons";
-import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getRoleCodesFromUser, type CurrentUser } from "@/stores/authStore";
+import { useNavigationStore } from "@/stores/navigationStore";
 
 const MENU_KEY_BY_PREFIX = [
   "/project-segments",
@@ -52,7 +53,12 @@ interface MenuContentProps {
   currentUser: CurrentUser | null;
 }
 
-export default function MenuContent({ pathname, currentUser }: MenuContentProps) {
+export default function MenuContent({
+  pathname,
+  currentUser,
+}: MenuContentProps) {
+  const router = useRouter();
+  const setNavigating = useNavigationStore((state) => state.setNavigating);
   const selectedMenuKey = useMemo(() => {
     return (
       MENU_KEY_BY_PREFIX.find(
@@ -60,12 +66,11 @@ export default function MenuContent({ pathname, currentUser }: MenuContentProps)
       ) ?? pathname
     );
   }, [pathname]);
+  const [activeSelectedKey, setActiveSelectedKey] = useState(selectedMenuKey);
 
-  const menuLink = (_href: string, label: string) => (
-    <Link href={_href} prefetch={false}>
-      {label}
-    </Link>
-  );
+  useEffect(() => {
+    setActiveSelectedKey(selectedMenuKey);
+  }, [selectedMenuKey]);
 
   const roleCodes = getRoleCodesFromUser(currentUser);
   const canViewCompanyFinance =
@@ -79,7 +84,7 @@ export default function MenuContent({ pathname, currentUser }: MenuContentProps)
       {
         key: "/",
         icon: <HomeOutlined />,
-        label: menuLink("/", "首页"),
+        label: "首页",
       },
       {
         key: "crm",
@@ -89,17 +94,17 @@ export default function MenuContent({ pathname, currentUser }: MenuContentProps)
           {
             key: "/clients",
             icon: <UserOutlined />,
-            label: menuLink("/clients", "客户管理"),
+            label: "客户管理",
           },
           {
             key: "/client-contacts",
             icon: <IdcardOutlined />,
-            label: menuLink("/client-contacts", "客户人员"),
+            label: "客户人员",
           },
           {
             key: "/vendors",
             icon: <ShopOutlined />,
-            label: menuLink("/vendors", "供应商管理"),
+            label: "供应商管理",
           },
         ],
       },
@@ -111,32 +116,32 @@ export default function MenuContent({ pathname, currentUser }: MenuContentProps)
           {
             key: "/client-projects",
             icon: <ShoppingOutlined />,
-            label: menuLink("/client-projects", "客户项目"),
+            label: "客户项目",
           },
           {
             key: "/internal-projects",
             icon: <ApartmentOutlined />,
-            label: menuLink("/internal-projects", "内部项目"),
+            label: "内部项目",
           },
           {
             key: "/project-segments",
             icon: <AppstoreOutlined />,
-            label: menuLink("/project-segments", "项目环节"),
+            label: "项目环节",
           },
           {
             key: "/project-tasks",
             icon: <ProfileOutlined />,
-            label: menuLink("/project-tasks", "项目任务"),
+            label: "项目任务",
           },
           {
             key: "/project-milestones",
             icon: <FlagOutlined />,
-            label: menuLink("/project-milestones", "项目里程碑"),
+            label: "项目里程碑",
           },
           {
             key: "/project-documents",
             icon: <FileTextOutlined />,
-            label: menuLink("/project-documents", "项目资料"),
+            label: "项目资料",
           },
         ],
       },
@@ -148,17 +153,17 @@ export default function MenuContent({ pathname, currentUser }: MenuContentProps)
           {
             key: "/planned-work-entries",
             icon: <CalendarOutlined />,
-            label: menuLink("/planned-work-entries", "计划工时"),
+            label: "计划工时",
           },
           {
             key: "/actual-work-entries",
             icon: <ClockCircleOutlined />,
-            label: menuLink("/actual-work-entries", "实际工时"),
+            label: "实际工时",
           },
           {
             key: "/work-hours-analysis",
             icon: <ClockCircleOutlined />,
-            label: menuLink("/work-hours-analysis", "工时分析"),
+            label: "工时分析",
           },
         ],
       },
@@ -170,31 +175,31 @@ export default function MenuContent({ pathname, currentUser }: MenuContentProps)
           {
             key: "/employees",
             icon: <TeamOutlined />,
-            label: menuLink("/employees", "团队成员"),
+            label: "团队成员",
           },
           ...(isAdmin
             ? [
                 {
                   key: "/roles",
                   icon: <IdcardOutlined />,
-                  label: menuLink("/roles", "角色管理"),
+                  label: "角色管理",
                 },
                 {
                   key: "/select-options",
                   icon: <AppstoreOutlined />,
-                  label: menuLink("/select-options", "选项管理"),
+                  label: "选项管理",
                 },
               ]
             : []),
           {
             key: "/leave-calendar",
             icon: <CalendarFilled />,
-            label: menuLink("/leave-calendar", "请假日历"),
+            label: "请假日历",
           },
           {
             key: "/workday-adjustments",
             icon: <SwapOutlined />,
-            label: menuLink("/workday-adjustments", "工作日变动"),
+            label: "工作日变动",
           },
         ],
       },
@@ -208,7 +213,7 @@ export default function MenuContent({ pathname, currentUser }: MenuContentProps)
                 {
                   key: "/legal-entities",
                   icon: <BankOutlined />,
-                  label: menuLink("/legal-entities", "公司主体"),
+                  label: "公司主体",
                 },
               ],
             },
@@ -222,7 +227,7 @@ export default function MenuContent({ pathname, currentUser }: MenuContentProps)
           {
             key: "/schedule",
             icon: <CalendarOutlined />,
-            label: menuLink("/schedule", "项目排期"),
+            label: "项目排期",
           },
         ],
       },
@@ -234,7 +239,14 @@ export default function MenuContent({ pathname, currentUser }: MenuContentProps)
     <Menu
       theme="dark"
       mode="inline"
-      selectedKeys={[selectedMenuKey]}
+      selectedKeys={[activeSelectedKey]}
+      onClick={({ key }) => {
+        if (!key.startsWith("/")) return;
+        if (key === pathname) return;
+        setActiveSelectedKey(key);
+        setNavigating(true);
+        router.push(key);
+      }}
       items={items}
     />
   );

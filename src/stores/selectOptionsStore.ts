@@ -27,6 +27,10 @@ const toByField = (options: SelectOption[]) =>
     return acc;
   }, {});
 
+// 外部缓存，避免重复创建对象
+let cachedOptions: SelectOption[] = [];
+let cachedByField: Record<string, SelectOption[]> = {};
+
 export const useSelectOptionsStore = create<SelectOptionsStore>((set, get) => ({
   options: [],
   optionsByField: {},
@@ -53,9 +57,18 @@ export const useSelectOptionsStore = create<SelectOptionsStore>((set, get) => ({
       const options = Array.isArray(data.options) ? data.options : [];
       const optionsByField = data.optionsByField ?? toByField(options);
 
+      // 只有当数据真正改变时才更新缓存和状态
+      const dataChanged =
+        JSON.stringify(cachedOptions) !== JSON.stringify(options);
+
+      if (dataChanged) {
+        cachedOptions = options;
+        cachedByField = optionsByField;
+      }
+
       set({
-        options,
-        optionsByField,
+        options: cachedOptions,
+        optionsByField: cachedByField,
         loaded: true,
         loading: false,
         error: null,

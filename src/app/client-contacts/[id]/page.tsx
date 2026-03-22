@@ -1,59 +1,67 @@
-// @ts-nocheck
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button, Card, Descriptions, Popconfirm, Space, message } from "antd";
-import { EditOutlined } from "@ant-design/icons";
+import { Card, Descriptions, message } from "antd";
 import { useParams, useRouter } from "next/navigation";
 import AppLink from "@/components/AppLink";
 import ContactFormModal from "@/components/ContactFormModal";
+import DetailPageContainer from "@/components/DetailPageContainer";
+import TableActions from "@/components/TableActions";
 import { useCrmPermission } from "@/hooks/useCrmPermission";
-
-type Contact = {
-  id: string;
-  name: string;
-  title?: string | null;
-  scope?: string | null;
-  preference?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  wechat?: string | null;
-  address?: string | null;
-  clientId: string;
-  client?: {
-    id: string;
-    name: string;
-  } | null;
-};
+import { useClientContactsStore } from "@/stores/clientContactsStore";
+import type { ClientContact as Contact } from "@/types/clientContact";
 
 const ClientContactDetailPage = () => {
   const params = useParams();
   const router = useRouter();
   const contactId = params.id as string;
+  const cachedContact = useClientContactsStore((state) => state.byId[contactId]);
+  const upsertContacts = useClientContactsStore((state) => state.upsertContacts);
+  const removeContact = useClientContactsStore((state) => state.removeContact);
 
-  const [contact, setContact] = useState<Contact | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [contact, setContact] = useState<Contact | null>(
+    (cachedContact as Contact | undefined) ?? null,
+  );
+  const [loading, setLoading] = useState(!cachedContact);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
   const { canManageCrm } = useCrmPermission();
 
-  const fetchContact = useCallback(async () => {
+  const fetchContact = useCallback(async (showLoading = false) => {
     if (!contactId) return;
 
-    setLoading(true);
+    if (showLoading) {
+      setLoading(true);
+    }
     try {
       const res = await fetch(`/api/client-contacts/${contactId}`);
+      if (!res.ok) {
+        setContact(null);
+        return;
+      }
       const data = await res.json();
       setContact(data);
+      if (data?.id) {
+        upsertContacts([data]);
+      }
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
-  }, [contactId]);
+  }, [contactId, upsertContacts]);
 
   useEffect(() => {
-    void fetchContact();
-  }, [fetchContact]);
+    if (cachedContact) {
+      setContact(cachedContact as Contact);
+      setLoading(false);
+      void fetchContact(false);
+      return;
+    }
+    setContact(null);
+    void fetchContact(true);
+  }, [cachedContact, fetchContact]);
 
   const handleDelete = async () => {
     if (!contactId) return;
@@ -69,6 +77,7 @@ const ClientContactDetailPage = () => {
         throw new Error("删除失败");
       }
 
+      removeContact(contactId);
       messageApi.success("删除成功");
       router.push("/client-contacts");
     } catch (error) {
@@ -79,89 +88,89 @@ const ClientContactDetailPage = () => {
     }
   };
 
+  const displayContact = contact ?? ((cachedContact as Contact | undefined) ?? null);
+
+  if (loading && !displayContact) {
+    return (
+      <DetailPageContainer>
+        {contextHolder}
+        <Card title="客户人员详情" loading />
+      </DetailPageContainer>
+    );
+  }
+
+  if (!displayContact) {
+    return (
+      <DetailPageContainer>
+        {contextHolder}
+        <Card title="客户人员详情">客户人员不存在</Card>
+      </DetailPageContainer>
+    );
+  }
+
   return (
-    <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+    <DetailPageContainer>
       {contextHolder}
       <Card
-        title={contact?.name || "客户人员详情"}
-        loading={loading}
+        title={displayContact.name || "客户人员详情"}
         extra={
-          <Space>
-            <Button
-              icon={<EditOutlined />}
-              onClick={() => setModalOpen(true)}
-              disabled={!canManageCrm}
-            >
-              编辑
-            </Button>
-            <Popconfirm
-              title={`确定删除客户人员「${contact?.name ?? ""}」？`}
-              okText="删除"
-              cancelText="取消"
-              onConfirm={handleDelete}
-              okButtonProps={{ danger: true, loading: deleting }}
-            >
-              <Button danger loading={deleting} disabled={!canManageCrm}>
-                删除
-              </Button>
-            </Popconfirm>
-          </Space>
+          <TableActions
+            onEdit={() => setModalOpen(true)}
+            onDelete={handleDelete}
+            disabled={!canManageCrm}
+            deleteLoading={deleting}
+            deleteTitle={`确定删除客户人员「${displayContact?.name ?? ""}」？`}
+          />
         }
       >
-        {contact && (
-          <Descriptions column={2} size="small">
-            <Descriptions.Item label="所属客户">
-              {contact.client ? (
-                <AppLink href={`/clients/${contact.client.id}`}>
-                  {contact.client.name}
-                </AppLink>
-              ) : (
-                "-"
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="职位">
-              {contact.title ?? "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="职责范围">
-              {contact.scope ?? "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="偏好">
-              {contact.preference ?? "-"}
-            </Descriptions.Item>
-          </Descriptions>
-        )}
+        <Descriptions column={2} size="small">
+          <Descriptions.Item label="所属客户">
+            {displayContact.client ? (
+              <AppLink href={`/clients/${displayContact.client.id}`}>
+                {displayContact.client.name}
+              </AppLink>
+            ) : (
+              "-"
+            )}
+          </Descriptions.Item>
+          <Descriptions.Item label="职位">
+            {displayContact.title ?? "-"}
+          </Descriptions.Item>
+          <Descriptions.Item label="职责范围">
+            {displayContact.scope ?? "-"}
+          </Descriptions.Item>
+          <Descriptions.Item label="偏好">
+            {displayContact.preference ?? "-"}
+          </Descriptions.Item>
+        </Descriptions>
       </Card>
-
-      <Card title="联系方式" loading={loading}>
-        {contact && (
-          <Descriptions column={2} size="small">
-            <Descriptions.Item label="电话">
-              {contact.phone ?? "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="邮箱">
-              {contact.email ?? "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="微信">
-              {contact.wechat ?? "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="地址">
-              {contact.address ?? "-"}
-            </Descriptions.Item>
-          </Descriptions>
-        )}
+      <Card title="联系方式">
+        <Descriptions column={2} size="small">
+          <Descriptions.Item label="电话">
+            {displayContact.phone ?? "-"}
+          </Descriptions.Item>
+          <Descriptions.Item label="邮箱">
+            {displayContact.email ?? "-"}
+          </Descriptions.Item>
+          <Descriptions.Item label="微信">
+            {displayContact.wechat ?? "-"}
+          </Descriptions.Item>
+          <Descriptions.Item label="地址">
+            {displayContact.address ?? "-"}
+          </Descriptions.Item>
+        </Descriptions>
       </Card>
-
       <ContactFormModal
         open={modalOpen}
         clientEditable={true}
-        initialValues={contact}
+        initialValues={displayContact}
         onCancel={() => setModalOpen(false)}
         onSuccess={async () => {
           setModalOpen(false);
-          await fetchContact();
+          await fetchContact(false);
         }}
       />
-    </Space>
+    </DetailPageContainer>
   );
 };
 

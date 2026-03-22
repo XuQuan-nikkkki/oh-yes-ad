@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useState } from "react";
@@ -65,8 +64,8 @@ const ClientTable = ({
       filterSearch: true,
       onFilter: (value, record) => record.name.includes(String(value)),
       sorter: (a, b) => a.name.localeCompare(b.name),
-      render: (value: string, record) => (
-        <AppLink href={`/clients/${record.id}`}>{value}</AppLink>
+      render: (_dom, record) => (
+        <AppLink href={`/clients/${record.id}`}>{record.name}</AppLink>
       ),
     },
     industry: {
@@ -82,7 +81,7 @@ const ClientTable = ({
         (a.industryOption?.value ?? "").localeCompare(
           b.industryOption?.value ?? "",
         ),
-      render: (_value: string | undefined, record) => (
+      render: (_dom, record) => (
         <SelectOptionTag
           option={record.industryOption}
           fallbackText="-"
@@ -98,8 +97,7 @@ const ClientTable = ({
         <TableActions
           onEdit={() => onEdit(record)}
           onDelete={() => onDelete(record.id)}
-          editDisabled={actionsDisabled}
-          deleteDisabled={actionsDisabled}
+          disabled={actionsDisabled}
           deleteTitle="确定删除这个客户？"
         />
       ),

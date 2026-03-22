@@ -1,63 +1,104 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button, Card, Modal } from "antd";
+import { Button, Modal } from "antd";
+import ListPageContainer from "@/components/ListPageContainer";
 import PlannedWorkEntryForm, {
   PlannedWorkEntryFormPayload,
 } from "@/components/project-detail/PlannedWorkEntryForm";
 import PlannedWorkEntriesTable, {
   PlannedWorkEntryRow,
 } from "@/components/PlannedWorkEntriesTable";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
+import { usePlannedWorkEntriesStore } from "@/stores/plannedWorkEntriesStore";
 import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
+import type { WorkdayAdjustmentRange } from "@/types/workdayAdjustment";
 
 export default function Page() {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [tasks, setTasks] = useState<
     { id: string; name: string; projectId: string; segmentId?: string; segmentName?: string }[]
   >([]);
+  const [formOptionsLoaded, setFormOptionsLoaded] = useState(false);
+  const [formOptionsLoading, setFormOptionsLoading] = useState(false);
   const [workdayAdjustments, setWorkdayAdjustments] = useState<
-    { startDate: string; endDate: string; changeType?: string | null }[]
+    WorkdayAdjustmentRange[]
   >([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<PlannedWorkEntryRow | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const fetchEntriesFromStore = usePlannedWorkEntriesStore(
+    (state) => state.fetchEntries,
+  );
+  const clearEntriesCache = usePlannedWorkEntriesStore(
+    (state) => state.clearEntriesCache,
+  );
   const fetchAdjustmentsFromStore = useWorkdayAdjustmentsStore(
     (state) => state.fetchAdjustments,
   );
 
-  const fetchOptions = useCallback(async () => {
-    const [res2, res3, workdayList] = await Promise.all([
-      fetch("/api/projects"),
-      fetch("/api/project-tasks"),
-      fetchAdjustmentsFromStore(),
-    ]);
-    const projectList = await res2.json();
-    const taskList = await res3.json();
-    setProjects(
-      projectList.map((p: { id: string; name: string }) => ({
-        id: p.id,
-        name: p.name,
+  const fetchWorkdayAdjustments = useCallback(async () => {
+    const workdayList = await fetchAdjustmentsFromStore();
+    setWorkdayAdjustments(Array.isArray(workdayList) ? workdayList : []);
+  }, [fetchAdjustmentsFromStore]);
+
+  const fetchFormOptions = useCallback(async () => {
+    const tasksRes = await fetch("/api/project-tasks");
+    const taskList = await tasksRes.json();
+    const nextTasks = Array.isArray(taskList)
+      ? taskList
+          .filter(
+            (item): item is {
+              id: string;
+              name: string;
+              segment?: {
+                id?: string;
+                name?: string;
+                project?: { id?: string; name?: string };
+              };
+            } => Boolean(item?.id && item?.name),
+          )
+          .map((t) => ({
+            id: t.id,
+            name: t.name,
+            projectId: t.segment?.project?.id ?? "",
+            segmentId: t.segment?.id,
+            segmentName: t.segment?.name,
+            projectName: t.segment?.project?.name ?? "",
+          }))
+      : [];
+    setTasks(
+      nextTasks.map((task) => ({
+        id: task.id,
+        name: task.name,
+        projectId: task.projectId,
+        segmentId: task.segmentId,
+        segmentName: task.segmentName,
       })),
     );
-    setTasks(
-      taskList.map(
-        (t: {
-          id: string;
-          name: string;
-          segment?: { id?: string; name?: string; project?: { id: string } };
-        }) => ({
-          id: t.id,
-          name: t.name,
-          projectId: t.segment?.project?.id,
-          segmentId: t.segment?.id,
-          segmentName: t.segment?.name,
-        }),
-      ),
+    const projectMap = new Map<string, string>();
+    nextTasks.forEach((task) => {
+      if (!task.projectId || !task.projectName) return;
+      projectMap.set(task.projectId, task.projectName);
+    });
+    setProjects(
+      Array.from(projectMap.entries()).map(([id, name]) => ({
+        id,
+        name,
+      })),
     );
-    setWorkdayAdjustments(
-      Array.isArray(workdayList) ? workdayList : [],
-    );
-  }, [fetchAdjustmentsFromStore]);
+    setFormOptionsLoaded(true);
+  }, []);
+
+  const ensureFormOptionsLoaded = useCallback(async () => {
+    if (formOptionsLoaded || formOptionsLoading) return;
+    setFormOptionsLoading(true);
+    try {
+      await fetchFormOptions();
+    } finally {
+      setFormOptionsLoading(false);
+    }
+  }, [fetchFormOptions, formOptionsLoaded, formOptionsLoading]);
 
   const fetchRows = useCallback(
     async (params: {
@@ -87,35 +128,35 @@ export default function Page() {
       if (params.filters.weekNumber)
         query.set("weekNumber", params.filters.weekNumber);
 
-      const res = await fetch(`/api/planned-work-entries?${query.toString()}`);
-      const payload = await res.json();
-      if (Array.isArray(payload)) {
-        return {
-          data: payload,
-          total: payload.length,
-        };
-      }
-      return {
-        data: Array.isArray(payload?.data) ? payload.data : [],
-        total:
-          typeof payload?.total === "number"
-            ? payload.total
-            : Array.isArray(payload?.data)
-              ? payload.data.length
-              : 0,
-      };
+      return fetchEntriesFromStore(
+        {
+          current: params.current,
+          pageSize: params.pageSize,
+          filters: {
+            projectName: query.get("projectName") ?? undefined,
+            segmentName: query.get("segmentName") ?? undefined,
+            taskName: query.get("taskName") ?? undefined,
+            ownerName: query.get("ownerName") ?? undefined,
+            year: query.get("year") ?? undefined,
+            weekNumber: query.get("weekNumber") ?? undefined,
+          },
+        },
+        refreshKey > 0,
+      );
     },
-    [],
+    [fetchEntriesFromStore, refreshKey],
   );
 
   useEffect(() => {
-    (async () => {
-      await fetchOptions();
-    })();
-  }, [fetchOptions]);
+    const timer = setTimeout(() => {
+      void fetchWorkdayAdjustments();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchWorkdayAdjustments]);
 
   const onDelete = async (id: string) => {
     await fetch(`/api/planned-work-entries/${id}`, { method: "DELETE" });
+    clearEntriesCache();
     setRefreshKey((prev) => prev + 1);
   };
 
@@ -135,21 +176,24 @@ export default function Page() {
     }
     setOpen(false);
     setEditing(null);
+    clearEntriesCache();
     setRefreshKey((prev) => prev + 1);
   };
 
   return (
-    <Card styles={{ body: { padding: 12 } }}>
+    <ListPageContainer>
       <PlannedWorkEntriesTable
         requestData={fetchRows}
-        headerTitle={<h3 style={{ margin: 0 }}>计划工时</h3>}
+        headerTitle={<ProTableHeaderTitle>计划工时</ProTableHeaderTitle>}
         toolbarActions={[
           <Button
             key="create-planned-work-entry"
             type="primary"
             onClick={() => {
-              setEditing(null);
-              setOpen(true);
+              void ensureFormOptionsLoaded().then(() => {
+                setEditing(null);
+                setOpen(true);
+              });
             }}
           >
             新增计划工时
@@ -157,8 +201,10 @@ export default function Page() {
         ]}
         workdayAdjustments={workdayAdjustments}
         onEdit={(row) => {
-          setEditing(row);
-          setOpen(true);
+          void ensureFormOptionsLoaded().then(() => {
+            setEditing(row);
+            setOpen(true);
+          });
         }}
         onDelete={(id) => {
           void onDelete(id);
@@ -200,6 +246,6 @@ export default function Page() {
           onSubmit={onSubmit}
         />
       </Modal>
-    </Card>
+    </ListPageContainer>
   );
 }

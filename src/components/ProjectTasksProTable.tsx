@@ -3,9 +3,10 @@
 import type { ReactNode } from "react";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
 import TableActions from "@/components/TableActions";
+import { DATE_FORMAT } from "@/lib/constants";
+import { formatDate } from "@/lib/date";
 
 export type ProjectTasksProTableRow = {
   id: string;
@@ -56,7 +57,7 @@ const ProjectTasksProTable = ({
   const dueDateFilters = Array.from(
     new Set(
       rows
-        .map((row) => (row.dueDate ? dayjs(row.dueDate).format("YYYY-MM-DD") : null))
+        .map((row) => formatDate(row.dueDate, DATE_FORMAT, ""))
         .filter((value): value is string => Boolean(value)),
     ),
   ).map((value) => ({ text: value, value }));
@@ -90,9 +91,8 @@ const ProjectTasksProTable = ({
       filters: dueDateFilters,
       filterSearch: true,
       onFilter: (value, record) =>
-        (record.dueDate ? dayjs(record.dueDate).format("YYYY-MM-DD") : "") === String(value),
-      render: (_value, record) =>
-        record.dueDate ? dayjs(record.dueDate).format("YYYY-MM-DD") : "-",
+        formatDate(record.dueDate, DATE_FORMAT, "") === String(value),
+      render: (_value, record) => formatDate(record.dueDate, DATE_FORMAT),
       sorter: (a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""),
     },
     actions: {

@@ -6,20 +6,18 @@ import { EditOutlined } from "@ant-design/icons";
 import { useParams, useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
+import { DEFAULT_COLOR } from "@/lib/constants";
 import AppLink from "@/components/AppLink";
+import DetailPageContainer from "@/components/DetailPageContainer";
+import EmployeeFunctionValue from "@/components/employee/EmployeeFunctionValue";
 import PlannedWorkEntryForm, { PlannedWorkEntryFormPayload } from "@/components/project-detail/PlannedWorkEntryForm";
 import SelectOptionTag from "@/components/SelectOptionTag";
+import type { NullableSelectOptionValue } from "@/types/selectOption";
 
 dayjs.extend(isoWeek);
 
-type SelectOptionValue = {
-  id?: string;
-  value?: string | null;
-  color?: string | null;
-} | null;
-
 const toSelectOptionTagOption = (
-  option: SelectOptionValue,
+  option: NullableSelectOptionValue,
 ): { id: string; value: string; color?: string | null } | null => {
   if (!option?.id || !option.value) return null;
   return {
@@ -57,15 +55,28 @@ type Detail = {
     owner?: {
       id: string;
       name: string;
-      functionOption?: SelectOptionValue;
+      functionOption?: NullableSelectOptionValue;
     } | null;
     segment?: {
       id: string;
       name: string;
-      statusOption?: SelectOptionValue;
+      statusOption?: NullableSelectOptionValue;
       project?: { id: string; name: string };
     };
   };
+};
+
+type ProjectDetailForTasks = {
+  id: string;
+  name: string;
+  segments?: {
+    id: string;
+    name: string;
+    projectTasks?: {
+      id: string;
+      name: string;
+    }[];
+  }[];
 };
 
 export default function Page() {
@@ -73,6 +84,7 @@ export default function Page() {
   const router = useRouter();
   const id = params.id as string;
   const [data, setData] = useState<Detail | null>(null);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
@@ -85,42 +97,53 @@ export default function Page() {
 
   const fetchDetail = useCallback(async () => {
     if (!id) return;
+    setLoading(true);
     const res = await fetch(`/api/planned-work-entries/${id}`);
-    if (!res.ok) return setData(null);
+    if (!res.ok) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
     setData(await res.json());
+    setLoading(false);
   }, [id]);
 
   const fetchOptions = useCallback(async () => {
     if (optionsLoaded || optionsLoading) return;
     setOptionsLoading(true);
     try {
-      const [projectsRes, tasksRes] = await Promise.all([
-        fetch("/api/projects"),
-        fetch("/api/project-tasks"),
-      ]);
-      const projectList = await projectsRes.json();
-      const taskList = await tasksRes.json();
-      setProjects(projectList);
-      setTasks(
-        taskList.map(
-          (task: {
-            id: string;
-            name: string;
-            segment?: { id?: string; name?: string; project?: { id: string } };
-          }) => ({
+      const projectId = data?.task?.segment?.project?.id;
+      if (!projectId) {
+        setProjects([]);
+        setTasks([]);
+        setOptionsLoaded(true);
+        return;
+      }
+
+      const projectRes = await fetch(`/api/projects/${projectId}`);
+      if (!projectRes.ok) {
+        setProjects([]);
+        setTasks([]);
+        return;
+      }
+      const project = (await projectRes.json()) as ProjectDetailForTasks;
+      setProjects([{ id: project.id, name: project.name }]);
+      const taskRows =
+        project.segments?.flatMap((segment) =>
+          (segment.projectTasks ?? []).map((task) => ({
             id: task.id,
             name: task.name,
-            projectId: task.segment?.project?.id,
-            segmentId: task.segment?.id,
-            segmentName: task.segment?.name,
-          }),
-        ),
-      );
+            projectId: project.id,
+            segmentId: segment.id,
+            segmentName: segment.name,
+          })),
+        ) ?? [];
+      setTasks(taskRows);
       setOptionsLoaded(true);
     } finally {
       setOptionsLoading(false);
     }
-  }, [optionsLoaded, optionsLoading]);
+  }, [data?.task?.segment?.project?.id, optionsLoaded, optionsLoading]);
 
   useEffect(() => {
     if (!id) return;
@@ -181,11 +204,27 @@ export default function Page() {
     }
   };
 
+  if (loading) {
+    return (
+      <DetailPageContainer>
+        <Card title="计划工时详情" loading />
+      </DetailPageContainer>
+    );
+  }
+
+  if (!data) {
+    return (
+      <DetailPageContainer>
+        <Card title="计划工时详情">计划工时记录不存在</Card>
+      </DetailPageContainer>
+    );
+  }
+
   return (
-    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+    <DetailPageContainer>
       {contextHolder}
       <Card
-        title={data?.task?.name || "计划工时详情"}
+        title={data.task?.name || "计划工时详情"}
         extra={
           <Space>
             <Button icon={<EditOutlined />} onClick={() => void onOpenEdit()} loading={optionsLoading}>
@@ -205,8 +244,7 @@ export default function Page() {
           </Space>
         }
       >
-        {data && (
-          <Space orientation="vertical" size={24} style={{ width: "100%" }}>
+        <Space orientation="vertical" size={24} style={{ width: "100%" }}>
             <div>
               <h4 style={{ margin: "0 0 12px" }}>任务信息</h4>
               <Descriptions column={2} size="small">
@@ -237,7 +275,7 @@ export default function Page() {
                     "-"
                   )}
                 </Descriptions.Item>
-                <Descriptions.Item label="任务状态">
+                <Descriptions.Item label="环节状态">
                   <SelectOptionTag
                     option={toSelectOptionTagOption(data.task?.segment?.statusOption ?? null)}
                   />
@@ -258,8 +296,8 @@ export default function Page() {
                   )}
                 </Descriptions.Item>
                 <Descriptions.Item label="负责人职能">
-                  <SelectOptionTag
-                    option={toSelectOptionTagOption(data.task?.owner?.functionOption ?? null)}
+                  <EmployeeFunctionValue
+                    functionOption={data.task?.owner?.functionOption}
                   />
                 </Descriptions.Item>
               </Descriptions>
@@ -296,7 +334,7 @@ export default function Page() {
                           : {
                               id: "",
                               value: weekText,
-                              color: "#d9d9d9",
+                              color: DEFAULT_COLOR,
                             }
                       }
                     />
@@ -327,35 +365,35 @@ export default function Page() {
                 <Descriptions.Item label="工时(天)">{`${data.plannedDays}d`}</Descriptions.Item>
               </Descriptions>
             </div>
-          </Space>
-        )}
+        </Space>
       </Card>
 
       <Modal title="编辑计划工时" open={open} onCancel={() => setOpen(false)} footer={null} destroyOnHidden>
         <PlannedWorkEntryForm
           projectOptions={projects}
+          selectedProjectId={data?.task?.segment?.project?.id}
+          disableProjectSelect
           taskOptions={tasks}
           initialValues={
-            data
-              ? {
-                  id: data.id,
-                  taskId: data.task?.id ?? "",
-                  yearOption: data.yearOption?.value ?? String(data.year ?? ""),
-                  weekNumberOption: data.weekNumberOption?.value ?? String(data.weekNumber ?? ""),
-                  plannedDays: data.plannedDays,
-                  monday: data.monday,
-                  tuesday: data.tuesday,
-                  wednesday: data.wednesday,
-                  thursday: data.thursday,
-                  friday: data.friday,
-                  saturday: data.saturday,
-                  sunday: data.sunday,
-                }
-              : null
+            {
+              id: data.id,
+              taskId: data.task?.id ?? "",
+              yearOption: data.yearOption?.value ?? String(data.year ?? ""),
+              weekNumberOption:
+                data.weekNumberOption?.value ?? String(data.weekNumber ?? ""),
+              plannedDays: data.plannedDays,
+              monday: data.monday,
+              tuesday: data.tuesday,
+              wednesday: data.wednesday,
+              thursday: data.thursday,
+              friday: data.friday,
+              saturday: data.saturday,
+              sunday: data.sunday,
+            }
           }
           onSubmit={onSubmit}
         />
       </Modal>
-    </Space>
+    </DetailPageContainer>
   );
 }

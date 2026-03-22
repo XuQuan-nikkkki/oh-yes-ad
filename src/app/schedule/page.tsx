@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
@@ -24,15 +23,12 @@ import SelectOptionTag from "@/components/SelectOptionTag";
 import AppLink from "@/components/AppLink";
 import ClientProjectSchedulePane from "@/components/schedule/ClientProjectSchedulePane";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
-import ProjectMilestoneForm, {
-  ProjectMilestoneFormPayload,
-} from "@/components/project-detail/ProjectMilestoneForm";
-import ProjectSegmentForm, {
-  ProjectSegmentFormPayload,
-} from "@/components/project-detail/ProjectSegmentForm";
-import ProjectTaskForm, {
-  ProjectTaskFormPayload,
-} from "@/components/project-detail/ProjectTaskForm";
+import type { ProjectMilestoneFormPayload } from "@/components/project-detail/ProjectMilestoneForm";
+import type { ProjectSegmentFormPayload } from "@/components/project-detail/ProjectSegmentForm";
+import type { ProjectTaskFormPayload } from "@/components/project-detail/ProjectTaskForm";
+import ProjectMilestoneFormModal from "@/components/project-detail/ProjectMilestoneFormModal";
+import ProjectSegmentFormModal from "@/components/project-detail/ProjectSegmentFormModal";
+import ProjectTaskFormModal from "@/components/project-detail/ProjectTaskFormModal";
 import PlannedWorkEntryForm, {
   PlannedWorkEntryFormPayload,
 } from "@/components/project-detail/PlannedWorkEntryForm";
@@ -40,6 +36,8 @@ import ProjectMilestoneSection from "@/components/project-detail/ProjectMileston
 import ProjectProgressNestedTable from "@/components/project-detail/ProjectProgressNestedTable";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { useProjectsStore } from "@/stores/projectsStore";
+import { DEFAULT_COLOR } from "@/lib/constants";
 
 dayjs.extend(isoWeek);
 
@@ -345,11 +343,13 @@ function SchedulePageContent() {
   const searchParams = useSearchParams();
   const [messageApi, contextHolder] = message.useMessage();
   const [loadingProjects, setLoadingProjects] = useState(true);
-  const [projectDetailsRefreshSeed, setProjectDetailsRefreshSeed] = useState(0);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const [allProjects, setAllProjects] = useState<ProjectListItem[]>([]);
   const [projectDetails, setProjectDetails] = useState<
     Record<string, ProjectDetail>
+  >({});
+  const [projectDetailLoadingById, setProjectDetailLoadingById] = useState<
+    Record<string, boolean>
   >({});
   const [employees, setEmployees] = useState<EmployeeListItem[]>([]);
   const [weeklyPlannedEntries, setWeeklyPlannedEntries] = useState<
@@ -374,7 +374,12 @@ function SchedulePageContent() {
     Record<string, "progress" | "tasks">
   >({});
   const { canManageProject } = useProjectPermission();
+  const employeesFromStore = useEmployeesStore((state) => state.employees);
+  const employeesFullFromStore = useEmployeesStore((state) => state.employeesFull);
+  const employeesLoaded = useEmployeesStore((state) => state.loaded);
+  const employeesLoadedFull = useEmployeesStore((state) => state.loadedFull);
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
   const [editingSegment, setEditingSegment] = useState<SegmentRow | null>(null);
   const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
   const [editingPlannedEntry, setEditingPlannedEntry] =
@@ -385,23 +390,33 @@ function SchedulePageContent() {
   const [plannedDefaultTaskId, setPlannedDefaultTaskId] = useState<
     string | undefined
   >(undefined);
+  const [internalExpandedProjectIds, setInternalExpandedProjectIds] = useState<
+    string[]
+  >([]);
+  const activeScheduleTab = useMemo(() => {
+    const tab = searchParams.get("tab");
+    if (tab && SCHEDULE_TAB_KEYS.has(tab)) {
+      return tab;
+    }
+    return "client-project-schedule";
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchProjects = async () => {
       setLoadingProjects(true);
       try {
-        const response = await fetch("/api/projects", { cache: "no-store" });
-        const data = (await response.json()) as ProjectListItem[];
-        setAllProjects(Array.isArray(data) ? data : []);
+        const data = await fetchProjectsFromStore();
+        setAllProjects(Array.isArray(data) ? (data as ProjectListItem[]) : []);
       } finally {
         setLoadingProjects(false);
       }
     };
 
     void fetchProjects();
-  }, []);
+  }, [fetchProjectsFromStore]);
 
   useEffect(() => {
+    if (activeScheduleTab !== "weekly-tasks") return;
     const fetchWeeklyData = async () => {
       setLoadingWeekly(true);
       try {
@@ -409,12 +424,20 @@ function SchedulePageContent() {
         const currentYear = String(now.year());
         const currentWeek = String(now.isoWeek());
 
+        const plannedPromise = fetch(
+          `/api/planned-work-entries?page=1&pageSize=1000&year=${currentYear}&weekNumber=${currentWeek}`,
+          { cache: "no-store" },
+        );
+        const employeesPromise =
+          employeesLoaded && employeesFromStore.length > 0
+            ? Promise.resolve(employeesFromStore)
+            : employeesLoadedFull && employeesFullFromStore.length > 0
+              ? Promise.resolve(employeesFullFromStore)
+              : fetchEmployeesFromStore();
+
         const [employeesPayload, plannedRes] = await Promise.all([
-          fetchEmployeesFromStore(),
-          fetch(
-            `/api/planned-work-entries?page=1&pageSize=1000&year=${currentYear}&weekNumber=${currentWeek}`,
-            { cache: "no-store" },
-          ),
+          employeesPromise,
+          plannedPromise,
         ]);
 
         const plannedPayload = await plannedRes.json();
@@ -434,7 +457,14 @@ function SchedulePageContent() {
     };
 
     void fetchWeeklyData();
-  }, [fetchEmployeesFromStore]);
+  }, [
+    activeScheduleTab,
+    employeesFromStore,
+    employeesFullFromStore,
+    employeesLoaded,
+    employeesLoadedFull,
+    fetchEmployeesFromStore,
+  ]);
 
   const visibleProjects = useMemo(
     () =>
@@ -460,20 +490,23 @@ function SchedulePageContent() {
           if (project.name.includes("中台")) return false;
           return true;
         })
-        .sort((left, right) => {
-          const leftSegmentCount =
-            projectDetails[left.id]?.segments?.length ?? 0;
-          const rightSegmentCount =
-            projectDetails[right.id]?.segments?.length ?? 0;
-          if (leftSegmentCount !== rightSegmentCount) {
-            return rightSegmentCount - leftSegmentCount;
-          }
-          return left.name.localeCompare(right.name, "zh-CN");
-        }),
-    [allProjects, projectDetails],
+        .sort((left, right) => left.name.localeCompare(right.name, "zh-CN")),
+    [allProjects],
   );
 
   const groupedVisibleProjects = useMemo(() => {
+    const statusOrderByValue = new Map<string, number>();
+    for (const option of optionsByField["project.status"] ?? []) {
+      const statusValue = (option.value ?? "").trim();
+      if (!statusValue) continue;
+      statusOrderByValue.set(
+        statusValue,
+        typeof option.order === "number"
+          ? option.order
+          : Number.MAX_SAFE_INTEGER,
+      );
+    }
+
     const groups = new Map<string, ProjectListItem[]>();
     for (const project of visibleProjects) {
       const status =
@@ -488,12 +521,23 @@ function SchedulePageContent() {
     return Array.from(groups.entries())
       .map(([status, projects]) => ({
         status,
+        statusOption:
+          (optionsByField["project.status"] ?? []).find(
+            (option) => (option.value ?? "").trim() === status,
+          ) ?? null,
         projects: [...projects].sort((left, right) =>
           left.name.localeCompare(right.name, "zh-CN"),
         ),
       }))
-      .sort((left, right) => left.status.localeCompare(right.status, "zh-CN"));
-  }, [visibleProjects]);
+      .sort((left, right) => {
+        const leftOrder =
+          statusOrderByValue.get(left.status) ?? Number.MAX_SAFE_INTEGER;
+        const rightOrder =
+          statusOrderByValue.get(right.status) ?? Number.MAX_SAFE_INTEGER;
+        if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+        return left.status.localeCompare(right.status, "zh-CN");
+      });
+  }, [optionsByField, visibleProjects]);
 
   const plannedYearOptionMap = useMemo(() => {
     const map = new Map<
@@ -567,20 +611,6 @@ function SchedulePageContent() {
     [projectDetails, selectedClientProject],
   );
 
-  const scheduleDetailProjectIds = useMemo(() => {
-    return allProjects
-      .filter((project) => {
-        if (Boolean(project.isArchived)) return false;
-        const typeValue =
-          project.typeOption?.value?.trim() || project.type?.trim() || "";
-        const isInternal = typeValue === "INTERNAL" || typeValue === "内部项目";
-        if (isInternal && project.name.includes("中台")) return false;
-        return true;
-      })
-      .map((project) => project.id)
-      .sort((left, right) => left.localeCompare(right));
-  }, [allProjects]);
-
   const activeMilestoneProjectId = useMemo(
     () => milestoneProjectId ?? selectedClientProject?.id ?? null,
     [milestoneProjectId, selectedClientProject?.id],
@@ -618,6 +648,7 @@ function SchedulePageContent() {
   );
 
   useEffect(() => {
+    if (!milestoneModalOpen) return;
     const clientId = activeMilestoneProjectDetail?.client?.id;
     if (!clientId) {
       setClientContacts([]);
@@ -639,7 +670,7 @@ function SchedulePageContent() {
       }
     };
     void fetchClientContacts();
-  }, [activeMilestoneProjectDetail?.client?.id]);
+  }, [activeMilestoneProjectDetail?.client?.id, milestoneModalOpen]);
 
   useEffect(() => {
     if (loadingProjects) {
@@ -664,31 +695,60 @@ function SchedulePageContent() {
     });
   }, [loadingProjects, pathname, router, searchParams, selectedClientProject]);
 
+  const fetchProjectDetailById = async (
+    projectId: string,
+    force = false,
+  ) => {
+    if (!projectId) return;
+    if (!force && projectDetails[projectId]) return;
+    setProjectDetailLoadingById((prev) => ({
+      ...prev,
+      [projectId]: true,
+    }));
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const detail = (await response.json()) as ProjectDetail;
+      setProjectDetails((prev) => ({
+        ...prev,
+        [projectId]: detail,
+      }));
+    } finally {
+      setProjectDetailLoadingById((prev) => ({
+        ...prev,
+        [projectId]: false,
+      }));
+    }
+  };
+
   useEffect(() => {
-    const fetchProjectDetails = async () => {
-      if (scheduleDetailProjectIds.length === 0) {
-        setProjectDetails({});
-        return;
-      }
+    if (activeScheduleTab === "client-project-schedule") {
+      const projectId = selectedClientProject?.id;
+      if (!projectId) return;
+      void fetchProjectDetailById(projectId);
+      return;
+    }
+    if (activeScheduleTab === "internal-project-schedule") {
+      const projectIds = internalExpandedProjectIds;
+      if (projectIds.length === 0) return;
+      void Promise.all(projectIds.map((projectId) => fetchProjectDetailById(projectId)));
+      return;
+    }
+    const projectId = activeMilestoneProjectId;
+    if (!projectId) return;
+    void fetchProjectDetailById(projectId);
+  }, [
+    activeMilestoneProjectId,
+    activeScheduleTab,
+    internalExpandedProjectIds,
+    selectedClientProject?.id,
+  ]);
 
-      const results = await Promise.all(
-        scheduleDetailProjectIds.map(async (projectId) => {
-          const response = await fetch(`/api/projects/${projectId}`, {
-            cache: "no-store",
-          });
-          const detail = (await response.json()) as ProjectDetail;
-          return [projectId, detail] as const;
-        }),
-      );
-
-      setProjectDetails(Object.fromEntries(results));
-    };
-
-    void fetchProjectDetails();
-  }, [projectDetailsRefreshSeed, scheduleDetailProjectIds]);
-
-  const refreshProjectDetails = () => {
-    setProjectDetailsRefreshSeed((value) => value + 1);
+  const refreshProjectDetails = (projectId?: string | null) => {
+    if (!projectId) return;
+    void fetchProjectDetailById(projectId, true);
   };
 
   const handleSubmitMilestone = async (
@@ -716,7 +776,7 @@ function SchedulePageContent() {
       messageApi.success("里程碑已创建");
       setMilestoneModalOpen(false);
       setMilestoneProjectId(null);
-      refreshProjectDetails();
+      refreshProjectDetails(activeMilestoneProjectId);
     } catch (error) {
       const text = error instanceof Error ? error.message : "保存里程碑失败";
       messageApi.error(text);
@@ -768,7 +828,7 @@ function SchedulePageContent() {
         throw new Error(text || "删除环节失败");
       }
       messageApi.success("环节已删除");
-      refreshProjectDetails();
+      refreshProjectDetails(selectedClientProject?.id);
     } catch (error) {
       const text = error instanceof Error ? error.message : "删除环节失败";
       messageApi.error(text);
@@ -786,7 +846,7 @@ function SchedulePageContent() {
         throw new Error(text || "删除任务失败");
       }
       messageApi.success("任务已删除");
-      refreshProjectDetails();
+      refreshProjectDetails(selectedClientProject?.id);
     } catch (error) {
       const text = error instanceof Error ? error.message : "删除任务失败";
       messageApi.error(text);
@@ -803,7 +863,7 @@ function SchedulePageContent() {
         throw new Error(text || "删除计划工时失败");
       }
       messageApi.success("计划工时已删除");
-      refreshProjectDetails();
+      refreshProjectDetails(selectedClientProject?.id);
     } catch (error) {
       const text = error instanceof Error ? error.message : "删除计划工时失败";
       messageApi.error(text);
@@ -837,7 +897,7 @@ function SchedulePageContent() {
       messageApi.success(editingSegment ? "环节已更新" : "环节已创建");
       setSegmentModalOpen(false);
       setEditingSegment(null);
-      refreshProjectDetails();
+      refreshProjectDetails(selectedClientProject?.id);
     } catch (error) {
       const text = error instanceof Error ? error.message : "保存环节失败";
       messageApi.error(text);
@@ -871,7 +931,7 @@ function SchedulePageContent() {
       setTaskModalOpen(false);
       setEditingTask(null);
       setTaskDefaultSegmentId(undefined);
-      refreshProjectDetails();
+      refreshProjectDetails(selectedClientProject?.id);
     } catch (error) {
       const text = error instanceof Error ? error.message : "保存任务失败";
       messageApi.error(text);
@@ -904,7 +964,7 @@ function SchedulePageContent() {
       setPlannedWorkModalOpen(false);
       setEditingPlannedEntry(null);
       setPlannedDefaultTaskId(undefined);
-      refreshProjectDetails();
+      refreshProjectDetails(selectedClientProject?.id);
     } catch (error) {
       const text = error instanceof Error ? error.message : "保存计划工时失败";
       messageApi.error(text);
@@ -1118,7 +1178,7 @@ function SchedulePageContent() {
                   ...(hasTasks
                     ? {}
                     : {
-                        color: "#8c8c8c",
+                        color: DEFAULT_COLOR,
                         background: "#f5f5f5",
                         borderColor: "#f0f0f0",
                       }),
@@ -1304,7 +1364,24 @@ function SchedulePageContent() {
 
   const renderProjectScheduleContent = (project: ProjectListItem) => {
     const detail = projectDetails[project.id];
+    const detailLoading = Boolean(projectDetailLoadingById[project.id]);
     const progressView = projectProgressViewById[project.id] ?? "progress";
+
+    if (!detail && detailLoading) {
+      return (
+        <Card>
+          <Spin />
+        </Card>
+      );
+    }
+
+    if (!detail) {
+      return (
+        <Card>
+          <Empty description="暂无项目详情" />
+        </Card>
+      );
+    }
 
     const segmentRows: SegmentRow[] =
       detail?.segments
@@ -1542,6 +1619,13 @@ function SchedulePageContent() {
   ) : (
     <Collapse
       ghost
+      activeKey={internalExpandedProjectIds}
+      onChange={(keys) => {
+        const next = Array.isArray(keys) ? keys : [keys];
+        setInternalExpandedProjectIds(
+          next.filter((value): value is string => typeof value === "string"),
+        );
+      }}
       items={internalVisibleProjects.map((project) => ({
         key: project.id,
         label: <AppLink href={`/projects/${project.id}`}>{project.name}</AppLink>,
@@ -1549,14 +1633,6 @@ function SchedulePageContent() {
       }))}
     />
   );
-
-  const activeScheduleTab = useMemo(() => {
-    const tab = searchParams.get("tab");
-    if (tab && SCHEDULE_TAB_KEYS.has(tab)) {
-      return tab;
-    }
-    return "client-project-schedule";
-  }, [searchParams]);
 
   const handleScheduleTabChange = (nextTab: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -1613,95 +1689,85 @@ function SchedulePageContent() {
       </Card>
 
       {segmentModalOpen ? (
-        <Modal
+        <ProjectSegmentFormModal
           title={editingSegment ? "编辑环节" : "新增环节"}
           open={segmentModalOpen}
           onCancel={() => {
             setSegmentModalOpen(false);
             setEditingSegment(null);
           }}
-          footer={null}
           confirmLoading={segmentSubmitting}
-          destroyOnHidden
-        >
-          <ProjectSegmentForm
-            initialValues={
-              editingSegment
-                ? {
-                    id: editingSegment.id,
-                    name: editingSegment.name,
-                    status: editingSegment.status ?? null,
-                    statusOption: editingSegment.statusOption ?? null,
-                    dueDate: editingSegment.dueDate ?? null,
-                    owner: editingSegment.ownerId
-                      ? {
-                          id: editingSegment.ownerId,
-                          name: editingSegment.ownerName,
-                        }
-                      : null,
-                    project: selectedClientProject
-                      ? {
-                          id: selectedClientProject.id,
-                          name: selectedClientProject.name,
-                        }
-                      : null,
-                  }
-                : null
-            }
-            projectOptions={
-              selectedClientProject
-                ? [
-                    {
-                      id: selectedClientProject.id,
-                      name: selectedClientProject.name,
-                    },
-                  ]
-                : []
-            }
-            selectedProjectId={selectedClientProject?.id}
-            disableProjectSelect
-            employees={employees}
-            onSubmit={handleSubmitSegment}
-          />
-        </Modal>
+          initialValues={
+            editingSegment
+              ? {
+                  id: editingSegment.id,
+                  name: editingSegment.name,
+                  status: editingSegment.status ?? null,
+                  statusOption: editingSegment.statusOption ?? null,
+                  dueDate: editingSegment.dueDate ?? null,
+                  owner: editingSegment.ownerId
+                    ? {
+                        id: editingSegment.ownerId,
+                        name: editingSegment.ownerName,
+                      }
+                    : null,
+                  project: selectedClientProject
+                    ? {
+                        id: selectedClientProject.id,
+                        name: selectedClientProject.name,
+                      }
+                    : null,
+                }
+              : null
+          }
+          projectOptions={
+            selectedClientProject
+              ? [
+                  {
+                    id: selectedClientProject.id,
+                    name: selectedClientProject.name,
+                  },
+                ]
+              : []
+          }
+          selectedProjectId={selectedClientProject?.id}
+          disableProjectSelect
+          employees={employees}
+          onSubmit={handleSubmitSegment}
+        />
       ) : null}
 
       {milestoneModalOpen ? (
-        <Modal
+        <ProjectMilestoneFormModal
           title="新增里程碑"
           open={milestoneModalOpen}
           onCancel={() => {
             setMilestoneModalOpen(false);
             setMilestoneProjectId(null);
           }}
-          footer={null}
           confirmLoading={milestoneSubmitting}
-          destroyOnHidden
-        >
-          <ProjectMilestoneForm
-            projectMembers={activeMilestoneProjectDetail?.members ?? []}
-            allEmployees={employees}
-            clientParticipants={clientContacts}
-            vendors={activeMilestoneProjectDetail?.vendors ?? []}
-            projectOptions={
-              activeMilestoneProjectId && activeMilestoneProjectDetail
-                ? [
-                    {
-                      id: activeMilestoneProjectId,
-                      name: activeMilestoneProjectDetail.name,
-                    },
-                  ]
-                : []
-            }
-            selectedProjectId={activeMilestoneProjectId ?? undefined}
-            disableProjectSelect
-            onSubmit={handleSubmitMilestone}
-          />
-        </Modal>
+          projectMembers={activeMilestoneProjectDetail?.members ?? []}
+          allEmployees={employees}
+          clientParticipants={clientContacts}
+          vendors={activeMilestoneProjectDetail?.vendors ?? []}
+          projectOptions={
+            activeMilestoneProjectId && activeMilestoneProjectDetail
+              ? [
+                  {
+                    id: activeMilestoneProjectId,
+                    name: activeMilestoneProjectDetail.name,
+                  },
+                ]
+              : []
+          }
+          selectedProjectId={activeMilestoneProjectId ?? undefined}
+          disableProjectSelect
+          onSubmit={handleSubmitMilestone}
+        />
       ) : null}
 
       {taskModalOpen ? (
-        <Modal
+        <ProjectTaskFormModal
           title={editingTask ? "编辑任务" : "新增任务"}
           open={taskModalOpen}
           onCancel={() => {
@@ -1709,32 +1775,27 @@ function SchedulePageContent() {
             setEditingTask(null);
             setTaskDefaultSegmentId(undefined);
           }}
-          footer={null}
           confirmLoading={taskSubmitting}
-          destroyOnHidden
-        >
-          <ProjectTaskForm
-            segmentOptions={selectedProjectSegmentOptions}
-            defaultSegmentId={taskDefaultSegmentId}
-            employees={employees}
-            initialValues={
-              editingTask
-                ? {
-                    id: editingTask.id,
-                    name: editingTask.name,
-                    segmentId: editingTask.segmentId,
-                    segmentName: editingTask.segmentName,
-                    status: editingTask.status ?? null,
-                    dueDate: editingTask.dueDate ?? null,
-                    owner: editingTask.ownerId
-                      ? { id: editingTask.ownerId, name: editingTask.ownerName }
-                      : null,
-                  }
-                : null
-            }
-            onSubmit={handleSubmitTask}
-          />
-        </Modal>
+          segmentOptions={selectedProjectSegmentOptions}
+          defaultSegmentId={taskDefaultSegmentId}
+          employees={employees}
+          initialValues={
+            editingTask
+              ? {
+                  id: editingTask.id,
+                  name: editingTask.name,
+                  segmentId: editingTask.segmentId,
+                  segmentName: editingTask.segmentName,
+                  status: editingTask.status ?? null,
+                  dueDate: editingTask.dueDate ?? null,
+                  owner: editingTask.ownerId
+                    ? { id: editingTask.ownerId, name: editingTask.ownerName }
+                    : null,
+                }
+              : null
+          }
+          onSubmit={handleSubmitTask}
+        />
       ) : null}
 
       {plannedWorkModalOpen ? (

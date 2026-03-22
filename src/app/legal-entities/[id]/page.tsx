@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Card, Descriptions, Space, Table, Tag } from "antd";
 import dayjs from "dayjs";
 import { useParams } from "next/navigation";
+import DetailPageContainer from "@/components/DetailPageContainer";
 
 type BankAccount = {
   id: string;
@@ -55,7 +56,7 @@ const LegalEntityDetailPage = () => {
   }, [fetchData]);
 
   return (
-    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+    <DetailPageContainer>
       <Card title={data?.name || "公司主体详情"} loading={loading}>
         <Descriptions column={3} size="small">
           <Descriptions.Item label="名称">{data?.name ?? "-"}</Descriptions.Item>
@@ -98,7 +99,7 @@ const LegalEntityDetailPage = () => {
           ]}
         />
       </Card>
-    </Space>
+    </DetailPageContainer>
   );
 };
 

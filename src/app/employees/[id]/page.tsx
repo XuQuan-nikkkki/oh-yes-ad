@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -7,6 +6,7 @@ import { EditOutlined } from "@ant-design/icons";
 import { useParams, useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
+import DetailPageContainer from "@/components/DetailPageContainer";
 import EmployeeFormModal from "@/components/EmployeeFormModal";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import ProjectsTable, { type Project } from "@/components/ProjectsTable";
@@ -16,6 +16,7 @@ import ActualWorkEntriesTable, {
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
+import type { WorkdayAdjustment } from "@/types/workdayAdjustment";
 
 type EmployeeDetail = {
   id: string;
@@ -110,13 +111,6 @@ type EmployeeDetail = {
       name: string;
     } | null;
   }[];
-};
-
-type WorkdayAdjustment = {
-  id: string;
-  changeType: string;
-  startDate: string;
-  endDate: string;
 };
 
 const EmployeeDetailPage = () => {
@@ -320,11 +314,43 @@ const EmployeeDetailPage = () => {
     return `${hours.toFixed(1).replace(/\.0$/, "")}h`;
   };
 
+  if (loading && !employee) {
+    return (
+      <DetailPageContainer>
+        {contextHolder}
+        <Card loading />
+      </DetailPageContainer>
+    );
+  }
+
+  if (!employee) {
+    return (
+      <DetailPageContainer>
+        {contextHolder}
+        <Card>成员不存在</Card>
+      </DetailPageContainer>
+    );
+  }
+
+  const departmentLevel1Option = normalizeEditableOption(
+    employee.departmentLevel1Option,
+  );
+  const departmentLevel2Option = normalizeEditableOption(
+    employee.departmentLevel2Option,
+  );
+  const positionOption = normalizeEditableOption(employee.positionOption);
+  const employmentTypeOption = normalizeEditableOption(
+    employee.employmentTypeOption,
+  );
+  const employmentStatusOption = normalizeEditableOption(
+    employee.employmentStatusOption,
+  );
+
   return (
-    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+    <DetailPageContainer>
       {contextHolder}
       <Card
-        title={employee?.name || "成员详情"}
+        title={employee.name || "成员详情"}
         loading={loading}
         extra={
           <Space>
@@ -332,7 +358,7 @@ const EmployeeDetailPage = () => {
               编辑
             </Button>
             <Popconfirm
-              title={`确定删除成员「${employee?.name ?? ""}」？`}
+              title={`确定删除成员「${employee.name ?? ""}」？`}
               okText="删除"
               cancelText="取消"
               onConfirm={() => void handleDelete()}
@@ -345,19 +371,17 @@ const EmployeeDetailPage = () => {
           </Space>
         }
       >
-        {employee && (
-          <Descriptions column={3} size="small">
-            <Descriptions.Item label="全名">{employee.fullName ?? "-"}</Descriptions.Item>
-            <Descriptions.Item label="职能">
-              {normalizeEditableOption(employee.functionOption) ? (
-                <SelectOptionTag option={normalizeEditableOption(employee.functionOption)} onUpdated={fetchEmployee} />
-              ) : (
-                "-"
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="手机号">{employee.phone ?? "-"}</Descriptions.Item>
-          </Descriptions>
-        )}
+        <Descriptions column={3} size="small">
+          <Descriptions.Item label="全名">{employee.fullName ?? "-"}</Descriptions.Item>
+          <Descriptions.Item label="职能">
+            {normalizeEditableOption(employee.functionOption) ? (
+              <SelectOptionTag option={normalizeEditableOption(employee.functionOption)} onUpdated={fetchEmployee} />
+            ) : (
+              "-"
+            )}
+          </Descriptions.Item>
+          <Descriptions.Item label="手机号">{employee.phone ?? "-"}</Descriptions.Item>
+        </Descriptions>
       </Card>
 
       <Card>
@@ -385,9 +409,9 @@ const EmployeeDetailPage = () => {
                               )}
                             </Descriptions.Item>
                             <Descriptions.Item label="一级部门(中心)">
-                              {normalizeEditableOption(employee?.departmentLevel1Option) ? (
+                              {departmentLevel1Option ? (
                                 <SelectOptionTag
-                                  option={normalizeEditableOption(employee.departmentLevel1Option)}
+                                  option={departmentLevel1Option}
                                   onUpdated={fetchEmployee}
                                 />
                               ) : employee?.departmentLevel1 ? (
@@ -397,9 +421,9 @@ const EmployeeDetailPage = () => {
                               )}
                             </Descriptions.Item>
                             <Descriptions.Item label="二级部门(部门)">
-                              {normalizeEditableOption(employee?.departmentLevel2Option) ? (
+                              {departmentLevel2Option ? (
                                 <SelectOptionTag
-                                  option={normalizeEditableOption(employee.departmentLevel2Option)}
+                                  option={departmentLevel2Option}
                                   onUpdated={fetchEmployee}
                                 />
                               ) : employee?.departmentLevel2 ? (
@@ -409,8 +433,8 @@ const EmployeeDetailPage = () => {
                               )}
                             </Descriptions.Item>
                             <Descriptions.Item label="职位">
-                              {normalizeEditableOption(employee?.positionOption) ? (
-                                <SelectOptionTag option={normalizeEditableOption(employee.positionOption)} onUpdated={fetchEmployee} />
+                              {positionOption ? (
+                                <SelectOptionTag option={positionOption} onUpdated={fetchEmployee} />
                               ) : employee?.position ? (
                                 employee.position
                               ) : (
@@ -425,15 +449,15 @@ const EmployeeDetailPage = () => {
                           <h4 style={{ margin: "0 0 12px 0" }}>在/离职信息</h4>
                           <Descriptions column={3} size="small">
                             <Descriptions.Item label="用工性质">
-                              {normalizeEditableOption(employee?.employmentTypeOption) ? (
-                                <SelectOptionTag option={normalizeEditableOption(employee.employmentTypeOption)} onUpdated={fetchEmployee} />
+                              {employmentTypeOption ? (
+                                <SelectOptionTag option={employmentTypeOption} onUpdated={fetchEmployee} />
                               ) : (
                                 null
                               )}
                             </Descriptions.Item>
                             <Descriptions.Item label="用工状态">
-                              {normalizeEditableOption(employee?.employmentStatusOption) ? (
-                                <SelectOptionTag option={normalizeEditableOption(employee.employmentStatusOption)} onUpdated={fetchEmployee} />
+                              {employmentStatusOption ? (
+                                <SelectOptionTag option={employmentStatusOption} onUpdated={fetchEmployee} />
                               ) : employee?.employmentStatus ? (
                                 employee.employmentStatus
                               ) : (
@@ -641,7 +665,7 @@ const EmployeeDetailPage = () => {
         initialValues={employee}
         showPositionAdvancedSteps={canViewHrFinanceInfo}
       />
-    </Space>
+    </DetailPageContainer>
   );
 };
 

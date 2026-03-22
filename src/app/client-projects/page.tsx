@@ -1,79 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Button, Card } from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import ProjectFormModal from "@/components/ProjectFormModal";
 import ProjectsTable, { type Project } from "@/components/ProjectsTable";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
+import ListPageContainer from "@/components/ListPageContainer";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
-import { useEmployeesStore } from "@/stores/employeesStore";
+import { useClientsStore } from "@/stores/clientsStore";
 import { useProjectsStore } from "@/stores/projectsStore";
 
-type Client = {
-  id: string;
-  name: string;
-};
-
-type Employee = {
-  id: string;
-  name: string;
-};
+const CLIENT_PROJECT_TYPE = "客户项目";
+const CLIENT_PROJECT_QUERY_KEY = JSON.stringify({
+  type: CLIENT_PROJECT_TYPE,
+  ownerId: "",
+  clientId: "",
+  vendorId: "",
+});
 
 const ClientProjectsPage = () => {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const { canManageProject } = useProjectPermission();
-  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const storeClients = useClientsStore((state) => state.clients);
+  const fetchClientsFromStore = useClientsStore((state) => state.fetchClients);
+  const projectsById = useProjectsStore((state) => state.byId);
+  const projectIds = useProjectsStore(
+    (state) => state.queryState[CLIENT_PROJECT_QUERY_KEY]?.ids,
+  );
+  const loading = useProjectsStore(
+    (state) => state.queryState[CLIENT_PROJECT_QUERY_KEY]?.loading ?? false,
+  );
+  const loaded = useProjectsStore(
+    (state) => state.queryState[CLIENT_PROJECT_QUERY_KEY]?.loaded ?? false,
+  );
   const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
-  
-  const fetchProjects = async (force = false) => {
-    setLoading(true);
-    const data = await fetchProjectsFromStore({ type: "客户项目", force });
-    setProjects(Array.isArray(data) ? (data as Project[]) : []);
-    setLoading(false);
-  };
+  const clients = storeClients
+    .filter(
+      (
+        item,
+      ): item is {
+        id: string;
+        name: string;
+      } => typeof item.id === "string" && typeof item.name === "string",
+    )
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+    }));
+  const projects = useMemo(
+    () =>
+      (projectIds ?? [])
+        .map((id) => projectsById[id])
+        .filter((item): item is Project => Boolean(item)),
+    [projectIds, projectsById],
+  );
 
-  const fetchClients = async () => {
-    const res = await fetch("/api/clients");
-    const data = await res.json();
-    setClients(data);
-  };
+  const fetchProjects = useCallback(
+    async (force = false) => {
+      await fetchProjectsFromStore({ type: CLIENT_PROJECT_TYPE, force });
+    },
+    [fetchProjectsFromStore],
+  );
 
-  const fetchEmployees = async () => {
-    try {
-      const data = await fetchEmployeesFromStore();
-      setEmployees(data);
-    } catch {
-      console.log("Employees API not available yet");
-    }
-  };
+  const ensureClientsLoaded = useCallback(async () => {
+    if (clients.length > 0) return;
+    await fetchClientsFromStore();
+  }, [clients.length, fetchClientsFromStore]);
 
   useEffect(() => {
-    const loadData = async () => {
-      await Promise.all([fetchProjects(), fetchClients(), fetchEmployees()]);
-    };
-    loadData();
-  }, []);
+    if (loaded) return;
+    void fetchProjects();
+  }, [fetchProjects, loaded]);
 
   const handleDelete = async (id: string) => {
     if (!canManageProject) return;
-    await fetch("/api/projects", {
+    const res = await fetch("/api/projects", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
-
-    fetchProjects(true);
+    if (!res.ok) return;
+    await fetchProjects(true);
   };
 
   return (
-    <Card styles={{ body: { padding: 12 } }}>
+    <ListPageContainer>
       <ProjectsTable
-        headerTitle={<h3 style={{ margin: 0 }}>客户项目</h3>}
+        headerTitle={<ProTableHeaderTitle>客户项目</ProTableHeaderTitle>}
         toolbarActions={[
           <Button
             key="create-client-project"
@@ -81,6 +96,7 @@ const ClientProjectsPage = () => {
             icon={<PlusOutlined />}
             disabled={!canManageProject}
             onClick={() => {
+              void ensureClientsLoaded();
               setEditingProject(null);
               setOpen(true);
             }}
@@ -95,8 +111,8 @@ const ClientProjectsPage = () => {
         columnKeys={["name", "client", "status", "stage", "owner", "isArchived", "actions"]}
         defaultVisibleColumnKeys={["name", "client", "status", "stage", "owner", "isArchived", "actions"]}
         onOptionUpdated={fetchProjects}
-        actionsDisabled={!canManageProject}
         onEdit={(project) => {
+          void ensureClientsLoaded();
           setEditingProject(project);
           setOpen(true);
         }}
@@ -104,7 +120,11 @@ const ClientProjectsPage = () => {
       />
       <ProjectFormModal
         open={open}
-        initialValues={editingProject ? { ...editingProject, type: "客户项目" } : { type: "客户项目" }}
+        initialValues={
+          editingProject
+            ? { ...editingProject, type: CLIENT_PROJECT_TYPE }
+            : { type: CLIENT_PROJECT_TYPE }
+        }
         onCancel={() => {
           setOpen(false);
           setEditingProject(null);
@@ -115,10 +135,9 @@ const ClientProjectsPage = () => {
           await fetchProjects(true);
         }}
         clients={clients}
-        employees={employees}
-        projectType="客户项目"
+        projectType={CLIENT_PROJECT_TYPE}
       />
-    </Card>
+    </ListPageContainer>
   );
 };
 

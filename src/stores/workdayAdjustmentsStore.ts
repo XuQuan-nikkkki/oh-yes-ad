@@ -1,12 +1,7 @@
 import { create } from "zustand";
+import type { WorkdayAdjustment } from "@/types/workdayAdjustment";
 
-export type WorkdayAdjustmentItem = {
-  id: string;
-  name?: string | null;
-  changeType: string;
-  startDate: string;
-  endDate: string;
-};
+export type WorkdayAdjustmentItem = WorkdayAdjustment;
 
 type WorkdayAdjustmentsStore = {
   adjustments: WorkdayAdjustmentItem[];

@@ -1,49 +1,23 @@
-// @ts-nocheck
 "use client";
 
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import TableActions from "@/components/TableActions";
-import dayjs from "dayjs";
+import BooleanTag from "@/components/BooleanTag";
 import AppLink from "@/components/AppLink";
 import SelectOptionTag from "@/components/SelectOptionTag";
-
-export type Project = {
-  id: string;
-  name: string;
-  type?: string | null;
-  isArchived?: boolean | null;
-  status?: string | null;
-  stage?: string | null;
-  startDate?: string | null;
-  endDate?: string | null;
-  clientId?: string | null;
-  ownerId?: string | null;
-  client?: {
-    id: string;
-    name: string;
-  } | null;
-  owner?: {
-    id: string;
-    name: string;
-  } | null;
-  statusOption?: {
-    id: string;
-    value: string;
-    color?: string | null;
-  } | null;
-  stageOption?: {
-    id: string;
-    value: string;
-    color?: string | null;
-  } | null;
-  typeOption?: {
-    id: string;
-    value: string;
-    color?: string | null;
-  } | null;
-};
+import { useProjectPermission } from "@/hooks/useProjectPermission";
+import { formatDate } from "@/lib/date";
+import { formatProjectPeriod } from "@/lib/workday";
+import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
+import type { Project } from "@/types/project";
+import type {
+  WorkdayAdjustment,
+  WorkdayAdjustmentRange,
+} from "@/types/workdayAdjustment";
+export type { Project } from "@/types/project";
 
 type ColumnKey =
   | "name"
@@ -58,12 +32,6 @@ type ColumnKey =
   | "endDate"
   | "actions";
 
-type WorkdayAdjustment = {
-  startDate: string;
-  endDate: string;
-  changeType: string;
-};
-
 interface ProjectsTableProps {
   projects: Project[];
   loading?: boolean;
@@ -75,7 +43,7 @@ interface ProjectsTableProps {
   columnsStatePersistenceKey?: string;
   pagination?: boolean;
   compactHorizontalPadding?: boolean;
-  workdayAdjustments?: WorkdayAdjustment[];
+  workdayAdjustments?: WorkdayAdjustmentRange[];
   onOptionUpdated?: () => void | Promise<void>;
   onEdit?: (project: Project) => void;
   onDelete?: (id: string) => void;
@@ -108,13 +76,36 @@ const ProjectsTable = ({
   onOptionUpdated,
   onEdit,
   onDelete,
-  actionsDisabled = false,
+  actionsDisabled,
 }: ProjectsTableProps) => {
-  const formatDate = (value?: string | null) => {
-    if (!value) return "-";
-    const parsed = dayjs(value);
-    return parsed.isValid() ? parsed.format("YYYY-MM-DD") : "-";
-  };
+  const { canManageProject } = useProjectPermission();
+  const resolvedActionsDisabled = actionsDisabled ?? !canManageProject;
+  const [fallbackWorkdayAdjustments, setFallbackWorkdayAdjustments] =
+    useState<WorkdayAdjustment[]>([]);
+  const fetchAdjustmentsFromStore = useWorkdayAdjustmentsStore(
+    (state) => state.fetchAdjustments,
+  );
+
+  useEffect(() => {
+    if (workdayAdjustments && workdayAdjustments.length > 0) return;
+
+    const loadAdjustments = async () => {
+      try {
+        const data = await fetchAdjustmentsFromStore();
+        setFallbackWorkdayAdjustments(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Failed to fetch workday adjustments:", error);
+        setFallbackWorkdayAdjustments([]);
+      }
+    };
+
+    loadAdjustments();
+  }, [workdayAdjustments, fetchAdjustmentsFromStore]);
+
+  const workdayAdjustmentsData =
+    workdayAdjustments && workdayAdjustments.length > 0
+      ? workdayAdjustments
+      : fallbackWorkdayAdjustments;
 
   const projectTypeOptions = {
     CLIENT: "客户项目",
@@ -123,53 +114,8 @@ const ProjectsTable = ({
     内部项目: "内部项目",
   };
 
-  const calculateWorkdays = (
-    startDate: Date,
-    endDate: Date,
-    adjustments: WorkdayAdjustment[],
-  ): number => {
-    let workdays = 0;
-    const current = new Date(startDate);
-
-    while (current <= endDate) {
-      const dayOfWeek = current.getDay();
-      const dateStr = current.toISOString().split("T")[0];
-
-      const adjustment = adjustments.find((adj) => {
-        const adjStart = new Date(adj.startDate).toISOString().split("T")[0];
-        const adjEnd = new Date(adj.endDate).toISOString().split("T")[0];
-        return dateStr >= adjStart && dateStr <= adjEnd;
-      });
-
-      if (adjustment) {
-        if (adjustment.changeType === "上班") {
-          workdays++;
-        }
-      } else if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-        workdays++;
-      }
-
-      current.setDate(current.getDate() + 1);
-    }
-
-    return workdays;
-  };
-
-  const formatPeriod = (startDate?: string | null, endDate?: string | null) => {
-    if (!startDate) return "-";
-    const start = new Date(startDate);
-    const today = new Date();
-    const effectiveEnd = endDate ? new Date(endDate) : today;
-    const naturalDays =
-      Math.floor(
-        (effectiveEnd.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
-      ) + 1;
-    const workdays = calculateWorkdays(start, effectiveEnd, workdayAdjustments);
-    const startStr = dayjs(start).format("YYYY/MM/DD");
-    const endStr = endDate ? dayjs(endDate).format("YYYY/MM/DD") : "至今";
-    const period = `${startStr} - ${endStr}`;
-    return `${period} (自然日: ${naturalDays}天 | 工作日: ${workdays}天)`;
-  };
+  const formatPeriod = (startDate?: string | null, endDate?: string | null) =>
+    formatProjectPeriod(startDate, endDate, workdayAdjustmentsData);
   const typeFilters = Array.from(
     new Set(
       projects
@@ -334,7 +280,9 @@ const ProjectsTable = ({
       ],
       onFilter: (value: string | number | boolean, record: Project) =>
         String(Boolean(record.isArchived)) === String(value),
-      render: (value: boolean | null | undefined) => (value ? "是" : "否"),
+      render: (value: boolean | null | undefined) => (
+        <BooleanTag value={Boolean(value)} />
+      ),
     },
     period: {
       title: "项目周期",
@@ -374,8 +322,7 @@ const ProjectsTable = ({
         <TableActions
           onEdit={() => onEdit?.(record)}
           onDelete={() => onDelete?.(record.id)}
-          editDisabled={actionsDisabled}
-          deleteDisabled={actionsDisabled}
+          disabled={resolvedActionsDisabled}
           deleteTitle="确定删除这个项目？"
         />
       ),
@@ -411,12 +358,10 @@ const ProjectsTable = ({
       cardProps={
         compactHorizontalPadding
           ? {
-              styles: {
-                body: {
-                  paddingInline: 0,
-                },
+              bodyStyle: {
+                paddingInline: 0,
+                paddingTop: 0,
               },
-              bodyStyle: { paddingInline: 0, paddingTop: 0 },
             }
           : undefined
       }

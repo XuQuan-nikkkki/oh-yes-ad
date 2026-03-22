@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useEffect, useMemo } from "react";
@@ -10,6 +9,7 @@ import SelectOptionSelector, {
   type SelectOptionSelectorValue,
 } from "@/components/SelectOptionSelector";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import { DEFAULT_COLOR } from "@/lib/constants";
 
 export type ProjectSegmentFormPayload = {
   name: string;
@@ -22,7 +22,7 @@ export type ProjectSegmentFormPayload = {
 type FormValues = {
   name: string;
   projectId?: string;
-  status?: SelectOptionSelectorValue;
+  status?: SelectOptionSelectorValue | null;
   ownerId?: string;
   dueDate?: dayjs.Dayjs;
 };
@@ -30,7 +30,7 @@ type FormValues = {
 type EmployeeOption = {
   id: string;
   name: string;
-  employmentStatus?: string;
+  employmentStatus?: string | null;
 };
 
 type ProjectOption = {
@@ -75,6 +75,13 @@ const ProjectSegmentForm = ({
   employees = [],
   onSubmit,
 }: Props) => {
+  const normalizeSelectValue = (
+    value?: SelectOptionSelectorValue | null,
+  ): string | null => {
+    if (!value) return null;
+    return typeof value === "string" ? value : value.value;
+  };
+
   dayjs.locale("zh-cn");
   const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
@@ -114,7 +121,7 @@ const ProjectSegmentForm = ({
           onSubmit({
             name: values.name,
             projectId: values.projectId,
-            status: values.status ?? null,
+            status: normalizeSelectValue(values.status),
             ownerId: values.ownerId ?? null,
             dueDate: values.dueDate ? values.dueDate.toISOString() : null,
           })
@@ -139,7 +146,7 @@ const ProjectSegmentForm = ({
             options={statusOptions.map((item) => ({
               label: item.value,
               value: item.value,
-              color: item.color ?? "#d9d9d9",
+              color: item.color ?? DEFAULT_COLOR,
             }))}
           />
         </Form.Item>

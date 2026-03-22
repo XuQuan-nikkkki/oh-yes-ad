@@ -1,77 +1,52 @@
-// @ts-nocheck
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Card } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
 import ContactFormModal from "@/components/ContactFormModal";
 import ClientContactTable from "@/components/ClientContactTable";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import { useCrmPermission } from "@/hooks/useCrmPermission";
-
-type Contact = {
-  id: string;
-  name: string;
-  clientId?: string;
-  title?: string | null;
-  scope?: string | null;
-  preference?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  wechat?: string | null;
-  address?: string | null;
-  client: {
-    id: string;
-    name: string;
-  };
-};
+import ListPageContainer from "@/components/ListPageContainer";
+import CreateButton from "@/components/actions/CreateButton";
+import { useClientContactsStore } from "@/stores/clientContactsStore";
+import type { ClientContact } from "@/types/clientContact";
 
 const ClientContactsPage = () => {
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState(false);
+  const contacts = useClientContactsStore((state) => state.contacts);
+  const loading = useClientContactsStore((state) => state.loading);
+  const fetchContactsFromStore = useClientContactsStore((state) => state.fetchContacts);
+  const upsertContacts = useClientContactsStore((state) => state.upsertContacts);
+  const removeContact = useClientContactsStore((state) => state.removeContact);
   const [open, setOpen] = useState(false);
-  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const { canManageCrm } = useCrmPermission();
 
-  const fetchContacts = async () => {
-    setLoading(true);
-    const res = await fetch("/api/client-contacts");
-    const data = await res.json();
-    setContacts(data);
-    setLoading(false);
-  };
-
   useEffect(() => {
-    (async () => {
-      await fetchContacts();
-    })();
-  }, []);
+    void fetchContactsFromStore();
+  }, [fetchContactsFromStore]);
 
   const handleDelete = async (id: string) => {
     if (!canManageCrm) return;
-    await fetch(`/api/client-contacts/${id}`, {
+    const res = await fetch(`/api/client-contacts/${id}`, {
       method: "DELETE",
     });
-
-    fetchContacts();
+    if (!res.ok) return;
+    removeContact(id);
   };
 
   return (
-    <Card styles={{ body: { padding: 12 } }}>
+    <ListPageContainer>
       <ClientContactTable
-        headerTitle={<h3 style={{ margin: 0 }}>客户人员管理</h3>}
+        headerTitle={<ProTableHeaderTitle>客户人员管理</ProTableHeaderTitle>}
         toolbarActions={[
-          <Button
+          <CreateButton
             key="create-contact"
-            type="primary"
-            icon={<PlusOutlined />}
             disabled={!canManageCrm}
             onClick={() => {
               setEditingContact(null);
               setOpen(true);
             }}
-          >
-            新建人员
-          </Button>,
+            btnText="新建人员"
+          />,
         ]}
         enableColumnSetting
         columnsStatePersistenceKey="client-contacts-table-columns-state"
@@ -79,7 +54,10 @@ const ClientContactsPage = () => {
         loading={loading}
         actionsDisabled={!canManageCrm}
         onEdit={(record) => {
-          setEditingContact(record);
+          setEditingContact({
+            ...record,
+            clientId: record.client?.id ?? "",
+          });
           setOpen(true);
         }}
         onDelete={handleDelete}
@@ -103,14 +81,15 @@ const ClientContactsPage = () => {
           setOpen(false);
           const isCreate = !editingContact;
           setEditingContact(null);
-          if (isCreate && savedContact?.id) {
-            setContacts((prev) => [savedContact as Contact, ...prev]);
+          if (savedContact?.id) {
+            upsertContacts([savedContact as ClientContact]);
             return;
           }
-          await fetchContacts();
+          if (isCreate) return;
+          await fetchContactsFromStore(true);
         }}
       />
-    </Card>
+    </ListPageContainer>
   );
 };
 

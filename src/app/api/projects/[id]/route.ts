@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import type { NullableSelectOptionValue } from "@/types/selectOption";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -31,26 +32,21 @@ const toProjectTypeCode = (value?: string | null) => {
   return value;
 };
 
-type SelectOptionValue = {
-  id?: string;
-  value?: string | null;
-  color?: string | null;
-} | null | undefined;
 type EmployeePayload = {
-  functionOption?: SelectOptionValue;
-  employmentStatusOption?: SelectOptionValue;
+  functionOption?: NullableSelectOptionValue;
+  employmentStatusOption?: NullableSelectOptionValue;
 } & Record<string, unknown>;
 type ProjectTaskPayload = {
   owner?: EmployeePayload | null;
   plannedWorkEntries?: Array<
     Record<string, unknown> & {
-      yearOption?: SelectOptionValue;
-      weekNumberOption?: SelectOptionValue;
+      yearOption?: NullableSelectOptionValue;
+      weekNumberOption?: NullableSelectOptionValue;
     }
   >;
 } & Record<string, unknown>;
 type ProjectSegmentPayload = {
-  statusOption?: SelectOptionValue;
+  statusOption?: NullableSelectOptionValue;
   projectTasks?: ProjectTaskPayload[];
 } & Record<string, unknown>;
 type ProjectMilestonePayload = {
@@ -58,17 +54,17 @@ type ProjectMilestonePayload = {
   endAt?: string | Date | null;
   datePrecision?: string | null;
   date?: string | null;
-  typeOption?: SelectOptionValue;
-  methodOption?: SelectOptionValue;
+  typeOption?: NullableSelectOptionValue;
+  methodOption?: NullableSelectOptionValue;
   internalParticipants?: EmployeePayload[];
 } & Record<string, unknown>;
 type ProjectDocumentPayload = {
-  typeOption?: SelectOptionValue;
+  typeOption?: NullableSelectOptionValue;
 } & Record<string, unknown>;
 type ProjectPayload = {
-  typeOption?: SelectOptionValue;
-  statusOption?: SelectOptionValue;
-  stageOption?: SelectOptionValue;
+  typeOption?: NullableSelectOptionValue;
+  statusOption?: NullableSelectOptionValue;
+  stageOption?: NullableSelectOptionValue;
   owner?: EmployeePayload | null;
   members?: EmployeePayload[];
   milestones?: ProjectMilestonePayload[];

@@ -3,22 +3,18 @@
 import type { ReactNode } from "react";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import TableActions from "@/components/TableActions";
-
-type SelectOptionValue = {
-  id: string;
-  value?: string | null;
-  color?: string | null;
-} | null;
+import { DATE_FORMAT } from "@/lib/constants";
+import { formatDate } from "@/lib/date";
+import type { NullableSelectOptionValue } from "@/types/selectOption";
 
 export type ProjectSegmentsProTableRow = {
   id: string;
   name: string;
   status?: string | null;
-  statusOption?: SelectOptionValue;
+  statusOption?: NullableSelectOptionValue;
   dueDate?: string | null;
   project?: { id: string; name: string } | null;
   owner?: { id: string; name: string } | null;
@@ -84,7 +80,7 @@ const ProjectSegmentsProTable = ({
   const dueDateFilters = Array.from(
     new Set(
       rows
-        .map((row) => (row.dueDate ? dayjs(row.dueDate).format("YYYY-MM-DD") : null))
+        .map((row) => formatDate(row.dueDate, DATE_FORMAT, ""))
         .filter((value): value is string => Boolean(value)),
     ),
   ).map((value) => ({ text: value, value }));
@@ -154,9 +150,8 @@ const ProjectSegmentsProTable = ({
       filters: dueDateFilters,
       filterSearch: true,
       onFilter: (value, record) =>
-        (record.dueDate ? dayjs(record.dueDate).format("YYYY-MM-DD") : "") === String(value),
-      render: (_value, record) =>
-        record.dueDate ? dayjs(record.dueDate).format("YYYY-MM-DD") : "-",
+        formatDate(record.dueDate, DATE_FORMAT, "") === String(value),
+      render: (_value, record) => formatDate(record.dueDate, DATE_FORMAT),
       sorter: (a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""),
     },
     actions: {
@@ -169,8 +164,7 @@ const ProjectSegmentsProTable = ({
           key={record.id}
           onEdit={() => onEdit(record)}
           onDelete={() => onDelete(record.id)}
-          editDisabled={actionsDisabled}
-          deleteDisabled={actionsDisabled}
+          disabled={actionsDisabled}
           deleteTitle={`确定删除环节「${record.name}」？`}
         />,
       ],

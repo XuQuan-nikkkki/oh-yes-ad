@@ -1,69 +1,25 @@
 "use client";
 
 import { useMemo } from "react";
-import { Tag } from "antd";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
+import type { CSSProperties } from "react";
 import TableActions from "@/components/TableActions";
 import AppLink from "@/components/AppLink";
-import SelectOptionTag from "@/components/SelectOptionTag";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
+import {
+  VendorBooleanValue,
+  VendorLinkValue,
+  VendorOptionListValue,
+  VendorOptionValue,
+  VendorTextValue,
+} from "@/components/vendor/VendorContent";
+import { useCrmPermission } from "@/hooks/useCrmPermission";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import { EMPTY_SELECT_OPTIONS } from "@/types/selectOption";
+import type { Vendor } from "@/types/vendor";
 
-export type Vendor = {
-  id: string;
-  name: string;
-  fullName?: string | null;
-  vendorTypeOptionId?: string | null;
-  businessTypeOptionIds?: string[];
-  businessTypeOptionId?: string | null;
-  cooperationStatusOptionId?: string | null;
-  ratingOptionId?: string | null;
-  serviceOptionIds?: string[];
-  vendorTypeOption?: {
-    id: string;
-    value: string;
-    color?: string | null;
-  } | null;
-  businessTypeOptions?: Array<{
-    id: string;
-    value: string;
-    color?: string | null;
-  }>;
-  businessTypeOption?: {
-    id: string;
-    value: string;
-    color?: string | null;
-  } | null;
-  cooperationStatusOption?: {
-    id: string;
-    value: string;
-    color?: string | null;
-  } | null;
-  ratingOption?: { id: string; value: string; color?: string | null } | null;
-  serviceOptions?: Array<{ id: string; value: string; color?: string | null }>;
-  isBlacklisted?: boolean;
-  location?: string | null;
-  contactName?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  wechat?: string | null;
-  strengths?: string | null;
-  companyIntro?: string | null;
-  portfolioLink?: string | null;
-  priceRange?: string | null;
-  lastCoopDate?: string | null;
-  cooperatedProjects?: string | null;
-  notes?: string | null;
-};
-
-const EMPTY_OPTIONS: {
-  id: string;
-  field: string;
-  value: string;
-  color?: string | null;
-  order?: number | null;
-  createdAt: string;
-}[] = [];
+export type { Vendor };
 
 type Props = {
   vendors: Vendor[];
@@ -96,6 +52,7 @@ type Props = {
   headerTitle?: React.ReactNode;
   toolbarActions?: React.ReactNode[];
   showColumnSetting?: boolean;
+  cardBodyStyle?: CSSProperties;
 };
 
 const VendorsTable = ({
@@ -126,25 +83,28 @@ const VendorsTable = ({
     "cooperatedProjects",
     "actions",
   ],
-  headerTitle = <h3 style={{ margin: 0 }}>供应商管理</h3>,
+  headerTitle = <ProTableHeaderTitle>供应商管理</ProTableHeaderTitle>,
   toolbarActions = [],
   showColumnSetting = true,
+  cardBodyStyle,
 }: Props) => {
+  const { canManageCrm } = useCrmPermission();
+  const resolvedActionsDisabled = actionsDisabled ?? !canManageCrm;
   const vendorTypeOptions = useSelectOptionsStore(
-    (state) => state.optionsByField["vendor.vendorType"] ?? EMPTY_OPTIONS,
+    (state) => state.optionsByField["vendor.vendorType"] ?? EMPTY_SELECT_OPTIONS,
   );
   const businessTypeOptions = useSelectOptionsStore(
-    (state) => state.optionsByField["vendor.businessType"] ?? EMPTY_OPTIONS,
+    (state) => state.optionsByField["vendor.businessType"] ?? EMPTY_SELECT_OPTIONS,
   );
   const servicesOptions = useSelectOptionsStore(
-    (state) => state.optionsByField["vendor.services"] ?? EMPTY_OPTIONS,
+    (state) => state.optionsByField["vendor.services"] ?? EMPTY_SELECT_OPTIONS,
   );
   const cooperationStatusOptions = useSelectOptionsStore(
     (state) =>
-      state.optionsByField["vendor.cooperationStatus"] ?? EMPTY_OPTIONS,
+      state.optionsByField["vendor.cooperationStatus"] ?? EMPTY_SELECT_OPTIONS,
   );
   const ratingOptions = useSelectOptionsStore(
-    (state) => state.optionsByField["vendor.rating"] ?? EMPTY_OPTIONS,
+    (state) => state.optionsByField["vendor.rating"] ?? EMPTY_SELECT_OPTIONS,
   );
 
   const vendorTypeFilters = useMemo(
@@ -218,12 +178,9 @@ const VendorsTable = ({
         filters: vendorTypeFilters,
         onFilter: (value, record) =>
           record.vendorTypeOptionId === String(value),
-        render: (_dom, record) =>
-          record.vendorTypeOption ? (
-            <SelectOptionTag option={record.vendorTypeOption} />
-          ) : (
-            "-"
-          ),
+        render: (_dom, record) => (
+          <VendorOptionValue option={record.vendorTypeOption} />
+        ),
       },
       businessType: {
         key: "businessType",
@@ -232,19 +189,20 @@ const VendorsTable = ({
         filters: businessTypeFilters,
         onFilter: (value, record) =>
           record.businessTypeOptionIds?.includes(String(value)) ?? false,
-        render: (_dom, record) =>
-          record.businessTypeOptions &&
-          record.businessTypeOptions.length > 0 ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-              {record.businessTypeOptions.map((item) => (
-                <SelectOptionTag key={item.id} option={item} />
-              ))}
-            </div>
-          ) : record.businessTypeOption ? (
-            <SelectOptionTag option={record.businessTypeOption} />
-          ) : (
-            "-"
-          ),
+        render: (_dom, record) => (
+          <VendorOptionListValue
+            options={record.businessTypeOptions}
+            fallbackOption={
+              record.businessTypeOption
+                ? {
+                    id: record.businessTypeOption.id,
+                    value: record.businessTypeOption.value,
+                    color: record.businessTypeOption.color ?? null,
+                  }
+                : undefined
+            }
+          />
+        ),
       },
       serviceRange: {
         key: "serviceRange",
@@ -253,16 +211,9 @@ const VendorsTable = ({
         filters: serviceFilters,
         onFilter: (value, record) =>
           record.serviceOptionIds?.includes(String(value)) ?? false,
-        render: (_dom, record) =>
-          record.serviceOptions && record.serviceOptions.length > 0 ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-              {record.serviceOptions.map((service) => (
-                <SelectOptionTag key={service.id} option={service} />
-              ))}
-            </div>
-          ) : (
-            "-"
-          ),
+        render: (_dom, record) => (
+          <VendorOptionListValue options={record.serviceOptions} />
+        ),
       },
       cooperationStatus: {
         key: "cooperationStatus",
@@ -271,12 +222,9 @@ const VendorsTable = ({
         filters: cooperationStatusFilters,
         onFilter: (value, record) =>
           record.cooperationStatusOptionId === String(value),
-        render: (_dom, record) =>
-          record.cooperationStatusOption ? (
-            <SelectOptionTag option={record.cooperationStatusOption} />
-          ) : (
-            "-"
-          ),
+        render: (_dom, record) => (
+          <VendorOptionValue option={record.cooperationStatusOption} />
+        ),
       },
       rating: {
         key: "rating",
@@ -284,12 +232,9 @@ const VendorsTable = ({
         dataIndex: "ratingOptionId",
         filters: ratingFilters,
         onFilter: (value, record) => record.ratingOptionId === String(value),
-        render: (_dom, record) =>
-          record.ratingOption ? (
-            <SelectOptionTag option={record.ratingOption} />
-          ) : (
-            "-"
-          ),
+        render: (_dom, record) => (
+          <VendorOptionValue option={record.ratingOption} />
+        ),
       },
       isBlacklisted: {
         key: "isBlacklisted",
@@ -300,65 +245,57 @@ const VendorsTable = ({
           { text: "否", value: false },
         ],
         onFilter: (value, record) => record.isBlacklisted === (value === true),
-        render: (_dom, record) =>
-          record.isBlacklisted ? (
-            <Tag color="red">是</Tag>
-          ) : (
-            <Tag color="green">否</Tag>
-          ),
+        render: (_dom, record) => (
+          <VendorBooleanValue value={record.isBlacklisted} />
+        ),
       },
       strengths: {
         key: "strengths",
         title: "核心特色/擅长领域",
         dataIndex: "strengths",
-        render: (_dom, record) => record.strengths ?? "-",
+        render: (_dom, record) => <VendorTextValue value={record.strengths} />,
       },
       companyIntro: {
         key: "companyIntro",
         title: "公司简介",
         dataIndex: "companyIntro",
-        render: (_dom, record) => record.companyIntro ?? "-",
+        render: (_dom, record) => (
+          <VendorTextValue value={record.companyIntro} />
+        ),
       },
       portfolioLink: {
         key: "portfolioLink",
         title: "代表作品",
         dataIndex: "portfolioLink",
-        render: (_dom, record) =>
-          record.portfolioLink ? (
-            <a
-              href={record.portfolioLink}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {record.portfolioLink}
-            </a>
-          ) : (
-            "-"
-          ),
+        render: (_dom, record) => <VendorLinkValue href={record.portfolioLink} />,
       },
       priceRange: {
         key: "priceRange",
         title: "参考价区间",
         dataIndex: "priceRange",
-        render: (_dom, record) => record.priceRange ?? "-",
+        render: (_dom, record) => <VendorTextValue value={record.priceRange} />,
       },
       notes: {
         key: "notes",
         title: "关键备注",
         dataIndex: "notes",
-        render: (_dom, record) => record.notes ?? "-",
+        render: (_dom, record) => <VendorTextValue value={record.notes} />,
       },
       lastCoopDate: {
         key: "lastCoopDate",
         title: "最近合作时间",
         dataIndex: "lastCoopDate",
-        render: (_dom, record) => record.lastCoopDate ?? "-",
+        render: (_dom, record) => (
+          <VendorTextValue value={record.lastCoopDate} />
+        ),
       },
       cooperatedProjects: {
         key: "cooperatedProjects",
         title: "往期合作项目",
         dataIndex: "cooperatedProjects",
-        render: (_dom, record) => record.cooperatedProjects ?? "-",
+        render: (_dom, record) => (
+          <VendorTextValue value={record.cooperatedProjects} />
+        ),
       },
       actions: {
         key: "actions",
@@ -368,8 +305,7 @@ const VendorsTable = ({
           <TableActions
             onEdit={onEdit ? () => onEdit(record) : undefined}
             onDelete={() => onDelete(record.id)}
-            editDisabled={actionsDisabled}
-            deleteDisabled={actionsDisabled}
+            disabled={resolvedActionsDisabled}
             deleteTitle={actionDeleteTitle}
             deleteText={actionDeleteText}
           />
@@ -389,7 +325,7 @@ const VendorsTable = ({
     onDelete,
     actionDeleteText,
     actionDeleteTitle,
-    actionsDisabled,
+    resolvedActionsDisabled,
     columnKeys,
   ]);
 
@@ -459,6 +395,13 @@ const VendorsTable = ({
       tableLayout="auto"
       scroll={{ x: "max-content" }}
       toolBarRender={() => toolbarActions}
+      cardProps={
+        cardBodyStyle
+          ? {
+              bodyStyle: cardBodyStyle,
+            }
+          : undefined
+      }
     />
   );
 };

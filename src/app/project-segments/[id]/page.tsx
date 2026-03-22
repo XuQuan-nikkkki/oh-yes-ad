@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -6,8 +5,10 @@ import { Button, Card, DatePicker, Descriptions, Form, Input, Modal, Popconfirm,
 import { EditOutlined } from "@ant-design/icons";
 import { useParams, useRouter } from "next/navigation";
 import dayjs from "dayjs";
+import { DEFAULT_COLOR } from "@/lib/constants";
 import AppLink from "@/components/AppLink";
-import SelectOptionTag from "@/components/SelectOptionTag";
+import DetailPageContainer from "@/components/DetailPageContainer";
+import ProjectSegmentStatusValue from "@/components/project-detail/ProjectSegmentStatusValue";
 import SelectOptionSelector, {
   type SelectOptionSelectorValue,
 } from "@/components/SelectOptionSelector";
@@ -17,18 +18,13 @@ import ProjectTasksProTable, {
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
-
-type SelectOptionValue = {
-  id?: string;
-  value?: string | null;
-  color?: string | null;
-} | null;
+import type { NullableSelectOptionValue } from "@/types/selectOption";
 
 type Detail = {
   id: string;
   name: string;
   status?: string | null;
-  statusOption?: SelectOptionValue;
+  statusOption?: NullableSelectOptionValue;
   dueDate?: string | null;
   project?: { id: string; name: string };
   owner?: { id: string; name: string } | null;
@@ -52,7 +48,6 @@ export default function ProjectSegmentDetailPage() {
   const [taskOpen, setTaskOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<ProjectTasksProTableRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
   const [form] = Form.useForm<FormValues>();
   const [taskForm] = Form.useForm<{
@@ -79,11 +74,7 @@ export default function ProjectSegmentDetailPage() {
   }, [id]);
 
   const fetchOptions = useCallback(async () => {
-    const [projectsRes, employeeRows] = await Promise.all([
-      fetch("/api/projects"),
-      fetchEmployeesFromStore(),
-    ]);
-    setProjects(await projectsRes.json());
+    const employeeRows = await fetchEmployeesFromStore();
     setEmployees(Array.isArray(employeeRows) ? employeeRows : []);
     await fetchAllOptions();
   }, [fetchAllOptions, fetchEmployeesFromStore]);
@@ -220,7 +211,7 @@ export default function ProjectSegmentDetailPage() {
   return (
     <>
       {contextHolder}
-      <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+      <DetailPageContainer>
         <Card
           title={data?.name || "环节详情"}
           extra={
@@ -248,17 +239,10 @@ export default function ProjectSegmentDetailPage() {
                 {data.project ? <AppLink href={`/projects/${data.project.id}`}>{data.project.name}</AppLink> : "-"}
               </Descriptions.Item>
               <Descriptions.Item label="环节状态">
-                {data.statusOption?.value ? (
-                  <SelectOptionTag
-                    option={{
-                      id: data.statusOption.id ?? "",
-                      value: data.statusOption.value,
-                      color: data.statusOption.color ?? null,
-                    }}
-                  />
-                ) : (
-                  data.status ?? "-"
-                )}
+                <ProjectSegmentStatusValue
+                  status={data.status}
+                  statusOption={data.statusOption}
+                />
               </Descriptions.Item>
               <Descriptions.Item label="环节负责人">{data.owner?.name ?? "-"}</Descriptions.Item>
               <Descriptions.Item label="截止日期">
@@ -276,7 +260,6 @@ export default function ProjectSegmentDetailPage() {
             columnKeys={["name", "owner", "dueDate", "actions"]}
             onEdit={onEditTask}
             onDelete={(taskId) => void onDeleteTask(taskId)}
-            actionsDisabled={!canManageProject}
             toolbarActions={[
               <Button
                 key="create-task"
@@ -314,7 +297,14 @@ export default function ProjectSegmentDetailPage() {
               <Input />
             </Form.Item>
             <Form.Item label="所属项目" name="projectId" rules={[{ required: true }]}>
-              <Select options={projects.map((project) => ({ label: project.name, value: project.id }))} />
+              <Select
+                disabled
+                options={
+                  data?.project
+                    ? [{ label: data.project.name, value: data.project.id }]
+                    : []
+                }
+              />
             </Form.Item>
             <Form.Item label="负责人" name="ownerId">
               <Select allowClear options={employees.map((employee) => ({ label: employee.name, value: employee.id }))} />
@@ -325,7 +315,7 @@ export default function ProjectSegmentDetailPage() {
                 options={statusOptions.map((item) => ({
                   label: item.value,
                   value: item.value,
-                  color: item.color ?? "#d9d9d9",
+                  color: item.color ?? DEFAULT_COLOR,
                 }))}
               />
             </Form.Item>
@@ -389,7 +379,7 @@ export default function ProjectSegmentDetailPage() {
             </Button>
           </Form>
         </Modal>
-      </Space>
+      </DetailPageContainer>
     </>
   );
 }

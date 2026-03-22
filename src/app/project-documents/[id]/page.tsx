@@ -20,21 +20,18 @@ import type { DefaultOptionType } from "antd/es/select";
 import { EditOutlined } from "@ant-design/icons";
 import { useParams, useRouter } from "next/navigation";
 import dayjs from "dayjs";
+import { DEFAULT_COLOR } from "@/lib/constants";
 import AppLink from "@/components/AppLink";
+import DetailPageContainer from "@/components/DetailPageContainer";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import { MilestoneTableRow } from "@/components/MilestonesTable";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
-
-type SelectOptionValue = {
-  id: string;
-  value: string;
-  color?: string | null;
-};
+import type { NullableSelectOptionValue } from "@/types/selectOption";
 
 type Detail = {
   id: string;
   name: string;
-  typeOption?: SelectOptionValue | null;
+  typeOption?: NullableSelectOptionValue;
   date?: string | null;
   isFinal: boolean;
   internalLink?: string | null;
@@ -56,9 +53,9 @@ export default function Page() {
   const router = useRouter();
   const id = params.id as string;
   const [data, setData] = useState<Detail | null>(null);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [typeSearch, setTypeSearch] = useState("");
   const [creatingType, setCreatingType] = useState(false);
   const [form] = Form.useForm<FormValues>();
@@ -71,21 +68,21 @@ export default function Page() {
 
   const fetchDetail = useCallback(async () => {
     if (!id) return;
+    setLoading(true);
     const res = await fetch(`/api/project-documents/${id}`);
-    if (!res.ok) return setData(null);
+    if (!res.ok) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
     setData(await res.json());
+    setLoading(false);
   }, [id]);
-
-  const fetchProjects = async () => {
-    const res = await fetch("/api/projects");
-    setProjects(await res.json());
-  };
 
   useEffect(() => {
     if (!id) return;
     (async () => {
       await fetchDetail();
-      await fetchProjects();
       await fetchAllOptions();
     })();
   }, [id, fetchAllOptions, fetchDetail]);
@@ -101,7 +98,7 @@ export default function Page() {
         body: JSON.stringify({
           field: "projectDocument.type",
           value,
-          color: "#d9d9d9",
+          color: DEFAULT_COLOR,
         }),
       });
       if (!response.ok) {
@@ -134,7 +131,7 @@ export default function Page() {
   const typeSelectOptions = typeOptions.map((option) => ({
     label: option.value,
     value: option.value,
-    color: option.color ?? "#d9d9d9",
+    color: option.color ?? DEFAULT_COLOR,
   }));
   const hasExactType = typeSearch.trim()
     ? typeSelectOptions.some(
@@ -181,18 +178,34 @@ export default function Page() {
     router.push("/project-documents");
   };
 
+  if (loading) {
+    return (
+      <DetailPageContainer>
+        <Card title="项目资料详情" loading />
+      </DetailPageContainer>
+    );
+  }
+
+  if (!data) {
+    return (
+      <DetailPageContainer>
+        <Card title="项目资料详情">项目资料不存在</Card>
+      </DetailPageContainer>
+    );
+  }
+
   return (
-    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+    <DetailPageContainer>
       {contextHolder}
       <Card
-        title={"项目资料：" + (data?.name || "资料详情")}
+        title={`项目资料：${data.name}`}
         extra={
           <Space>
             <Button icon={<EditOutlined />} onClick={onEdit}>
               编辑
             </Button>
             <Popconfirm
-              title={`确定删除资料「${data?.name ?? ""}」？`}
+              title={`确定删除资料「${data.name}」？`}
               okText="删除"
               cancelText="取消"
               onConfirm={() => void onDelete()}
@@ -205,8 +218,7 @@ export default function Page() {
           </Space>
         }
       >
-        {data && (
-          <Descriptions column={2} size="small">
+        <Descriptions column={2} size="small">
             <Descriptions.Item label="所属项目">
               {data.project ? (
                 <AppLink href={`/projects/${data.project.id}`}>
@@ -255,8 +267,7 @@ export default function Page() {
                 "-"
               )}
             </Descriptions.Item>
-          </Descriptions>
-        )}
+        </Descriptions>
       </Card>
 
       <Modal
@@ -281,10 +292,12 @@ export default function Page() {
             rules={[{ required: true }]}
           >
             <Select
-              options={projects.map((project) => ({
-                label: project.name,
-                value: project.id,
-              }))}
+              disabled
+              options={
+                data.project
+                  ? [{ label: data.project.name, value: data.project.id }]
+                  : []
+              }
             />
           </Form.Item>
           <Form.Item label="类型" name="typeOption">
@@ -308,7 +321,7 @@ export default function Page() {
                 };
                 return (
                   <Tag
-                    color={data.color ?? "#d9d9d9"}
+                    color={data.color ?? DEFAULT_COLOR}
                     style={{ borderRadius: 6 }}
                   >
                     {String(data.label ?? "")}
@@ -349,6 +362,6 @@ export default function Page() {
           </Button>
         </Form>
       </Modal>
-    </Space>
+    </DetailPageContainer>
   );
 }

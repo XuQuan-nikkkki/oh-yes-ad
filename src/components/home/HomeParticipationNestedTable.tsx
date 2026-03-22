@@ -1,25 +1,21 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Card, Spin } from "antd";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
 import SelectOptionTag from "@/components/SelectOptionTag";
-import type { Project } from "@/components/ProjectsTable";
+import { formatDate } from "@/lib/date";
+import { formatProjectPeriod } from "@/lib/workday";
 import type { ProjectTaskListRow } from "@/components/ProjectTasksListTable";
-
-type WorkdayAdjustment = {
-  startDate: string;
-  endDate: string;
-  changeType: string;
-};
-
-type SelectOptionValue = {
-  id?: string;
-  value?: string | null;
-  color?: string | null;
-};
+import { useAuthStore } from "@/stores/authStore";
+import { useProjectTasksStore } from "@/stores/projectTasksStore";
+import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
+import type { Project } from "@/types/project";
+import type { SelectOptionValue } from "@/types/selectOption";
+import type { WorkdayAdjustmentRange } from "@/types/workdayAdjustment";
 
 type ProjectNestedRow = {
   id: string;
@@ -35,64 +31,86 @@ type ProjectNestedRow = {
 };
 
 type Props = {
-  loading?: boolean;
-  projects: Project[];
-  tasks: ProjectTaskListRow[];
-  workdayAdjustments?: WorkdayAdjustment[];
+  active?: boolean;
 };
 
 const HomeParticipationNestedTable = ({
-  loading = false,
-  projects,
-  tasks,
-  workdayAdjustments = [],
+  active = false,
 }: Props) => {
-  const calculateWorkdays = (
-    startDate: Date,
-    endDate: Date,
-    adjustments: WorkdayAdjustment[],
-  ): number => {
-    let workdays = 0;
-    const current = new Date(startDate);
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const fetchAdjustmentsFromStore = useWorkdayAdjustmentsStore(
+    (state) => state.fetchAdjustments,
+  );
+  const fetchTasksFromStore = useProjectTasksStore((state) => state.fetchTasks);
+  const [loading, setLoading] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [tasks, setTasks] = useState<ProjectTaskListRow[]>([]);
+  const [workdayAdjustments, setWorkdayAdjustments] = useState<
+    WorkdayAdjustmentRange[]
+  >([]);
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
+  const inflightUserIdRef = useRef<string | null>(null);
+  const shouldShowLoading =
+    active &&
+    Boolean(currentUser?.id) &&
+    loadedUserId !== currentUser?.id;
 
-    while (current <= endDate) {
-      const dayOfWeek = current.getDay();
-      const dateStr = current.toISOString().split("T")[0];
+  useEffect(() => {
+    if (!active) return;
 
-      const adjustment = adjustments.find((adj) => {
-        const adjStart = new Date(adj.startDate).toISOString().split("T")[0];
-        const adjEnd = new Date(adj.endDate).toISOString().split("T")[0];
-        return dateStr >= adjStart && dateStr <= adjEnd;
-      });
-
-      if (adjustment) {
-        if (adjustment.changeType === "上班") {
-          workdays++;
-        }
-      } else if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-        workdays++;
-      }
-
-      current.setDate(current.getDate() + 1);
+    const userId = currentUser?.id;
+    if (!userId) {
+      setProjects([]);
+      setTasks([]);
+      setWorkdayAdjustments([]);
+      setLoadedUserId(null);
+      return;
     }
 
-    return workdays;
-  };
+    if (loadedUserId === userId) return;
+    if (inflightUserIdRef.current === userId) return;
 
-  const formatPeriod = (startDate?: string | null, endDate?: string | null) => {
-    if (!startDate) return "-";
-    const start = new Date(startDate);
-    const today = new Date();
-    const effectiveEnd = endDate ? new Date(endDate) : today;
-    const naturalDays =
-      Math.floor(
-        (effectiveEnd.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
-      ) + 1;
-    const workdays = calculateWorkdays(start, effectiveEnd, workdayAdjustments);
-    const startStr = dayjs(start).format("YYYY/MM/DD");
-    const endStr = endDate ? dayjs(endDate).format("YYYY/MM/DD") : "至今";
-    return `${startStr} - ${endStr} (自然日: ${naturalDays}天 | 工作日: ${workdays}天)`;
-  };
+    inflightUserIdRef.current = userId;
+    setLoading(true);
+    void (async () => {
+      try {
+        const [tasksData, adjustmentsData] = await Promise.all([
+          fetchTasksFromStore({ ownerId: userId }),
+          fetchAdjustmentsFromStore(),
+        ]);
+        const nextTasks = Array.isArray(tasksData)
+          ? (tasksData as ProjectTaskListRow[])
+          : [];
+        const projectMap = new Map<string, Project>();
+        for (const task of nextTasks) {
+          const project = task.segment?.project;
+          if (!project?.id || !project?.name) continue;
+          if (projectMap.has(project.id)) continue;
+          projectMap.set(project.id, {
+            id: project.id,
+            name: project.name,
+          });
+        }
+        setTasks(nextTasks);
+        setProjects(Array.from(projectMap.values()));
+        setWorkdayAdjustments(
+          Array.isArray(adjustmentsData) ? adjustmentsData : [],
+        );
+        setLoadedUserId(userId);
+      } finally {
+        if (inflightUserIdRef.current === userId) {
+          inflightUserIdRef.current = null;
+        }
+        setLoading(false);
+      }
+    })();
+  }, [
+    active,
+    currentUser?.id,
+    fetchAdjustmentsFromStore,
+    fetchTasksFromStore,
+    loadedUserId,
+  ]);
 
   const rows = useMemo<ProjectNestedRow[]>(() => {
     const availableProjects = projects.filter(
@@ -187,10 +205,7 @@ const HomeParticipationNestedTable = ({
       dataIndex: "dueDate",
       width: 160,
       render: (_dom, row) => {
-        const value = row.dueDate;
-        if (!value) return "";
-        const parsed = dayjs(String(value));
-        return parsed.isValid() ? parsed.format("YYYY-MM-DD") : "";
+        return formatDate(row.dueDate, undefined, "");
       },
     },
   ];
@@ -242,40 +257,44 @@ const HomeParticipationNestedTable = ({
       title: "项目周期",
       key: "period",
       width: 340,
-      render: (_value, row) => formatPeriod(row.startDate, row.endDate),
+      render: (_value, row) => formatProjectPeriod(row.startDate, row.endDate, workdayAdjustments),
     },
   ];
 
-  return (
-    <ProTable<ProjectNestedRow>
-      rowKey="id"
-      loading={loading}
-      search={false}
-      options={false}
-      columns={projectColumns}
-      dataSource={rows}
-      pagination={{ pageSize: 20, showSizeChanger: true }}
-      tableLayout="auto"
-      scroll={{ x: "max-content" }}
-      headerTitle={null}
-      locale={{ emptyText: "暂无项目或任务" }}
-      expandable={{
-        rowExpandable: (projectRow) => projectRow.tasks.length > 0,
-        expandedRowRender: (projectRow) => (
-          <ProTable<ProjectTaskListRow>
-            rowKey="id"
-            search={false}
-            options={false}
-            columns={taskColumns}
-            dataSource={projectRow.tasks}
-            pagination={false}
-            tableLayout="auto"
-            scroll={{ x: "max-content" }}
-            headerTitle={null}
-          />
-        ),
-      }}
-    />
+  return shouldShowLoading ? (
+    <Card loading />
+  ) : (
+    <Spin spinning={loading}>
+      <ProTable<ProjectNestedRow>
+        rowKey="id"
+        loading={loading}
+        search={false}
+        options={false}
+        columns={projectColumns}
+        dataSource={rows}
+        pagination={{ pageSize: 20, showSizeChanger: true }}
+        tableLayout="auto"
+        scroll={{ x: "max-content" }}
+        headerTitle={null}
+        locale={{ emptyText: "暂无项目或任务" }}
+        expandable={{
+          rowExpandable: (projectRow) => projectRow.tasks.length > 0,
+          expandedRowRender: (projectRow) => (
+            <ProTable<ProjectTaskListRow>
+              rowKey="id"
+              search={false}
+              options={false}
+              columns={taskColumns}
+              dataSource={projectRow.tasks}
+              pagination={false}
+              tableLayout="auto"
+              scroll={{ x: "max-content" }}
+              headerTitle={null}
+            />
+          ),
+        }}
+      />
+    </Spin>
   );
 };
 

@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -19,6 +18,7 @@ import {
 import type { DefaultOptionType } from "antd/es/select";
 import { ProForm, StepsForm } from "@ant-design/pro-components";
 import dayjs from "dayjs";
+import { DEFAULT_COLOR } from "@/lib/constants";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 
 type Employee = {
@@ -258,14 +258,14 @@ const EmployeeFormModal = ({
     const storeOptions = optionsByField[config.optionField] ?? [];
     const storeMapped = storeOptions.map((item) => ({
       value: item.value,
-      color: item.color ?? "#d9d9d9",
+      color: item.color ?? DEFAULT_COLOR,
     }));
 
     const storeSet = new Set(storeMapped.map((item) => item.value));
     const fallbackMapped = optionValuesMap[key]
       .filter((item): item is string => Boolean(item))
       .filter((item) => !storeSet.has(item))
-      .map((item) => ({ value: item, color: "#d9d9d9" }));
+      .map((item) => ({ value: item, color: DEFAULT_COLOR }));
 
     return [...storeMapped, ...fallbackMapped];
   };
@@ -284,7 +284,7 @@ const EmployeeFormModal = ({
       body: JSON.stringify({
         field,
         value,
-        color: color || "#8c8c8c",
+        color: color || DEFAULT_COLOR,
       }),
     });
 
@@ -373,13 +373,13 @@ const EmployeeFormModal = ({
       const rawColor = values[config.newColorField] as ColorValueLike;
       const color =
         typeof rawColor === "string"
-          ? rawColor.trim() || "#8c8c8c"
-          : rawColor?.toHexString?.() || "#8c8c8c";
+          ? rawColor.trim() || DEFAULT_COLOR
+          : rawColor?.toHexString?.() || DEFAULT_COLOR;
 
       if (!name) continue;
 
       await createOptionOnSubmit(config.optionField, name, color);
-      nextValues[config.fieldName] = name;
+      (nextValues as Record<string, unknown>)[config.fieldName] = name;
       created = true;
     }
 
@@ -479,7 +479,7 @@ const EmployeeFormModal = ({
     setShowCreate((prev) => ({ ...prev, [key]: true }));
     form.setFieldValue(config.fieldName, undefined);
 
-    form.setFieldValue(config.newColorField, "#8c8c8c");
+    form.setFieldValue(config.newColorField, DEFAULT_COLOR);
 
     if (nextName) {
       form.setFieldValue(config.newNameField, nextName);
@@ -501,7 +501,7 @@ const EmployeeFormModal = ({
     const options = getMergedOptions(key).map((item) => ({
       label: item.value,
       value: item.value,
-      color: item.color ?? "#d9d9d9",
+      color: item.color ?? DEFAULT_COLOR,
     }));
     const keyword = searchText[key].trim();
     const hasExactMatch = keyword
@@ -525,7 +525,7 @@ const EmployeeFormModal = ({
         optionRender={(option) => {
           const data = option.data as DefaultOptionType & { color?: string };
           return (
-            <Tag color={data.color ?? "#d9d9d9"} style={{ borderRadius: 6 }}>
+            <Tag color={data.color ?? DEFAULT_COLOR} style={{ borderRadius: 6 }}>
               {String(data.label ?? "")}
             </Tag>
           );
@@ -576,11 +576,11 @@ const EmployeeFormModal = ({
         <Form.Item
           label="颜色"
           name={config.newColorField}
-          initialValue="#8c8c8c"
+          initialValue={DEFAULT_COLOR}
           style={{ marginBottom: 0 }}
         >
           <ColorPicker
-            value={form.getFieldValue(config.newColorField) || "#8c8c8c"}
+            value={form.getFieldValue(config.newColorField) || DEFAULT_COLOR}
             format="hex"
             disabledFormat
             showText
@@ -677,13 +677,6 @@ const EmployeeFormModal = ({
   const renderPositionStepForm = () => (
     <StepsForm<FormValues>
       onFinish={onPositionFinish}
-      submitter={{
-        searchConfig: {
-          next: "下一步",
-          prev: "上一步",
-          submit: "保存",
-        },
-      }}
       stepsProps={{ size: "small" }}
     >
       <StepsForm.StepForm title="基础信息" initialValues={baseValues}>

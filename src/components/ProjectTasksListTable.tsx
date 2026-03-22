@@ -1,12 +1,13 @@
-// @ts-nocheck
 "use client";
 
 import type { ReactNode } from "react";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import TableActions from "@/components/TableActions";
+import { DATE_FORMAT } from "@/lib/constants";
+import { formatDate } from "@/lib/date";
 
 export type ProjectTaskListRow = {
   id: string;
@@ -44,7 +45,7 @@ type Props = {
 const ProjectTasksListTable = ({
   rows,
   loading = false,
-  headerTitle = <h3 style={{ margin: 0 }}>项目任务</h3>,
+  headerTitle = <ProTableHeaderTitle>项目任务</ProTableHeaderTitle>,
   toolbarActions = [],
   showTableOptions = false,
   compactHorizontalPadding = false,
@@ -76,7 +77,7 @@ const ProjectTasksListTable = ({
   const dueDateFilters = Array.from(
     new Set(
       rows
-        .map((item) => (item.dueDate ? dayjs(item.dueDate).format("YYYY-MM-DD") : null))
+        .map((item) => formatDate(item.dueDate, DATE_FORMAT, ""))
         .filter((value): value is string => Boolean(value)),
     ),
   ).map((value) => ({ text: value, value }));
@@ -152,10 +153,8 @@ const ProjectTasksListTable = ({
       filters: dueDateFilters,
       filterSearch: true,
       onFilter: (value, record) =>
-        (record.dueDate ? dayjs(record.dueDate).format("YYYY-MM-DD") : "") ===
-        String(value),
-      render: (_dom, record) =>
-        record.dueDate ? dayjs(record.dueDate).format("YYYY-MM-DD") : "-",
+        formatDate(record.dueDate, DATE_FORMAT, "") === String(value),
+      render: (_dom, record) => formatDate(record.dueDate, DATE_FORMAT),
     },
     actions: {
       title: "操作",
@@ -167,8 +166,7 @@ const ProjectTasksListTable = ({
           <TableActions
             onEdit={() => onEdit(record)}
             onDelete={() => onDelete(record.id, record.name)}
-            editDisabled={actionsDisabled}
-            deleteDisabled={actionsDisabled}
+            disabled={actionsDisabled}
             deleteTitle={`确定删除任务「${record.name}」？`}
           />
         ) : (
@@ -202,11 +200,6 @@ const ProjectTasksListTable = ({
       cardProps={
         compactHorizontalPadding
           ? {
-              styles: {
-                body: {
-                  paddingInline: 0,
-                },
-              },
               bodyStyle: { paddingInline: 0, paddingTop: 0 },
             }
           : undefined

@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +14,7 @@ import ActualWorkEntryForm, {
   ActualWorkEntryFormPayload,
 } from "@/components/project-detail/ActualWorkEntryForm";
 import { useAuthStore } from "@/stores/authStore";
+import { useProjectTasksStore } from "@/stores/projectTasksStore";
 import { useProjectsStore } from "@/stores/projectsStore";
 
 type EmployeeOption = {
@@ -95,12 +95,12 @@ export default function WorkLogsPanel() {
   const fetchProjectsFromStore = useProjectsStore(
     (state) => state.fetchProjects,
   );
+  const fetchTasksFromStore = useProjectTasksStore((state) => state.fetchTasks);
   const employees = useMemo<EmployeeOption[]>(
     () => (currentUser ? [{ id: currentUser.id, name: currentUser.name }] : []),
     [currentUser],
   );
   const [actualRows, setActualRows] = useState<ActualWorkEntryRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [actualRowsLoading, setActualRowsLoading] = useState(false);
 
   const [workLogModalOpen, setWorkLogModalOpen] = useState(false);
@@ -113,6 +113,10 @@ export default function WorkLogsPanel() {
   const [workLogProjectOptionGroups, setWorkLogProjectOptionGroups] = useState<
     ProjectOptionGroup[]
   >([]);
+  const [workLogOptionsLoading, setWorkLogOptionsLoading] = useState(false);
+  const [workLogOptionsLoadedUserId, setWorkLogOptionsLoadedUserId] = useState<
+    string | null
+  >(null);
   const [workLogSelectedProjectId, setWorkLogSelectedProjectId] = useState<
     string | undefined
   >(undefined);
@@ -139,109 +143,79 @@ export default function WorkLogsPanel() {
   );
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        if (!currentUser?.id) {
-          setWorkLogProjectOptions([]);
-          setWorkLogProjectOptionGroups([]);
-          return;
-        }
+    if (workLogOptionsLoadedUserId && workLogOptionsLoadedUserId !== currentUser?.id) {
+      setWorkLogProjectOptions([]);
+      setWorkLogProjectOptionGroups([]);
+      setWorkLogOptionsLoadedUserId(null);
+    }
+  }, [currentUser?.id, workLogOptionsLoadedUserId]);
 
-        const [projects, tasksRes, ownedProjects] = await Promise.all([
-          fetchProjectsFromStore(),
-          fetch(
-            `/api/project-tasks?ownerId=${encodeURIComponent(currentUser.id)}`,
-            {
-              cache: "no-store",
-            },
-          ),
-          fetchProjectsFromStore({ ownerId: currentUser.id }),
-        ]);
-        const tasks = tasksRes.ok ? await tasksRes.json() : [];
+  const ensureWorkLogProjectOptionsLoaded = async () => {
+    const userId = currentUser?.id;
+    if (!userId) {
+      setWorkLogProjectOptions([]);
+      setWorkLogProjectOptionGroups([]);
+      setWorkLogOptionsLoadedUserId(null);
+      return;
+    }
+    if (workLogOptionsLoadedUserId === userId) return;
 
-        const participantProjectIdsFromTasks = Array.isArray(tasks)
-          ? tasks
-              .map(
-                (task: {
-                  segment?: {
-                    project?: {
-                      id?: string | null;
-                    } | null;
-                  } | null;
-                }) => task?.segment?.project?.id ?? "",
-              )
-              .filter(Boolean)
-          : [];
-        const ownerProjectIds = Array.isArray(ownedProjects)
-          ? ownedProjects
-              .map((project: { id?: string | null }) => project?.id ?? "")
-              .filter(Boolean)
-          : [];
-        const participantProjectIds = new Set<string>([
-          ...participantProjectIdsFromTasks,
-          ...ownerProjectIds,
-        ]);
+    setWorkLogOptionsLoading(true);
+    try {
+      const [tasks, ownedProjects] = await Promise.all([
+        fetchTasksFromStore({ ownerId: userId }),
+        fetchProjectsFromStore({ ownerId: userId }),
+      ]);
 
-        const isArchivedProject = (project: {
+      const isArchivedProject = (project: {
+        status?: string | null;
+        statusOption?: { value?: string | null } | null;
+      }) => {
+        const statusValue = project.statusOption?.value ?? project.status ?? "";
+        return statusValue === "已归档";
+      };
+
+      const projectMap = new Map<string, ProjectOption>();
+
+      if (Array.isArray(ownedProjects)) {
+        for (const project of ownedProjects as Array<{
+          id?: string | null;
+          name?: string | null;
           status?: string | null;
           statusOption?: { value?: string | null } | null;
-        }) => {
-          const statusValue =
-            project.statusOption?.value ?? project.status ?? "";
-          return statusValue === "已归档";
-        };
-
-        const projectList: ProjectOption[] = Array.isArray(projects)
-          ? projects
-              .filter(
-                (project: {
-                  id?: string | null;
-                  name?: string | null;
-                  status?: string | null;
-                  statusOption?: { value?: string | null } | null;
-                }) =>
-                  Boolean(project.id) &&
-                  Boolean(project.name) &&
-                  !isArchivedProject(project),
-              )
-              .map((project: { id: string; name: string }) => ({
-                id: project.id,
-                name: project.name,
-              }))
-              .sort((a, b) => a.name.localeCompare(b.name, "zh-CN"))
-          : [];
-
-        const groupedProjectOptions: ProjectOptionGroup[] = [
-          {
-            label: "参与项目",
-            options: projectList.filter((project) =>
-              participantProjectIds.has(project.id),
-            ),
-          },
-          {
-            label: "中台项目",
-            options: projectList.filter(
-              (project) => project.name === "中台项目",
-            ),
-          },
-          {
-            label: "其他项目",
-            options: projectList.filter(
-              (project) =>
-                !participantProjectIds.has(project.id) &&
-                project.name !== "中台项目",
-            ),
-          },
-        ];
-
-        setWorkLogProjectOptions(projectList);
-        setWorkLogProjectOptionGroups(groupedProjectOptions);
-      } finally {
-        setLoading(false);
+        }>) {
+          if (!project.id || !project.name || isArchivedProject(project)) continue;
+          projectMap.set(project.id, { id: project.id, name: project.name });
+        }
       }
-    })();
-  }, [currentUser?.id, fetchProjectsFromStore]);
+
+      if (Array.isArray(tasks)) {
+        for (const task of tasks as Array<{
+          segment?: { project?: { id?: string | null; name?: string | null } | null } | null;
+        }>) {
+          const project = task?.segment?.project;
+          if (!project?.id || !project.name) continue;
+          if (projectMap.has(project.id)) continue;
+          projectMap.set(project.id, { id: project.id, name: project.name });
+        }
+      }
+
+      const projectList = Array.from(projectMap.values()).sort((a, b) =>
+        a.name.localeCompare(b.name, "zh-CN"),
+      );
+      const groupedProjectOptions: ProjectOptionGroup[] = [
+        {
+          label: "参与项目",
+          options: projectList,
+        },
+      ];
+      setWorkLogProjectOptions(projectList);
+      setWorkLogProjectOptionGroups(groupedProjectOptions);
+      setWorkLogOptionsLoadedUserId(userId);
+    } finally {
+      setWorkLogOptionsLoading(false);
+    }
+  };
 
   const fetchActualRowsInRange = async (
     range: CalendarVisibleRange,
@@ -449,6 +423,7 @@ export default function WorkLogsPanel() {
 
   const openQuickCreateFromCalendar = (date: Date, allDay: boolean) => {
     if (!currentUser) return;
+    void ensureWorkLogProjectOptionsLoaded();
     const base = dayjs(date);
     const start = allDay
       ? base.hour(9).minute(0).second(0).millisecond(0)
@@ -471,6 +446,7 @@ export default function WorkLogsPanel() {
 
   const openEditWorkLogModal = (entry: ActualWorkEntryRow) => {
     if (!currentUser) return;
+    void ensureWorkLogProjectOptionsLoaded();
 
     setWorkLogMode("edit");
     setEditingWorkLogId(entry.id);
@@ -619,19 +595,14 @@ export default function WorkLogsPanel() {
   return (
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
       {contextHolder}
-      {loading ? (
-        <Card>
-          <Spin />
-        </Card>
-      ) : (
-        <>
-          <Card
+      <>
+        <Card
             title={`实际工时（总计 ${formatSummaryNumber(totalActualHours)}小时 | ${formatSummaryNumber(totalActualDays)}天）`}
             type="inner"
-          >
-            <Spin spinning={actualRowsLoading}>
-              <FullCalendar
-                className="work-logs-calendar"
+        >
+          <Spin spinning={actualRowsLoading}>
+              <div className="work-logs-calendar">
+                <FullCalendar
                 weekNumbers
                 plugins={[
                   dayGridPlugin,
@@ -730,7 +701,7 @@ export default function WorkLogsPanel() {
                     (item) => item.id === info.event.id,
                   );
                   if (!entry) return;
-                  openEditWorkLogModal(entry);
+                  void openEditWorkLogModal(entry);
                 }}
                 eventDrop={(info) => {
                   void handleCalendarTimeChange({
@@ -759,14 +730,15 @@ export default function WorkLogsPanel() {
                   const prev = lastCalendarClickRef.current;
                   if (prev && prev.key === clickKey && now - prev.ts <= 300) {
                     lastCalendarClickRef.current = null;
-                    openQuickCreateFromCalendar(info.date, info.allDay);
+                    void openQuickCreateFromCalendar(info.date, info.allDay);
                     return;
                   }
                   lastCalendarClickRef.current = { key: clickKey, ts: now };
                 }}
-              />
-            </Spin>
-          </Card>
+                />
+              </div>
+          </Spin>
+        </Card>
           <style jsx global>{`
             .work-logs-calendar .fc-day-sat,
             .work-logs-calendar .fc-day-sun {
@@ -788,18 +760,19 @@ export default function WorkLogsPanel() {
             footer={null}
             destroyOnHidden
           >
-            <ActualWorkEntryForm
-              projectOptions={workLogProjectOptions}
-              projectOptionGroups={workLogProjectOptionGroups}
-              selectedProjectId={workLogSelectedProjectId}
-              employees={employees}
-              initialValues={workLogInitialValues}
-              disableEmployeeSelect
-              onSubmit={handleSubmitWorkLog}
-            />
+            <Spin spinning={workLogOptionsLoading}>
+              <ActualWorkEntryForm
+                projectOptions={workLogProjectOptions}
+                projectOptionGroups={workLogProjectOptionGroups}
+                selectedProjectId={workLogSelectedProjectId}
+                employees={employees}
+                initialValues={workLogInitialValues}
+                disableEmployeeSelect
+                onSubmit={handleSubmitWorkLog}
+              />
+            </Spin>
           </Modal>
-        </>
-      )}
+      </>
     </Space>
   );
 }

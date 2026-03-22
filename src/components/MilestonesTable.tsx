@@ -2,9 +2,9 @@
 
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
 import SelectOptionTag from "@/components/SelectOptionTag";
+import { formatDate } from "@/lib/date";
 
 export type MilestoneTableRow = {
   id: string;
@@ -66,8 +66,7 @@ const MilestonesTable = ({
       title: "截止日期",
       dataIndex: "date",
       sorter: (a, b) => (a.date || "").localeCompare(b.date || ""),
-      render: (value: string | null | undefined) =>
-        value ? dayjs(value).format("YYYY-MM-DD") : "-",
+      render: (value: string | null | undefined) => formatDate(value),
     },
     {
       title: "地点",

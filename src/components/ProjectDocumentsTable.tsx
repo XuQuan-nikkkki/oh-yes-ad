@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useMemo } from "react";
@@ -8,19 +7,15 @@ import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import TableActions from "@/components/TableActions";
 import SelectOptionTag from "@/components/SelectOptionTag";
-
-type SelectOptionValue = {
-  id: string;
-  value: string;
-  color?: string | null;
-};
+import type { NullableSelectOptionValue } from "@/types/selectOption";
 
 export type ProjectDocumentRow = {
   id: string;
   name: string;
-  typeOption?: SelectOptionValue | null;
+  typeOption?: NullableSelectOptionValue;
   date?: string | null;
   isFinal: boolean;
   internalLink?: string | null;
@@ -30,6 +25,7 @@ export type ProjectDocumentRow = {
 
 type Props = {
   rows: ProjectDocumentRow[];
+  loading?: boolean;
   onEdit?: (row: ProjectDocumentRow) => void;
   onDelete: (id: string) => void;
   actionDeleteText?: string;
@@ -51,6 +47,7 @@ type Props = {
 
 const ProjectDocumentsTable = ({
   rows,
+  loading = false,
   onEdit,
   onDelete,
   actionDeleteText = "删除",
@@ -65,7 +62,7 @@ const ProjectDocumentsTable = ({
     "internalLink",
     "actions",
   ],
-  headerTitle = <h3 style={{ margin: 0 }}>项目资料</h3>,
+  headerTitle = <ProTableHeaderTitle>项目资料</ProTableHeaderTitle>,
   toolbarActions = [],
   showColumnSetting = true,
 }: Props) => {
@@ -215,8 +212,8 @@ const ProjectDocumentsTable = ({
       filters: typeFilters,
       filterSearch: true,
       onFilter: (value, record) => (record.typeOption?.value ?? "") === String(value),
-      render: (option: SelectOptionValue | null | undefined) => (
-        <SelectOptionTag option={option ?? null} />
+      render: (_dom, record) => (
+        <SelectOptionTag option={record.typeOption ?? null} />
       ),
     },
     milestone: {
@@ -241,16 +238,15 @@ const ProjectDocumentsTable = ({
       filterSearch: true,
       onFilter: (value, record) =>
         formatDateSafe(record.date) === String(value),
-      render: (value: string | null | undefined) =>
-        formatDateSafe(value),
+      render: (_dom, record) => formatDateSafe(record.date),
     },
     isFinal: {
       title: "是最终版",
       dataIndex: "isFinal",
       filters: finalFilters,
       onFilter: (value, record) => String(record.isFinal) === String(value),
-      render: (value: boolean) => (
-        <Checkbox checked={value} onChange={() => {}} style={{ pointerEvents: "none" }} />
+      render: (_dom, record) => (
+        <Checkbox checked={Boolean(record.isFinal)} onChange={() => {}} style={{ pointerEvents: "none" }} />
       ),
     },
     internalLink: {
@@ -343,6 +339,7 @@ const ProjectDocumentsTable = ({
         rowKey="id"
         columns={columns}
         dataSource={rows}
+        loading={loading}
         search={false}
         headerTitle={headerTitle}
         pagination={{ pageSize: 10 }}

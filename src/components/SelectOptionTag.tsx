@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -21,12 +20,8 @@ import {
   StepsForm,
   type ProColumns,
 } from "@ant-design/pro-components";
-
-type SelectOptionValue = {
-  id: string;
-  value: string;
-  color?: string | null;
-};
+import { DEFAULT_COLOR } from "@/lib/constants";
+import type { NullableSelectOptionValue } from "@/types/selectOption";
 
 type SelectOptionRecord = {
   id: string;
@@ -43,7 +38,7 @@ type FormValues = {
 };
 
 type Props = {
-  option?: SelectOptionValue | null;
+  option?: NullableSelectOptionValue;
   fallbackText?: string;
   rounded?: boolean;
   onUpdated?: () => void | Promise<void>;
@@ -54,8 +49,6 @@ type Props = {
   successMessage?: string;
   editNotice?: ReactNode;
 };
-
-const DEFAULT_COLOR = "#8c8c8c";
 
 const normalizeHexColor = (raw?: string | null) => {
   if (!raw) return DEFAULT_COLOR;
@@ -152,9 +145,9 @@ const SelectOptionTag = ({
       } catch (error) {
         if (!cancelled) {
           if (error instanceof Error && error.message) {
-            messageApi.error(error.message);
+            message.error(error.message);
           } else {
-            messageApi.error("获取选项失败");
+            message.error("获取选项失败");
           }
           setActiveField("");
           setSortableOptions([]);
@@ -173,7 +166,7 @@ const SelectOptionTag = ({
     return () => {
       cancelled = true;
     };
-  }, [editOpen, messageApi, option?.color, option?.id, option?.value]);
+  }, [editOpen, option?.color, option?.id, option?.value]);
 
   const handleMenuClick: MenuProps["onClick"] = ({ key }) => {
     if (key !== "edit" || !option?.id) return;
@@ -321,11 +314,6 @@ const SelectOptionTag = ({
           onFinish={handleFinish}
           stepsProps={{ size: "small" }}
           submitter={{
-            searchConfig: {
-              next: "下一步",
-              prev: "上一步",
-              submit: "保存",
-            },
             submitButtonProps: {
               loading: submitting,
             },

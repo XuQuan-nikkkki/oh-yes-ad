@@ -10,6 +10,11 @@ export type ProjectSegmentRow = {
   id: string;
   name: string;
   status?: string | null;
+  statusOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
   dueDate?: string | null;
   owner?: {
     id: string;

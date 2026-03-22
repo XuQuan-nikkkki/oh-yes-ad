@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
+import type { NullableSelectOptionTextValue } from "@/types/selectOption";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
@@ -36,15 +37,14 @@ const toProjectTypeCode = (value?: string | null) => {
   return value;
 };
 
-type SelectOptionValue = { value?: string | null } | null | undefined;
 type ProjectOwnerPayload = {
-  functionOption?: SelectOptionValue;
-  employmentStatusOption?: SelectOptionValue;
+  functionOption?: NullableSelectOptionTextValue;
+  employmentStatusOption?: NullableSelectOptionTextValue;
 } & Record<string, unknown>;
 type ProjectPayload = {
-  typeOption?: SelectOptionValue;
-  statusOption?: SelectOptionValue;
-  stageOption?: SelectOptionValue;
+  typeOption?: NullableSelectOptionTextValue;
+  statusOption?: NullableSelectOptionTextValue;
+  stageOption?: NullableSelectOptionTextValue;
   owner?: ProjectOwnerPayload | null;
 } & Record<string, unknown>;
 

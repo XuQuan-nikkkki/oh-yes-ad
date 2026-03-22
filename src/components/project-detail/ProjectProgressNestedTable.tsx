@@ -1,14 +1,17 @@
-// @ts-nocheck
 "use client";
 
-import { Button, Tag } from "antd";
+import { Button } from "antd";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import { PlusOutlined } from "@ant-design/icons";
 import AppLink from "@/components/AppLink";
+import PlannedWorkScheduleValue from "@/components/project-detail/PlannedWorkScheduleValue";
+import PlannedWorkWeekValue from "@/components/project-detail/PlannedWorkWeekValue";
+import PlannedWorkYearValue from "@/components/project-detail/PlannedWorkYearValue";
+import ProjectSegmentStatusValue from "@/components/project-detail/ProjectSegmentStatusValue";
 import TableActions from "@/components/TableActions";
-import SelectOptionTag from "@/components/SelectOptionTag";
-import dayjs from "dayjs";
+import { formatDate } from "@/lib/date";
+import { DATE_FORMAT } from "@/lib/constants";
 
 type OptionValue = {
   id?: string;
@@ -79,9 +82,7 @@ type Props = {
 };
 
 const formatDateOrEmpty = (value?: string | null) => {
-  if (!value) return "";
-  const parsed = dayjs(value);
-  return parsed.isValid() ? parsed.format("YYYY/MM/DD") : "";
+  return formatDate(value, DATE_FORMAT, "").replaceAll("-", "/");
 };
 
 const toDisplayDays = (value: number) => `${Number(value.toFixed(2))}天`;
@@ -140,17 +141,9 @@ const ProjectProgressNestedTable = ({
         return leftStatus.localeCompare(rightStatus, "zh-CN");
       },
       render: (_value, row) => (
-        <SelectOptionTag
-          option={
-            row.statusOption?.value
-              ? {
-                  id: row.statusOption.id ?? "",
-                  value: row.statusOption.value,
-                  color: row.statusOption.color ?? null,
-                }
-              : null
-          }
-          fallbackText={row.status || "-"}
+        <ProjectSegmentStatusValue
+          status={row.status}
+          statusOption={row.statusOption}
         />
       ),
     },
@@ -169,7 +162,7 @@ const ProjectProgressNestedTable = ({
       title: "截止日期",
       dataIndex: "dueDate",
       width: 160,
-      render: (value) => formatDateOrEmpty(value),
+      render: (_dom, row) => formatDateOrEmpty(row.dueDate),
     },
     {
       title: "操作",
@@ -190,10 +183,7 @@ const ProjectProgressNestedTable = ({
           <TableActions
             onEdit={() => onEditSegment?.(row)}
             onDelete={() => onDeleteSegment?.(row)}
-            editDisabled={actionsDisabled}
-            deleteDisabled={actionsDisabled}
-            editText="编辑"
-            deleteText="删除"
+            disabled={actionsDisabled}
             deleteTitle="确定删除该环节？"
           />
         </div>
@@ -239,7 +229,7 @@ const ProjectProgressNestedTable = ({
       title: "截止日期",
       dataIndex: "dueDate",
       width: 160,
-      render: (value) => formatDateOrEmpty(value),
+      render: (_dom, row) => formatDateOrEmpty(row.dueDate),
     },
     {
       title: "操作",
@@ -260,10 +250,7 @@ const ProjectProgressNestedTable = ({
           <TableActions
             onEdit={() => onEditTask?.(row)}
             onDelete={() => onDeleteTask?.(row)}
-            editDisabled={actionsDisabled}
-            deleteDisabled={actionsDisabled}
-            editText="编辑"
-            deleteText="删除"
+            disabled={actionsDisabled}
             deleteTitle="确定删除该任务？"
           />
         </div>
@@ -276,99 +263,41 @@ const ProjectProgressNestedTable = ({
       title: "年份",
       dataIndex: "year",
       width: 90,
-      render: (value: number) => {
-        const text = String(value);
-        const option = plannedYearOptionMap.get(text);
-        return (
-          <SelectOptionTag
-            option={
-              option
-                ? { id: option.id, value: option.value, color: option.color ?? null }
-                : { id: "", value: text, color: null }
-            }
-          />
-        );
-      },
+      render: (_dom, row) => (
+        <PlannedWorkYearValue year={row.year} optionMap={plannedYearOptionMap} />
+      ),
     },
     {
       title: "周数",
       dataIndex: "weekNumber",
       width: 90,
-      render: (value: number) => {
-        const text = String(value);
-        const option = plannedWeekOptionMap.get(text);
-        return (
-          <SelectOptionTag
-            option={
-              option
-                ? { id: option.id, value: option.value, color: option.color ?? null }
-                : { id: "", value: text, color: null }
-            }
-          />
-        );
-      },
+      render: (_dom, row) => (
+        <PlannedWorkWeekValue weekNumber={row.weekNumber} optionMap={plannedWeekOptionMap} />
+      ),
     },
     {
       title: "计划天数",
       dataIndex: "plannedDays",
       width: 110,
-      render: (value: number) => toDisplayDays(value),
+      render: (_dom, row) => toDisplayDays(row.plannedDays),
     },
     {
       title: "时间安排",
       key: "timeArrangement",
       width: 280,
-      render: (_value, row) => {
-        const dayItems: Array<{
-          key: keyof Pick<
-            ProjectProgressPlannedEntryRow,
-            | "monday"
-            | "tuesday"
-            | "wednesday"
-            | "thursday"
-            | "friday"
-            | "saturday"
-            | "sunday"
-          >;
-          label: string;
-        }> = [
-          { key: "monday", label: "一" },
-          { key: "tuesday", label: "二" },
-          { key: "wednesday", label: "三" },
-          { key: "thursday", label: "四" },
-          { key: "friday", label: "五" },
-          { key: "saturday", label: "六" },
-          { key: "sunday", label: "日" },
-        ];
-
-        const visibleDays = dayItems.filter((item) => {
-          if (item.key === "saturday" || item.key === "sunday") {
-            return Boolean(row[item.key]);
-          }
-          return true;
-        });
-
-        return (
-          <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
-            <Tag color="#d9d9d9" style={{ marginInlineEnd: 0, fontWeight: 600 }}>
-              {`W${row.weekNumber}`}
-            </Tag>
-            {visibleDays.map((item) => (
-              <Tag
-                key={`${row.id}-${item.key}`}
-                color={row[item.key] ? "#b7eb8f" : "#d9d9d9"}
-                style={{
-                  marginInlineEnd: 0,
-                  fontWeight: 600,
-                  color: row[item.key] ? "#389e0d" : "#8c8c8c",
-                }}
-              >
-                {item.label}
-              </Tag>
-            ))}
-          </span>
-        );
-      },
+      render: (_value, row) => (
+        <PlannedWorkScheduleValue
+          entryId={row.id}
+          weekNumber={row.weekNumber}
+          monday={row.monday}
+          tuesday={row.tuesday}
+          wednesday={row.wednesday}
+          thursday={row.thursday}
+          friday={row.friday}
+          saturday={row.saturday}
+          sunday={row.sunday}
+        />
+      ),
     },
     {
       title: "操作",
@@ -379,10 +308,7 @@ const ProjectProgressNestedTable = ({
         <TableActions
           onEdit={() => onEditPlannedWork?.(row)}
           onDelete={() => onDeletePlannedWork?.(row)}
-          editDisabled={actionsDisabled}
-          deleteDisabled={actionsDisabled}
-          editText="编辑"
-          deleteText="删除"
+          disabled={actionsDisabled}
           deleteTitle="确定删除该计划工时？"
         />
       ),

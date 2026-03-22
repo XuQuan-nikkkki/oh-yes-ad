@@ -1,13 +1,15 @@
-// @ts-nocheck
 "use client";
 
 import { Button, DatePicker, Input, Popover, Select, Space } from "antd";
 import dayjs from "dayjs";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
+import type { Key } from "react";
 import AppLink from "@/components/AppLink";
 import TableActions from "@/components/TableActions";
+import TimeRangeValue from "@/components/TimeRangeValue";
 import { InfoCircleOutlined } from "@ant-design/icons";
+import { DEFAULT_COLOR } from "@/lib/constants";
 
 export type ActualWorkEntryRow = {
   id: string;
@@ -76,8 +78,8 @@ const ActualWorkEntriesTable = ({
   };
   const renderTextFilterDropdown = (
     placeholder: string,
-    selectedKeys: (string | number)[],
-    setSelectedKeys: (keys: (string | number)[]) => void,
+    selectedKeys: Key[],
+    setSelectedKeys: (keys: Key[]) => void,
     confirm: () => void,
     clearFilters?: () => void,
   ) => (
@@ -111,8 +113,8 @@ const ActualWorkEntriesTable = ({
   );
   const renderSelectFilterDropdown = (
     placeholder: string,
-    selectedKeys: (string | number)[],
-    setSelectedKeys: (keys: (string | number)[]) => void,
+    selectedKeys: Key[],
+    setSelectedKeys: (keys: Key[]) => void,
     confirm: () => void,
     clearFilters: (() => void) | undefined,
     options: { label: string; value: string }[],
@@ -162,16 +164,6 @@ const ActualWorkEntriesTable = ({
   };
 
   const fmtNum = (num: number) => num.toFixed(2);
-  const fmtRange = (start: string, end: string) => {
-    const s = dayjs(start);
-    const e = dayjs(end);
-    if (s.isSame(e, "day"))
-      return `${s.format("YYYY-MM-DD HH:mm")}-${e.format("HH:mm")}`;
-    const dayDiff = e.startOf("day").diff(s.startOf("day"), "day");
-    const daySuffix = dayDiff > 0 ? `(+${dayDiff})` : "";
-    return `${s.format("YYYY-MM-DD HH:mm")} - ${e.format("HH:mm")}${daySuffix}`;
-  };
-
   const allColumns: Record<ColumnKey, ProColumns<TableRow>> = {
     title: {
       key: "title",
@@ -298,7 +290,15 @@ const ActualWorkEntriesTable = ({
           </Space>
         </div>
       ),
-      render: (_, row) => fmtRange(row.startDate, row.endDate),
+      render: (_, row) => (
+        <TimeRangeValue
+          start={row.startDate}
+          end={row.endDate}
+          datePrecision="DATETIME"
+          compactEndTime
+          showDayOffset
+        />
+      ),
     },
     workDay: {
       key: "workDay",
@@ -321,7 +321,7 @@ const ActualWorkEntriesTable = ({
           <Space size={4}>
             <span>{fmtNum(workDays)}d</span>
             <Popover content={text}>
-              <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+              <InfoCircleOutlined style={{ color: DEFAULT_COLOR }} />
             </Popover>
           </Space>
         );
@@ -350,13 +350,13 @@ const ActualWorkEntriesTable = ({
       rowKey="id"
       columns={columns}
       request={async (params, _sort, filter) => {
-        const startDateFilter = filter.startDate;
+        const startDateFilter = filter.startDate as Key[] | string | undefined;
         const startDateValues = Array.isArray(startDateFilter)
-          ? startDateFilter.map((value) => String(value)).filter(Boolean)
+          ? startDateFilter.map((value: Key) => String(value)).filter(Boolean)
           : typeof startDateFilter === "string" && startDateFilter.trim()
             ? startDateFilter
                 .split(",")
-                .map((value) => value.trim())
+                .map((value: string) => value.trim())
                 .filter(Boolean)
             : [];
         const result = await requestData({
@@ -423,11 +423,6 @@ const ActualWorkEntriesTable = ({
       cardProps={
         compactHorizontalPadding
           ? {
-              styles: {
-                body: {
-                  paddingInline: 0,
-                },
-              },
               bodyStyle: { paddingInline: 0, paddingTop: 0 },
             }
           : undefined

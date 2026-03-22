@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Form, Input, Select, Button, Divider, Space, Tag, ColorPicker } from "antd";
 import type { DefaultOptionType } from "antd/es/select";
+import { DEFAULT_COLOR } from "@/lib/constants";
 
 export type ClientFormValues = {
   name: string;
@@ -76,7 +77,7 @@ const ClientForm = ({
       form.setFieldValue("newIndustryName", value);
     }
     if (!form.getFieldValue("newIndustryColor")) {
-      form.setFieldValue("newIndustryColor", "#8c8c8c");
+      form.setFieldValue("newIndustryColor", DEFAULT_COLOR);
     }
   };
 
@@ -138,7 +139,7 @@ const ClientForm = ({
             optionRender={(option) => {
               const data = option.data as DefaultOptionType & { color?: string };
               return (
-                <Tag color={data.color ?? "#d9d9d9"} style={{ borderRadius: 6 }}>
+                <Tag color={data.color ?? DEFAULT_COLOR} style={{ borderRadius: 6 }}>
                   {String(data.label ?? "")}
                 </Tag>
               );
@@ -192,11 +193,11 @@ const ClientForm = ({
           <Form.Item
             label="颜色"
             name="newIndustryColor"
-            initialValue="#8c8c8c"
+            initialValue={DEFAULT_COLOR}
             style={{ marginBottom: 0 }}
           >
             <ColorPicker
-              value={newIndustryColor || "#8c8c8c"}
+              value={newIndustryColor || DEFAULT_COLOR}
               format="hex"
               disabledFormat
               showText

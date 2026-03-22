@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { DEFAULT_COLOR } from "@/lib/constants";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
     create: {
       field,
       value,
-      color: body.color ?? "#d9d9d9",
+      color: body.color ?? DEFAULT_COLOR,
       order: body.order ?? null,
     },
     update: {

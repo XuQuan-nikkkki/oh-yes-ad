@@ -6,7 +6,10 @@ import { EditOutlined, InfoCircleOutlined } from "@ant-design/icons";
 import { useParams, useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
+import DetailPageContainer from "@/components/DetailPageContainer";
 import ActualWorkEntryForm, { ActualWorkEntryFormPayload } from "@/components/project-detail/ActualWorkEntryForm";
+import { DATE_FORMAT, DEFAULT_COLOR } from "@/lib/constants";
+import { formatDate, formatDateRange } from "@/lib/date";
 import { useEmployeesStore } from "@/stores/employeesStore";
 
 type Detail = {
@@ -30,24 +33,29 @@ export default function Page() {
   const router = useRouter();
   const id = params.id as string;
   const [data, setData] = useState<Detail | null>(null);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [employees, setEmployees] = useState<{ id: string; name: string; employmentStatus?: string }[]>([]);
   const [dayTotalHours, setDayTotalHours] = useState(0);
   const [messageApi, contextHolder] = message.useMessage();
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
-  const getWorkDateKey = (start: string) => dayjs(start).format("YYYY-MM-DD");
+  const getWorkDateKey = (start: string) => formatDate(start, DATE_FORMAT, "");
 
   const fetchDetail = useCallback(async () => {
     if (!id) return;
     const res = await fetch(`/api/actual-work-entries/${id}?projectType=all`);
-    if (!res.ok) return setData(null);
+    if (!res.ok) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
     const detail = (await res.json()) as Detail;
     setData(detail);
 
     if (!detail.employee?.id || !detail.startDate) {
       setDayTotalHours(0);
+      setLoading(false);
       return;
     }
 
@@ -57,6 +65,7 @@ export default function Page() {
     );
     if (!listRes.ok) {
       setDayTotalHours(0);
+      setLoading(false);
       return;
     }
     const list = (await listRes.json()) as ActualWorkEntryRow[];
@@ -65,14 +74,11 @@ export default function Page() {
         return sum + hours;
       }, 0);
     setDayTotalHours(total);
+    setLoading(false);
   }, [id]);
 
-  const fetchOptions = async () => {
-    const [projectsRes, employeesData] = await Promise.all([
-      fetch("/api/projects"),
-      fetchEmployeesFromStore(),
-    ]);
-    setProjects(await projectsRes.json());
+  const fetchEmployees = async () => {
+    const employeesData = await fetchEmployeesFromStore();
     setEmployees(
       Array.isArray(employeesData)
         ? employeesData.map((row) => ({
@@ -86,10 +92,10 @@ export default function Page() {
 
   useEffect(() => {
     if (!id) return;
-    (async () => {
-      await fetchDetail();
-      await fetchOptions();
-    })();
+    const timer = window.setTimeout(() => {
+      void fetchDetail();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [id, fetchDetail]);
 
   const onSubmit = async (payload: ActualWorkEntryFormPayload) => {
@@ -122,15 +128,20 @@ export default function Page() {
     router.push("/actual-work-entries");
   };
 
+  const handleOpenEdit = async () => {
+    await fetchEmployees();
+    setOpen(true);
+  };
+
   const formatTimeRange = (startDate: string, endDate: string) => {
-    const start = dayjs(startDate);
-    const end = dayjs(endDate);
-    if (start.isSame(end, "day")) {
-      return `${start.format("YYYY-MM-DD HH:mm")}-${end.format("HH:mm")}`;
-    }
-    const dayDiff = end.startOf("day").diff(start.startOf("day"), "day");
-    const daySuffix = dayDiff > 0 ? `(+${dayDiff})` : "";
-    return `${start.format("YYYY-MM-DD HH:mm")} - ${end.format("HH:mm")}${daySuffix}`;
+    return formatDateRange({
+      start: startDate,
+      end: endDate,
+      withTime: true,
+      separator: " - ",
+      compactEndTimeOnSameDay: true,
+      showDayOffset: true,
+    });
   };
 
   const actualHours =
@@ -142,14 +153,30 @@ export default function Page() {
   const formatNumber = (value: number, fractionDigits: number) =>
     Number(value.toFixed(fractionDigits)).toString();
 
+  if (loading) {
+    return (
+      <DetailPageContainer>
+        <Card title="实际工时详情" loading />
+      </DetailPageContainer>
+    );
+  }
+
+  if (!data) {
+    return (
+      <DetailPageContainer>
+        <Card title="实际工时详情">实际工时记录不存在</Card>
+      </DetailPageContainer>
+    );
+  }
+
   return (
-    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+    <DetailPageContainer>
       {contextHolder}
       <Card
-        title={data?.title || "实际工时详情"}
+        title={data.title}
         extra={
           <Space>
-            <Button icon={<EditOutlined />} onClick={() => setOpen(true)}>
+            <Button icon={<EditOutlined />} onClick={() => void handleOpenEdit()}>
               编辑
             </Button>
             <Popconfirm
@@ -166,8 +193,7 @@ export default function Page() {
           </Space>
         }
       >
-        {data && (
-          <Descriptions column={3} size="small">
+        <Descriptions column={3} size="small">
             <Descriptions.Item label="所属项目">{data.project ? <AppLink href={`/projects/${data.project.id}`}>{data.project.name}</AppLink> : "-"}</Descriptions.Item>
             <Descriptions.Item label="人员">
               {data.employee ? (
@@ -190,20 +216,21 @@ export default function Page() {
                 <Tooltip
                   title={`记录时长 ${formatNumber(actualHours, 2)}h，当天总工时 ${formatNumber(workdayDenominator, 2)}h，折合 ${formatNumber(actualWorkdays, 2)}d`}
                 >
-                  <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                  <InfoCircleOutlined style={{ color: DEFAULT_COLOR }} />
                 </Tooltip>
               </Space>
             </Descriptions.Item>
-          </Descriptions>
-        )}
+        </Descriptions>
       </Card>
 
       <Modal title="编辑实际工时" open={open} onCancel={() => setOpen(false)} footer={null} destroyOnHidden>
         <ActualWorkEntryForm
-          projectOptions={projects}
+          projectOptions={data?.project ? [{ id: data.project.id, name: data.project.name }] : []}
+          selectedProjectId={data?.project?.id}
+          disableProjectSelect
           employees={employees}
           initialValues={
-            data && data.project?.id && data.employee?.id
+            data.project?.id && data.employee?.id
               ? {
                   id: data.id,
                   projectId: data.project.id,
@@ -217,6 +244,6 @@ export default function Page() {
           onSubmit={onSubmit}
         />
       </Modal>
-    </Space>
+    </DetailPageContainer>
   );
 }

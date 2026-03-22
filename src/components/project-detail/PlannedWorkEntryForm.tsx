@@ -1,10 +1,10 @@
-// @ts-nocheck
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { Button, Checkbox, Form, InputNumber, Select, Space, message } from "antd";
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
+import { DEFAULT_COLOR } from "@/lib/constants";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 
 dayjs.extend(isoWeek);
@@ -34,6 +34,12 @@ type TaskOption = {
 type ProjectOption = {
   id: string;
   name: string;
+};
+
+type SelectOptionItem = {
+  id: string;
+  value: string;
+  color?: string | null;
 };
 
 type PlannedWorkEntryInitialValues = PlannedWorkEntryFormPayload & {
@@ -132,12 +138,13 @@ const PlannedWorkEntryForm = ({
     },
     [taskOptions, watchProjectId, watchSegmentId],
   );
-  const yearOptions = useMemo(
-    () => optionsByField["plannedWorkEntry.year"] ?? [],
+  const yearOptions = useMemo<SelectOptionItem[]>(
+    () => (optionsByField["plannedWorkEntry.year"] ?? []) as SelectOptionItem[],
     [optionsByField],
   );
-  const weekNumberOptions = useMemo(
-    () => optionsByField["plannedWorkEntry.weekNumber"] ?? [],
+  const weekNumberOptions = useMemo<SelectOptionItem[]>(
+    () =>
+      (optionsByField["plannedWorkEntry.weekNumber"] ?? []) as SelectOptionItem[],
     [optionsByField],
   );
   const isCreateMode = !initialValues || initialValues.id === "new";
@@ -153,12 +160,14 @@ const PlannedWorkEntryForm = ({
       : undefined);
   const defaultYearOptionValue = useMemo(() => {
     const normalized = currentYearValue.trim();
-    const matched = yearOptions.find((option) => option.value.trim() === normalized);
+    const matched = yearOptions.find(
+      (option: SelectOptionItem) => option.value.trim() === normalized,
+    );
     return matched?.value ?? currentYearValue;
   }, [currentYearValue, yearOptions]);
   const defaultWeekOptionValue = useMemo(() => {
     const numericCurrentWeek = Number(currentWeekValue);
-    const matched = weekNumberOptions.find((option) => {
+    const matched = weekNumberOptions.find((option: SelectOptionItem) => {
       const numericOption = Number(option.value);
       return Number.isFinite(numericOption) && numericOption === numericCurrentWeek;
     });
@@ -214,7 +223,7 @@ const PlannedWorkEntryForm = ({
       body: JSON.stringify({
         field,
         value: normalized,
-        color: "#d9d9d9",
+        color: DEFAULT_COLOR,
       }),
     });
     if (!res.ok) {
@@ -423,7 +432,7 @@ const PlannedWorkEntryForm = ({
         name="weekdays"
         rules={[{ required: true, message: "请至少选择一个工作日", type: "array", min: 1 }]}
       >
-        <Checkbox.Group options={weekdayOptions} />
+        <Checkbox.Group options={[...weekdayOptions]} />
       </Form.Item>
 
       <Form.Item

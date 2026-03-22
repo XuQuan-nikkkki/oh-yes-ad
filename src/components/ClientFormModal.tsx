@@ -2,6 +2,7 @@
 
 import { Modal } from "antd";
 import ClientForm, { ClientFormValues } from "@/components/ClientForm";
+import { DEFAULT_COLOR } from "@/lib/constants";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 
 type Client = {
@@ -42,7 +43,7 @@ const ClientFormModal = ({
   const handleSubmit = async (values: ClientFormValues) => {
     let industryOptionId = values.industryOptionId;
     const newIndustryName = String(values.newIndustryName ?? "").trim();
-    const newIndustryColor = values.newIndustryColor ?? "#8c8c8c";
+    const newIndustryColor = values.newIndustryColor ?? DEFAULT_COLOR;
 
     if (!industryOptionId && newIndustryName) {
       const response = await fetch("/api/select-options", {

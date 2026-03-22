@@ -1,17 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Button, Card, DatePicker, Form, Input, Modal, Select } from "antd";
+import { useCallback, useEffect, useState } from "react";
+import { Button, DatePicker, Form, Input, Modal, Select } from "antd";
 import dayjs from "dayjs";
+import { DEFAULT_COLOR } from "@/lib/constants";
 import ProjectSegmentsProTable, {
   type ProjectSegmentsProTableRow,
 } from "@/components/ProjectSegmentsProTable";
+import ListPageContainer from "@/components/ListPageContainer";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import SelectOptionSelector, {
   type SelectOptionSelectorValue,
 } from "@/components/SelectOptionSelector";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { useProjectsStore } from "@/stores/projectsStore";
+import { useProjectSegmentsStore } from "@/stores/projectSegmentsStore";
 
 type Row = ProjectSegmentsProTableRow;
 
@@ -26,40 +31,69 @@ type FormValues = {
 };
 
 export default function ProjectSegmentsPage() {
-  const [rows, setRows] = useState<Row[]>([]);
   const [projects, setProjects] = useState<Option[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
   const [employees, setEmployees] = useState<Option[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [form] = Form.useForm<FormValues>();
   const { canManageProject } = useProjectPermission();
+  const rows = useProjectSegmentsStore((state) => state.rows);
+  const rowsLoading = useProjectSegmentsStore((state) => state.loading);
+  const fetchSegmentsFromStore = useProjectSegmentsStore(
+    (state) => state.fetchSegments,
+  );
+  const upsertSegments = useProjectSegmentsStore((state) => state.upsertSegments);
+  const removeSegment = useProjectSegmentsStore((state) => state.removeSegment);
   const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const statusOptions = optionsByField["projectSegment.status"] ?? [];
 
-  const fetchData = async () => {
-    const [segmentsRes, projectsRes, employeeRows] = await Promise.all([
-      fetch("/api/project-segments"),
-      fetch("/api/projects"),
-      fetchEmployeesFromStore(),
-    ]);
-    setRows(await segmentsRes.json());
-    setProjects((await projectsRes.json()).map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })));
+  const fetchBaseData = useCallback(async () => {
+    const employeeRows = await fetchEmployeesFromStore();
+    await fetchSegmentsFromStore();
     setEmployees(
       (Array.isArray(employeeRows) ? employeeRows : []).map((e: { id: string; name: string }) => ({
         id: e.id,
         name: e.name,
       })),
     );
-  };
+  }, [fetchEmployeesFromStore, fetchSegmentsFromStore]);
+
+  const fetchProjects = useCallback(async () => {
+    setProjectsLoading(true);
+    const data = await fetchProjectsFromStore();
+    setProjects(
+      (Array.isArray(data) ? data : [])
+        .filter(
+          (
+            p,
+          ): p is {
+            id: string;
+            name: string;
+          } => typeof p?.id === "string" && typeof p?.name === "string",
+        )
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+        })),
+    );
+    setProjectsLoading(false);
+  }, [fetchProjectsFromStore]);
+
+  const ensureProjectsLoaded = useCallback(async () => {
+    if (projects.length > 0) return;
+    await fetchProjects();
+  }, [fetchProjects, projects.length]);
 
   useEffect(() => {
     (async () => {
-      await fetchData();
+      await fetchBaseData();
       await fetchAllOptions();
     })();
-  }, [fetchAllOptions]);
+  }, [fetchAllOptions, fetchBaseData]);
 
   useEffect(() => {
     if (!open) return;
@@ -78,20 +112,27 @@ export default function ProjectSegmentsPage() {
 
   const onCreate = () => {
     if (!canManageProject) return;
-    setEditing(null);
-    setOpen(true);
+    void (async () => {
+      await ensureProjectsLoaded();
+      setEditing(null);
+      setOpen(true);
+    })();
   };
 
   const onEdit = (row: Row) => {
     if (!canManageProject) return;
-    setEditing(row);
-    setOpen(true);
+    void (async () => {
+      await ensureProjectsLoaded();
+      setEditing(row);
+      setOpen(true);
+    })();
   };
 
   const onDelete = async (id: string) => {
     if (!canManageProject) return;
-    await fetch(`/api/project-segments/${id}`, { method: "DELETE" });
-    await fetchData();
+    const res = await fetch(`/api/project-segments/${id}`, { method: "DELETE" });
+    if (!res.ok) return;
+    removeSegment(id);
   };
 
   const onSubmit = async (values: FormValues) => {
@@ -104,14 +145,15 @@ export default function ProjectSegmentsPage() {
       dueDate: values.dueDate ? values.dueDate.toISOString() : null,
     };
 
+    let res: Response;
     if (editing) {
-      await fetch(`/api/project-segments/${editing.id}`, {
+      res = await fetch(`/api/project-segments/${editing.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
     } else {
-      await fetch("/api/project-segments", {
+      res = await fetch("/api/project-segments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -119,14 +161,24 @@ export default function ProjectSegmentsPage() {
     }
 
     setOpen(false);
-    await fetchData();
+    if (!res.ok) {
+      await fetchSegmentsFromStore(true);
+      return;
+    }
+    const next = (await res.json()) as Row | null;
+    if (next?.id) {
+      upsertSegments([next]);
+      return;
+    }
+    await fetchSegmentsFromStore(true);
   };
 
   return (
-    <Card styles={{ body: { padding: 12 } }}>
+    <ListPageContainer>
       <ProjectSegmentsProTable
         rows={rows}
-        headerTitle={<h3 style={{ margin: 0 }}>项目环节</h3>}
+        loading={rowsLoading}
+        headerTitle={<ProTableHeaderTitle>项目环节</ProTableHeaderTitle>}
         columnsStatePersistenceKey="project-segments-table-columns-state"
         onEdit={onEdit}
         onDelete={(id) => void onDelete(id)}
@@ -151,7 +203,10 @@ export default function ProjectSegmentsPage() {
             <Input />
           </Form.Item>
           <Form.Item label="所属项目" name="projectId" rules={[{ required: true }]}>
-            <Select options={projects.map((p) => ({ label: p.name, value: p.id }))} />
+            <Select
+              loading={projectsLoading}
+              options={projects.map((p) => ({ label: p.name, value: p.id }))}
+            />
           </Form.Item>
           <Form.Item label="负责人" name="ownerId">
             <Select allowClear options={employees.map((e) => ({ label: e.name, value: e.id }))} />
@@ -162,7 +217,7 @@ export default function ProjectSegmentsPage() {
               options={statusOptions.map((item) => ({
                 label: item.value,
                 value: item.value,
-                color: item.color ?? "#d9d9d9",
+                color: item.color ?? DEFAULT_COLOR,
               }))}
             />
           </Form.Item>
@@ -172,6 +227,6 @@ export default function ProjectSegmentsPage() {
           <Button block type="primary" htmlType="submit">保存</Button>
         </Form>
       </Modal>
-    </Card>
+    </ListPageContainer>
   );
 }

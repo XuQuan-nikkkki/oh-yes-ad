@@ -1,9 +1,11 @@
 "use client";
 
-import { Card, Table, Tag } from "antd";
+import { Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
+import ListPageContainer from "@/components/ListPageContainer";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import { useFetch } from "@/hooks/useFetch";
 
 type LegalEntity = {
@@ -69,7 +71,7 @@ const LegalEntitiesPage = () => {
   const { data, loading } = useFetch<LegalEntity>("/api/legal-entities");
 
   return (
-    <Card styles={{ body: { padding: 12 } }}>
+    <ListPageContainer>
       <Table
         rowKey="id"
         tableLayout="auto"
@@ -77,11 +79,10 @@ const LegalEntitiesPage = () => {
         dataSource={data}
         columns={columns}
         pagination={{ pageSize: 20 }}
-        title={() => <h3 style={{ margin: 0 }}>公司主体</h3>}
+        title={() => <ProTableHeaderTitle>公司主体</ProTableHeaderTitle>}
       />
-    </Card>
+    </ListPageContainer>
   );
 };
 
 export default LegalEntitiesPage;
-

@@ -1,13 +1,12 @@
-// @ts-nocheck
 "use client";
 
 import { Button, Space } from "antd";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import dayjs from "dayjs";
 import { PlusOutlined } from "@ant-design/icons";
 import AppLink from "@/components/AppLink";
 import TableActions from "@/components/TableActions";
+import { formatDate } from "@/lib/date";
 
 export type ProjectTaskRow = {
   id: string;
@@ -136,9 +135,9 @@ const ProjectTasksTable = ({
       dataIndex: "name",
       width: SEGMENT_NAME_WIDTH,
       ellipsis: true,
-      render: (value: string, record) => (
+      render: (_dom, record) => (
         <AppLink href={`/project-segments/${record.id}`}>
-          <strong>{value}</strong>
+          <strong>{record.name}</strong>
         </AppLink>
       ),
     },
@@ -146,7 +145,7 @@ const ProjectTasksTable = ({
       title: "状态",
       dataIndex: "status",
       width: SEGMENT_STATUS_WIDTH,
-      render: (value: string | null | undefined) => value ?? "-",
+      render: (_dom, record) => record.status ?? "-",
     },
     owner: {
       title: "负责人",
@@ -159,8 +158,7 @@ const ProjectTasksTable = ({
       dataIndex: "dueDate",
       width: SEGMENT_DUE_DATE_WIDTH,
       sorter: (a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""),
-      render: (value: string | null | undefined) =>
-        value ? dayjs(value).format("YYYY-MM-DD") : "-",
+      render: (_dom, record) => formatDate(record.dueDate),
     },
     actions: {
       title: "操作",
@@ -215,7 +213,7 @@ const ProjectTasksTable = ({
       title: "状态",
       dataIndex: "status",
       width: TASK_STATUS_WIDTH,
-      render: (value: string | null | undefined) => value ?? "-",
+      render: (_dom, row) => row.status ?? "-",
     },
     {
       title: "负责人",
@@ -229,8 +227,7 @@ const ProjectTasksTable = ({
       dataIndex: "dueDate",
       width: TASK_DUE_DATE_WIDTH,
       sorter: (a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""),
-      render: (value: string | null | undefined) =>
-        value ? dayjs(value).format("YYYY-MM-DD") : "-",
+      render: (_dom, row) => formatDate(row.dueDate),
     },
     {
       title: "操作",

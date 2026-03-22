@@ -2,8 +2,8 @@
 
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import dayjs from "dayjs";
 import TableActions from "@/components/TableActions";
+import TimeRangeValue from "@/components/TimeRangeValue";
 
 type Participant = {
   id: string;
@@ -13,6 +13,11 @@ type Participant = {
 export type ProjectMilestoneRow = {
   id: string;
   name: string;
+  projectId?: string | null;
+  project?: {
+    id: string;
+    name: string;
+  } | null;
   type?: string | null;
   startAt?: string | null;
   endAt?: string | null;
@@ -23,27 +28,6 @@ export type ProjectMilestoneRow = {
   internalParticipants?: Participant[];
   clientParticipants?: Participant[];
   vendorParticipants?: Participant[];
-};
-
-const formatMilestoneDate = (row: ProjectMilestoneRow) => {
-  const start = row.startAt ?? row.date ?? null;
-  const end = row.endAt ?? null;
-  if (!start) return "-";
-  const startAt = dayjs(start);
-  const withTime = row.datePrecision === "DATETIME";
-  const fmt = withTime ? "YYYY-MM-DD HH:mm" : "YYYY-MM-DD";
-  const startText = startAt.format(fmt);
-  if (!end) return startText;
-
-  const endAt = dayjs(end);
-  if (endAt.valueOf() === startAt.valueOf()) return startText;
-
-  if (withTime && endAt.isSame(startAt, "day")) {
-    return `${startAt.format("YYYY-MM-DD HH:mm")} ~ ${endAt.format("HH:mm")}`;
-  }
-
-  if (!withTime && endAt.isSame(startAt, "day")) return startText;
-  return `${startText} ~ ${endAt.format(fmt)}`;
 };
 
 type Props = {
@@ -100,7 +84,13 @@ const ProjectMilestonesTable = ({
       width: "12%",
       sorter: (a, b) =>
         (a.startAt ?? a.date ?? "").localeCompare(b.startAt ?? b.date ?? ""),
-      render: (_value, record) => formatMilestoneDate(record),
+      render: (_value, record) => (
+        <TimeRangeValue
+          start={record.startAt ?? record.date}
+          end={record.endAt}
+          datePrecision={record.datePrecision}
+        />
+      ),
     },
     internalParticipants: {
       title: "内部参与人员",

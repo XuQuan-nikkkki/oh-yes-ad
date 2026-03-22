@@ -1,14 +1,14 @@
-// @ts-nocheck
 "use client";
 
 import { useMemo } from "react";
 import { Space, Tag } from "antd";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import dayjs from "dayjs";
 import TableActions from "@/components/TableActions";
 import AppLink from "@/components/AppLink";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import SelectOptionTag from "@/components/SelectOptionTag";
+import { formatDate } from "@/lib/date";
 
 export type Employee = {
   id: string;
@@ -135,10 +135,27 @@ const EmployeesTable = ({
   onOptionUpdated,
   toolbarActions = [],
   columnsStatePersistenceKey,
-  headerTitle = <h3 style={{ margin: 0 }}>团队成员</h3>,
+  headerTitle = <ProTableHeaderTitle>团队成员</ProTableHeaderTitle>,
   showColumnSetting = true,
   compactHorizontalPadding = false,
 }: Props) => {
+  const normalizeOption = (
+    option?:
+      | {
+          id?: string;
+          value?: string | null;
+          color?: string | null;
+        }
+      | null,
+  ) => {
+    if (!option?.id || !option.value) return null;
+    return {
+      id: option.id,
+      value: option.value,
+      color: option.color ?? null,
+    };
+  };
+
   const functionFilters = useMemo(
     () =>
       Array.from(
@@ -185,9 +202,9 @@ const EmployeesTable = ({
         filters: functionFilters,
         onFilter: (value, record) => record.function === value,
         render: (_dom, record) =>
-          record.functionOption?.id ? (
+          normalizeOption(record.functionOption) ? (
             <SelectOptionTag
-              option={record.functionOption}
+              option={normalizeOption(record.functionOption)}
               onUpdated={onOptionUpdated}
             />
           ) : record.function ? (
@@ -231,9 +248,9 @@ const EmployeesTable = ({
         key: "departmentLevel1",
         title: "一级部门",
         render: (_dom, record) =>
-          record.departmentLevel1Option?.id ? (
+          normalizeOption(record.departmentLevel1Option) ? (
             <SelectOptionTag
-              option={record.departmentLevel1Option}
+              option={normalizeOption(record.departmentLevel1Option)}
               onUpdated={onOptionUpdated}
             />
           ) : record.departmentLevel1 ? (
@@ -246,9 +263,9 @@ const EmployeesTable = ({
         key: "departmentLevel2",
         title: "二级部门",
         render: (_dom, record) =>
-          record.departmentLevel2Option?.id ? (
+          normalizeOption(record.departmentLevel2Option) ? (
             <SelectOptionTag
-              option={record.departmentLevel2Option}
+              option={normalizeOption(record.departmentLevel2Option)}
               onUpdated={onOptionUpdated}
             />
           ) : record.departmentLevel2 ? (
@@ -261,9 +278,9 @@ const EmployeesTable = ({
         key: "position",
         title: "职位",
         render: (_dom, record) =>
-          record.positionOption?.id ? (
+          normalizeOption(record.positionOption) ? (
             <SelectOptionTag
-              option={record.positionOption}
+              option={normalizeOption(record.positionOption)}
               onUpdated={onOptionUpdated}
             />
           ) : record.position ? (
@@ -282,9 +299,9 @@ const EmployeesTable = ({
         key: "employmentType",
         title: "用工性质",
         render: (_dom, record) =>
-          record.employmentTypeOption?.id ? (
+          normalizeOption(record.employmentTypeOption) ? (
             <SelectOptionTag
-              option={record.employmentTypeOption}
+              option={normalizeOption(record.employmentTypeOption)}
               onUpdated={onOptionUpdated}
             />
           ) : record.employmentType ? (
@@ -303,9 +320,9 @@ const EmployeesTable = ({
         ],
         onFilter: (value, record) => record.employmentStatus === value,
         render: (_dom, record) =>
-          record.employmentStatusOption?.id ? (
+          normalizeOption(record.employmentStatusOption) ? (
             <SelectOptionTag
-              option={record.employmentStatusOption}
+              option={normalizeOption(record.employmentStatusOption)}
               onUpdated={onOptionUpdated}
             />
           ) : record.employmentStatus ? (
@@ -317,14 +334,12 @@ const EmployeesTable = ({
       entryDate: {
         key: "entryDate",
         title: "入职日期",
-        render: (_dom, record) =>
-          record.entryDate ? dayjs(record.entryDate).format("YYYY-MM-DD") : "-",
+        render: (_dom, record) => formatDate(record.entryDate),
       },
       leaveDate: {
         key: "leaveDate",
         title: "离职日期",
-        render: (_dom, record) =>
-          record.leaveDate ? dayjs(record.leaveDate).format("YYYY-MM-DD") : "-",
+        render: (_dom, record) => formatDate(record.leaveDate),
       },
       salary: {
         key: "salary",
@@ -422,13 +437,7 @@ const EmployeesTable = ({
       cardProps={
         compactHorizontalPadding
           ? {
-              styles: {
-                body: {
-                  paddingInline: 0,
-                  paddingBlock: 8,
-                },
-              },
-              bodyStyle: { paddingInline: 0, paddingTop: 0 },
+              bodyStyle: { paddingInline: 0, paddingTop: 0, paddingBlock: 8 },
             }
           : undefined
       }

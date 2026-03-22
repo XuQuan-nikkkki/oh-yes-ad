@@ -15,7 +15,7 @@ export type ActualWorkEntryFormPayload = {
 type EmployeeOption = {
   id: string;
   name: string;
-  employmentStatus?: string;
+  employmentStatus?: string | null;
 };
 
 type ProjectOption = {

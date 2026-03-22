@@ -1,12 +1,13 @@
 "use client";
 
 import "./globals.css";
-import { Layout, ConfigProvider, message } from "antd";
+import { Layout, ConfigProvider, message, Spin } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import { useAuthStore } from "@/stores/authStore";
+import { useNavigationStore } from "@/stores/navigationStore";
 import ResetPasswordModal from "@/components/layout/PasswordResetModal";
 import BasicLayout from "@/components/layout/BasicLayout";
 import LayoutSider from "@/components/layout/LayoutSider";
@@ -26,6 +27,8 @@ export default function RootLayout({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const currentUser = useAuthStore((state) => state.currentUser);
+  const navigating = useNavigationStore((state) => state.navigating);
+  const setNavigating = useNavigationStore((state) => state.setNavigating);
   const fetchMe = useAuthStore((state) => state.fetchMe);
   const clearCurrentUser = useAuthStore((state) => state.clearCurrentUser);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
@@ -44,6 +47,10 @@ export default function RootLayout({
       router.refresh();
     }
   }, [clearCurrentUser, router]);
+
+  useEffect(() => {
+    setNavigating(false);
+  }, [pathname, setNavigating]);
 
   useEffect(() => {
     if (isLoginPage) return;
@@ -90,6 +97,22 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <ConfigProvider locale={zhCN}>
           {contextHolder}
+          {navigating ? (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(255,255,255,0.35)",
+                zIndex: 1999,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                pointerEvents: "none",
+              }}
+            >
+              <Spin size="large" />
+            </div>
+          ) : null}
           {renderContent()}
           <ResetPasswordModal
             isModalOpen={passwordModalOpen}

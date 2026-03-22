@@ -20,16 +20,9 @@ import "dayjs/locale/zh-cn";
 import zhCN from "antd/locale/zh_CN";
 import type { Dayjs } from "dayjs";
 import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
+import type { WorkdayAdjustment } from "@/types/workdayAdjustment";
 
 dayjs.locale("zh-cn");
-
-type WorkdayAdjustment = {
-  id: string;
-  name?: string | null;
-  changeType: string;
-  startDate: string;
-  endDate: string;
-};
 
 const WorkdayAdjustmentsPage = () => {
   const [records, setRecords] = useState<WorkdayAdjustment[]>([]);

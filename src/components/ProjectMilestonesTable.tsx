@@ -1,58 +1,42 @@
-// @ts-nocheck
 "use client";
 
 import { useMemo } from "react";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
+import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import TableActions from "@/components/TableActions";
 import SelectOptionTag from "@/components/SelectOptionTag";
-
-type SelectOptionValue = {
-  id?: string;
-  value?: string | null;
-  color?: string | null;
-} | null;
+import { formatDate, formatDateRange } from "@/lib/date";
+import type { NullableSelectOptionValue } from "@/types/selectOption";
 
 export type ProjectMilestoneRow = {
   id: string;
   name: string;
   type?: string | null;
-  typeOption?: SelectOptionValue;
+  typeOption?: NullableSelectOptionValue;
   startAt?: string | null;
   endAt?: string | null;
   datePrecision?: "DATE" | "DATETIME" | null;
   date?: string | null;
   location?: string | null;
   method?: string | null;
-  methodOption?: SelectOptionValue;
+  methodOption?: NullableSelectOptionValue;
   project?: { id: string; name: string; client?: { id: string; name: string } | null } | null;
 };
 
 const formatMilestoneDate = (row: ProjectMilestoneRow) => {
-  const start = row.startAt ?? row.date ?? null;
-  const end = row.endAt ?? null;
-  if (!start) return "-";
-  const startAt = dayjs(start);
-  const withTime = row.datePrecision === "DATETIME";
-  const fmt = withTime ? "YYYY-MM-DD HH:mm" : "YYYY-MM-DD";
-  const startText = startAt.format(fmt);
-  if (!end) return startText;
-
-  const endAt = dayjs(end);
-  if (endAt.valueOf() === startAt.valueOf()) return startText;
-
-  if (withTime && endAt.isSame(startAt, "day")) {
-    return `${startAt.format("YYYY-MM-DD HH:mm")} ~ ${endAt.format("HH:mm")}`;
-  }
-
-  if (!withTime && endAt.isSame(startAt, "day")) return startText;
-  return `${startText} ~ ${endAt.format(fmt)}`;
+  return formatDateRange({
+    start: row.startAt ?? row.date ?? null,
+    end: row.endAt ?? null,
+    withTime: row.datePrecision === "DATETIME",
+    separator: " ~ ",
+  });
 };
 
 type Props = {
   rows: ProjectMilestoneRow[];
+  loading?: boolean;
   onEdit: (row: ProjectMilestoneRow) => void;
   onDelete: (id: string) => void;
   actionsDisabled?: boolean;
@@ -62,10 +46,11 @@ type Props = {
 
 const ProjectMilestonesTable = ({
   rows,
+  loading = false,
   onEdit,
   onDelete,
   actionsDisabled = false,
-  headerTitle = <h3 style={{ margin: 0 }}>项目里程碑</h3>,
+  headerTitle = <ProTableHeaderTitle>项目里程碑</ProTableHeaderTitle>,
   toolbarActions = [],
 }: Props) => {
   const nameFilters = useMemo(
@@ -103,9 +88,7 @@ const ProjectMilestonesTable = ({
         new Set(
           rows
             .map((row) =>
-              row.startAt ?? row.date
-                ? dayjs(row.startAt ?? row.date).format("YYYY-MM-DD")
-                : null,
+              formatDate(row.startAt ?? row.date, undefined, ""),
             )
             .filter((value): value is string => Boolean(value)),
         ),
@@ -191,9 +174,7 @@ const ProjectMilestonesTable = ({
       filters: dateFilters,
       filterSearch: true,
       onFilter: (value, record) =>
-        (record.startAt ?? record.date
-          ? dayjs(record.startAt ?? record.date).format("YYYY-MM-DD")
-          : "") ===
+        formatDate(record.startAt ?? record.date, undefined, "") ===
         String(value),
       render: (_value, record) => formatMilestoneDate(record),
     },
@@ -223,7 +204,7 @@ const ProjectMilestonesTable = ({
       filters: locationFilters,
       filterSearch: true,
       onFilter: (value, record) => (record.location ?? "") === String(value),
-      render: (value: string | null | undefined) => value ?? "-",
+      render: (_dom, record) => record.location ?? "-",
     },
     {
       title: "操作",
@@ -234,8 +215,7 @@ const ProjectMilestonesTable = ({
           key={record.id}
           onEdit={() => onEdit(record)}
           onDelete={() => onDelete(record.id)}
-          editDisabled={actionsDisabled}
-          deleteDisabled={actionsDisabled}
+          disabled={actionsDisabled}
           deleteTitle={`确定删除里程碑「${record.name}」？`}
         />,
       ],
@@ -247,6 +227,7 @@ const ProjectMilestonesTable = ({
       rowKey="id"
       columns={columns}
       dataSource={rows}
+      loading={loading}
       search={false}
       headerTitle={headerTitle}
       pagination={{ pageSize: 10 }}

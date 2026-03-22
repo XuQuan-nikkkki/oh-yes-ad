@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Button, ColorPicker, Select, Tag } from "antd";
 import type { DefaultOptionType } from "antd/es/select";
+import { DEFAULT_COLOR } from "@/lib/constants";
 
 export type SelectOptionSelectorOption = {
   value: string;
@@ -28,8 +29,6 @@ type Props = {
   createButtonText?: string;
   existsText?: string;
 };
-
-const DEFAULT_COLOR = "#d9d9d9";
 
 const SelectOptionSelector = ({
   value,
@@ -77,7 +76,6 @@ const SelectOptionSelector = ({
       placeholder={placeholder}
       showSearch
       value={selectedValue}
-      searchValue={search}
       onSearch={setSearch}
       onClear={() => onChange?.(undefined)}
       onChange={(nextValue) => {
@@ -88,12 +86,6 @@ const SelectOptionSelector = ({
         }
         onChange?.(String(nextValue));
       }}
-      optionFilterProp="label"
-      filterOption={(input, option) =>
-        String(option?.label ?? "")
-          .toLowerCase()
-          .includes(input.toLowerCase())
-      }
       options={normalizedOptions}
       optionRender={(option) => {
         const optionData = option.data as DefaultOptionType & { color?: string };
@@ -129,7 +121,7 @@ const SelectOptionSelector = ({
     />
       {isNewValue ? (
         <div style={{ marginTop: 8 }}>
-          <div style={{ marginBottom: 6, color: "#8c8c8c" }}>新增并选择颜色：</div>
+          <div style={{ marginBottom: 6, color: DEFAULT_COLOR }}>新增并选择颜色：</div>
           <ColorPicker
             value={selectedColor}
             showText
