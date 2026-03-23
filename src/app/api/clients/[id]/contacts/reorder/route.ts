@@ -43,9 +43,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     return new Response("Invalid payload", { status: 400 });
   }
 
-  const contacts = await prisma.clientContact.findMany({
+  const contacts = await prisma.clientContactClient.findMany({
     where: { clientId },
-    select: { id: true, order: true },
+    select: { contactId: true, order: true },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
   });
 
@@ -53,7 +53,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     return Response.json({ success: true });
   }
 
-  const dbIdSet = new Set(contacts.map((item) => item.id));
+  const dbIdSet = new Set(contacts.map((item) => item.contactId));
   const orderedSet = new Set(orderedIds);
   if (orderedIds.length !== contacts.length || orderedSet.size !== contacts.length) {
     return new Response("Ordered IDs length mismatch", { status: 400 });
@@ -72,7 +72,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     return new Response("Moved contact not in ordered IDs", { status: 400 });
   }
 
-  const orderMap = new Map(contacts.map((item) => [item.id, item.order]));
+  const orderMap = new Map(contacts.map((item) => [item.contactId, item.order]));
   const prevId = movedIndex > 0 ? (orderedIds as string[])[movedIndex - 1] : null;
   const nextId =
     movedIndex < orderedIds.length - 1 ? (orderedIds as string[])[movedIndex + 1] : null;
@@ -100,8 +100,13 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   if (needRebalance) {
     await prisma.$transaction(
       (orderedIds as string[]).map((id: string, index: number) =>
-        prisma.clientContact.update({
-          where: { id },
+        prisma.clientContactClient.update({
+          where: {
+            clientId_contactId: {
+              clientId,
+              contactId: id,
+            },
+          },
           data: { order: (index + 1) * ORDER_STEP },
         }),
       ),
@@ -109,8 +114,13 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     return Response.json({ success: true, rebalanced: true });
   }
 
-  await prisma.clientContact.update({
-    where: { id: movedIdRaw },
+  await prisma.clientContactClient.update({
+    where: {
+      clientId_contactId: {
+        clientId,
+        contactId: movedIdRaw,
+      },
+    },
     data: { order: nextOrderValue },
   });
 

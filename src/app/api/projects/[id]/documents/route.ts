@@ -3,6 +3,7 @@ import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { DEFAULT_COLOR } from "@/lib/constants";
+import { requireProjectWritePermission } from "@/lib/api-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -14,8 +15,37 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+const parseSelectOptionInput = (value: unknown) => {
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    return {
+      value: normalized || null,
+      color: null as string | null,
+    };
+  }
+  if (value && typeof value === "object") {
+    const candidateValue =
+      "value" in value && typeof value.value === "string"
+        ? value.value.trim()
+        : "";
+    const candidateColor =
+      "color" in value && typeof value.color === "string"
+        ? value.color.trim()
+        : "";
+    return {
+      value: candidateValue || null,
+      color: candidateColor || null,
+    };
+  }
+  return {
+    value: null as string | null,
+    color: null as string | null,
+  };
+};
+
 const upsertSelectOption = async (field: string, value: unknown) => {
-  const normalized = typeof value === "string" ? value.trim() : "";
+  const parsed = parseSelectOptionInput(value);
+  const normalized = parsed.value ?? "";
   if (!normalized) return null;
 
   const option = await prisma.selectOption.upsert({
@@ -28,7 +58,7 @@ const upsertSelectOption = async (field: string, value: unknown) => {
     create: {
       field,
       value: normalized,
-      color: DEFAULT_COLOR,
+      color: parsed.color ?? DEFAULT_COLOR,
     },
     update: {},
   });
@@ -44,10 +74,13 @@ const extractTypeOptionValue = (body: Record<string, unknown>) => {
     return typeof value === "string" ? value : "";
   }
   const legacyType = body.type;
-  return typeof legacyType === "string" ? legacyType : "";
+  return legacyType;
 };
 
 export async function POST(req: NextRequest, context: RouteContext) {
+  const permissionResponse = await requireProjectWritePermission();
+  if (permissionResponse) return permissionResponse;
+
   const { id: projectId } = await context.params;
   if (!projectId) {
     return new Response("Missing project ID", { status: 400 });

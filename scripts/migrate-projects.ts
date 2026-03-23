@@ -1,6 +1,11 @@
 import "dotenv/config";
 import { PageObjectResponse } from "@notionhq/client";
 import {
+  DEFAULT_PROJECT_TASK_STATUS,
+  PROJECT_TASK_STATUS_FIELD,
+  PROJECT_TASK_STATUS_OPTIONS,
+} from "../src/lib/constants";
+import {
   getCheckboxValue,
   getDatePrecisionValue,
   getDateRangeValue,
@@ -14,6 +19,18 @@ import {
 import { prisma, migrateDatabase } from "./migrate-notion";
 
 const DEFAULT_COLOR = "#d9d9d9";
+
+const getTrimmedRequiredTitle = (
+  page: PageObjectResponse,
+  fieldName: string,
+) => {
+  const raw = getTitleValue(page, fieldName, true);
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+  if (!trimmed) {
+    throw new Error(`字段 '${fieldName}' 去除首尾空格后为空`);
+  }
+  return trimmed;
+};
 
 const upsertSelectOption = async (field: string, value?: string | null) => {
   const normalized = value?.trim();
@@ -37,7 +54,7 @@ const upsertSelectOption = async (field: string, value?: string | null) => {
 
 const syncProject = async (project: PageObjectResponse) => {
   const { id } = project;
-  const name = getTitleValue(project, "项目名称", true);
+  const name = getTrimmedRequiredTitle(project, "项目名称");
   const status = getStatusValue(project, "项目状态"); // 你需要有 getStatusValue
   const stage = getSelectValue(project, "项目阶段");
   const isInternal = getCheckboxValue(project, "是内部项目");
@@ -135,7 +152,7 @@ const syncProject = async (project: PageObjectResponse) => {
     update: {
       name,
       typeOptionId: typeOptionId ?? null,
-      statusOptionId: statusOptionId ?? null,
+      statusOptionId: statusOptionId ?? undefined,
       stageOptionId: stageOptionId ?? null,
       isArchived,
       startDate: startDate ? new Date(startDate) : null,
@@ -182,9 +199,10 @@ const syncSegment = async (segment: PageObjectResponse) => {
   const { id } = segment;
 
   // ===== 基础字段 =====
-  const name = getTitleValue(segment, "环节名称", true);
+  const name = getTrimmedRequiredTitle(segment, "环节名称");
   const status = getStatusValue(segment, "环节状态");
-  const dueDate = getDateValue(segment, "截止日期");
+  const startDate = getDateValue(segment, "开始时间") ?? getDateValue(segment, "开始日期");
+  const endDate = getDateValue(segment, "结束时间") ?? getDateValue(segment, "结束日期");
   const statusOptionId = await upsertSelectOption("projectSegment.status", status);
 
   // ===== 所属项目 =====
@@ -223,8 +241,9 @@ const syncSegment = async (segment: PageObjectResponse) => {
     data: {
       notionPageId: id,
       name,
-      statusOptionId: statusOptionId ?? null,
-      dueDate: dueDate ? new Date(dueDate) : null,
+      statusOptionId: statusOptionId ?? undefined,
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
 
       projectId: project.id,
       ownerId,
@@ -248,9 +267,16 @@ const syncTask = async (task: PageObjectResponse) => {
   const { id } = task;
 
   // ===== 基础字段 =====
-  const name = getTitleValue(task, "任务名称", true);
-  getStatusValue(task, "任务状态");
+  const name = getTrimmedRequiredTitle(task, "任务名称");
+  const taskStatus = getStatusValue(task, "任务状态") ?? DEFAULT_PROJECT_TASK_STATUS;
   const dueDate = getDateValue(task, "截止日期");
+  const statusOptionId = await upsertSelectOption(
+    PROJECT_TASK_STATUS_FIELD,
+    taskStatus,
+  );
+  if (!statusOptionId) {
+    throw new Error(`任务状态选项未创建成功: ${taskStatus}`);
+  }
 
   // ===== 所属环节 =====
   const segmentRelation = getRelationValue(task, "所属环节");
@@ -307,6 +333,7 @@ const syncTask = async (task: PageObjectResponse) => {
     data: {
       notionPageId: id,
       name,
+      statusOptionId,
       dueDate: dueDate ? new Date(dueDate) : null,
 
       segmentId: segment.id,
@@ -320,6 +347,28 @@ const syncTask = async (task: PageObjectResponse) => {
 
 export const syncProjectTasks = async () => {
   console.log("开始同步项目任务...", process.env.NOTION_PROJECT_TASK_DB_ID);
+  await Promise.all(
+    PROJECT_TASK_STATUS_OPTIONS.map((option) =>
+      prisma.selectOption.upsert({
+        where: {
+          field_value: {
+            field: PROJECT_TASK_STATUS_FIELD,
+            value: option.value,
+          },
+        },
+        create: {
+          field: PROJECT_TASK_STATUS_FIELD,
+          value: option.value,
+          color: option.color,
+          order: option.order,
+        },
+        update: {
+          color: option.color,
+          order: option.order,
+        },
+      }),
+    ),
+  );
   await migrateDatabase(
     process.env.NOTION_PROJECT_TASK_DB_ID!,
     syncTask,
@@ -435,7 +484,7 @@ const syncProjectMilestone = async (milestone: PageObjectResponse) => {
   const { id } = milestone;
 
   // ===== 基础字段 =====
-  const name = getTitleValue(milestone, "里程碑名称", true);
+  const name = getTrimmedRequiredTitle(milestone, "里程碑名称");
   const type = getSelectValue(milestone, "类型");
   const dateRange = getDateRangeValue(milestone, "日期");
   const datePrecision = getDatePrecisionValue(milestone, "日期");

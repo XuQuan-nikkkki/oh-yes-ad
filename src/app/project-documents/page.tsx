@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Modal, message } from "antd";
 import ProjectDocumentsTable, {
   ProjectDocumentRow,
@@ -10,6 +10,9 @@ import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import ProjectDocumentForm, {
   type ProjectDocumentFormPayload,
 } from "@/components/project-detail/ProjectDocumentForm";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
+import { canManageProjectResources } from "@/lib/role-permissions";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useProjectDocumentsStore } from "@/stores/projectDocumentsStore";
 import { useProjectMilestonesStore } from "@/stores/projectMilestonesStore";
 import { useProjectsStore } from "@/stores/projectsStore";
@@ -23,6 +26,12 @@ type MilestoneOption = {
 };
 
 export default function Page() {
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
+  const canManageProjectDocuments = useMemo(
+    () => canManageProjectResources(roleCodes),
+    [roleCodes],
+  );
   const [messageApi, contextHolder] = message.useMessage();
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [open, setOpen] = useState(false);
@@ -60,6 +69,22 @@ export default function Page() {
     );
   }, [fetchProjectsFromStore]);
 
+  const refreshDocument = useCallback(
+    async (documentId: string) => {
+      const res = await fetch(`/api/project-documents/${documentId}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        throw new Error((await res.text()) || "获取资料失败");
+      }
+      const next = (await res.json()) as ProjectDocumentRow | null;
+      if (next?.id) {
+        upsertDocuments([next]);
+      }
+    },
+    [upsertDocuments],
+  );
+
   useEffect(() => {
     const timer = setTimeout(() => {
       void fetchData();
@@ -68,6 +93,7 @@ export default function Page() {
   }, [fetchData]);
 
   const onEdit = (row: ProjectDocumentRow) => {
+    if (!canManageProjectDocuments) return;
     if (projects.length === 0) {
       void fetchProjectOptions();
     }
@@ -76,12 +102,14 @@ export default function Page() {
   };
 
   const onDelete = async (id: string) => {
+    if (!canManageProjectDocuments) return;
     const res = await fetch(`/api/project-documents/${id}`, { method: "DELETE" });
     if (!res.ok) return;
     removeDocument(id);
   };
 
   const onSubmit = async (payload: ProjectDocumentFormPayload) => {
+    if (!canManageProjectDocuments) return;
     if (!payload.projectId) {
       messageApi.error("请选择所属项目");
       return;
@@ -126,6 +154,29 @@ export default function Page() {
     await fetchDocumentsFromStore(true);
   };
 
+  const updateDocumentType = async (
+    row: ProjectDocumentRow,
+    nextOption: { id: string; value: string; color: string },
+  ) => {
+    if (!canManageProjectDocuments) return;
+    const res = await fetch(`/api/project-documents/${row.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        typeOption: nextOption,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error((await res.text()) || "更新类型失败");
+    }
+
+    const next = (await res.json()) as ProjectDocumentRow | null;
+    if (next?.id) {
+      upsertDocuments([next]);
+    }
+  };
+
   const formProjectOptions =
     editing?.project && !projects.some((item) => item.id === editing.project?.id)
       ? [...projects, { id: editing.project.id, name: editing.project.name }]
@@ -138,25 +189,48 @@ export default function Page() {
         <ProjectDocumentsTable
           rows={rows}
           loading={rowsLoading}
+          actionsDisabled={!canManageProjectDocuments}
           onEdit={onEdit}
           onDelete={(id) => {
             void onDelete(id);
           }}
+          renderTypeOption={(record) => (
+            canManageProjectDocuments ? (
+              <SelectOptionQuickEditTag
+                field="projectDocument.type"
+                option={record.typeOption ?? null}
+                modalTitle="修改资料类型"
+                modalDescription="勾选只会暂存类型切换。点击保存后会一并保存选项改动、排序和资料类型。"
+                optionValueLabel="类型值"
+                saveSuccessText="资料类型已保存"
+                onSaveSelection={(nextOption) => updateDocumentType(record, nextOption)}
+                onUpdated={async () => {
+                  await refreshDocument(record.id);
+                }}
+              />
+            ) : (
+              record.typeOption?.value ?? "-"
+            )
+          )}
           headerTitle={<ProTableHeaderTitle>项目资料</ProTableHeaderTitle>}
           toolbarActions={[
-            <Button
-              key="create-project-document"
-              type="primary"
-              onClick={() => {
-                if (projects.length === 0) {
-                  void fetchProjectOptions();
-                }
-                setEditing(null);
-                setOpen(true);
-              }}
-            >
-              新增资料
-            </Button>,
+            ...(canManageProjectDocuments
+              ? [
+                  <Button
+                    key="create-project-document"
+                    type="primary"
+                    onClick={() => {
+                      if (projects.length === 0) {
+                        void fetchProjectOptions();
+                      }
+                      setEditing(null);
+                      setOpen(true);
+                    }}
+                  >
+                    新增资料
+                  </Button>,
+                ]
+              : []),
         ]}
         />
 
@@ -165,7 +239,7 @@ export default function Page() {
           open={open}
           onCancel={() => setOpen(false)}
           footer={null}
-          forceRender
+          width={860}
           destroyOnHidden
         >
           <ProjectDocumentForm

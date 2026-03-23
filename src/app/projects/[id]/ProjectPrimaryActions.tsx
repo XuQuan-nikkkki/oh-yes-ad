@@ -33,6 +33,7 @@ const ProjectPrimaryActions = ({
         disabled={!canManageProject}
         deleteLoading={deletingProject}
         deleteTitle={`确定删除项目「${projectName ?? ""}」？`}
+        disableTextVairant
         onEdit={() => {
           if (!canManageProject) return;
           onOpenEdit();

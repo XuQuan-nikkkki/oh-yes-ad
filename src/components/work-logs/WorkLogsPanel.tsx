@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card, message, Modal, Space, Spin } from "antd";
+import { Card, Modal, Space, Spin, message } from "antd";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -46,6 +46,9 @@ type CopiedWorkLog = {
 };
 
 type ProjectOption = { id: string; name: string };
+type ProjectOptionWithStatus = ProjectOption & {
+  status?: string | null;
+};
 
 type ProjectOptionGroup = {
   label: string;
@@ -87,10 +90,10 @@ const formatSummaryNumber = (value: number) =>
   value.toFixed(2).replace(/\.?0+$/, "");
 
 export default function WorkLogsPanel() {
+  const [messageApi, contextHolder] = message.useMessage();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [messageApi, contextHolder] = message.useMessage();
   const currentUser = useAuthStore((state) => state.currentUser);
   const fetchProjectsFromStore = useProjectsStore(
     (state) => state.fetchProjects,
@@ -108,7 +111,7 @@ export default function WorkLogsPanel() {
   const [workLogMode, setWorkLogMode] = useState<"create" | "edit">("create");
   const [editingWorkLogId, setEditingWorkLogId] = useState<string | null>(null);
   const [workLogProjectOptions, setWorkLogProjectOptions] = useState<
-    ProjectOption[]
+    ProjectOptionWithStatus[]
   >([]);
   const [workLogProjectOptionGroups, setWorkLogProjectOptionGroups] = useState<
     ProjectOptionGroup[]
@@ -168,47 +171,83 @@ export default function WorkLogsPanel() {
       ]);
 
       const isArchivedProject = (project: {
+        isArchived?: boolean | null;
         status?: string | null;
         statusOption?: { value?: string | null } | null;
       }) => {
+        if (Boolean(project.isArchived)) return true;
         const statusValue = project.statusOption?.value ?? project.status ?? "";
         return statusValue === "已归档";
       };
 
-      const projectMap = new Map<string, ProjectOption>();
+      const projectMap = new Map<string, ProjectOptionWithStatus>();
 
       if (Array.isArray(ownedProjects)) {
         for (const project of ownedProjects as Array<{
           id?: string | null;
           name?: string | null;
+          isArchived?: boolean | null;
           status?: string | null;
           statusOption?: { value?: string | null } | null;
         }>) {
           if (!project.id || !project.name || isArchivedProject(project)) continue;
-          projectMap.set(project.id, { id: project.id, name: project.name });
+          projectMap.set(project.id, {
+            id: project.id,
+            name: project.name,
+            status: project.statusOption?.value ?? project.status ?? null,
+          });
         }
       }
 
       if (Array.isArray(tasks)) {
         for (const task of tasks as Array<{
-          segment?: { project?: { id?: string | null; name?: string | null } | null } | null;
+          segment?: {
+            project?: {
+              id?: string | null;
+              name?: string | null;
+              status?: string | null;
+              statusOption?: { value?: string | null } | null;
+            } | null;
+          } | null;
         }>) {
           const project = task?.segment?.project;
           if (!project?.id || !project.name) continue;
+          if (isArchivedProject(project)) continue;
           if (projectMap.has(project.id)) continue;
-          projectMap.set(project.id, { id: project.id, name: project.name });
+          projectMap.set(project.id, {
+            id: project.id,
+            name: project.name,
+            status: project.statusOption?.value ?? project.status ?? null,
+          });
         }
       }
 
       const projectList = Array.from(projectMap.values()).sort((a, b) =>
         a.name.localeCompare(b.name, "zh-CN"),
       );
-      const groupedProjectOptions: ProjectOptionGroup[] = [
-        {
-          label: "参与项目",
-          options: projectList,
-        },
-      ];
+
+      const groupedProjectOptions = Array.from(
+        projectList.reduce<Map<string, ProjectOptionWithStatus[]>>((groups, project) => {
+          const groupLabel = project.status?.trim() || "未设置状态";
+          if (!groups.has(groupLabel)) {
+            groups.set(groupLabel, []);
+          }
+          groups.get(groupLabel)?.push(project);
+          return groups;
+        }, new Map()),
+      )
+        .sort(([leftLabel], [rightLabel]) => leftLabel.localeCompare(rightLabel, "zh-CN"))
+        .map(([label, options]) => ({
+          label,
+          options: options
+            .slice()
+            .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"))
+            .map(({ id, name }) => ({
+              id,
+              name,
+            })),
+        }));
+
       setWorkLogProjectOptions(projectList);
       setWorkLogProjectOptionGroups(groupedProjectOptions);
       setWorkLogOptionsLoadedUserId(userId);
@@ -356,6 +395,7 @@ export default function WorkLogsPanel() {
   }, [
     copiedWorkLog,
     currentUser,
+    messageApi,
     myActualRows,
     selectedCalendarEntryId,
     workLogProjectOptions,

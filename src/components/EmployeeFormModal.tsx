@@ -19,7 +19,13 @@ import type { DefaultOptionType } from "antd/es/select";
 import { ProForm, StepsForm } from "@ant-design/pro-components";
 import dayjs from "dayjs";
 import { DEFAULT_COLOR } from "@/lib/constants";
+import {
+  getSystemSettingNumberFromRecords,
+  SYSTEM_SETTING_KEYS,
+} from "@/lib/system-settings";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
+import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
 
 type Employee = {
   id?: string;
@@ -63,7 +69,7 @@ type RoleOption = {
   name: string;
 };
 
-type EmployeeViewMode = "basic" | "role" | "position";
+type EmployeeViewMode = "basic" | "position";
 
 type Props = {
   open: boolean;
@@ -208,13 +214,53 @@ const EmployeeFormModal = ({
 }: Props) => {
   const [form] = Form.useForm<FormValues>();
   const isEdit = !!initialValues?.id;
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const currentRoleCodes = getRoleCodesFromUser(currentUser);
+  const canManageRoles =
+    currentRoleCodes.includes("ADMIN") || currentRoleCodes.includes("HR");
+  const defaultStaffRoleId = useMemo(
+    () =>
+      roleOptions.find((role) => role.code === "STAFF")?.id ??
+      roleOptions.find((role) => role.name === "员工")?.id,
+    [roleOptions],
+  );
   const selectedRoleIds = useMemo(
     () => initialValues?.roles?.map((item) => item.role.id) ?? [],
     [initialValues?.roles],
   );
+  const defaultRoleIds = useMemo(
+    () =>
+      selectedRoleIds.length > 0
+        ? selectedRoleIds
+        : !isEdit && defaultStaffRoleId
+          ? [defaultStaffRoleId]
+          : [],
+    [defaultStaffRoleId, isEdit, selectedRoleIds],
+  );
 
   const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
+  const systemSettings = useSystemSettingsStore((state) => state.records);
+  const fetchSystemSettings = useSystemSettingsStore(
+    (state) => state.fetchSystemSettings,
+  );
+
+  const defaultWorkstationCost = useMemo(
+    () =>
+      getSystemSettingNumberFromRecords(
+        systemSettings,
+        SYSTEM_SETTING_KEYS.employeeDefaultWorkstationCost,
+      ),
+    [systemSettings],
+  );
+  const defaultUtilityCost = useMemo(
+    () =>
+      getSystemSettingNumberFromRecords(
+        systemSettings,
+        SYSTEM_SETTING_KEYS.employeeDefaultUtilityCost,
+      ),
+    [systemSettings],
+  );
 
   const [searchText, setSearchText] = useState<Record<CreatableKey, string>>({
     function: "",
@@ -300,7 +346,7 @@ const EmployeeFormModal = ({
       name: initialValues?.name ?? "",
       phone: initialValues?.phone ?? "",
       fullName: initialValues?.fullName ?? "",
-      roleIds: selectedRoleIds,
+      roleIds: defaultRoleIds,
       function: initialValues?.function ?? undefined,
       legalEntityId: initialValues?.legalEntity?.id ?? undefined,
       departmentLevel1: initialValues?.departmentLevel1 ?? undefined,
@@ -325,23 +371,28 @@ const EmployeeFormModal = ({
           : String(initialValues.providentFund),
       workstationCost:
         initialValues?.workstationCost === null || initialValues?.workstationCost === undefined
-          ? undefined
+          ? String(defaultWorkstationCost)
           : String(initialValues.workstationCost),
       utilityCost:
         initialValues?.utilityCost === null || initialValues?.utilityCost === undefined
-          ? undefined
+          ? String(defaultUtilityCost)
           : String(initialValues.utilityCost),
       bankAccountNumber: initialValues?.bankAccountNumber ?? undefined,
       bankName: initialValues?.bankName ?? undefined,
       bankBranch: initialValues?.bankBranch ?? undefined,
     }),
-    [initialValues, selectedRoleIds],
+    [defaultRoleIds, defaultUtilityCost, defaultWorkstationCost, initialValues],
   );
 
   useEffect(() => {
     if (!open) return;
     void fetchAllOptions();
   }, [open, fetchAllOptions]);
+
+  useEffect(() => {
+    if (!open) return;
+    void fetchSystemSettings();
+  }, [open, fetchSystemSettings]);
 
   useEffect(() => {
     if (!open) return;
@@ -408,7 +459,7 @@ const EmployeeFormModal = ({
         name: resolved.name,
         phone: resolved.phone || null,
         fullName: resolved.fullName || null,
-        roleIds: resolved.roleIds ?? [],
+        roleIds: canManageRoles ? resolved.roleIds ?? defaultRoleIds : defaultRoleIds,
         function: toSingleValue(resolved.function),
         employmentStatus: toSingleValue(resolved.employmentStatus),
       };
@@ -419,16 +470,10 @@ const EmployeeFormModal = ({
     if (viewMode === "basic") {
       await saveEmployee({
         name: resolved.name,
+        phone: resolved.phone || null,
         fullName: resolved.fullName || null,
         function: toSingleValue(resolved.function),
-      });
-      return;
-    }
-
-    if (viewMode === "role") {
-      await saveEmployee({
-        name: resolved.name,
-        roleIds: resolved.roleIds ?? [],
+        ...(canManageRoles ? { roleIds: resolved.roleIds ?? [] } : {}),
       });
       return;
     }
@@ -598,53 +643,65 @@ const EmployeeFormModal = ({
 
   const renderSimpleForm = () => (
     <Form form={form} layout="vertical" onFinish={onNormalFinish}>
-      <Form.Item
-        label="姓名"
-        name="name"
-        rules={[{ required: true, message: "请输入姓名" }]}
-      >
-        <Input placeholder="请输入姓名" />
-      </Form.Item>
-
-      {!isEdit ? (
-        <Form.Item
-          label="手机号"
-          name="phone"
-          rules={[{ required: true, message: "请输入手机号" }]}
-        >
-          <Input placeholder="用于登录的手机号" />
-        </Form.Item>
-      ) : null}
-
-      {(!isEdit || viewMode === "basic") && (
-        <>
+      <Row gutter={16}>
+        <Col span={12}>
+          <Form.Item
+            label="姓名"
+            name="name"
+            rules={[{ required: true, message: "请输入姓名" }]}
+          >
+            <Input placeholder="请输入姓名" />
+          </Form.Item>
+        </Col>
+        <Col span={12}>
           <Form.Item label="全名" name="fullName">
             <Input placeholder="可选，完整姓名" />
           </Form.Item>
+        </Col>
+      </Row>
 
-          <Form.Item label="职能" name="function">
+      <Row gutter={16}>
+        <Col span={12}>
+          <Form.Item
+            label="职能"
+            name="function"
+            rules={[{ required: true, message: "请选择职能" }]}
+          >
             {renderCreatableSelect("function", "function", "选择或新增职能")}
           </Form.Item>
           {renderCreateRow("function", "职能")}
-        </>
-      )}
+        </Col>
+        <Col span={12}>
+          <Form.Item
+            label="手机号"
+            name="phone"
+            rules={[{ required: true, message: "请输入手机号" }]}
+          >
+            <Input placeholder="用于登录的手机号" />
+          </Form.Item>
+        </Col>
+      </Row>
 
-      {(!isEdit || viewMode === "role") && (
-        <Form.Item
-          label="角色"
-          name="roleIds"
-          rules={[{ required: true, message: "请至少选择一个角色" }]}
-        >
-          <Select
-            mode="multiple"
-            options={roleOptions.map((item) => ({
-              label: item.name,
-              value: item.id,
-            }))}
-            placeholder="选择角色"
-          />
-        </Form.Item>
-      )}
+      {canManageRoles ? (
+        <Row gutter={16}>
+          <Col span={24}>
+            <Form.Item
+              label="角色"
+              name="roleIds"
+              rules={[{ required: true, message: "请至少选择一个角色" }]}
+            >
+              <Select
+                mode="multiple"
+                options={roleOptions.map((item) => ({
+                  label: item.name,
+                  value: item.id,
+                }))}
+                placeholder="选择角色"
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+      ) : null}
 
       {!isEdit ? (
         <>
@@ -776,10 +833,10 @@ const EmployeeFormModal = ({
               <Input placeholder="请输入公积金" />
             </ProForm.Item>
             <ProForm.Item label="工位费" name="workstationCost">
-              <Input placeholder="请输入工位费" />
+              <Input disabled />
             </ProForm.Item>
             <ProForm.Item label="水电" name="utilityCost">
-              <Input placeholder="请输入水电" />
+              <Input disabled />
             </ProForm.Item>
           </StepsForm.StepForm>
 

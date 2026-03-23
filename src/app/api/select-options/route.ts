@@ -34,28 +34,54 @@ export async function POST(req: Request) {
   const body = await sanitizeRequestBody(req);
   const field = String(body.field ?? "").trim();
   const value = String(body.value ?? "").trim();
+  const inputOrder =
+    typeof body.order === "number" && Number.isFinite(body.order)
+      ? Math.round(body.order)
+      : null;
 
   if (!field || !value) {
     return new Response("Missing field or value", { status: 400 });
   }
 
-  const option = await prisma.selectOption.upsert({
-    where: {
-      field_value: {
+  const option = await prisma.$transaction(async (tx) => {
+    const existing = await tx.selectOption.findUnique({
+      where: {
+        field_value: {
+          field,
+          value,
+        },
+      },
+    });
+
+    if (existing) {
+      return tx.selectOption.update({
+        where: {
+          field_value: {
+            field,
+            value,
+          },
+        },
+        data: {
+          color: body.color ?? undefined,
+          order: inputOrder ?? undefined,
+        },
+      });
+    }
+
+    const maxOrderResult = await tx.selectOption.aggregate({
+      where: { field },
+      _max: { order: true },
+    });
+    const nextOrder = (maxOrderResult._max.order ?? 0) + 1;
+
+    return tx.selectOption.create({
+      data: {
         field,
         value,
+        color: body.color ?? DEFAULT_COLOR,
+        order: inputOrder ?? nextOrder,
       },
-    },
-    create: {
-      field,
-      value,
-      color: body.color ?? DEFAULT_COLOR,
-      order: body.order ?? null,
-    },
-    update: {
-      color: body.color ?? undefined,
-      order: body.order ?? undefined,
-    },
+    });
   });
 
   return Response.json(option);

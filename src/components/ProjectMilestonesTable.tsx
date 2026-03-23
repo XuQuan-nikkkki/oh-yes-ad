@@ -42,6 +42,8 @@ type Props = {
   actionsDisabled?: boolean;
   headerTitle?: React.ReactNode;
   toolbarActions?: React.ReactNode[];
+  renderTypeOption?: (row: ProjectMilestoneRow) => React.ReactNode;
+  renderMethodOption?: (row: ProjectMilestoneRow) => React.ReactNode;
 };
 
 const ProjectMilestonesTable = ({
@@ -52,6 +54,8 @@ const ProjectMilestonesTable = ({
   actionsDisabled = false,
   headerTitle = <ProTableHeaderTitle>项目里程碑</ProTableHeaderTitle>,
   toolbarActions = [],
+  renderTypeOption,
+  renderMethodOption,
 }: Props) => {
   const nameFilters = useMemo(
     () =>
@@ -156,7 +160,7 @@ const ProjectMilestonesTable = ({
       onFilter: (value, record) =>
         (record.typeOption?.value ?? record.type ?? "") === String(value),
       render: (_, record) =>
-        record.typeOption?.value ? (
+        renderTypeOption ? renderTypeOption(record) : record.typeOption?.value ? (
           <SelectOptionTag
             option={{
               id: record.typeOption.id ?? "",
@@ -186,7 +190,7 @@ const ProjectMilestonesTable = ({
       onFilter: (value, record) =>
         (record.methodOption?.value ?? record.method ?? "") === String(value),
       render: (_, record) =>
-        record.methodOption?.value ? (
+        renderMethodOption ? renderMethodOption(record) : record.methodOption?.value ? (
           <SelectOptionTag
             option={{
               id: record.methodOption.id ?? "",

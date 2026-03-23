@@ -27,6 +27,7 @@ const ProjectMilestoneFormModal = ({
       onCancel={onCancel}
       footer={null}
       confirmLoading={confirmLoading}
+      width={960}
       destroyOnHidden
     >
       <ProjectMilestoneForm {...formProps} />

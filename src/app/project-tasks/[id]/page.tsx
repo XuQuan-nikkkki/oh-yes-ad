@@ -4,36 +4,44 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Button,
   Card,
-  DatePicker,
   Descriptions,
-  Form,
-  Input,
   Modal,
   Popconfirm,
-  Select,
   Space,
+  Tag,
   message,
 } from "antd";
-import { EditOutlined, PlusOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import { useParams, useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
 import DetailPageContainer from "@/components/DetailPageContainer";
-import EmployeeFunctionValue from "@/components/employee/EmployeeFunctionValue";
 import PlannedWorkEntriesTable, {
   type PlannedWorkEntryRow,
 } from "@/components/PlannedWorkEntriesTable";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import PlannedWorkEntryForm, {
   type PlannedWorkEntryFormPayload,
 } from "@/components/project-detail/PlannedWorkEntryForm";
+import ProjectTaskForm, {
+  type ProjectTaskFormPayload,
+} from "@/components/project-detail/ProjectTaskForm";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { useProjectTasksStore } from "@/stores/projectTasksStore";
 import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
 import type { WorkdayAdjustmentRange } from "@/types/workdayAdjustment";
+import { DEFAULT_COLOR } from "@/lib/constants";
 
 type Detail = {
   id: string;
   name: string;
+  status?: string | null;
+  statusOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
   dueDate?: string | null;
   segment?: {
     id: string;
@@ -52,13 +60,6 @@ type Detail = {
   creator?: { id: string; name: string } | null;
 };
 
-type FormValues = {
-  name: string;
-  segmentId: string;
-  ownerId?: string;
-  dueDate?: dayjs.Dayjs;
-};
-
 type PlannedEntryInitialValues = PlannedWorkEntryFormPayload & { id: string };
 
 export default function ProjectTaskDetailPage() {
@@ -70,9 +71,8 @@ export default function ProjectTaskDetailPage() {
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [segments, setSegments] = useState<
-    { id: string; name: string; project?: { name: string } }[]
+    { id: string; name: string; project?: { id?: string; name: string } }[]
   >([]);
-  const [segmentsLoading, setSegmentsLoading] = useState(false);
   const [employees, setEmployees] = useState<{ id: string; name: string }[]>(
     [],
   );
@@ -83,10 +83,12 @@ export default function ProjectTaskDetailPage() {
   const [editingPlanned, setEditingPlanned] =
     useState<PlannedEntryInitialValues | null>(null);
   const [plannedRefreshKey, setPlannedRefreshKey] = useState(0);
-  const [form] = Form.useForm<FormValues>();
   const [messageApi, contextHolder] = message.useMessage();
   const { canManageProject } = useProjectPermission();
-  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const fetchEmployeesFromStore = useEmployeesStore(
+    (state) => state.fetchEmployees,
+  );
+  const removeTaskFromStore = useProjectTasksStore((state) => state.removeTask);
   const fetchAdjustmentsFromStore = useWorkdayAdjustmentsStore(
     (state) => state.fetchAdjustments,
   );
@@ -121,11 +123,9 @@ export default function ProjectTaskDetailPage() {
       setSegments([]);
       return;
     }
-    setSegmentsLoading(true);
     const projectRes = await fetch(`/api/projects/${projectId}`);
     if (!projectRes.ok) {
       setSegments([]);
-      setSegmentsLoading(false);
       return;
     }
     const project = (await projectRes.json()) as {
@@ -136,10 +136,9 @@ export default function ProjectTaskDetailPage() {
       (project.segments ?? []).map((segment) => ({
         id: segment.id,
         name: segment.name,
-        project: { name: project.name ?? "" },
+        project: { id: projectId, name: project.name ?? "" },
       })),
     );
-    setSegmentsLoading(false);
   }, [data?.segment?.project?.id]);
 
   const ensureSegmentsLoaded = useCallback(async () => {
@@ -165,24 +164,8 @@ export default function ProjectTaskDetailPage() {
     })();
   };
 
-  useEffect(() => {
-    if (!open || !data) return;
-    form.setFieldsValue({
-      name: data.name,
-      segmentId: data.segment?.id,
-      ownerId: data.owner?.id,
-      dueDate: data.dueDate ? dayjs(data.dueDate) : undefined,
-    });
-  }, [data, form, open]);
-
-  const onSubmit = async (values: FormValues) => {
+  const onSubmit = async (payload: ProjectTaskFormPayload) => {
     if (!canManageProject) return;
-    const payload = {
-      name: values.name,
-      segmentId: values.segmentId,
-      ownerId: values.ownerId ?? null,
-      dueDate: values.dueDate ? values.dueDate.toISOString() : null,
-    };
     const res = await fetch(`/api/project-tasks/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -206,6 +189,7 @@ export default function ProjectTaskDetailPage() {
       messageApi.error("删除失败");
       return;
     }
+    removeTaskFromStore(id);
     messageApi.success("删除成功");
     router.push("/project-tasks");
   };
@@ -330,6 +314,31 @@ export default function ProjectTaskDetailPage() {
     setPlannedRefreshKey((prev) => prev + 1);
   };
 
+  const refreshPlannedEntries = useCallback(() => {
+    setPlannedRefreshKey((prev) => prev + 1);
+  }, []);
+
+  const updatePlannedEntryOption = useCallback(
+    async (
+      entryId: string,
+      field: "yearOption" | "weekNumberOption",
+      nextOption: { id: string; value: string; color: string },
+    ) => {
+      const res = await fetch(`/api/planned-work-entries/${entryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          [field]: nextOption.value,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error((await res.text()) || "更新计划工时失败");
+      }
+    },
+    [],
+  );
+
   const plannedProjectOptions = data?.segment?.project
     ? [{ id: data.segment.project.id, name: data.segment.project.name }]
     : [];
@@ -369,7 +378,11 @@ export default function ProjectTaskDetailPage() {
         title={data.name}
         extra={
           <Space>
-            <Button icon={<EditOutlined />} onClick={onEdit} disabled={!canManageProject}>
+            <Button
+              icon={<EditOutlined />}
+              onClick={onEdit}
+              disabled={!canManageProject}
+            >
               编辑
             </Button>
             <Popconfirm
@@ -379,7 +392,12 @@ export default function ProjectTaskDetailPage() {
               onConfirm={() => void onDelete()}
               okButtonProps={{ danger: true, loading: deleting }}
             >
-              <Button danger loading={deleting} disabled={!canManageProject}>
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                loading={deleting}
+                disabled={!canManageProject}
+              >
                 删除
               </Button>
             </Popconfirm>
@@ -387,56 +405,59 @@ export default function ProjectTaskDetailPage() {
         }
       >
         <Space orientation="vertical" size={20} style={{ width: "100%" }}>
+          <Descriptions column={2} size="small">
+            <Descriptions.Item label="所属项目">
+              {data.segment?.project ? (
+                <AppLink href={`/projects/${data.segment.project.id}`}>
+                  {data.segment.project.name}
+                </AppLink>
+              ) : (
+                "-"
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="所属环节">
+              {data.segment ? (
+                <AppLink href={`/project-segments/${data.segment.id}`}>
+                  {data.segment.name}
+                </AppLink>
+              ) : (
+                "-"
+              )}
+            </Descriptions.Item>
+          </Descriptions>
+
+          <div>
+            <h4 style={{ margin: "0 0 12px" }}>人员配置</h4>
             <Descriptions column={2} size="small">
-              <Descriptions.Item label="所属项目">
-                {data.segment?.project ? (
-                  <AppLink href={`/projects/${data.segment.project.id}`}>
-                    {data.segment.project.name}
+              <Descriptions.Item label="负责人">
+                {data.owner ? (
+                  <AppLink href={`/employees/${data.owner.id}`}>
+                    {data.owner.name}
                   </AppLink>
                 ) : (
                   "-"
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="所属环节">
-                {data.segment ? (
-                  <AppLink href={`/project-segments/${data.segment.id}`}>
-                    {data.segment.name}
-                  </AppLink>
-                ) : (
-                  "-"
-                )}
+              <Descriptions.Item label="负责人职能">
+                <Tag color={data.owner?.functionOption?.color ?? "default"}>
+                  {data.owner?.functionOption?.value ?? "-"}
+                </Tag>
               </Descriptions.Item>
             </Descriptions>
-
-            <div>
-              <h4 style={{ margin: "0 0 12px" }}>人员配置</h4>
-              <Descriptions column={2} size="small">
-                <Descriptions.Item label="负责人">
-                  {data.owner ? (
-                    <AppLink href={`/employees/${data.owner.id}`}>
-                      {data.owner.name}
-                    </AppLink>
-                  ) : (
-                    "-"
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="负责人职能">
-                  <EmployeeFunctionValue
-                    functionOption={data.owner?.functionOption}
-                  />
-                </Descriptions.Item>
-              </Descriptions>
-            </div>
-            <div>
-              <h4 style={{ margin: "0 0 12px" }}>时间安排</h4>
-              <Descriptions column={2} size="small">
-                <Descriptions.Item label="截止日期">
-                  {data.dueDate
-                    ? dayjs(data.dueDate).format("YYYY-MM-DD")
-                    : "-"}
-                </Descriptions.Item>
-              </Descriptions>
-            </div>
+          </div>
+          <div>
+            <h4 style={{ margin: "0 0 12px" }}>时间安排</h4>
+            <Descriptions column={2} size="small">
+              <Descriptions.Item label="任务状态">
+                <Tag color={data.statusOption?.color ?? "default"}>
+                  {data.statusOption?.value ?? data.status ?? "-"}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="截止日期">
+                {data.dueDate ? dayjs(data.dueDate).format("YYYY-MM-DD") : "-"}
+              </Descriptions.Item>
+            </Descriptions>
+          </div>
         </Space>
       </Card>
 
@@ -459,9 +480,82 @@ export default function ProjectTaskDetailPage() {
               新增计划工时
             </Button>,
           ]}
+          renderYearCell={(row) => (
+            <SelectOptionQuickEditTag
+              field="plannedWorkEntry.year"
+              option={
+                row.yearOption?.value
+                  ? {
+                      id: row.yearOption.id ?? "",
+                      value: row.yearOption.value,
+                      color: row.yearOption.color ?? DEFAULT_COLOR,
+                    }
+                  : null
+              }
+              fallbackText={
+                row.year !== null && row.year !== undefined
+                  ? String(row.year)
+                  : "-"
+              }
+              disabled={!canManageProject}
+              modalTitle="修改年份"
+              modalDescription="勾选只会暂存年份切换。点击保存后会一并保存选项改动、排序和当前计划工时的年份。"
+              optionValueLabel="年份"
+              saveSuccessText="年份已保存"
+              onSaveSelection={async (nextOption) => {
+                await updatePlannedEntryOption(
+                  row.id,
+                  "yearOption",
+                  nextOption,
+                );
+              }}
+              onUpdated={refreshPlannedEntries}
+            />
+          )}
+          monthTitle="第 n 周"
+          renderMonthCell={(row) => (
+            <SelectOptionQuickEditTag
+              field="plannedWorkEntry.weekNumber"
+              optionSortMode="numeric"
+              option={
+                row.weekNumberOption?.value
+                  ? {
+                      id: row.weekNumberOption.id ?? "",
+                      value: row.weekNumberOption.value,
+                      color: row.weekNumberOption.color ?? DEFAULT_COLOR,
+                    }
+                  : null
+              }
+              fallbackText={
+                row.weekNumber !== null && row.weekNumber !== undefined
+                  ? String(row.weekNumber)
+                  : "-"
+              }
+              disabled={!canManageProject}
+              modalTitle="修改周数"
+              modalDescription="勾选只会暂存周数切换。点击保存后会一并保存选项改动、排序和当前计划工时的周数。"
+              optionValueLabel="周数"
+              saveSuccessText="周数已保存"
+              onSaveSelection={async (nextOption) => {
+                await updatePlannedEntryOption(
+                  row.id,
+                  "weekNumberOption",
+                  nextOption,
+                );
+              }}
+              onUpdated={refreshPlannedEntries}
+            />
+          )}
           workdayAdjustments={workdayAdjustments}
           refreshKey={plannedRefreshKey}
-          columnKeys={["name", "year", "weekNumber", "plannedDays", "actions"]}
+          columnKeys={[
+            "name",
+            "year",
+            "month",
+            "weekNumber",
+            "plannedDays",
+            "actions",
+          ]}
           actionsDisabled={!canManageProject}
         />
       </Card>
@@ -502,46 +596,32 @@ export default function ProjectTaskDetailPage() {
         open={open}
         onCancel={() => setOpen(false)}
         footer={null}
-        forceRender
         destroyOnHidden
+        width={860}
       >
-        <Form
-          layout="vertical"
-          form={form}
-          onFinish={(values) => void onSubmit(values)}
-        >
-          <Form.Item label="任务名称" name="name" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item
-            label="所属环节"
-            name="segmentId"
-            rules={[{ required: true }]}
-          >
-            <Select
-              loading={segmentsLoading}
-              options={segments.map((segment) => ({
-                label: `${segment.project?.name ?? ""}-${segment.name}`,
-                value: segment.id,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item label="负责人" name="ownerId">
-            <Select
-              allowClear
-              options={employees.map((employee) => ({
-                label: employee.name,
-                value: employee.id,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item label="截止日期" name="dueDate">
-            <DatePicker style={{ width: "100%" }} />
-          </Form.Item>
-          <Button block type="primary" htmlType="submit">
-            保存
-          </Button>
-        </Form>
+        <ProjectTaskForm
+          segmentOptions={segments.map((segment) => ({
+            id: segment.id,
+            name: segment.name,
+            projectId: segment.project?.id,
+            projectName: segment.project?.name,
+          }))}
+          employees={employees}
+          initialValues={
+            data
+              ? {
+                  id: data.id,
+                  name: data.name,
+                  segmentId: data.segment?.id,
+                  status: data.status ?? null,
+                  statusOption: data.statusOption ?? null,
+                  owner: data.owner ?? null,
+                  dueDate: data.dueDate ?? null,
+                }
+              : null
+          }
+          onSubmit={onSubmit}
+        />
       </Modal>
     </DetailPageContainer>
   );

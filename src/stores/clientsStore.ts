@@ -19,6 +19,7 @@ type ClientsStore = {
   loaded: boolean;
   fetchClients: (force?: boolean) => Promise<ClientListItem[]>;
   upsertClients: (rows: ClientListItem[]) => void;
+  removeClient: (id: string) => void;
   clearClientsCache: () => void;
 };
 
@@ -90,6 +91,17 @@ export const useClientsStore = create<ClientsStore>((set, get) => ({
       return {
         byId,
         clients: mergedClients.map((item) => byId[item.id]).filter(Boolean),
+      };
+    });
+  },
+  removeClient: (id) => {
+    if (!id) return;
+    set((state) => {
+      const nextById = { ...state.byId };
+      delete nextById[id];
+      return {
+        byId: nextById,
+        clients: state.clients.filter((item) => item.id !== id),
       };
     });
   },

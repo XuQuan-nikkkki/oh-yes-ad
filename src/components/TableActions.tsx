@@ -2,6 +2,7 @@
 
 import { Space, Button, Popconfirm } from "antd";
 import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import type { CSSProperties } from "react";
 
 type Props = {
   onEdit?: () => void;
@@ -12,6 +13,9 @@ type Props = {
   deleteTitle?: string;
   editText?: string;
   deleteText?: string;
+  disableTextVairant?: boolean;
+  gap?: number;
+  buttonStyle?: CSSProperties;
 };
 
 const TableActions = ({
@@ -23,13 +27,17 @@ const TableActions = ({
   deleteTitle = "确定删除该记录？",
   editText = "编辑",
   deleteText = "删除",
+  disableTextVairant = false,
+  gap = 4,
+  buttonStyle,
 }: Props) => {
   return (
-    <Space size={8} wrap={false} style={{ whiteSpace: "nowrap" }}>
+    <Space size={gap} wrap={false} style={{ whiteSpace: "nowrap" }}>
       {onEdit && (
         <Button
-          variant="text"
+          variant={disableTextVairant ? undefined : "text"}
           color="primary"
+          style={buttonStyle}
           disabled={disabled}
           loading={editLoading}
           icon={<EditOutlined />}
@@ -37,6 +45,7 @@ const TableActions = ({
             e.stopPropagation();
             onEdit?.();
           }}
+          styles={{ root: disableTextVairant ? undefined : { padding: 6 } }}
         >
           {editText}
         </Button>
@@ -54,12 +63,15 @@ const TableActions = ({
           }}
         >
           <Button
-            variant="text"
             color="danger"
+            variant={disableTextVairant ? undefined : "text"}
+            danger
+            style={buttonStyle}
             disabled={disabled}
             loading={deleteLoading}
             icon={<DeleteOutlined />}
             onClick={(e) => e.stopPropagation()}
+            styles={{ root: disableTextVairant ? undefined : { padding: 8 } }}
           >
             {deleteText}
           </Button>

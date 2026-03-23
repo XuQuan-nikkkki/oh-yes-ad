@@ -3,6 +3,7 @@ import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { DEFAULT_COLOR } from "@/lib/constants";
+import { requireProjectWritePermission } from "@/lib/api-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -12,6 +13,32 @@ const prisma = new PrismaClient({ adapter });
 
 type RouteContext = {
   params: Promise<{ id: string }>;
+};
+
+const normalizeInteger = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) return Math.trunc(numeric);
+  }
+  return null;
+};
+
+const normalizeNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return null;
 };
 
 const ensureTaskInProject = async (projectId: string, taskId: string) => {
@@ -49,6 +76,9 @@ const ensureOptionId = async (field: string, value: number | string) => {
 };
 
 export async function POST(req: NextRequest, context: RouteContext) {
+  const permissionResponse = await requireProjectWritePermission();
+  if (permissionResponse) return permissionResponse;
+
   const { id: projectId } = await context.params;
   if (!projectId) {
     return new Response("Missing project ID", { status: 400 });
@@ -59,13 +89,17 @@ export async function POST(req: NextRequest, context: RouteContext) {
   if (!body?.taskId || typeof body.taskId !== "string") {
     return new Response("Invalid task ID", { status: 400 });
   }
-  if (typeof body.year !== "number") {
+  const year = normalizeInteger(body.yearOption ?? body.year);
+  const weekNumber = normalizeInteger(body.weekNumberOption ?? body.weekNumber);
+  const plannedDays = normalizeNumber(body.plannedDays);
+
+  if (year === null) {
     return new Response("Invalid year", { status: 400 });
   }
-  if (typeof body.weekNumber !== "number") {
+  if (weekNumber === null) {
     return new Response("Invalid week number", { status: 400 });
   }
-  if (typeof body.plannedDays !== "number") {
+  if (plannedDays === null) {
     return new Response("Invalid planned days", { status: 400 });
   }
 
@@ -75,8 +109,8 @@ export async function POST(req: NextRequest, context: RouteContext) {
   }
 
   const [yearOptionId, weekNumberOptionId] = await Promise.all([
-    ensureOptionId("plannedWorkEntry.year", Math.trunc(body.year)),
-    ensureOptionId("plannedWorkEntry.weekNumber", Math.trunc(body.weekNumber)),
+    ensureOptionId("plannedWorkEntry.year", year),
+    ensureOptionId("plannedWorkEntry.weekNumber", weekNumber),
   ]);
 
   const entry = await prisma.plannedWorkEntry.create({
@@ -84,7 +118,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
       taskId: body.taskId,
       yearOptionId,
       weekNumberOptionId,
-      plannedDays: body.plannedDays,
+      plannedDays,
       monday: Boolean(body.monday),
       tuesday: Boolean(body.tuesday),
       wednesday: Boolean(body.wednesday),

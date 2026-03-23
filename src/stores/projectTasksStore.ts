@@ -3,11 +3,32 @@ import { create } from "zustand";
 export type ProjectTaskStoreRow = {
   id: string;
   name?: string | null;
+  status?: string | null;
+  statusOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
   dueDate?: string | null;
   segment?: {
     id: string;
     name: string;
-    project?: { id: string; name: string } | null;
+    project?: {
+      id: string;
+      name: string;
+      statusOption?: {
+        id: string;
+        value: string;
+        color?: string | null;
+      } | null;
+      stageOption?: {
+        id: string;
+        value: string;
+        color?: string | null;
+      } | null;
+      startDate?: string | null;
+      endDate?: string | null;
+    } | null;
   } | null;
   owner?: { id: string; name: string } | null;
 };
@@ -74,15 +95,27 @@ export const useProjectTasksStore = create<ProjectTasksStore>((set, get) => ({
       };
       for (const key of Object.keys(nextTasksByKey)) {
         const existingRows = nextTasksByKey[key] ?? [];
+        const existingIds = new Set(existingRows.map((row) => row.id));
         const map = new Map(existingRows.map((row) => [row.id, row]));
+        const prependedIds: string[] = [];
         for (const row of rows) {
           if (!row?.id) continue;
+          if (!existingIds.has(row.id) && !prependedIds.includes(row.id)) {
+            prependedIds.push(row.id);
+          }
           map.set(row.id, {
             ...(map.get(row.id) ?? {}),
             ...row,
           });
         }
-        nextTasksByKey[key] = Array.from(map.values());
+        nextTasksByKey[key] = [
+          ...prependedIds
+            .map((id) => map.get(id))
+            .filter((item): item is ProjectTaskStoreRow => Boolean(item)),
+          ...existingRows
+            .map((row) => map.get(row.id))
+            .filter((item): item is ProjectTaskStoreRow => Boolean(item)),
+        ];
       }
       return {
         tasksByKey: nextTasksByKey,

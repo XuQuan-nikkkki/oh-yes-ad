@@ -7,24 +7,7 @@ import ClientContactTable from "@/components/ClientContactTable";
 import ContactFormModal from "@/components/ContactFormModal";
 import { useCrmPermission } from "@/hooks/useCrmPermission";
 import type { SimpleClient } from "@/types/client";
-
-type Contact = {
-  id: string;
-  name: string;
-  order?: number;
-  clientId?: string;
-  title?: string | null;
-  scope?: string | null;
-  preference?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  wechat?: string | null;
-  address?: string | null;
-  client?: {
-    id: string;
-    name: string;
-  };
-};
+import type { ClientContact as Contact } from "@/types/clientContact";
 
 interface ClientContactsSectionProps {
   clientId: string;
@@ -161,7 +144,7 @@ const ClientContactsSection = ({
       <ContactFormModal
         open={contactModalOpen}
         clientId={clientId}
-        clientEditable={false}
+        clientEditable
         clientOptions={client ? [{ id: client.id, name: client.name }] : []}
         initialValues={editingContact}
         onCancel={() => {

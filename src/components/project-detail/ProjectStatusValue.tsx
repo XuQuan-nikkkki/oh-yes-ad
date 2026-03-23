@@ -1,6 +1,8 @@
 "use client";
 
 import SelectOptionTag from "@/components/SelectOptionTag";
+import { canManageProjectResources } from "@/lib/role-permissions";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 
 type Props = {
   status?: string | null;
@@ -12,8 +14,13 @@ type Props = {
 };
 
 const ProjectStatusValue = ({ status, statusOption }: Props) => {
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const roleCodes = getRoleCodesFromUser(currentUser);
+  const canManageProject = canManageProjectResources(roleCodes);
+
   return (
     <SelectOptionTag
+      disabled={!canManageProject}
       option={
         statusOption?.value
           ? {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Card,
   Button,
@@ -19,12 +19,17 @@ import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
 import zhCN from "antd/locale/zh_CN";
 import type { Dayjs } from "dayjs";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
 import type { WorkdayAdjustment } from "@/types/workdayAdjustment";
+import { canManageWorkdayAdjustments } from "@/lib/role-permissions";
 
 dayjs.locale("zh-cn");
 
 const WorkdayAdjustmentsPage = () => {
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
+  const canManage = canManageWorkdayAdjustments(roleCodes);
   const [records, setRecords] = useState<WorkdayAdjustment[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -37,7 +42,7 @@ const WorkdayAdjustmentsPage = () => {
     (state) => state.fetchAdjustments,
   );
 
-  const fetchRecords = async () => {
+  const fetchRecords = useCallback(async () => {
     setLoading(true);
     try {
       const data = await fetchAdjustmentsFromStore();
@@ -48,11 +53,11 @@ const WorkdayAdjustmentsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchAdjustmentsFromStore]);
 
   useEffect(() => {
     fetchRecords();
-  }, []);
+  }, [fetchRecords]);
 
   const handleOpenModal = () => {
     form.resetFields();
@@ -169,13 +174,15 @@ const WorkdayAdjustmentsPage = () => {
     <Card
       title={<h3>工作日变动</h3>}
       extra={
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleOpenModal}
-        >
-          添加
-        </Button>
+        canManage ? (
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleOpenModal}
+          >
+            添加
+          </Button>
+        ) : null
       }
     >
       <ConfigProvider locale={zhCN}>
@@ -190,8 +197,12 @@ const WorkdayAdjustmentsPage = () => {
                   {items.map((item) => (
                     <div key={`${dateKey}-${item.id}`} style={{ marginBottom: 4 }}>
                       <span
-                        style={{ cursor: "pointer", display: "block" }}
+                        style={{
+                          cursor: canManage ? "pointer" : "default",
+                          display: "block",
+                        }}
                         onClick={(e) => {
+                          if (!canManage) return;
                           e.stopPropagation();
                           handleEditRecord(item);
                         }}
@@ -222,7 +233,7 @@ const WorkdayAdjustmentsPage = () => {
         }}
         footer={(_, { OkBtn, CancelBtn }) => (
           <>
-            {editingRecord ? (
+            {canManage && editingRecord ? (
               <Button
                 danger
                 onClick={async () => {
@@ -235,7 +246,7 @@ const WorkdayAdjustmentsPage = () => {
               </Button>
             ) : null}
             <CancelBtn />
-            <OkBtn />
+            {canManage ? <OkBtn /> : null}
           </>
         )}
       >

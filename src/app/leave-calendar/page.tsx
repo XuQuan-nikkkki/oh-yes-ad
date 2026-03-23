@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Card,
   Button,
@@ -22,7 +22,9 @@ import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
 import zhCN from "antd/locale/zh_CN";
 import type { Dayjs } from "dayjs";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { canManageLeaveRecords } from "@/lib/role-permissions";
 
 dayjs.locale("zh-cn");
 
@@ -51,6 +53,9 @@ type Employee = {
 const DEFAULT_LEAVE_TYPE_COLOR = "#1677ff";
 
 const LeaveCalendarPage = () => {
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
+  const canManage = canManageLeaveRecords(roleCodes);
   const [records, setRecords] = useState<LeaveRecord[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,19 +81,19 @@ const LeaveCalendarPage = () => {
     }
   };
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = useCallback(async () => {
     try {
       const data = await fetchEmployeesFromStore();
       setEmployees(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("获取员工列表失败:", error);
     }
-  };
+  }, [fetchEmployeesFromStore]);
 
   useEffect(() => {
     fetchRecords();
     fetchEmployees();
-  }, []);
+  }, [fetchEmployees]);
 
   const resolveStart = (record: LeaveRecord) =>
     record.startAt ?? record.startDate;
@@ -359,13 +364,15 @@ const LeaveCalendarPage = () => {
             options={typeFilterOptions}
             onChange={(values) => setTypeFilters(values)}
           />
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleOpenModal}
-          >
-            新增记录
-          </Button>
+          {canManage ? (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleOpenModal}
+            >
+              新增记录
+            </Button>
+          ) : null}
         </Space>
       }
     >
@@ -383,8 +390,12 @@ const LeaveCalendarPage = () => {
                       style={{ marginBottom: 4 }}
                     >
                       <span
-                        style={{ cursor: "pointer", display: "block" }}
+                        style={{
+                          cursor: canManage ? "pointer" : "default",
+                          display: "block",
+                        }}
                         onClick={(e) => {
+                          if (!canManage) return;
                           e.stopPropagation();
                           handleEditRecord(item);
                         }}
@@ -427,7 +438,7 @@ const LeaveCalendarPage = () => {
         cancelText="取消"
         footer={(_, { OkBtn, CancelBtn }) => (
           <>
-            {editingRecord ? (
+            {canManage && editingRecord ? (
               <Button
                 danger
                 onClick={async () => {
@@ -440,7 +451,7 @@ const LeaveCalendarPage = () => {
               </Button>
             ) : null}
             <CancelBtn />
-            <OkBtn />
+            {canManage ? <OkBtn /> : null}
           </>
         )}
       >

@@ -2,6 +2,8 @@ import { PrismaClient } from "@prisma/client";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
+import { requireAuthenticatedEmployee } from "@/lib/api-permissions";
+import { extractRoleCodes } from "@/lib/role-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -14,6 +16,8 @@ type RouteContext = {
 };
 
 export async function POST(req: NextRequest, context: RouteContext) {
+  const authResult = await requireAuthenticatedEmployee();
+  if (authResult.response) return authResult.response;
   const { id: projectId } = await context.params;
   if (!projectId) {
     return new Response("Missing project ID", { status: 400 });
@@ -34,6 +38,11 @@ export async function POST(req: NextRequest, context: RouteContext) {
   }
   if (new Date(body.endDate).getTime() < new Date(body.startDate).getTime()) {
     return new Response("End date must be after start date", { status: 400 });
+  }
+  const roleCodes = extractRoleCodes(authResult.employee);
+  const isAdmin = roleCodes.includes("ADMIN");
+  if (!isAdmin && body.employeeId !== authResult.session.employeeId) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   const employee = await prisma.employee.findUnique({

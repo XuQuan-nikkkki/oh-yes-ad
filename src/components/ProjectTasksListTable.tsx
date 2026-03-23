@@ -5,6 +5,7 @@ import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import AppLink from "@/components/AppLink";
 import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
+import SelectOptionTag from "@/components/SelectOptionTag";
 import TableActions from "@/components/TableActions";
 import { DATE_FORMAT } from "@/lib/constants";
 import { formatDate } from "@/lib/date";
@@ -12,17 +13,39 @@ import { formatDate } from "@/lib/date";
 export type ProjectTaskListRow = {
   id: string;
   name: string;
+  status?: string | null;
+  statusOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
   dueDate?: string | null;
   segment?: {
     id: string;
     name: string;
-    project?: { id: string; name: string } | null;
+    project?: {
+      id: string;
+      name: string;
+      statusOption?: {
+        id: string;
+        value: string;
+        color?: string | null;
+      } | null;
+      stageOption?: {
+        id: string;
+        value: string;
+        color?: string | null;
+      } | null;
+      startDate?: string | null;
+      endDate?: string | null;
+    } | null;
   } | null;
   owner?: { id: string; name: string } | null;
 };
 
 type ColumnKey =
   | "name"
+  | "status"
   | "project"
   | "segment"
   | "owner"
@@ -37,9 +60,11 @@ type Props = {
   showTableOptions?: boolean;
   compactHorizontalPadding?: boolean;
   columnKeys?: ColumnKey[];
+  statusFilterOptions?: { text: string; value: string }[];
   onEdit?: (row: ProjectTaskListRow) => void;
   onDelete?: (id: string, name: string) => void;
   actionsDisabled?: boolean;
+  renderStatusOption?: (row: ProjectTaskListRow) => ReactNode;
 };
 
 const ProjectTasksListTable = ({
@@ -49,10 +74,12 @@ const ProjectTasksListTable = ({
   toolbarActions = [],
   showTableOptions = false,
   compactHorizontalPadding = false,
-  columnKeys = ["name", "project", "segment", "owner", "dueDate", "actions"],
+  columnKeys = ["name", "status", "project", "segment", "owner", "dueDate", "actions"],
+  statusFilterOptions,
   onEdit,
   onDelete,
   actionsDisabled = false,
+  renderStatusOption,
 }: Props) => {
   const taskNameFilters = Array.from(
     new Set(rows.map((item) => item.name).filter((value): value is string => Boolean(value))),
@@ -81,6 +108,16 @@ const ProjectTasksListTable = ({
         .filter((value): value is string => Boolean(value)),
     ),
   ).map((value) => ({ text: value, value }));
+  const statusFilters =
+    statusFilterOptions && statusFilterOptions.length > 0
+      ? statusFilterOptions
+      : Array.from(
+          new Set(
+            rows
+              .map((item) => item.statusOption?.value ?? item.status)
+              .filter((value): value is string => Boolean(value)),
+          ),
+        ).map((value) => ({ text: value, value }));
 
   const allColumns: Record<ColumnKey, ProColumns<ProjectTaskListRow>> = {
     name: {
@@ -113,6 +150,22 @@ const ProjectTasksListTable = ({
           </AppLink>
         ) : (
           "-"
+        ),
+    },
+    status: {
+      title: "状态",
+      key: "status",
+      filters: statusFilters,
+      filterSearch: true,
+      onFilter: (value, record) =>
+        (record.statusOption?.value ?? record.status ?? "") === String(value),
+      render: (_dom, record) =>
+        renderStatusOption ? (
+          renderStatusOption(record)
+        ) : record.statusOption?.value ? (
+          <SelectOptionTag option={record.statusOption} />
+        ) : (
+          record.status ?? "-"
         ),
     },
     segment: {

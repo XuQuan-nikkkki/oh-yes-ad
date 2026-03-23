@@ -54,10 +54,7 @@ const ClientContactsPage = () => {
         loading={loading}
         actionsDisabled={!canManageCrm}
         onEdit={(record) => {
-          setEditingContact({
-            ...record,
-            clientId: record.client?.id ?? "",
-          });
+          setEditingContact(record);
           setOpen(true);
         }}
         onDelete={handleDelete}

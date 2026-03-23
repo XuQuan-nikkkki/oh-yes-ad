@@ -5,6 +5,7 @@ import { Card, Tabs } from "antd";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import WorkLogsPanel from "@/components/work-logs/WorkLogsPanel";
 import HomeOwnedProjectsTable from "@/components/home/HomeOwnedProjectsTable";
+import HomeParticipationMilestones from "@/components/home/HomeParticipationMilestones";
 import HomeParticipationNestedTable from "@/components/home/HomeParticipationNestedTable";
 import HomeSiteMap from "@/components/home/HomeSiteMap";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
@@ -14,6 +15,7 @@ const HOME_TAB_SITE_MAP = "site-map";
 const HOME_TAB_OWNED_PROJECTS = "owned-projects";
 const HOME_TAB_WORK_LOGS = "work-logs";
 const HOME_TAB_PARTICIPATION = "participation";
+const HOME_TAB_PARTICIPATION_MILESTONES = "participation-milestones";
 const WORK_LOG_VIEW_PARAM = "workLogView";
 
 const validHomeTab = (tab: string | null, allowedTabs: string[]) => {
@@ -37,6 +39,7 @@ function HomePageContent() {
       HOME_TAB_SITE_MAP,
       ...(canViewOwnedProjectsTab ? [HOME_TAB_OWNED_PROJECTS] : []),
       HOME_TAB_PARTICIPATION,
+      HOME_TAB_PARTICIPATION_MILESTONES,
       HOME_TAB_WORK_LOGS,
     ],
     [canViewOwnedProjectsTab],
@@ -97,6 +100,15 @@ function HomePageContent() {
             children: (
               <HomeParticipationNestedTable
                 active={activeTab === HOME_TAB_PARTICIPATION}
+              />
+            ),
+          },
+          {
+            key: HOME_TAB_PARTICIPATION_MILESTONES,
+            label: "参与里程碑",
+            children: (
+              <HomeParticipationMilestones
+                active={activeTab === HOME_TAB_PARTICIPATION_MILESTONES}
               />
             ),
           },

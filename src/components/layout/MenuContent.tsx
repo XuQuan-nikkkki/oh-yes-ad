@@ -19,6 +19,8 @@ import {
   IdcardOutlined,
   BankOutlined,
   WalletOutlined,
+  CalculatorOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -30,6 +32,8 @@ const MENU_KEY_BY_PREFIX = [
   "/project-tasks",
   "/project-milestones",
   "/project-documents",
+  "/project-receivable-payable",
+  "/project-receivable-delays",
   "/planned-work-entries",
   "/actual-work-entries",
   "/work-hours-analysis",
@@ -38,9 +42,11 @@ const MENU_KEY_BY_PREFIX = [
   "/client-contacts",
   "/clients",
   "/vendors",
+  "/company-account-balances",
   "/legal-entities",
   "/roles",
   "/select-options",
+  "/system-settings",
   "/employees",
   "/leave-calendar",
   "/workday-adjustments",
@@ -87,24 +93,14 @@ export default function MenuContent({
         label: "首页",
       },
       {
-        key: "crm",
-        icon: <ShopOutlined />,
-        label: "客户与供应商",
+        key: "team",
+        icon: <TeamOutlined />,
+        label: "团队协作",
         children: [
           {
-            key: "/clients",
-            icon: <UserOutlined />,
-            label: "客户管理",
-          },
-          {
-            key: "/client-contacts",
-            icon: <IdcardOutlined />,
-            label: "客户人员",
-          },
-          {
-            key: "/vendors",
-            icon: <ShopOutlined />,
-            label: "供应商管理",
+            key: "/schedule",
+            icon: <CalendarOutlined />,
+            label: "项目排期",
           },
         ],
       },
@@ -168,6 +164,28 @@ export default function MenuContent({
         ],
       },
       {
+        key: "crm",
+        icon: <ShopOutlined />,
+        label: "客户与供应商",
+        children: [
+          {
+            key: "/clients",
+            icon: <UserOutlined />,
+            label: "客户管理",
+          },
+          {
+            key: "/client-contacts",
+            icon: <IdcardOutlined />,
+            label: "客户人员",
+          },
+          {
+            key: "/vendors",
+            icon: <ShopOutlined />,
+            label: "供应商管理",
+          },
+        ],
+      },
+      {
         key: "team-mgmt",
         icon: <TeamOutlined />,
         label: "团队管理",
@@ -189,6 +207,11 @@ export default function MenuContent({
                   icon: <AppstoreOutlined />,
                   label: "选项管理",
                 },
+                {
+                  key: "/system-settings",
+                  icon: <SettingOutlined />,
+                  label: "系统参数",
+                },
               ]
             : []),
           {
@@ -203,32 +226,35 @@ export default function MenuContent({
           },
         ],
       },
-      ...(canViewCompanyFinance
-        ? [
-            {
-              key: "company-finance",
-              icon: <WalletOutlined />,
-              label: "公司财务",
-              children: [
+      {
+        key: "project-finance",
+        icon: <CalculatorOutlined />,
+        label: "财务管理",
+        children: [
+          {
+            key: "/project-receivable-payable",
+            icon: <CalculatorOutlined />,
+            label: "项目收付款",
+          },
+          {
+            key: "/project-receivable-delays",
+            icon: <CalendarOutlined />,
+            label: "项目收款延期",
+          },
+          ...(canViewCompanyFinance
+            ? [
                 {
                   key: "/legal-entities",
                   icon: <BankOutlined />,
                   label: "公司主体",
                 },
-              ],
-            },
-          ]
-        : []),
-      {
-        key: "team",
-        icon: <TeamOutlined />,
-        label: "团队协作",
-        children: [
-          {
-            key: "/schedule",
-            icon: <CalendarOutlined />,
-            label: "项目排期",
-          },
+                {
+                  key: "/company-account-balances",
+                  icon: <WalletOutlined />,
+                  label: "公司账户余额",
+                },
+              ]
+            : []),
         ],
       },
     ],

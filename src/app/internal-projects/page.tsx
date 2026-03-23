@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import ListPageContainer from "@/components/ListPageContainer";
@@ -22,28 +22,28 @@ const InternalProjectsPage = () => {
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
 
-  const fetchProjects = async (force = false) => {
+  const fetchProjects = useCallback(async (force = false) => {
     setLoading(true);
     const data = await fetchProjectsFromStore({ type: "内部项目", force });
     setProjects(Array.isArray(data) ? (data as Project[]) : []);
     setLoading(false);
-  };
+  }, [fetchProjectsFromStore]);
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = useCallback(async () => {
     try {
       const data = await fetchEmployeesFromStore();
       setEmployees(data);
     } catch {
       console.log("Employees API not available yet");
     }
-  };
+  }, [fetchEmployeesFromStore]);
 
   useEffect(() => {
     const loadData = async () => {
       await Promise.all([fetchProjects(), fetchEmployees()]);
     };
     void loadData();
-  }, []);
+  }, [fetchEmployees, fetchProjects]);
 
   const handleDelete = async (id: string) => {
     if (!canManageProject) return;

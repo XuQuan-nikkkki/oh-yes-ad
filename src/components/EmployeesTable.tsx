@@ -1,14 +1,16 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { Space, Tag } from "antd";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import TableActions from "@/components/TableActions";
 import AppLink from "@/components/AppLink";
 import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
-import SelectOptionTag from "@/components/SelectOptionTag";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
+import EmployeeFunctionValue from "@/components/employee/EmployeeFunctionValue";
 import { formatDate } from "@/lib/date";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 
 export type Employee = {
   id: string;
@@ -85,6 +87,7 @@ type RoleOption = {
 export type EmployeeColumnKey =
   | "name"
   | "fullName"
+  | "phone"
   | "function"
   | "roles"
   | "legalEntity"
@@ -113,6 +116,7 @@ type Props = {
   loading?: boolean;
   onEdit?: (employee: Employee) => void;
   onDelete?: (id: string) => void;
+  actionsDisabled?: boolean;
   actionDeleteText?: string;
   actionDeleteTitle?: string;
   onOptionUpdated?: () => void | Promise<void>;
@@ -130,6 +134,7 @@ const EmployeesTable = ({
   loading = false,
   onEdit,
   onDelete,
+  actionsDisabled = false,
   actionDeleteText = "删除",
   actionDeleteTitle = "确定删除这个团队成员？",
   onOptionUpdated,
@@ -139,6 +144,20 @@ const EmployeesTable = ({
   showColumnSetting = true,
   compactHorizontalPadding = false,
 }: Props) => {
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const roleCodes = getRoleCodesFromUser(currentUser);
+  const canEditEmployeeOptions =
+    roleCodes.includes("ADMIN") ||
+    roleCodes.includes("PROJECT_MANAGER") ||
+    roleCodes.includes("HR");
+  const effectiveColumnKeys = useMemo(
+    () =>
+      actionsDisabled || (!onEdit && !onDelete)
+        ? columnKeys.filter((key) => key !== "actions")
+        : columnKeys,
+    [actionsDisabled, columnKeys, onDelete, onEdit],
+  );
+
   const normalizeOption = (
     option?:
       | {
@@ -176,6 +195,57 @@ const EmployeesTable = ({
     return String(value);
   };
 
+  const renderEditableOption = useCallback((
+    employeeId: string,
+    field:
+      | "employee.departmentLevel1"
+      | "employee.departmentLevel2"
+      | "employee.position"
+      | "employee.employmentType"
+      | "employee.employmentStatus",
+    payloadKey:
+      | "departmentLevel1"
+      | "departmentLevel2"
+      | "position"
+      | "employmentType"
+      | "employmentStatus",
+    option:
+      | {
+          id?: string;
+          value?: string | null;
+          color?: string | null;
+        }
+      | null
+      | undefined,
+    fallbackText = "-",
+    label = "选项",
+  ) => {
+    const normalizedOption = normalizeOption(option);
+
+    return (
+      <SelectOptionQuickEditTag
+        field={field}
+        option={normalizedOption ?? null}
+        fallbackText={fallbackText}
+        disabled={!canEditEmployeeOptions}
+        modalTitle={`修改${label}`}
+        optionValueLabel={label}
+        saveSuccessText={`${label}已保存`}
+        onSaveSelection={async (nextOption) => {
+          const res = await fetch(`/api/employees/${employeeId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ [payloadKey]: nextOption }),
+          });
+          if (!res.ok) {
+            throw new Error((await res.text()) || "更新失败");
+          }
+        }}
+        onUpdated={onOptionUpdated}
+      />
+    );
+  }, [canEditEmployeeOptions, onOptionUpdated]);
+
   const selectedColumns = useMemo<ProColumns<Employee>[]>(() => {
     const allColumns: Record<EmployeeColumnKey, ProColumns<Employee>> = {
       name: {
@@ -195,6 +265,12 @@ const EmployeesTable = ({
         dataIndex: "fullName",
         render: (_dom, record) => record.fullName ?? "-",
       },
+      phone: {
+        key: "phone",
+        title: "手机号",
+        dataIndex: "phone",
+        render: (_dom, record) => record.phone ?? "-",
+      },
       function: {
         key: "function",
         title: "职能",
@@ -202,15 +278,13 @@ const EmployeesTable = ({
         filters: functionFilters,
         onFilter: (value, record) => record.function === value,
         render: (_dom, record) =>
-          normalizeOption(record.functionOption) ? (
-            <SelectOptionTag
-              option={normalizeOption(record.functionOption)}
+          (
+            <EmployeeFunctionValue
+              employeeId={record.id}
+              functionOption={normalizeOption(record.functionOption)}
+              fallbackText={record.function ?? "-"}
               onUpdated={onOptionUpdated}
             />
-          ) : record.function ? (
-            record.function
-          ) : (
-            "-"
           ),
       },
       roles: {
@@ -248,45 +322,39 @@ const EmployeesTable = ({
         key: "departmentLevel1",
         title: "一级部门",
         render: (_dom, record) =>
-          normalizeOption(record.departmentLevel1Option) ? (
-            <SelectOptionTag
-              option={normalizeOption(record.departmentLevel1Option)}
-              onUpdated={onOptionUpdated}
-            />
-          ) : record.departmentLevel1 ? (
-            record.departmentLevel1
-          ) : (
-            "-"
+          renderEditableOption(
+            record.id,
+            "employee.departmentLevel1",
+            "departmentLevel1",
+            record.departmentLevel1Option,
+            record.departmentLevel1 ?? "-",
+            "一级部门",
           ),
       },
       departmentLevel2: {
         key: "departmentLevel2",
         title: "二级部门",
         render: (_dom, record) =>
-          normalizeOption(record.departmentLevel2Option) ? (
-            <SelectOptionTag
-              option={normalizeOption(record.departmentLevel2Option)}
-              onUpdated={onOptionUpdated}
-            />
-          ) : record.departmentLevel2 ? (
-            record.departmentLevel2
-          ) : (
-            "-"
+          renderEditableOption(
+            record.id,
+            "employee.departmentLevel2",
+            "departmentLevel2",
+            record.departmentLevel2Option,
+            record.departmentLevel2 ?? "-",
+            "二级部门",
           ),
       },
       position: {
         key: "position",
         title: "职位",
         render: (_dom, record) =>
-          normalizeOption(record.positionOption) ? (
-            <SelectOptionTag
-              option={normalizeOption(record.positionOption)}
-              onUpdated={onOptionUpdated}
-            />
-          ) : record.position ? (
-            record.position
-          ) : (
-            "-"
+          renderEditableOption(
+            record.id,
+            "employee.position",
+            "position",
+            record.positionOption,
+            record.position ?? "-",
+            "职位",
           ),
       },
       level: {
@@ -299,15 +367,13 @@ const EmployeesTable = ({
         key: "employmentType",
         title: "用工性质",
         render: (_dom, record) =>
-          normalizeOption(record.employmentTypeOption) ? (
-            <SelectOptionTag
-              option={normalizeOption(record.employmentTypeOption)}
-              onUpdated={onOptionUpdated}
-            />
-          ) : record.employmentType ? (
-            record.employmentType
-          ) : (
-            "-"
+          renderEditableOption(
+            record.id,
+            "employee.employmentType",
+            "employmentType",
+            record.employmentTypeOption,
+            record.employmentType ?? "-",
+            "用工性质",
           ),
       },
       employmentStatus: {
@@ -320,15 +386,13 @@ const EmployeesTable = ({
         ],
         onFilter: (value, record) => record.employmentStatus === value,
         render: (_dom, record) =>
-          normalizeOption(record.employmentStatusOption) ? (
-            <SelectOptionTag
-              option={normalizeOption(record.employmentStatusOption)}
-              onUpdated={onOptionUpdated}
-            />
-          ) : record.employmentStatus ? (
-            record.employmentStatus
-          ) : (
-            "-"
+          renderEditableOption(
+            record.id,
+            "employee.employmentStatus",
+            "employmentStatus",
+            record.employmentStatusOption,
+            record.employmentStatus ?? "-",
+            "用工状态",
           ),
       },
       entryDate: {
@@ -398,6 +462,7 @@ const EmployeesTable = ({
                   }
                 : undefined
             }
+            disabled={actionsDisabled}
             deleteTitle={actionDeleteTitle}
             deleteText={actionDeleteText}
           />
@@ -405,8 +470,8 @@ const EmployeesTable = ({
       },
     };
 
-    return columnKeys.map((key) => allColumns[key]);
-  }, [employees, functionFilters, roleOptions, onEdit, onDelete, columnKeys, onOptionUpdated, actionDeleteText, actionDeleteTitle]);
+    return effectiveColumnKeys.map((key) => allColumns[key]);
+  }, [employees, functionFilters, roleOptions, onEdit, onDelete, effectiveColumnKeys, onOptionUpdated, actionDeleteText, actionDeleteTitle, renderEditableOption, actionsDisabled]);
 
   const columnsStateDefaultValue = useMemo(
     () =>

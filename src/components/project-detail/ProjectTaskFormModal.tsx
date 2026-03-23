@@ -28,6 +28,7 @@ const ProjectTaskFormModal = ({
       footer={null}
       confirmLoading={confirmLoading}
       destroyOnHidden
+      width={860}
     >
       <ProjectTaskForm {...formProps} />
     </Modal>

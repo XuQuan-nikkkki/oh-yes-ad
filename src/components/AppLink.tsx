@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ComponentProps } from "react";
 import { useNavigationStore } from "@/stores/navigationStore";
 
@@ -9,9 +9,12 @@ type Props = ComponentProps<typeof Link>;
 
 const AppLink = ({ children, style, href, onClick, onMouseEnter, ...props }: Props) => {
   const router = useRouter();
+  const pathname = usePathname();
   const setNavigatingGlobal = useNavigationStore((state) => state.setNavigating);
   const hrefText = typeof href === "string" ? href : "";
   const isInternalHref = hrefText.startsWith("/");
+  const hrefPathname = isInternalHref ? hrefText.split(/[?#]/)[0] : "";
+  const isCurrentPath = Boolean(hrefPathname) && hrefPathname === pathname;
   const prefetchRoute = () => {
     if (!isInternalHref) return;
     router.prefetch(hrefText);
@@ -35,6 +38,7 @@ const AppLink = ({ children, style, href, onClick, onMouseEnter, ...props }: Pro
         ) {
           return;
         }
+        if (isCurrentPath) return;
         setNavigatingGlobal(true);
       }}
       onMouseEnter={(event) => {

@@ -1,6 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
+import { requireAuthenticatedEmployee } from "@/lib/api-permissions";
+import { extractRoleCodes } from "@/lib/role-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -15,11 +17,13 @@ type RouteContext = {
 const findEntryInProject = async (projectId: string, entryId: string) => {
   return prisma.actualWorkEntry.findFirst({
     where: { id: entryId, projectId },
-    select: { id: true },
+    select: { id: true, employeeId: true },
   });
 };
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
+  const authResult = await requireAuthenticatedEmployee();
+  if (authResult.response) return authResult.response;
   const { id: projectId, entryId } = await context.params;
   if (!projectId || !entryId) {
     return new Response("Missing IDs", { status: 400 });
@@ -28,6 +32,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const found = await findEntryInProject(projectId, entryId);
   if (!found) {
     return new Response("Not Found", { status: 404 });
+  }
+  const roleCodes = extractRoleCodes(authResult.employee);
+  const isAdmin = roleCodes.includes("ADMIN");
+  if (!isAdmin && found.employeeId !== authResult.session.employeeId) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   const body = await req.json();
@@ -55,6 +64,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   if (!employee) {
     return new Response("Employee not found", { status: 400 });
   }
+  if (!isAdmin && body.employeeId !== authResult.session.employeeId) {
+    return new Response("Forbidden", { status: 403 });
+  }
 
   const entry = await prisma.actualWorkEntry.update({
     where: { id: entryId },
@@ -70,6 +82,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(_req: NextRequest, context: RouteContext) {
+  const authResult = await requireAuthenticatedEmployee();
+  if (authResult.response) return authResult.response;
   const { id: projectId, entryId } = await context.params;
   if (!projectId || !entryId) {
     return new Response("Missing IDs", { status: 400 });
@@ -78,6 +92,11 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
   const found = await findEntryInProject(projectId, entryId);
   if (!found) {
     return new Response("Not Found", { status: 404 });
+  }
+  const roleCodes = extractRoleCodes(authResult.employee);
+  const isAdmin = roleCodes.includes("ADMIN");
+  if (!isAdmin && found.employeeId !== authResult.session.employeeId) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   await prisma.actualWorkEntry.delete({

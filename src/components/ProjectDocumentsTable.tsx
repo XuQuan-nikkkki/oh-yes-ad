@@ -28,6 +28,7 @@ type Props = {
   loading?: boolean;
   onEdit?: (row: ProjectDocumentRow) => void;
   onDelete: (id: string) => void;
+  actionsDisabled?: boolean;
   actionDeleteText?: string;
   actionDeleteTitle?: string;
   columnKeys?: Array<
@@ -43,6 +44,7 @@ type Props = {
   headerTitle?: React.ReactNode;
   toolbarActions?: React.ReactNode[];
   showColumnSetting?: boolean;
+  renderTypeOption?: (row: ProjectDocumentRow) => React.ReactNode;
 };
 
 const ProjectDocumentsTable = ({
@@ -50,6 +52,7 @@ const ProjectDocumentsTable = ({
   loading = false,
   onEdit,
   onDelete,
+  actionsDisabled = false,
   actionDeleteText = "删除",
   actionDeleteTitle,
   columnKeys = [
@@ -65,7 +68,11 @@ const ProjectDocumentsTable = ({
   headerTitle = <ProTableHeaderTitle>项目资料</ProTableHeaderTitle>,
   toolbarActions = [],
   showColumnSetting = true,
+  renderTypeOption,
 }: Props) => {
+  const effectiveColumnKeys = actionsDisabled
+    ? columnKeys.filter((key) => key !== "actions")
+    : columnKeys;
   const [messageApi, contextHolder] = message.useMessage();
   const formatDateSafe = (value?: string | null) => {
     if (!value) return "";
@@ -212,9 +219,12 @@ const ProjectDocumentsTable = ({
       filters: typeFilters,
       filterSearch: true,
       onFilter: (value, record) => (record.typeOption?.value ?? "") === String(value),
-      render: (_dom, record) => (
-        <SelectOptionTag option={record.typeOption ?? null} />
-      ),
+      render: (_dom, record) =>
+        renderTypeOption ? (
+          renderTypeOption(record)
+        ) : (
+          <SelectOptionTag option={record.typeOption ?? null} />
+        ),
     },
     milestone: {
       title: "关联里程碑",
@@ -320,15 +330,19 @@ const ProjectDocumentsTable = ({
       render: (_, record) => [
         <TableActions
           key={record.id}
-          onEdit={onEdit ? () => onEdit(record) : undefined}
-          onDelete={() => onDelete(record.id)}
+          onEdit={
+            !actionsDisabled && onEdit ? () => onEdit(record) : undefined
+          }
+          onDelete={
+            !actionsDisabled ? () => onDelete(record.id) : undefined
+          }
           deleteTitle={actionDeleteTitle ?? `确定删除资料「${record.name}」？`}
           deleteText={actionDeleteText}
         />,
       ],
     },
   };
-  const columns: ProColumns<ProjectDocumentRow>[] = columnKeys.map(
+  const columns: ProColumns<ProjectDocumentRow>[] = effectiveColumnKeys.map(
     (key) => allColumns[key],
   );
 

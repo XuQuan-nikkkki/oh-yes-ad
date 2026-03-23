@@ -17,6 +17,7 @@ type EmployeesStore = {
   loaded: boolean;
   loadedFull: boolean;
   fetchEmployees: (options?: { full?: boolean; force?: boolean }) => Promise<EmployeeListItem[]>;
+  removeEmployee: (id: string) => void;
   clearEmployeesCache: () => void;
 };
 
@@ -70,6 +71,13 @@ export const useEmployeesStore = create<EmployeesStore>((set, get) => ({
       return [];
     }
   },
+  removeEmployee: (id) => {
+    if (!id) return;
+    set((state) => ({
+      employees: state.employees.filter((item) => item.id !== id),
+      employeesFull: state.employeesFull.filter((item) => item.id !== id),
+    }));
+  },
   clearEmployeesCache: () => {
     set({
       employees: [],
@@ -81,4 +89,3 @@ export const useEmployeesStore = create<EmployeesStore>((set, get) => ({
     });
   },
 }));
-

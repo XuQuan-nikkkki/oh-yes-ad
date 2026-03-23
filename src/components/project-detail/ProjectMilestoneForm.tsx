@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { StepsForm } from "@ant-design/pro-components";
-import { Checkbox, DatePicker, Form, Input, Select, Space } from "antd";
+import { Checkbox, Col, DatePicker, Form, Input, Row, Select, Space } from "antd";
 import dayjs from "dayjs";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import type { ProjectMilestoneRow } from "@/components/project-detail/ProjectMilestonesTable";
@@ -145,7 +145,7 @@ const ProjectMilestoneForm = ({
 
   return (
     <StepsForm<FormValues>
-      key={initialValues?.id || selectedProjectId || "new"}
+      key={initialValues?.id || "new"}
       onFinish={async (values) => {
         const end =
           values.isRange &&
@@ -156,11 +156,12 @@ const ProjectMilestoneForm = ({
           )
             ? values.endAt
             : null;
-        const toPayloadDate = (value?: dayjs.Dayjs | null) => {
+        const toPayloadDate = (value?: dayjs.Dayjs | string | null) => {
           if (!value) return null;
+          const d = dayjs.isDayjs(value) ? value : dayjs(value);
           return values.includeTime
-            ? value.toISOString()
-            : value.format("YYYY-MM-DD");
+            ? d.toISOString()
+            : d.format("YYYY-MM-DD");
         };
         await onSubmit({
           name: values.name,
@@ -215,48 +216,80 @@ const ProjectMilestoneForm = ({
           }
         }}
       >
-        <Form.Item label="名称" name="name" rules={[{ required: true }]}>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="名称" name="name" rules={[{ required: true }]}>
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item
+              label="所属项目"
+              name="projectId"
+              rules={[{ required: true, message: "请选择所属项目" }]}
+            >
+              <Select
+                disabled={disableProjectSelect}
+                options={projectOptions.map((project) => ({
+                  label: project.name,
+                  value: project.id,
+                }))}
+                placeholder="请选择所属项目"
+                onChange={(value) => {
+                  onProjectChange?.(value ? String(value) : undefined);
+                }}
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item
+              label="类型"
+              name="type"
+              rules={[{ required: true, message: "请选择类型" }]}
+            >
+              <SelectOptionSelector
+                placeholder="请选择或新增类型"
+                options={typeOptions.map((item) => ({
+                  label: item.value,
+                  value: item.value,
+                  color: item.color ?? DEFAULT_COLOR,
+                }))}
+                style={{ width: "100%" }}
+              />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="方式" name="method">
+              <SelectOptionSelector
+                placeholder="请选择或新增方式"
+                options={methodOptions.map((item) => ({
+                  label: item.value,
+                  value: item.value,
+                  color: item.color ?? DEFAULT_COLOR,
+                }))}
+                style={{ width: "100%" }}
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Form.Item label="地点" name="location">
           <Input />
         </Form.Item>
-        <Form.Item
-          label="所属项目"
-          name="projectId"
-          rules={[{ required: true, message: "请选择所属项目" }]}
-        >
-          <Select
-            disabled={disableProjectSelect}
-            options={projectOptions.map((project) => ({
-              label: project.name,
-              value: project.id,
-            }))}
-            placeholder="请选择所属项目"
-            onChange={(value) => {
-              onProjectChange?.(value ? String(value) : undefined);
-            }}
-          />
+
+        <Form.Item label="时间类型" style={{ marginBottom: 24 }}>
+          <Space style={{ paddingTop: 4 }}>
+            <Form.Item name="includeTime" valuePropName="checked" noStyle>
+              <Checkbox>包含时间</Checkbox>
+            </Form.Item>
+            <Form.Item name="isRange" valuePropName="checked" noStyle>
+              <Checkbox>时间段</Checkbox>
+            </Form.Item>
+          </Space>
         </Form.Item>
-        <Form.Item
-          label="类型"
-          name="type"
-          rules={[{ required: true, message: "请选择类型" }]}
-        >
-          <SelectOptionSelector
-            placeholder="请选择或新增类型"
-            options={typeOptions.map((item) => ({
-              label: item.value,
-              value: item.value,
-              color: item.color ?? DEFAULT_COLOR,
-            }))}
-          />
-        </Form.Item>
-        <Space style={{ marginBottom: 12 }}>
-          <Form.Item name="includeTime" valuePropName="checked" noStyle>
-            <Checkbox>包含时间</Checkbox>
-          </Form.Item>
-          <Form.Item name="isRange" valuePropName="checked" noStyle>
-            <Checkbox>时间段</Checkbox>
-          </Form.Item>
-        </Space>
         <Form.Item
           noStyle
           shouldUpdate={(prev, next) =>
@@ -268,41 +301,16 @@ const ProjectMilestoneForm = ({
             const isRangeValue = Boolean(getFieldValue("isRange"));
             const format = includeTimeValue ? "YYYY-MM-DD HH:mm" : "YYYY-MM-DD";
             return (
-              <>
-                <Form.Item
-                  label="时间"
-                  name="startAt"
-                  rules={[{ required: true, message: "请选择时间" }]}
-                >
-                  <DatePicker
-                    showTime={includeTimeValue}
-                    format={format}
-                    style={{ width: "100%" }}
-                  />
-                </Form.Item>
-                {isRangeValue ? (
+              <Row gutter={16}>
+                <Col span={isRangeValue ? 12 : 24}>
                   <Form.Item
-                    label="结束"
-                    name="endAt"
+                    label={isRangeValue ? "开始" : "时间"}
+                    name="startAt"
                     rules={[
-                      { required: true, message: "请选择结束时间" },
-                      ({ getFieldValue }) => ({
-                        validator(_, value: dayjs.Dayjs | undefined) {
-                          const startAtValue = getFieldValue("startAt") as
-                            | dayjs.Dayjs
-                            | undefined;
-                          if (
-                            !value ||
-                            !startAtValue ||
-                            !value.isBefore(startAtValue)
-                          ) {
-                            return Promise.resolve();
-                          }
-                          return Promise.reject(
-                            new Error("结束时间不能早于时间"),
-                          );
-                        },
-                      }),
+                      {
+                        required: true,
+                        message: isRangeValue ? "请选择开始时间" : "请选择时间",
+                      },
                     ]}
                   >
                     <DatePicker
@@ -311,26 +319,44 @@ const ProjectMilestoneForm = ({
                       style={{ width: "100%" }}
                     />
                   </Form.Item>
+                </Col>
+                {isRangeValue ? (
+                  <Col span={12}>
+                    <Form.Item
+                      label="结束"
+                      name="endAt"
+                      rules={[
+                        { required: true, message: "请选择结束时间" },
+                        ({ getFieldValue }) => ({
+                          validator(_, value: dayjs.Dayjs | undefined) {
+                            const startAtValue = getFieldValue("startAt") as
+                              | dayjs.Dayjs
+                              | undefined;
+                            if (
+                              !value ||
+                              !startAtValue ||
+                              !value.isBefore(startAtValue)
+                            ) {
+                              return Promise.resolve();
+                            }
+                            return Promise.reject(
+                              new Error("结束时间不能早于开始时间"),
+                            );
+                          },
+                        }),
+                      ]}
+                    >
+                      <DatePicker
+                        showTime={includeTimeValue}
+                        format={format}
+                        style={{ width: "100%" }}
+                      />
+                    </Form.Item>
+                  </Col>
                 ) : null}
-              </>
+              </Row>
             );
           }}
-        </Form.Item>
-      </StepsForm.StepForm>
-
-      <StepsForm.StepForm title="补充信息">
-        <Form.Item label="方式" name="method">
-          <SelectOptionSelector
-            placeholder="请选择或新增方式"
-            options={methodOptions.map((item) => ({
-              label: item.value,
-              value: item.value,
-              color: item.color ?? DEFAULT_COLOR,
-            }))}
-          />
-        </Form.Item>
-        <Form.Item label="地点" name="location">
-          <Input />
         </Form.Item>
       </StepsForm.StepForm>
 

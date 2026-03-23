@@ -6,6 +6,8 @@ import { DEFAULT_COLOR } from "@/lib/constants";
 type Props = {
   entryId: string;
   weekNumber: number;
+  plannedDays?: number | null;
+  isCurrentWeek?: boolean;
   monday: boolean;
   tuesday: boolean;
   wednesday: boolean;
@@ -18,6 +20,8 @@ type Props = {
 const PlannedWorkScheduleValue = ({
   entryId,
   weekNumber,
+  plannedDays,
+  isCurrentWeek = false,
   monday,
   tuesday,
   wednesday,
@@ -42,11 +46,22 @@ const PlannedWorkScheduleValue = ({
     }
     return true;
   });
+  const weekLabel = `W${String(weekNumber).padStart(2, "0")}`;
 
   return (
     <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
-      <Tag color={DEFAULT_COLOR} style={{ marginInlineEnd: 0, fontWeight: 600 }}>
-        {`W${weekNumber}`}
+      <Tag
+        color={isCurrentWeek ? "#ffccc7" : DEFAULT_COLOR}
+        style={{
+          marginInlineEnd: 0,
+          fontWeight: 600,
+          width: 40,
+          textAlign: "center",
+          padding: "0 4px 0 3px",
+          color: isCurrentWeek ? "#cf1322" : DEFAULT_COLOR,
+        }}
+      >
+        {weekLabel}
       </Tag>
       {visibleDays.map((item) => (
         <Tag
@@ -56,11 +71,27 @@ const PlannedWorkScheduleValue = ({
             marginInlineEnd: 0,
             fontWeight: 600,
             color: item.active ? "#389e0d" : DEFAULT_COLOR,
+            textAlign: "center",
           }}
         >
           {item.label}
         </Tag>
       ))}
+      {typeof plannedDays === "number" ? (
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            paddingInline: 4,
+            fontSize: 12,
+            fontWeight: 600,
+            color: "rgba(0,0,0,0.65)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {`${Number(plannedDays.toFixed(2))}d`}
+        </span>
+      ) : null}
     </span>
   );
 };

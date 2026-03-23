@@ -62,10 +62,13 @@ const upsertSelectOption = async (field: string, value: unknown) => {
 };
 
 const serializeSegment = (segment: {
-  statusOption?: { value: string; color: string | null } | null;
+  startDate?: Date | string | null;
+  endDate?: Date | string | null;
+  statusOption?: { id?: string; value: string; color: string | null } | null;
 } & Record<string, unknown>) => ({
   ...segment,
   status: segment.statusOption?.value ?? null,
+  dueDate: segment.endDate ?? null,
 });
 
 export async function GET(_req: NextRequest, context: RouteContext) {
@@ -75,11 +78,12 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     include: {
       project: { select: { id: true, name: true } },
       owner: { select: { id: true, name: true } },
-      statusOption: { select: { value: true, color: true } },
+      statusOption: { select: { id: true, value: true, color: true } },
       projectTasks: {
         select: {
           id: true,
           name: true,
+          statusOption: { select: { id: true, value: true, color: true } },
           dueDate: true,
           owner: { select: { id: true, name: true } },
         },
@@ -117,18 +121,26 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     data: {
       name: body.name,
       statusOptionId,
-      dueDate: body.dueDate ? new Date(body.dueDate) : null,
+      startDate:
+        typeof body.startDate === "string" && body.startDate
+          ? new Date(body.startDate)
+          : null,
+      endDate:
+        typeof (body.endDate ?? body.dueDate) === "string" && (body.endDate ?? body.dueDate)
+          ? new Date(body.endDate ?? body.dueDate)
+          : null,
       projectId: body.projectId,
       ownerId: body.ownerId ?? null,
     },
     include: {
       project: { select: { id: true, name: true } },
       owner: { select: { id: true, name: true } },
-      statusOption: { select: { value: true, color: true } },
+      statusOption: { select: { id: true, value: true, color: true } },
       projectTasks: {
         select: {
           id: true,
           name: true,
+          statusOption: { select: { id: true, value: true, color: true } },
           dueDate: true,
           owner: { select: { id: true, name: true } },
         },

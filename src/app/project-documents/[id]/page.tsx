@@ -1,32 +1,46 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
   Card,
   Checkbox,
-  DatePicker,
   Descriptions,
-  Form,
-  Input,
   Modal,
   Popconfirm,
-  Select,
   Space,
-  Tag,
   message,
 } from "antd";
-import type { DefaultOptionType } from "antd/es/select";
-import { EditOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined } from "@ant-design/icons";
 import { useParams, useRouter } from "next/navigation";
 import dayjs from "dayjs";
-import { DEFAULT_COLOR } from "@/lib/constants";
 import AppLink from "@/components/AppLink";
 import DetailPageContainer from "@/components/DetailPageContainer";
-import SelectOptionTag from "@/components/SelectOptionTag";
-import { MilestoneTableRow } from "@/components/MilestonesTable";
-import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
+import ProjectDocumentForm, {
+  ProjectDocumentFormPayload,
+} from "@/components/project-detail/ProjectDocumentForm";
+import { canManageProjectResources } from "@/lib/role-permissions";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
+import { useProjectDocumentsStore } from "@/stores/projectDocumentsStore";
 import type { NullableSelectOptionValue } from "@/types/selectOption";
+
+export type MilestoneTableRow = {
+  id: string;
+  name: string;
+  typeOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
+  date?: string | null;
+  location?: string | null;
+  methodOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
+};
 
 type Detail = {
   id: string;
@@ -39,16 +53,13 @@ type Detail = {
   milestone?: MilestoneTableRow | null;
 };
 
-type FormValues = {
-  name: string;
-  projectId: string;
-  typeOption?: string;
-  date?: dayjs.Dayjs;
-  isFinal?: boolean;
-  internalLink?: string;
-};
-
 export default function Page() {
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
+  const canManageProjectDocuments = useMemo(
+    () => canManageProjectResources(roleCodes),
+    [roleCodes],
+  );
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
@@ -56,15 +67,10 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [typeSearch, setTypeSearch] = useState("");
-  const [creatingType, setCreatingType] = useState(false);
-  const [form] = Form.useForm<FormValues>();
   const [messageApi, contextHolder] = message.useMessage();
-  const fetchAllOptions = useSelectOptionsStore(
-    (state) => state.fetchAllOptions,
+  const removeDocumentFromStore = useProjectDocumentsStore(
+    (state) => state.removeDocument,
   );
-  const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
-  const typeOptions = optionsByField["projectDocument.type"] ?? [];
 
   const fetchDetail = useCallback(async () => {
     if (!id) return;
@@ -83,70 +89,21 @@ export default function Page() {
     if (!id) return;
     (async () => {
       await fetchDetail();
-      await fetchAllOptions();
     })();
-  }, [id, fetchAllOptions, fetchDetail]);
-
-  const createTypeOption = async () => {
-    const value = typeSearch.trim();
-    if (!value) return;
-    try {
-      setCreatingType(true);
-      const response = await fetch("/api/select-options", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          field: "projectDocument.type",
-          value,
-          color: DEFAULT_COLOR,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-      await fetchAllOptions(true);
-      form.setFieldValue("typeOption", value);
-      setTypeSearch("");
-      messageApi.success("类型已新增");
-    } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : "新增类型失败");
-    } finally {
-      setCreatingType(false);
-    }
-  };
+  }, [id, fetchDetail]);
 
   const onEdit = () => {
-    if (!data) return;
-    form.setFieldsValue({
-      name: data.name,
-      projectId: data.project?.id,
-      typeOption: data.typeOption?.value ?? undefined,
-      date: data.date ? dayjs(data.date) : undefined,
-      isFinal: data.isFinal,
-      internalLink: data.internalLink ?? undefined,
-    });
+    if (!canManageProjectDocuments || !data) return;
     setOpen(true);
   };
 
-  const typeSelectOptions = typeOptions.map((option) => ({
-    label: option.value,
-    value: option.value,
-    color: option.color ?? DEFAULT_COLOR,
-  }));
-  const hasExactType = typeSearch.trim()
-    ? typeSelectOptions.some(
-        (option) =>
-          String(option.value).toLowerCase() ===
-          typeSearch.trim().toLowerCase(),
-      )
-    : false;
-
-  const onSubmit = async (values: FormValues) => {
+  const onSubmit = async (values: ProjectDocumentFormPayload) => {
+    if (!canManageProjectDocuments) return;
     const payload = {
       name: values.name,
-      projectId: values.projectId,
+      projectId: values.projectId ?? data?.project?.id,
       typeOption: values.typeOption ?? null,
-      date: values.date ? values.date.toISOString() : null,
+      date: values.date ?? null,
       isFinal: Boolean(values.isFinal),
       internalLink: values.internalLink ?? null,
     };
@@ -165,6 +122,7 @@ export default function Page() {
   };
 
   const onDelete = async () => {
+    if (!canManageProjectDocuments) return;
     setDeleting(true);
     const res = await fetch(`/api/project-documents/${id}`, {
       method: "DELETE",
@@ -174,6 +132,7 @@ export default function Page() {
       messageApi.error("删除失败");
       return;
     }
+    removeDocumentFromStore(id);
     messageApi.success("删除成功");
     router.push("/project-documents");
   };
@@ -201,72 +160,101 @@ export default function Page() {
         title={`项目资料：${data.name}`}
         extra={
           <Space>
-            <Button icon={<EditOutlined />} onClick={onEdit}>
-              编辑
-            </Button>
-            <Popconfirm
-              title={`确定删除资料「${data.name}」？`}
-              okText="删除"
-              cancelText="取消"
-              onConfirm={() => void onDelete()}
-              okButtonProps={{ danger: true, loading: deleting }}
-            >
-              <Button danger loading={deleting}>
-                删除
-              </Button>
-            </Popconfirm>
+            {canManageProjectDocuments ? (
+              <>
+                <Button icon={<EditOutlined />} onClick={onEdit}>
+                  编辑
+                </Button>
+                <Popconfirm
+                  title={`确定删除资料「${data.name}」？`}
+                  okText="删除"
+                  icon={<DeleteOutlined />}
+                  cancelText="取消"
+                  onConfirm={() => void onDelete()}
+                  okButtonProps={{ danger: true, loading: deleting }}
+                >
+                  <Button danger loading={deleting}>
+                    删除
+                  </Button>
+                </Popconfirm>
+              </>
+            ) : null}
           </Space>
         }
       >
         <Descriptions column={2} size="small">
-            <Descriptions.Item label="所属项目">
-              {data.project ? (
-                <AppLink href={`/projects/${data.project.id}`}>
-                  {data.project.name}
-                </AppLink>
-              ) : (
-                "-"
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="类型">
-              <SelectOptionTag option={data.typeOption} />
-            </Descriptions.Item>
-            <Descriptions.Item label="日期">
-              {data.date ? dayjs(data.date).format("YYYY-MM-DD") : "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="是最终版">
-              <Checkbox
-                checked={data.isFinal}
-                onChange={() => {}}
-                style={{ pointerEvents: "none" }}
+          <Descriptions.Item label="所属项目">
+            {data.project ? (
+              <AppLink href={`/projects/${data.project.id}`}>
+                {data.project.name}
+              </AppLink>
+            ) : (
+              "-"
+            )}
+          </Descriptions.Item>
+          <Descriptions.Item label="类型">
+            {canManageProjectDocuments ? (
+              <SelectOptionQuickEditTag
+                field="projectDocument.type"
+                option={data.typeOption}
+                modalTitle="修改资料类型"
+                modalDescription="勾选只会暂存类型切换。点击保存后会一并保存选项改动、排序和资料类型。"
+                optionValueLabel="类型值"
+                saveSuccessText="资料类型已保存"
+                onSaveSelection={async (nextOption) => {
+                  const res = await fetch(`/api/project-documents/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      typeOption: nextOption,
+                    }),
+                  });
+                  if (!res.ok) {
+                    throw new Error((await res.text()) || "更新类型失败");
+                  }
+                }}
+                onUpdated={fetchDetail}
               />
-            </Descriptions.Item>
-            <Descriptions.Item label="内部链接">
-              {data.internalLink ? (
-                <a
-                  href={data.internalLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    color: "gray",
-                    textDecoration: "underline",
-                  }}
-                >
-                  {data.internalLink}
-                </a>
-              ) : (
-                "-"
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="关联里程碑">
-              {data.milestone ? (
-                <AppLink href={`/milestones/${data.milestone.id}`}>
-                  {data.milestone.name}
-                </AppLink>
-              ) : (
-                "-"
-              )}
-            </Descriptions.Item>
+            ) : (
+              data.typeOption?.value ?? "-"
+            )}
+          </Descriptions.Item>
+          <Descriptions.Item label="日期">
+            {data.date ? dayjs(data.date).format("YYYY-MM-DD") : "-"}
+          </Descriptions.Item>
+          <Descriptions.Item label="是最终版">
+            <Checkbox
+              checked={data.isFinal}
+              onChange={() => {}}
+              style={{ pointerEvents: "none" }}
+            />
+          </Descriptions.Item>
+          <Descriptions.Item label="内部链接">
+            {data.internalLink ? (
+              <a
+                href={data.internalLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: "gray",
+                  textDecoration: "underline",
+                }}
+              >
+                {data.internalLink}
+              </a>
+            ) : (
+              "-"
+            )}
+          </Descriptions.Item>
+          <Descriptions.Item label="关联里程碑">
+            {data.milestone ? (
+              <AppLink href={`/milestones/${data.milestone.id}`}>
+                {data.milestone.name}
+              </AppLink>
+            ) : (
+              "-"
+            )}
+          </Descriptions.Item>
         </Descriptions>
       </Card>
 
@@ -275,92 +263,27 @@ export default function Page() {
         open={open}
         onCancel={() => setOpen(false)}
         footer={null}
-        forceRender
+        width={860}
         destroyOnHidden
       >
-        <Form
-          layout="vertical"
-          form={form}
-          onFinish={(values) => void onSubmit(values)}
-        >
-          <Form.Item label="名称" name="name" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item
-            label="所属项目"
-            name="projectId"
-            rules={[{ required: true }]}
-          >
-            <Select
-              disabled
-              options={
-                data.project
-                  ? [{ label: data.project.name, value: data.project.id }]
-                  : []
-              }
-            />
-          </Form.Item>
-          <Form.Item label="类型" name="typeOption">
-            <Select
-              allowClear
-              placeholder="请选择或新增类型"
-              showSearch
-              searchValue={typeSearch}
-              onSearch={(value) => setTypeSearch(value)}
-              onChange={() => setTypeSearch("")}
-              optionFilterProp="label"
-              filterOption={(input, option) =>
-                String(option?.label ?? "")
-                  .toLowerCase()
-                  .includes(input.toLowerCase())
-              }
-              options={typeSelectOptions}
-              optionRender={(option) => {
-                const data = option.data as DefaultOptionType & {
-                  color?: string;
-                };
-                return (
-                  <Tag
-                    color={data.color ?? DEFAULT_COLOR}
-                    style={{ borderRadius: 6 }}
-                  >
-                    {String(data.label ?? "")}
-                  </Tag>
-                );
-              }}
-              popupRender={(menu) => (
-                <>
-                  {menu}
-                  <div style={{ padding: "8px" }}>
-                    <Button
-                      type="link"
-                      loading={creatingType}
-                      disabled={!typeSearch.trim() || hasExactType}
-                      style={{ padding: 0 }}
-                      onClick={() => void createTypeOption()}
-                    >
-                      {hasExactType
-                        ? "已存在同名选项"
-                        : `新增: ${typeSearch.trim() || ""}`}
-                    </Button>
-                  </div>
-                </>
-              )}
-            />
-          </Form.Item>
-          <Form.Item label="日期" name="date">
-            <DatePicker style={{ width: "100%" }} />
-          </Form.Item>
-          <Form.Item label="内部链接" name="internalLink">
-            <Input />
-          </Form.Item>
-          <Form.Item name="isFinal" valuePropName="checked">
-            <Checkbox>是最终版</Checkbox>
-          </Form.Item>
-          <Button block type="primary" htmlType="submit">
-            保存
-          </Button>
-        </Form>
+        <ProjectDocumentForm
+          projectOptions={
+            data.project ? [{ id: data.project.id, name: data.project.name }] : []
+          }
+          showProjectField
+          disableProjectSelect
+          initialValues={{
+            id: data.id,
+            name: data.name,
+            projectId: data.project?.id,
+            milestoneId: data.milestone?.id ?? null,
+            typeOption: data.typeOption ?? null,
+            date: data.date ?? null,
+            isFinal: data.isFinal,
+            internalLink: data.internalLink ?? null,
+          }}
+          onSubmit={onSubmit}
+        />
       </Modal>
     </DetailPageContainer>
   );

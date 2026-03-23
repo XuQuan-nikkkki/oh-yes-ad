@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { DEFAULT_COLOR } from "@/lib/constants";
+import { requireWorkdayAdjustmentWritePermission } from "@/lib/api-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -68,6 +69,9 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const permissionResponse = await requireWorkdayAdjustmentWritePermission();
+    if (permissionResponse) return permissionResponse;
+
     const body = await sanitizeRequestBody(req);
     const changeTypeOptionId = await ensureChangeTypeOptionId(body.changeType);
 

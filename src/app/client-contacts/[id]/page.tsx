@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, Descriptions, message } from "antd";
 import { useParams, useRouter } from "next/navigation";
 import AppLink from "@/components/AppLink";
@@ -18,11 +18,14 @@ const ClientContactDetailPage = () => {
   const cachedContact = useClientContactsStore((state) => state.byId[contactId]);
   const upsertContacts = useClientContactsStore((state) => state.upsertContacts);
   const removeContact = useClientContactsStore((state) => state.removeContact);
-
-  const [contact, setContact] = useState<Contact | null>(
+  const initialCachedContactRef = useRef<Contact | null>(
     (cachedContact as Contact | undefined) ?? null,
   );
-  const [loading, setLoading] = useState(!cachedContact);
+
+  const [contact, setContact] = useState<Contact | null>(
+    initialCachedContactRef.current,
+  );
+  const [loading, setLoading] = useState(!initialCachedContactRef.current);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
@@ -45,23 +48,42 @@ const ClientContactDetailPage = () => {
       if (data?.id) {
         upsertContacts([data]);
       }
+      return data as Contact;
     } finally {
       if (showLoading) {
         setLoading(false);
       }
     }
+    return null;
   }, [contactId, upsertContacts]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      const initialContact = initialCachedContactRef.current;
+      setContact(initialContact);
+      setLoading(!initialContact);
+
+      const latest = await fetchContact(!initialContact);
+      if (cancelled || !latest) return;
+
+      setContact(latest);
+      setLoading(false);
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [contactId, fetchContact]);
 
   useEffect(() => {
     if (cachedContact) {
       setContact(cachedContact as Contact);
-      setLoading(false);
-      void fetchContact(false);
-      return;
     }
-    setContact(null);
-    void fetchContact(true);
-  }, [cachedContact, fetchContact]);
+  }, [cachedContact]);
 
   const handleDelete = async () => {
     if (!contactId) return;
@@ -120,18 +142,26 @@ const ClientContactDetailPage = () => {
             disabled={!canManageCrm}
             deleteLoading={deleting}
             deleteTitle={`确定删除客户人员「${displayContact?.name ?? ""}」？`}
+            disableTextVairant
           />
         }
       >
         <Descriptions column={2} size="small">
           <Descriptions.Item label="所属客户">
-            {displayContact.client ? (
-              <AppLink href={`/clients/${displayContact.client.id}`}>
-                {displayContact.client.name}
-              </AppLink>
-            ) : (
-              "-"
-            )}
+            {(displayContact.clients ?? []).length > 0
+              ? (displayContact.clients ?? []).map((client, index) => (
+                  <span key={client.id}>
+                    {index > 0 ? "、" : ""}
+                    <AppLink href={`/clients/${client.id}`}>{client.name}</AppLink>
+                  </span>
+                ))
+              : displayContact.client
+                ? (
+                    <AppLink href={`/clients/${displayContact.client.id}`}>
+                      {displayContact.client.name}
+                    </AppLink>
+                  )
+                : "-"}
           </Descriptions.Item>
           <Descriptions.Item label="职位">
             {displayContact.title ?? "-"}

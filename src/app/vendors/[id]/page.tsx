@@ -17,10 +17,10 @@ import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import {
   VendorBooleanValue,
   VendorLinkValue,
-  VendorOptionListValue,
   VendorOptionValue,
   VendorTextValue,
 } from "@/components/vendor/VendorContent";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import ProjectsTable, {
   Project as ProjectRow,
 } from "@/components/ProjectsTable";
@@ -35,6 +35,7 @@ const VendorDetailPage = () => {
   const vendorId = params.id as string;
   const cachedVendor = useVendorsStore((state) => state.byId[vendorId]);
   const upsertVendors = useVendorsStore((state) => state.upsertVendors);
+  const removeVendorFromStore = useVendorsStore((state) => state.removeVendor);
 
   const [vendor, setVendor] = useState<Vendor | null>(
     (cachedVendor as Vendor | undefined) ?? null,
@@ -111,6 +112,66 @@ const VendorDetailPage = () => {
 
   const displayVendor = vendor ?? ((cachedVendor as Vendor | undefined) ?? null);
 
+  const renderQuickEditList = useCallback(
+    (
+      field: "vendor.businessType" | "vendor.services",
+      items: { id: string; value: string; color?: string | null }[] | undefined,
+      save: (
+        currentId: string | null,
+        nextOption: { id: string; value: string; color: string },
+      ) => Promise<void>,
+      emptyLabel: string,
+      modalTitle: string,
+      optionValueLabel: string,
+      saveSuccessText: string,
+    ) => {
+      if (!displayVendor) return null;
+
+      if (!items?.length) {
+        return (
+          <SelectOptionQuickEditTag
+            field={field}
+            option={null}
+            fallbackText={emptyLabel}
+            disabled={!canManageCrm}
+            modalTitle={modalTitle}
+            optionValueLabel={optionValueLabel}
+            saveSuccessText={saveSuccessText}
+            onSaveSelection={async (nextOption) => {
+              await save(null, nextOption);
+            }}
+            onUpdated={async () => {
+              await fetchVendor(false);
+            }}
+          />
+        );
+      }
+
+      return (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {items.map((item) => (
+            <SelectOptionQuickEditTag
+              key={item.id}
+              field={field}
+              option={{ id: item.id, value: item.value, color: item.color ?? null }}
+              disabled={!canManageCrm}
+              modalTitle={modalTitle}
+              optionValueLabel={optionValueLabel}
+              saveSuccessText={saveSuccessText}
+              onSaveSelection={async (nextOption) => {
+                await save(item.id, nextOption);
+              }}
+              onUpdated={async () => {
+                await fetchVendor(false);
+              }}
+            />
+          ))}
+        </div>
+      );
+    },
+    [canManageCrm, displayVendor, fetchVendor],
+  );
+
   const handleDelete = async () => {
     if (!vendorId) return;
     if (!canManageCrm) return;
@@ -125,6 +186,7 @@ const VendorDetailPage = () => {
       messageApi.error("删除失败");
       return;
     }
+    removeVendorFromStore(vendorId);
     messageApi.success("删除成功");
     router.push("/vendors");
   };
@@ -186,24 +248,99 @@ const VendorDetailPage = () => {
           {displayVendor ? (
             <Descriptions column={3} size="small">
               <Descriptions.Item label="供应商类型">
-                <VendorOptionValue option={displayVendor.vendorTypeOption} />
-              </Descriptions.Item>
-              <Descriptions.Item label="业务类型">
-                <VendorOptionListValue
-                  options={displayVendor.businessTypeOptions}
-                  fallbackOption={
-                    displayVendor.businessTypeOption
-                      ? {
-                          id: displayVendor.businessTypeOption.id,
-                          value: displayVendor.businessTypeOption.value,
-                          color: displayVendor.businessTypeOption.color ?? null,
-                        }
-                      : undefined
-                  }
+                <SelectOptionQuickEditTag
+                  field="vendor.vendorType"
+                  option={displayVendor.vendorTypeOption ?? null}
+                  fallbackText="-"
+                  disabled={!canManageCrm}
+                  modalTitle="修改供应商类型"
+                  optionValueLabel="供应商类型"
+                  saveSuccessText="供应商类型已保存"
+                  onSaveSelection={async (nextOption) => {
+                    const res = await fetch(`/api/vendors/${displayVendor.id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ vendorType: nextOption }),
+                    });
+                    if (!res.ok) {
+                      throw new Error((await res.text()) || "更新失败");
+                    }
+                    const next = (await res.json()) as Vendor | null;
+                    if (next?.id) {
+                      setVendor(next);
+                      upsertVendors([next]);
+                    }
+                  }}
+                  onUpdated={async () => {
+                    await fetchVendor(false);
+                  }}
                 />
               </Descriptions.Item>
+              <Descriptions.Item label="业务类型">
+                {renderQuickEditList(
+                  "vendor.businessType",
+                  displayVendor.businessTypeOptions,
+                  async (currentId, nextOption) => {
+                    const nextIds = [
+                      ...(displayVendor.businessTypeOptionIds ?? []).filter(
+                        (id) => id !== currentId,
+                      ),
+                      nextOption.id,
+                    ];
+                    const res = await fetch(`/api/vendors/${displayVendor.id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        businessTypeOptionIds: Array.from(new Set(nextIds)),
+                      }),
+                    });
+                    if (!res.ok) {
+                      throw new Error((await res.text()) || "更新失败");
+                    }
+                    const next = (await res.json()) as Vendor | null;
+                    if (next?.id) {
+                      setVendor(next);
+                      upsertVendors([next]);
+                    }
+                  },
+                  "-",
+                  "修改业务类型",
+                  "业务类型",
+                  "业务类型已保存",
+                )}
+              </Descriptions.Item>
               <Descriptions.Item label="服务范围">
-                <VendorOptionListValue options={displayVendor.serviceOptions} />
+                {renderQuickEditList(
+                  "vendor.services",
+                  displayVendor.serviceOptions,
+                  async (currentId, nextOption) => {
+                    const nextIds = [
+                      ...(displayVendor.serviceOptionIds ?? []).filter(
+                        (id) => id !== currentId,
+                      ),
+                      nextOption.id,
+                    ];
+                    const res = await fetch(`/api/vendors/${displayVendor.id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        serviceOptionIds: Array.from(new Set(nextIds)),
+                      }),
+                    });
+                    if (!res.ok) {
+                      throw new Error((await res.text()) || "更新失败");
+                    }
+                    const next = (await res.json()) as Vendor | null;
+                    if (next?.id) {
+                      setVendor(next);
+                      upsertVendors([next]);
+                    }
+                  },
+                  "-",
+                  "修改服务范围",
+                  "服务范围",
+                  "服务范围已保存",
+                )}
               </Descriptions.Item>
               <Descriptions.Item label="核心特色/擅长领域">
                 <VendorTextValue value={displayVendor.strengths} />

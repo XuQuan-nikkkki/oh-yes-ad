@@ -34,6 +34,7 @@ type Props = {
   onEdit: (row: ProjectSegmentsProTableRow) => void;
   onDelete: (id: string) => void;
   actionsDisabled?: boolean;
+  renderStatusOption?: (row: ProjectSegmentsProTableRow) => ReactNode;
 };
 
 const ProjectSegmentsProTable = ({
@@ -48,6 +49,7 @@ const ProjectSegmentsProTable = ({
   onEdit,
   onDelete,
   actionsDisabled = false,
+  renderStatusOption,
 }: Props) => {
   const nameFilters = Array.from(
     new Set(rows.map((row) => row.name).filter((value): value is string => Boolean(value))),
@@ -132,7 +134,9 @@ const ProjectSegmentsProTable = ({
       onFilter: (value, record) =>
         (record.statusOption?.value ?? record.status ?? "") === String(value),
       render: (_value, record) =>
-        record.statusOption?.value ? (
+        renderStatusOption ? (
+          renderStatusOption(record)
+        ) : record.statusOption?.value ? (
           <SelectOptionTag
             option={{
               id: record.statusOption.id ?? "",

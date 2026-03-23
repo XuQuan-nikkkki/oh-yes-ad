@@ -184,6 +184,7 @@ export async function POST(req: Request) {
     data: {
       name: body.name,
       typeOptionId,
+      isArchived: Boolean(body.isArchived),
       statusOptionId,
       stageOptionId,
       startDate: body.startDate ? new Date(body.startDate) : null,
@@ -224,6 +225,7 @@ export async function PUT(req: Request) {
     data: {
       name: body.name,
       typeOptionId,
+      isArchived: Boolean(body.isArchived),
       statusOptionId,
       stageOptionId,
       startDate: body.startDate ? new Date(body.startDate) : null,

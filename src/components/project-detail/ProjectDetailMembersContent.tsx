@@ -137,7 +137,6 @@ const ProjectDetailMembersContent = ({
             }
           }}
           onBlur={() => onSetAddingFunction(null)}
-          autoFocus
           open
         />
       ) : canManageProject ? (

@@ -16,7 +16,7 @@ import {
   Tag,
   message,
 } from "antd";
-import { EditOutlined, PlusOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import { useParams, useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
@@ -24,7 +24,7 @@ import "dayjs/locale/zh-cn";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import AppLink from "@/components/AppLink";
 import DetailPageContainer from "@/components/DetailPageContainer";
-import SelectOptionTag from "@/components/SelectOptionTag";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import SelectOptionSelector, {
   type SelectOptionSelectorValue,
 } from "@/components/SelectOptionSelector";
@@ -207,7 +207,9 @@ const normalizeTagOption = (option?: NullableSelectOptionValue) => {
   };
 };
 
-const mapStoreMilestoneToDetail = (row: ProjectMilestoneRow): MilestoneDetail => ({
+const mapStoreMilestoneToDetail = (
+  row: ProjectMilestoneRow,
+): MilestoneDetail => ({
   id: row.id,
   name: row.name,
   typeOption: row.typeOption ?? null,
@@ -243,6 +245,9 @@ export default function Page() {
   const cachedMilestone = useProjectMilestonesStore((state) =>
     id ? state.byId[id] : undefined,
   );
+  const removeMilestoneFromStore = useProjectMilestonesStore(
+    (state) => state.removeMilestone,
+  );
 
   const [data, setData] = useState<MilestoneDetail | null>(
     cachedMilestone ? mapStoreMilestoneToDetail(cachedMilestone) : null,
@@ -251,9 +256,9 @@ export default function Page() {
   const [context, setContext] = useState<ProjectContext>(EMPTY_CONTEXT);
   const [contextProjectId, setContextProjectId] = useState<string | null>(null);
   const [contextClientId, setContextClientId] = useState<string | null>(null);
-  const [clientContactsProjectId, setClientContactsProjectId] = useState<string | null>(
-    null,
-  );
+  const [clientContactsProjectId, setClientContactsProjectId] = useState<
+    string | null
+  >(null);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -273,7 +278,9 @@ export default function Page() {
   const [form] = Form.useForm<FormValues>();
   const [messageApi, contextHolder] = message.useMessage();
   const { canManageProject } = useProjectPermission();
-  const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
+  const fetchProjectsFromStore = useProjectsStore(
+    (state) => state.fetchProjects,
+  );
 
   const fetchAllOptions = useSelectOptionsStore(
     (state) => state.fetchAllOptions,
@@ -305,9 +312,8 @@ export default function Page() {
     const rows = await fetchProjectsFromStore();
     setProjects(
       Array.isArray(rows)
-        ? rows.filter(
-            (item): item is { id: string; name: string } =>
-              Boolean(item?.id && item?.name),
+        ? rows.filter((item): item is { id: string; name: string } =>
+            Boolean(item?.id && item?.name),
           )
         : [],
     );
@@ -428,7 +434,9 @@ export default function Page() {
       return;
     }
 
-    const clientRes = await fetch(`/api/client-contacts?clientId=${contextClientId}`);
+    const clientRes = await fetch(
+      `/api/client-contacts?clientId=${contextClientId}`,
+    );
     const clientContacts = clientRes.ok
       ? ((await clientRes.json()) as ClientContact[])
       : [];
@@ -488,6 +496,7 @@ export default function Page() {
       messageApi.error("删除失败");
       return;
     }
+    removeMilestoneFromStore(id);
     messageApi.success("删除成功");
     router.push("/project-milestones");
   };
@@ -556,6 +565,7 @@ export default function Page() {
   };
 
   const onCreateDocument = async (payload: ProjectDocumentFormPayload) => {
+    if (!canManageProject) return;
     const projectId = data?.project?.id;
     if (!projectId) {
       messageApi.error("当前里程碑缺少所属项目");
@@ -591,20 +601,25 @@ export default function Page() {
         title={data?.name || "里程碑详情"}
         extra={
           <Space>
-            <Button icon={<EditOutlined />} onClick={onEdit} disabled={!canManageProject}>
-              编辑
-            </Button>
-            <Popconfirm
-              title={`确定删除里程碑「${data?.name ?? ""}」？`}
-              okText="删除"
-              cancelText="取消"
-              onConfirm={() => void onDelete()}
-              okButtonProps={{ danger: true, loading: deleting }}
-            >
-              <Button danger loading={deleting} disabled={!canManageProject}>
-                删除
-              </Button>
-            </Popconfirm>
+            {canManageProject ? (
+              <>
+                <Button icon={<EditOutlined />} onClick={onEdit}>
+                  编辑
+                </Button>
+                <Popconfirm
+                  title={`确定删除里程碑「${data?.name ?? ""}」？`}
+                  icon={<DeleteOutlined />}
+                  okText="删除"
+                  cancelText="取消"
+                  onConfirm={() => void onDelete()}
+                  okButtonProps={{ danger: true, loading: deleting }}
+                >
+                  <Button danger loading={deleting}>
+                    删除
+                  </Button>
+                </Popconfirm>
+              </>
+            ) : null}
           </Space>
         }
       >
@@ -620,35 +635,62 @@ export default function Page() {
               )}
             </Descriptions.Item>
             <Descriptions.Item label="类型">
-              {data.typeOption?.value ? (
-                <SelectOptionTag option={normalizeTagOption(data.typeOption)} />
-              ) : data.type ? (
-                data.type
-              ) : (
-                "-"
-              )}
+              <SelectOptionQuickEditTag
+                field="projectMilestone.type"
+                option={normalizeTagOption(data.typeOption)}
+                disabled={!canManageProject}
+                modalTitle="修改里程碑类型"
+                modalDescription="勾选只会暂存类型切换。点击保存后会一并保存选项改动、排序和里程碑类型。"
+                optionValueLabel="类型值"
+                saveSuccessText="里程碑类型已保存"
+                fallbackText={data.type ?? "-"}
+                onSaveSelection={async (nextOption) => {
+                  const res = await fetch(`/api/project-milestones/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      type: nextOption,
+                    }),
+                  });
+                  if (!res.ok) {
+                    throw new Error((await res.text()) || "更新里程碑类型失败");
+                  }
+                }}
+                onUpdated={refreshAll}
+              />
             </Descriptions.Item>
             <Descriptions.Item label="日期">
               {formatDateByPrecision(data)}
             </Descriptions.Item>
             <Descriptions.Item label="倒计时">
-              <Tag
-                color={countdown.color}
-                style={{ margin: 0 }}
-              >
+              <Tag color={countdown.color} style={{ margin: 0 }}>
                 {countdown.text}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="方式">
-              {data.methodOption?.value ? (
-                <SelectOptionTag
-                  option={normalizeTagOption(data.methodOption)}
-                />
-              ) : data.method ? (
-                data.method
-              ) : (
-                "-"
-              )}
+              <SelectOptionQuickEditTag
+                field="projectMilestone.method"
+                option={normalizeTagOption(data.methodOption)}
+                disabled={!canManageProject}
+                modalTitle="修改里程碑方式"
+                modalDescription="勾选只会暂存方式切换。点击保存后会一并保存选项改动、排序和里程碑方式。"
+                optionValueLabel="方式值"
+                saveSuccessText="里程碑方式已保存"
+                fallbackText={data.method ?? "-"}
+                onSaveSelection={async (nextOption) => {
+                  const res = await fetch(`/api/project-milestones/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      method: nextOption,
+                    }),
+                  });
+                  if (!res.ok) {
+                    throw new Error((await res.text()) || "更新里程碑方式失败");
+                  }
+                }}
+                onUpdated={refreshAll}
+              />
             </Descriptions.Item>
             <Descriptions.Item label="地点">
               {data.location ?? "-"}
@@ -663,6 +705,7 @@ export default function Page() {
           employees={data?.internalParticipants ?? []}
           roleOptions={[]}
           columnKeys={["name", "function", "actions"]}
+          actionsDisabled={!canManageProject}
           loading={loading}
           onDelete={(employeeId) => {
             void updateRelationWithLoading(async () => {
@@ -677,18 +720,22 @@ export default function Page() {
           actionDeleteTitle="确定移除该内部参与人员？"
           showColumnSetting={false}
           toolbarActions={[
-            <Button
-              key="add-internal"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                void ensureProjectContextLoaded().then(() => {
-                  setInternalAddOpen(true);
-                });
-              }}
-            >
-              添加
-            </Button>,
+            ...(canManageProject
+              ? [
+                  <Button
+                    key="add-internal"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => {
+                      void ensureProjectContextLoaded().then(() => {
+                        setInternalAddOpen(true);
+                      });
+                    }}
+                  >
+                    添加
+                  </Button>,
+                ]
+              : []),
           ]}
         />
       </Card>
@@ -712,18 +759,22 @@ export default function Page() {
           headerTitle={<h4 style={{ margin: 0 }}>客户参与人员</h4>}
           enableColumnSetting={false}
           toolbarActions={[
-            <Button
-              key="add-client"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                void ensureClientContactsLoaded().then(() => {
-                  setClientAddOpen(true);
-                });
-              }}
-            >
-              添加
-            </Button>,
+            ...(canManageProject
+              ? [
+                  <Button
+                    key="add-client"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => {
+                      void ensureClientContactsLoaded().then(() => {
+                        setClientAddOpen(true);
+                      });
+                    }}
+                  >
+                    添加
+                  </Button>,
+                ]
+              : []),
           ]}
         />
       </Card>
@@ -760,18 +811,22 @@ export default function Page() {
             ]}
             showColumnSetting={false}
             toolbarActions={[
-              <Button
-                key="add-vendor"
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  void ensureProjectContextLoaded().then(() => {
-                    setVendorAddOpen(true);
-                  });
-                }}
-              >
-                添加
-              </Button>,
+              ...(canManageProject
+                ? [
+                    <Button
+                      key="add-vendor"
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={() => {
+                        void ensureProjectContextLoaded().then(() => {
+                          setVendorAddOpen(true);
+                        });
+                      }}
+                    >
+                      添加
+                    </Button>,
+                  ]
+                : []),
             ]}
           />
         </Card>
@@ -781,7 +836,9 @@ export default function Page() {
         <ProjectDocumentsTable
           rows={data?.documents ?? []}
           loading={loading}
+          actionsDisabled={!canManageProject}
           onDelete={(documentId) => {
+            if (!canManageProject) return;
             void updateRelationWithLoading(async () => {
               const res = await fetch(`/api/project-documents/${documentId}`, {
                 method: "PATCH",
@@ -807,14 +864,18 @@ export default function Page() {
           headerTitle={<h4 style={{ margin: 0 }}>相关资料</h4>}
           showColumnSetting={false}
           toolbarActions={[
-            <Button
-              key="add-document"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => setDocumentAddOpen(true)}
-            >
-              新建资料
-            </Button>,
+            ...(canManageProject
+              ? [
+                  <Button
+                    key="add-document"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => setDocumentAddOpen(true)}
+                  >
+                    新建资料
+                  </Button>,
+                ]
+              : []),
           ]}
         />
       </Card>
@@ -960,6 +1021,7 @@ export default function Page() {
           setPendingInternalIds([]);
         }}
         onOk={() => {
+          if (!canManageProject) return;
           if (pendingInternalIds.length === 0) return;
           void updateRelationWithLoading(async () => {
             await updateMilestone({
@@ -972,7 +1034,7 @@ export default function Page() {
           });
         }}
         okButtonProps={{
-          disabled: pendingInternalIds.length === 0,
+          disabled: !canManageProject || pendingInternalIds.length === 0,
           loading: savingRelation,
         }}
       >
@@ -996,6 +1058,7 @@ export default function Page() {
           setPendingClientIds([]);
         }}
         onOk={() => {
+          if (!canManageProject) return;
           if (pendingClientIds.length === 0) return;
           void updateRelationWithLoading(async () => {
             await updateMilestone({
@@ -1008,7 +1071,7 @@ export default function Page() {
           });
         }}
         okButtonProps={{
-          disabled: pendingClientIds.length === 0,
+          disabled: !canManageProject || pendingClientIds.length === 0,
           loading: savingRelation,
         }}
       >
@@ -1035,6 +1098,7 @@ export default function Page() {
           setPendingVendorIds([]);
         }}
         onOk={() => {
+          if (!canManageProject) return;
           if (pendingVendorIds.length === 0) return;
           void updateRelationWithLoading(async () => {
             await updateMilestone({
@@ -1047,7 +1111,7 @@ export default function Page() {
           });
         }}
         okButtonProps={{
-          disabled: pendingVendorIds.length === 0,
+          disabled: !canManageProject || pendingVendorIds.length === 0,
           loading: savingRelation,
         }}
       >
@@ -1063,6 +1127,7 @@ export default function Page() {
           placeholder="请选择供应商"
           showSearch
           optionFilterProp="label"
+          notFoundContent="该项目没有合作供应商"
         />
       </Modal>
 
@@ -1074,6 +1139,7 @@ export default function Page() {
             setDocumentAddOpen(false);
           }}
           footer={null}
+          width={860}
           destroyOnHidden
         >
           <ProjectDocumentForm

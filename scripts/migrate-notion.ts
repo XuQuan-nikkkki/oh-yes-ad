@@ -88,6 +88,28 @@ type SelectOptionDataSourceConfig = {
   fields: SelectOptionFieldConfig[];
 };
 
+const getPageDisplayTitle = (page: PageObjectResponse) => {
+  const properties = page.properties as Record<
+    string,
+    {
+      type?: string;
+      title?: Array<{
+        plain_text?: string | null;
+        text?: { content?: string | null } | null;
+      }>;
+    }
+  >;
+
+  for (const property of Object.values(properties)) {
+    if (property?.type !== "title") continue;
+    const rawTitle = property.title?.[0]?.plain_text ?? property.title?.[0]?.text?.content ?? "";
+    const normalizedTitle = rawTitle.trim();
+    if (normalizedTitle) return normalizedTitle;
+  }
+
+  return null;
+};
+
 const getDataSourceIdByDbId = async (databaseId: string) => {
   const database = await notion.databases.retrieve({
     database_id: databaseId,
@@ -393,18 +415,22 @@ export const migrateDatabase = async (
     database_id,
   )) as PageObjectResponse[];
 
-  const errors: { id: string; message: string }[] = [];
+  const errors: { id: string; title: string | null; message: string }[] = [];
 
   for (const item of items) {
     try {
       await handler(item);
     } catch (error: unknown) {
       const pageId = (item as PageObjectResponse).id;
+      const pageTitle = getPageDisplayTitle(item);
       const message = (error as Error).message;
 
-      console.error(`❌ ${label} ${pageId} 失败:`, message);
+      console.error(
+        `❌ ${label} ${pageTitle ? `「${pageTitle}」 ` : ""}${pageId} 失败:`,
+        message,
+      );
 
-      errors.push({ id: pageId, message });
+      errors.push({ id: pageId, title: pageTitle, message });
     }
   }
 
@@ -417,41 +443,51 @@ export const migrateDatabase = async (
   }
 };
 
-// 测试
-const getResultStructure = async (databaseId: string) => {
-  getDataSourceProperties(databaseId!)
-    .then((results) => {
-      for (const [key, value] of Object.entries(results)) {
-        const valueType = (value as { type?: string }).type;
-        if (valueType !== "formula" && valueType !== "button") {
-          console.log(`${key}: ${JSON.stringify(value)}`);
-        }
-      }
-    })
-    .catch((error) => {
-      console.error("查询 Notion 数据源失败:", error);
-    });
-};
-// getResultStructure(process.env.NOTION_EMPLOYEE_SALARY_DB_ID!);
-
 const resetDatabases = async () => {
   console.log("重置数据库...");
-  await prisma.workdayAdjustment.deleteMany({});
-  await prisma.clientContact.deleteMany({});
-  await prisma.client.deleteMany({});
-  await prisma.plannedWorkEntry.deleteMany({});
-  await prisma.actualWorkEntry.deleteMany({});
-  await prisma.vendor.deleteMany({});
-  await prisma.employee.deleteMany({});
-  await prisma.legalEntity.deleteMany({});
-  await prisma.bankAccount.deleteMany({});
-  await prisma.bankAccountBalanceSnapshot.deleteMany({});
-  await prisma.leaveRecord.deleteMany({});
-  await prisma.projectMilestone.deleteMany({});
-  await prisma.projectDocument.deleteMany({});
-  await prisma.projectTask.deleteMany({});
-  await prisma.projectSegment.deleteMany({});
-  await prisma.project.deleteMany({});
+  const tablesToTruncate = [
+    "ApiCallLog",
+    "WorkdayAdjustment",
+    "LeaveRecord",
+    "ActualWorkEntry",
+    "PlannedWorkEntry",
+    "ProjectDocument",
+    "ProjectMilestone",
+    "ProjectTask",
+    "ProjectSegment",
+    "ProjectFinancialStructureExecutionCostItem",
+    "ProjectFinancialStructure",
+    "ProjectPricingStrategyCostItem",
+    "ProjectPricingStrategy",
+    "ProjectCostEstimationMember",
+    "ProjectCostEstimation",
+    "ProjectReceivableNodeExpectedDateHistory",
+    "ProjectReceivableActualNode",
+    "ProjectReceivableNode",
+    "ProjectReceivablePlan",
+    "ProjectPayableActualNode",
+    "ProjectPayableNode",
+    "ProjectPayablePlan",
+    "VendorContract",
+    "CustomerContract",
+    "Project",
+    "VendorServiceOption",
+    "VendorBusinessTypeOption",
+    "Vendor",
+    "EmployeeRole",
+    "Employee",
+    "BankAccountBalanceSnapshot",
+    "BankAccount",
+    "LegalEntity",
+    "ClientContactClient",
+    "ClientContact",
+    "Client",
+    "SelectOption",
+  ];
+
+  await prisma.$executeRawUnsafe(
+    `TRUNCATE TABLE ${tablesToTruncate.map((table) => `"${table}"`).join(", ")} RESTART IDENTITY CASCADE`,
+  );
 
   console.log("数据库重置完成");
 };

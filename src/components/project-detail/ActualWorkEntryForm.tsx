@@ -3,6 +3,7 @@
 import { Button, DatePicker, Form, Input, Select } from "antd";
 import dayjs from "dayjs";
 import type { DefaultOptionType } from "antd/es/select";
+import { useAuthStore } from "@/stores/authStore";
 
 export type ActualWorkEntryFormPayload = {
   projectId: string;
@@ -54,11 +55,11 @@ const ActualWorkEntryForm = ({
   projectOptionGroups,
   selectedProjectId,
   disableProjectSelect = false,
-  disableEmployeeSelect = false,
   employees,
   initialValues,
   onSubmit,
 }: Props) => {
+  const currentUser = useAuthStore((state) => state.currentUser);
   const employeeOptions = employees
     .filter((employee) => employee.employmentStatus !== "离职")
     .map((employee) => ({ label: employee.name, value: employee.id }));
@@ -68,6 +69,8 @@ const ActualWorkEntryForm = ({
       : projectOptions;
   const initialProjectId =
     selectedProjectId ?? initialValues?.projectId ?? flattenedProjects[0]?.id;
+  const currentEmployeeId = currentUser?.id ?? "";
+  const initialEmployeeId = initialValues?.employeeId ?? currentEmployeeId;
   const selectOptions: DefaultOptionType[] =
     projectOptionGroups && projectOptionGroups.length > 0
       ? projectOptionGroups
@@ -91,7 +94,7 @@ const ActualWorkEntryForm = ({
       initialValues={{
         projectId: initialProjectId,
         title: initialValues?.title,
-        employeeId: initialValues?.employeeId,
+        employeeId: initialEmployeeId,
         timeRange:
           initialValues?.startDate && initialValues?.endDate
             ? [dayjs(initialValues.startDate), dayjs(initialValues.endDate)]
@@ -128,7 +131,7 @@ const ActualWorkEntryForm = ({
         rules={[{ required: true, message: "请选择人员" }]}
       >
         <Select
-          disabled={disableEmployeeSelect}
+          disabled
           placeholder="请选择人员"
           options={employeeOptions}
         />

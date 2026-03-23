@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button, Checkbox, Input, Modal, Space, message } from "antd";
 import dayjs from "dayjs";
 import DetailPageContainer from "@/components/DetailPageContainer";
@@ -48,25 +48,55 @@ type MilestoneNoticeItem = {
 };
 
 type Props = {
+  projectId?: string;
+  buttonText?: string;
   status?: string | null;
   statusOptionValue?: string | null;
   milestones?: MilestoneNoticeSource[];
 };
 
 const MilestoneNoticeTemplate = ({
+  projectId,
+  buttonText = "生成通知模板",
   status,
   statusOptionValue,
   milestones = [],
 }: Props) => {
   const [messageApi, contextHolder] = message.useMessage();
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [fetchedStatus, setFetchedStatus] = useState<string | null>(null);
+  const [fetchedStatusOptionValue, setFetchedStatusOptionValue] = useState<
+    string | null
+  >(null);
+  const [fetchedMilestones, setFetchedMilestones] = useState<MilestoneNoticeSource[]>([]);
   const [showNextWeekMilestones, setShowNextWeekMilestones] = useState(false);
   const [showFollowingMilestones, setShowFollowingMilestones] = useState(false);
+  const [availabilityChecked, setAvailabilityChecked] = useState(false);
+  const effectiveStatus = status ?? fetchedStatus;
+  const effectiveStatusOptionValue = statusOptionValue ?? fetchedStatusOptionValue;
+  const effectiveMilestones =
+    milestones.length > 0 ? milestones : fetchedMilestones;
+  const hasMilestonesProp = milestones.length > 0;
+
+  const hasUpcomingMilestones = useMemo(() => {
+    const today = dayjs().startOf("day");
+    return effectiveMilestones.some((milestone) => {
+      const startRaw = milestone.startAt ?? milestone.date ?? milestone.endAt;
+      if (!startRaw) return false;
+      const start = dayjs(startRaw);
+      if (!start.isValid()) return false;
+      return !start.isBefore(today, "day");
+    });
+  }, [effectiveMilestones]);
+
+  const disableByNoMilestones = availabilityChecked && !hasUpcomingMilestones;
+  const resolvedButtonText = disableByNoMilestones ? "后续无里程碑" : buttonText;
 
   const milestoneNoticeTemplate = useMemo(() => {
     const newLine = "\n";
     const weekDays = ["周一", "周二", "周三", "周四", "周五", "周六", "周天"];
-    const statusText = statusOptionValue ?? status ?? "";
+    const statusText = effectiveStatusOptionValue ?? effectiveStatus ?? "";
     const needInfo = !["已结案", "暂停"].includes(statusText);
     if (!needInfo) return "";
 
@@ -85,7 +115,7 @@ const MilestoneNoticeTemplate = ({
         : friday.format("MM月DD日");
     const title = `本周${mondayDisplay}-${fridayDisplay}工作安排：`;
 
-    const normalizedMilestones: MilestoneNoticeItem[] = milestones
+    const normalizedMilestones: MilestoneNoticeItem[] = effectiveMilestones
       .flatMap((milestone) => {
         const startRaw = milestone.startAt ?? milestone.date ?? milestone.endAt;
         if (!startRaw) return [];
@@ -192,12 +222,80 @@ const MilestoneNoticeTemplate = ({
     if (!details) return "";
     return `${title}${newLine}${details}`;
   }, [
-    milestones,
+    effectiveMilestones,
+    effectiveStatus,
+    effectiveStatusOptionValue,
     showFollowingMilestones,
     showNextWeekMilestones,
-    status,
-    statusOptionValue,
   ]);
+
+  const handleOpen = async () => {
+    setOpen(true);
+
+    if (!projectId || hasMilestonesProp) return;
+    if (availabilityChecked) return;
+
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/projects/${projectId}`);
+      if (!res.ok) {
+        messageApi.error("获取项目里程碑失败");
+        return;
+      }
+      const detail = (await res.json()) as {
+        status?: string | null;
+        statusOption?: { value?: string | null } | null;
+        milestones?: MilestoneNoticeSource[];
+      };
+      setFetchedStatus(detail.status ?? null);
+      setFetchedStatusOptionValue(detail.statusOption?.value ?? null);
+      setFetchedMilestones(Array.isArray(detail.milestones) ? detail.milestones : []);
+      setAvailabilityChecked(true);
+    } catch {
+      messageApi.error("获取项目里程碑失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (hasMilestonesProp) {
+      setAvailabilityChecked(true);
+      return;
+    }
+    if (!projectId) {
+      setAvailabilityChecked(true);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}`);
+        if (!res.ok) {
+          if (!cancelled) setAvailabilityChecked(true);
+          return;
+        }
+        const detail = (await res.json()) as {
+          status?: string | null;
+          statusOption?: { value?: string | null } | null;
+          milestones?: MilestoneNoticeSource[];
+        };
+        if (cancelled) return;
+        setFetchedStatus(detail.status ?? null);
+        setFetchedStatusOptionValue(detail.statusOption?.value ?? null);
+        setFetchedMilestones(Array.isArray(detail.milestones) ? detail.milestones : []);
+      } finally {
+        if (!cancelled) {
+          setAvailabilityChecked(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasMilestonesProp, projectId]);
 
   const handleCopyTemplate = async () => {
     if (!milestoneNoticeTemplate) return;
@@ -212,9 +310,14 @@ const MilestoneNoticeTemplate = ({
   return (
     <>
       {contextHolder}
-      <Button onClick={() => setOpen(true)}>生成通知模板</Button>
+      <Button
+        disabled={disableByNoMilestones}
+        onClick={() => void handleOpen()}
+      >
+        {resolvedButtonText}
+      </Button>
       <Modal
-        title="生成通知模板"
+        title="生成里程碑通知"
         open={open}
         onCancel={() => setOpen(false)}
         destroyOnHidden
@@ -224,7 +327,7 @@ const MilestoneNoticeTemplate = ({
             <Button onClick={() => setOpen(false)}>关闭</Button>
             <Button
               type="primary"
-              disabled={!milestoneNoticeTemplate}
+              disabled={!milestoneNoticeTemplate || loading}
               onClick={() => {
                 void handleCopyTemplate();
               }}
@@ -253,7 +356,7 @@ const MilestoneNoticeTemplate = ({
             value={milestoneNoticeTemplate}
             readOnly
             autoSize={{ minRows: 14, maxRows: 24 }}
-            placeholder="当前无可生成的里程碑通知内容"
+            placeholder={loading ? "里程碑加载中..." : "当前无可生成的里程碑通知内容"}
           />
         </DetailPageContainer>
       </Modal>

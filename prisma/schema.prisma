@@ -22,6 +22,30 @@ enum LeaveRecordDatePrecision {
   DATETIME
 }
 
+enum ProjectReceivablePlanStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum ProjectCostEstimationType {
+  planning
+  baseline
+}
+
+enum ProjectPricingStrategyMode {
+  range
+  target
+}
+
+enum SystemSettingValueType {
+  number
+  percent
+  boolean
+  text
+  json
+}
+
 model Client {
   id           String  @id @default(uuid())
   notionPageId String? @unique
@@ -33,8 +57,9 @@ model Client {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  contacts ClientContact[]
-  projects Project[]
+  contactLinks    ClientContactClient[]
+  projects        Project[]
+  receivablePlans ProjectReceivablePlan[]
 }
 
 model SelectOption {
@@ -46,33 +71,59 @@ model SelectOption {
 
   createdAt DateTime @default(now())
 
-  clientsByIndustry              Client[]
-  vendorsByVendorType            Vendor[]              @relation("VendorVendorType")
-  vendorsByBusinessType          Vendor[]              @relation("VendorBusinessType")
-  vendorBusinessTypeOptions      VendorBusinessTypeOption[]
-  vendorsByCooperationStatus     Vendor[]              @relation("VendorCooperationStatus")
-  vendorsByRating                Vendor[]              @relation("VendorRating")
-  vendorServiceOptions           VendorServiceOption[]
-  employeesByFunction            Employee[]            @relation("EmployeeFunction")
-  employeesByDepartmentLevel1    Employee[]            @relation("EmployeeDepartmentLevel1")
-  employeesByDepartmentLevel2    Employee[]            @relation("EmployeeDepartmentLevel2")
-  employeesByPosition            Employee[]            @relation("EmployeePosition")
-  employeesByEmploymentType      Employee[]            @relation("EmployeeEmploymentType")
-  employeesByEmploymentStatus    Employee[]            @relation("EmployeeEmploymentStatus")
-  leaveRecordsByType             LeaveRecord[]         @relation("LeaveRecordType")
-  workdayAdjustmentsByChangeType WorkdayAdjustment[]   @relation("WorkdayAdjustmentChangeType")
-  projectsByType                 Project[]             @relation("ProjectType")
-  projectsByStatus               Project[]             @relation("ProjectStatus")
-  projectsByStage                Project[]             @relation("ProjectStage")
-  projectSegmentsByStatus        ProjectSegment[]      @relation("ProjectSegmentStatus")
-  projectDocumentsByType         ProjectDocument[]     @relation("ProjectDocumentType")
-  projectMilestonesByType        ProjectMilestone[]    @relation("ProjectMilestoneType")
-  projectMilestonesByMethod      ProjectMilestone[]    @relation("ProjectMilestoneMethod")
-  plannedWorkEntriesByYear       PlannedWorkEntry[]    @relation("PlannedWorkEntryYear")
-  plannedWorkEntriesByWeekNumber PlannedWorkEntry[]    @relation("PlannedWorkEntryWeekNumber")
+  clientsByIndustry                         Client[]
+  vendorsByVendorType                       Vendor[]                         @relation("VendorVendorType")
+  vendorsByBusinessType                     Vendor[]                         @relation("VendorBusinessType")
+  vendorBusinessTypeOptions                 VendorBusinessTypeOption[]
+  vendorsByCooperationStatus                Vendor[]                         @relation("VendorCooperationStatus")
+  vendorsByRating                           Vendor[]                         @relation("VendorRating")
+  vendorServiceOptions                      VendorServiceOption[]
+  employeesByFunction                       Employee[]                       @relation("EmployeeFunction")
+  employeesByDepartmentLevel1               Employee[]                       @relation("EmployeeDepartmentLevel1")
+  employeesByDepartmentLevel2               Employee[]                       @relation("EmployeeDepartmentLevel2")
+  employeesByPosition                       Employee[]                       @relation("EmployeePosition")
+  employeesByEmploymentType                 Employee[]                       @relation("EmployeeEmploymentType")
+  employeesByEmploymentStatus               Employee[]                       @relation("EmployeeEmploymentStatus")
+  leaveRecordsByType                        LeaveRecord[]                    @relation("LeaveRecordType")
+  workdayAdjustmentsByChangeType            WorkdayAdjustment[]              @relation("WorkdayAdjustmentChangeType")
+  projectsByType                            Project[]                        @relation("ProjectType")
+  projectsByStatus                          Project[]                        @relation("ProjectStatus")
+  projectsByStage                           Project[]                        @relation("ProjectStage")
+  projectSegmentsByStatus                   ProjectSegment[]                 @relation("ProjectSegmentStatus")
+  projectTasksByStatus                      ProjectTask[]                    @relation("ProjectTaskStatus")
+  projectDocumentsByType                    ProjectDocument[]                @relation("ProjectDocumentType")
+  projectMilestonesByType                   ProjectMilestone[]               @relation("ProjectMilestoneType")
+  projectMilestonesByMethod                 ProjectMilestone[]               @relation("ProjectMilestoneMethod")
+  projectCostEstimationsByExecutionCostType ProjectCostEstimation[]          @relation("ProjectCostEstimationExecutionCostTypes")
+  projectPricingStrategyCostTypes           ProjectPricingStrategyCostItem[] @relation("ProjectPricingStrategyCostType")
+  projectFinancialStructureExecutionCostTypes ProjectFinancialStructureExecutionCostItem[] @relation("ProjectFinancialStructureExecutionCostType")
+  projectReimbursementsByCategory           ProjectReimbursement[]           @relation("ProjectReimbursementCategory")
+  plannedWorkEntriesByYear                  PlannedWorkEntry[]               @relation("PlannedWorkEntryYear")
+  plannedWorkEntriesByWeekNumber            PlannedWorkEntry[]               @relation("PlannedWorkEntryWeekNumber")
+  projectReceivableNodesByStage             ProjectReceivableNode[]          @relation("ProjectReceivableNodeStage")
+  projectPayableNodesByStage                ProjectPayableNode[]             @relation("ProjectPayableNodeStage")
 
   @@unique([field, value])
   @@index([field, order])
+}
+
+model SystemSetting {
+  id String @id @default(uuid())
+
+  key         String                 @unique
+  name        String
+  group       String
+  value       String
+  valueType   SystemSettingValueType @default(number)
+  unit        String?
+  description String?
+  order       Int?
+  updatedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([group, order])
 }
 
 model ClientContact {
@@ -80,7 +131,6 @@ model ClientContact {
   notionPageId String? @unique
 
   name       String
-  order      Int     @default(1000)
   title      String?
   scope      String?
   preference String?
@@ -90,15 +140,26 @@ model ClientContact {
   wechat  String?
   address String?
 
-  clientId String
-  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientLinks ClientContactClient[]
 
   milestones ProjectMilestone[] @relation("MilestoneClientParticipants")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
 
+model ClientContactClient {
+  clientId  String
+  contactId String
+  order     Int      @default(1000)
+  createdAt DateTime @default(now())
+
+  client  Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contact ClientContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([clientId, contactId])
   @@index([clientId, order])
+  @@index([contactId])
 }
 
 model LegalEntity {
@@ -114,8 +175,11 @@ model LegalEntity {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  bankAccounts BankAccount[]
-  employees    Employee[]
+  bankAccounts      BankAccount[]
+  employees         Employee[]
+  clientContracts ClientContract[]
+  receivablePlans   ProjectReceivablePlan[]
+  vendorContracts   VendorContract[]
 }
 
 model BankAccount {
@@ -134,6 +198,7 @@ model BankAccount {
   updatedAt DateTime @updatedAt
 
   balanceSnapshots BankAccountBalanceSnapshot[]
+  balanceRecords   BankAccountBalanceRecord[]
 }
 
 model BankAccountBalanceSnapshot {
@@ -150,6 +215,23 @@ model BankAccountBalanceSnapshot {
   createdAt DateTime @default(now())
 
   @@index([bankAccountId, recordedAt])
+}
+
+model BankAccountBalanceRecord {
+  id String @id @default(uuid())
+
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  balance    Decimal
+  snapshotAt DateTime
+  remark     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bankAccountId])
+  @@index([bankAccountId, snapshotAt])
 }
 
 model Employee {
@@ -197,16 +279,22 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  leaveRecords      LeaveRecord[]
-  ownedProjects     Project[]          @relation("ProjectOwner")
-  projects          Project[]          @relation("ProjectMembers")
-  projectSegments   ProjectSegment[]
-  ownedTasks        ProjectTask[]      @relation("TaskOwner")
-  createdTasks      ProjectTask[]      @relation("TaskCreator")
-  milestones        ProjectMilestone[] @relation("MilestoneInternalParticipants")
-  actualWorkEntries ActualWorkEntry[]
-  roles             EmployeeRole[]
-  apiCallLogs       ApiCallLog[]
+  leaveRecords                LeaveRecord[]
+  ownedProjects               Project[]                                  @relation("ProjectOwner")
+  ownedProjectCostEstimations ProjectCostEstimation[]                    @relation("ProjectCostEstimationOwner")
+  projects                    Project[]                                  @relation("ProjectMembers")
+  projectSegments             ProjectSegment[]
+  ownedTasks                  ProjectTask[]                              @relation("TaskOwner")
+  createdTasks                ProjectTask[]                              @relation("TaskCreator")
+  milestones                  ProjectMilestone[]                         @relation("MilestoneInternalParticipants")
+  projectCostEstimations      ProjectCostEstimationMember[]
+  actualWorkEntries           ActualWorkEntry[]
+  roles                       EmployeeRole[]
+  apiCallLogs                 ApiCallLog[]
+  ownedProjectReceivablePlans ProjectReceivablePlan[]                    @relation("ProjectReceivablePlanOwner")
+  ownedProjectPayablePlans    ProjectPayablePlan[]                       @relation("ProjectPayablePlanOwner")
+  projectReimbursements       ProjectReimbursement[]                     @relation("ProjectReimbursementApplicant")
+  receivableExpectedDateEdits ProjectReceivableNodeExpectedDateHistory[]
 }
 
 model Role {
@@ -235,10 +323,10 @@ model LeaveRecord {
   id           String  @id @default(uuid())
   notionPageId String? @unique
 
-  typeOptionId String?
-  typeOption   SelectOption? @relation("LeaveRecordType", fields: [typeOptionId], references: [id])
-  startAt      DateTime
-  endAt        DateTime?
+  typeOptionId  String?
+  typeOption    SelectOption?            @relation("LeaveRecordType", fields: [typeOptionId], references: [id])
+  startAt       DateTime
+  endAt         DateTime?
   datePrecision LeaveRecordDatePrecision @default(DATE)
 
   employeeId String
@@ -303,9 +391,451 @@ model Project {
   segments ProjectSegment[]
 
   documents         ProjectDocument[]
-  vendors           Vendor[]           @relation("ProjectVendors")
+  vendors           Vendor[]                 @relation("ProjectVendors")
   milestones        ProjectMilestone[]
+  costEstimations   ProjectCostEstimation[]
+  pricingStrategies ProjectPricingStrategy[]
+  financialStructures ProjectFinancialStructure[]
+  reimbursements      ProjectReimbursement[]
+  clientContracts ClientContract[]
+  vendorContracts   VendorContract[]
   actualWorkEntries ActualWorkEntry[]
+  receivablePlans   ProjectReceivablePlan[]
+  payablePlans      ProjectPayablePlan[]
+}
+
+model ClientContract {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  legalEntityId String
+  legalEntity   LegalEntity @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
+
+  contractAmount Decimal?
+  taxAmount      Decimal?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  receivablePlans ProjectReceivablePlan[]
+
+  @@unique([projectId], map: "CustomerContract_projectId_key")
+  @@index([projectId], map: "CustomerContract_projectId_idx")
+  @@index([legalEntityId], map: "CustomerContract_legalEntityId_idx")
+  @@map("CustomerContract")
+}
+
+model VendorContract {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  vendorId String
+  vendor   Vendor @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+
+  legalEntityId String
+  legalEntity   LegalEntity @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
+
+  serviceContent String?
+  contractAmount Int
+
+  payablePlans ProjectPayablePlan[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([vendorId])
+  @@index([legalEntityId])
+}
+
+model ProjectReceivablePlan {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  clientContractId String? @map("customerContractId")
+  clientContract   ClientContract? @relation(fields: [clientContractId], references: [id], onDelete: SetNull)
+
+  legalEntityId String
+  legalEntity   LegalEntity @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
+
+  ownerEmployeeId String
+  ownerEmployee   Employee @relation("ProjectReceivablePlanOwner", fields: [ownerEmployeeId], references: [id], onDelete: Restrict)
+
+  contractAmount       Int
+  serviceContent       String?
+  remark               String?
+  remarkNeedsAttention Boolean                     @default(false)
+  status               ProjectReceivablePlanStatus @default(DRAFT)
+
+  nodes ProjectReceivableNode[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([clientId])
+  @@index([clientContractId], map: "ProjectReceivablePlan_customerContractId_idx")
+  @@index([legalEntityId])
+  @@index([ownerEmployeeId])
+  @@index([projectId, status])
+}
+
+model ProjectPayablePlan {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  vendorContractId String?
+  vendorContract   VendorContract? @relation(fields: [vendorContractId], references: [id], onDelete: SetNull)
+
+  ownerEmployeeId String
+  ownerEmployee   Employee @relation("ProjectPayablePlanOwner", fields: [ownerEmployeeId], references: [id], onDelete: Restrict)
+
+  contractAmount       Int
+  remark               String?
+  remarkNeedsAttention Boolean @default(false)
+
+  nodes ProjectPayableNode[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([vendorContractId])
+  @@index([ownerEmployeeId])
+}
+
+model ProjectReceivableNode {
+  id String @id @default(uuid())
+
+  planId String
+  plan   ProjectReceivablePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  stageOptionId String
+  stageOption   SelectOption @relation("ProjectReceivableNodeStage", fields: [stageOptionId], references: [id], onDelete: Restrict)
+
+  sortOrder      Int
+  keyDeliverable String
+
+  expectedAmountTaxIncluded Int
+  expectedDate              DateTime
+  expectedDateChangeCount   Int      @default(0)
+  hasVendorPayment          Boolean  @default(false)
+
+  remark               String?
+  remarkNeedsAttention Boolean @default(false)
+
+  expectedDateHistories ProjectReceivableNodeExpectedDateHistory[]
+  actualNodes           ProjectReceivableActualNode[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([planId, sortOrder])
+  @@index([planId])
+  @@index([stageOptionId])
+  @@index([planId, expectedDate])
+}
+
+model ProjectReceivableActualNode {
+  id String @id @default(uuid())
+
+  receivableNodeId String
+  receivableNode   ProjectReceivableNode @relation(fields: [receivableNodeId], references: [id], onDelete: Cascade)
+
+  actualAmountTaxIncluded Int
+  actualDate              DateTime
+  remark                  String?
+  remarkNeedsAttention    Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([receivableNodeId])
+  @@index([receivableNodeId, actualDate])
+}
+
+model ProjectPayableNode {
+  id String @id @default(uuid())
+
+  planId String
+  plan   ProjectPayablePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  stageOptionId String
+  stageOption   SelectOption @relation("ProjectPayableNodeStage", fields: [stageOptionId], references: [id], onDelete: Restrict)
+
+  sortOrder                 Int
+  paymentCondition          String
+  expectedAmountTaxIncluded Int
+  expectedDate              DateTime
+  hasCustomerCollection     Boolean  @default(false)
+  remark                    String?
+  remarkNeedsAttention      Boolean  @default(false)
+
+  actualNodes ProjectPayableActualNode[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([planId, sortOrder])
+  @@index([planId])
+  @@index([stageOptionId])
+  @@index([planId, expectedDate])
+}
+
+model ProjectPayableActualNode {
+  id String @id @default(uuid())
+
+  payableNodeId String
+  payableNode   ProjectPayableNode @relation(fields: [payableNodeId], references: [id], onDelete: Cascade)
+
+  actualAmountTaxIncluded Int
+  actualDate              DateTime
+  remark                  String?
+  remarkNeedsAttention    Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([payableNodeId])
+  @@index([payableNodeId, actualDate])
+}
+
+model ProjectReceivableNodeExpectedDateHistory {
+  id String @id @default(uuid())
+
+  nodeId String
+  node   ProjectReceivableNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  fromExpectedDate DateTime
+  toExpectedDate   DateTime
+
+  changedByEmployeeId String
+  changedByEmployee   Employee @relation(fields: [changedByEmployeeId], references: [id], onDelete: Restrict)
+
+  changedAt DateTime @default(now())
+  reason    String?
+  remark    String?
+
+  @@index([nodeId])
+  @@index([nodeId, changedAt(sort: Desc)])
+  @@index([changedByEmployeeId])
+}
+
+model ProjectCostEstimation {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  ownerId String?
+  owner   Employee? @relation("ProjectCostEstimationOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  version Int
+  type    ProjectCostEstimationType @default(planning)
+
+  estimatedDuration      Int
+  clientBudget        String?
+  contractAmountSnapshot Float?
+
+  totalLaborCost           Float   @default(0)
+  agencyFeeRate           Float?   @default(0)
+  outsourceRemark         String?
+  otherExecutionCostRemark String?
+
+  executionCostTypes SelectOption[]               @relation("ProjectCostEstimationExecutionCostTypes")
+  members            ProjectCostEstimationMember[]
+  outsourceItems     ProjectOutsourceItem[]       @relation("ProjectCostEstimationOutsourceItems")
+  pricingStrategies  ProjectPricingStrategy[]
+  financialStructures ProjectFinancialStructure[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, version])
+  @@index([projectId, type])
+  @@index([ownerId])
+}
+
+model ProjectCostEstimationMember {
+  id String @id @default(uuid())
+
+  estimationId String
+  estimation   ProjectCostEstimation @relation(fields: [estimationId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  allocationPercent Int
+  laborCostSnapshot Float
+  rentCostSnapshot  Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([estimationId, employeeId])
+  @@index([estimationId])
+  @@index([employeeId])
+}
+
+model ProjectPricingStrategy {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  estimationId String                @unique
+  estimation   ProjectCostEstimation @relation(fields: [estimationId], references: [id], onDelete: Cascade)
+
+  estimatedDuration   Int
+  mode                ProjectPricingStrategyMode @default(range)
+  rentCost            Float
+
+  plannedLaborCost   Float
+  suggestedLaborCost Float
+
+  plannedMiddleOfficeCost   Float
+  suggestedMiddleOfficeCost Float
+
+  plannedExecutionCost Float
+  agencyFeeRate        Float?
+  outsourceRemark      String?
+
+  bottomLinePrice  Float
+  bottomLineProfit Float
+  targetPrice      Float
+  targetProfit     Float
+
+  outsourceItems ProjectOutsourceItem[]      @relation("ProjectPricingStrategyOutsourceItems")
+  costItems       ProjectPricingStrategyCostItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model ProjectFinancialStructure {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  estimationId String                @unique
+  estimation   ProjectCostEstimation @relation(fields: [estimationId], references: [id], onDelete: Restrict)
+
+  laborCost         Float
+  rentCost          Float
+  middleOfficeCost  Float
+  executionCost     Float
+  agencyFeeRate     Float?
+  totalCost         Float
+
+  outsourceItems      ProjectOutsourceItem[]                      @relation("ProjectFinancialStructureOutsourceItems")
+  executionCostItems ProjectFinancialStructureExecutionCostItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model ProjectFinancialStructureExecutionCostItem {
+  id String @id @default(uuid())
+
+  financialStructureId String
+  financialStructure   ProjectFinancialStructure @relation(fields: [financialStructureId], references: [id], onDelete: Cascade)
+
+  costTypeOptionId String
+  costTypeOption   SelectOption @relation("ProjectFinancialStructureExecutionCostType", fields: [costTypeOptionId], references: [id])
+
+  budgetAmount Float
+  remark       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([financialStructureId, costTypeOptionId])
+  @@index([financialStructureId])
+  @@index([costTypeOptionId])
+}
+
+model ProjectReimbursement {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  applicantEmployeeId String
+  applicantEmployee   Employee @relation("ProjectReimbursementApplicant", fields: [applicantEmployeeId], references: [id], onDelete: Restrict)
+
+  occurredAt DateTime
+
+  categoryOptionId String
+  categoryOption   SelectOption @relation("ProjectReimbursementCategory", fields: [categoryOptionId], references: [id], onDelete: Restrict)
+
+  amount Decimal
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([applicantEmployeeId])
+  @@index([categoryOptionId])
+  @@index([projectId, occurredAt])
+}
+
+model ProjectOutsourceItem {
+  id String @id @default(uuid())
+
+  type   String
+  amount Int
+
+  estimationId String?
+  estimation   ProjectCostEstimation? @relation("ProjectCostEstimationOutsourceItems", fields: [estimationId], references: [id], onDelete: Cascade)
+
+  pricingStrategyId String?
+  pricingStrategy   ProjectPricingStrategy? @relation("ProjectPricingStrategyOutsourceItems", fields: [pricingStrategyId], references: [id], onDelete: Cascade)
+
+  financialStructureId String?
+  financialStructure   ProjectFinancialStructure? @relation("ProjectFinancialStructureOutsourceItems", fields: [financialStructureId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([estimationId])
+  @@index([pricingStrategyId])
+  @@index([financialStructureId])
+}
+
+model ProjectPricingStrategyCostItem {
+  id String @id @default(uuid())
+
+  strategyId String
+  strategy   ProjectPricingStrategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+
+  costTypeOptionId String
+  costTypeOption   SelectOption @relation("ProjectPricingStrategyCostType", fields: [costTypeOptionId], references: [id])
+
+  budgetAmount Float?
+  remark       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([strategyId, costTypeOptionId])
+  @@index([strategyId])
+  @@index([costTypeOptionId])
 }
 
 model ProjectSegment {
@@ -316,7 +846,8 @@ model ProjectSegment {
   name           String
   statusOptionId String?
   statusOption   SelectOption? @relation("ProjectSegmentStatus", fields: [statusOptionId], references: [id])
-  dueDate        DateTime?
+  startDate      DateTime?
+  endDate        DateTime?
 
   // relation
 
@@ -340,8 +871,10 @@ model ProjectTask {
   notionPageId String? @unique
 
   // 基础字段
-  name    String
-  dueDate DateTime?
+  name           String
+  statusOptionId String
+  statusOption   SelectOption @relation("ProjectTaskStatus", fields: [statusOptionId], references: [id])
+  dueDate        DateTime?
 
   // 所属环节
   segmentId String
@@ -361,6 +894,7 @@ model ProjectTask {
   plannedWorkEntries PlannedWorkEntry[]
 
   @@index([segmentId])
+  @@index([statusOptionId])
   @@index([ownerId])
 }
 
@@ -377,8 +911,8 @@ model ProjectDocument {
   internalLink String? // 内部盘链接
 
   // 所属项目
-  projectId  String
-  project    Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   milestoneId String?
   milestone   ProjectMilestone? @relation("MilestoneDocuments", fields: [milestoneId], references: [id], onDelete: SetNull)
 
@@ -428,11 +962,12 @@ model Vendor {
   cooperatedProjects        String?
 
   businessTypes VendorBusinessTypeOption[]
-  services VendorServiceOption[]
+  services      VendorServiceOption[]
 
   // 项目多对多
   projects   Project[]          @relation("ProjectVendors")
   milestones ProjectMilestone[] @relation("MilestoneVendorParticipants")
+  contracts  VendorContract[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -467,13 +1002,13 @@ model ProjectMilestone {
   // 基础字段
   name           String
   typeOptionId   String?
-  typeOption     SelectOption? @relation("ProjectMilestoneType", fields: [typeOptionId], references: [id])
+  typeOption     SelectOption?          @relation("ProjectMilestoneType", fields: [typeOptionId], references: [id])
   startAt        DateTime?
   endAt          DateTime?
   datePrecision  MilestoneDatePrecision @default(DATE)
   location       String?
   methodOptionId String?
-  methodOption   SelectOption? @relation("ProjectMilestoneMethod", fields: [methodOptionId], references: [id])
+  methodOption   SelectOption?          @relation("ProjectMilestoneMethod", fields: [methodOptionId], references: [id])
 
   // 所属项目
   projectId String

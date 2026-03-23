@@ -9,10 +9,14 @@ import ActualWorkEntriesTable from "@/components/ActualWorkEntriesTable";
 import ListPageContainer from "@/components/ListPageContainer";
 import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import { useActualWorkEntriesStore } from "@/stores/actualWorkEntriesStore";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useProjectsStore } from "@/stores/projectsStore";
 
 export default function Page() {
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const roleCodes = getRoleCodesFromUser(currentUser);
+  const isAdmin = roleCodes.includes("ADMIN");
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [employees, setEmployees] = useState<
     { id: string; name: string; employmentStatus?: string }[]
@@ -37,6 +41,7 @@ export default function Page() {
   );
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
+  const currentEmployeeId = currentUser?.id ?? "";
 
   const fetchOptions = useCallback(async () => {
     const [projectRows, employeeRows] = await Promise.all([
@@ -153,11 +158,23 @@ export default function Page() {
     setRefreshKey((prev) => prev + 1);
   };
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void ensureOptionsLoaded();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [ensureOptionsLoaded]);
+
   return (
     <ListPageContainer>
       <ActualWorkEntriesTable
         requestData={fetchRows}
         employeeFilterOptions={employees
+          .map((item) => ({ label: item.name, value: item.name }))
+          .sort((left, right) =>
+            left.label.localeCompare(right.label, "zh-CN"),
+          )}
+        projectFilterOptions={projects
           .map((item) => ({ label: item.name, value: item.name }))
           .sort((left, right) =>
             left.label.localeCompare(right.label, "zh-CN"),
@@ -184,6 +201,9 @@ export default function Page() {
             setOpen(true);
           });
         }}
+        canManageRow={(row) =>
+          isAdmin || (Boolean(currentEmployeeId) && row.employee?.id === currentEmployeeId)
+        }
         onDelete={(id) => {
           void onDelete(id);
         }}
@@ -206,7 +226,7 @@ export default function Page() {
                   id: editing.id,
                   projectId: editing.project?.id ?? "",
                   title: editing.title,
-                  employeeId: editing.employee?.id ?? "",
+                  employeeId: editing.employee?.id ?? currentEmployeeId,
                   startDate: editing.startDate,
                   endDate: editing.endDate,
                 }

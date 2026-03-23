@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { DEFAULT_COLOR } from "@/lib/constants";
+import { requireWorkdayAdjustmentWritePermission } from "@/lib/api-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -53,6 +54,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const permissionResponse = await requireWorkdayAdjustmentWritePermission();
+    if (permissionResponse) return permissionResponse;
+
     const { id } = await params;
     const body = await sanitizeRequestBody(req);
     const changeTypeOptionId = await ensureChangeTypeOptionId(body.changeType);
@@ -83,6 +87,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const permissionResponse = await requireWorkdayAdjustmentWritePermission();
+    if (permissionResponse) return permissionResponse;
+
     const { id } = await params;
     await prisma.workdayAdjustment.delete({
       where: { id },

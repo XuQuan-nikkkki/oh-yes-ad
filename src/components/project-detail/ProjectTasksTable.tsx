@@ -5,6 +5,7 @@ import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import { PlusOutlined } from "@ant-design/icons";
 import AppLink from "@/components/AppLink";
+import SelectOptionTag from "@/components/SelectOptionTag";
 import TableActions from "@/components/TableActions";
 import { formatDate } from "@/lib/date";
 
@@ -12,6 +13,11 @@ export type ProjectTaskRow = {
   id: string;
   name: string;
   status?: string | null;
+  statusOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
   dueDate?: string | null;
   segmentId: string;
   segmentName: string;
@@ -34,6 +40,11 @@ export type ProjectTaskSegmentGroup = {
     id: string;
     name: string;
     status?: string | null;
+    statusOption?: {
+      id?: string;
+      value?: string | null;
+      color?: string | null;
+    } | null;
     dueDate?: string | null;
     segmentId: string;
     owner?: {
@@ -213,7 +224,12 @@ const ProjectTasksTable = ({
       title: "状态",
       dataIndex: "status",
       width: TASK_STATUS_WIDTH,
-      render: (_dom, row) => row.status ?? "-",
+      render: (_dom, row) =>
+        row.statusOption?.value ? (
+          <SelectOptionTag option={row.statusOption} />
+        ) : (
+          row.status ?? "-"
+        ),
     },
     {
       title: "负责人",
@@ -265,6 +281,7 @@ const ProjectTasksTable = ({
                 id: task.id,
                 name: task.name,
                 status: task.status ?? null,
+                statusOption: task.statusOption ?? null,
                 dueDate: task.dueDate ?? null,
                 segmentId: segment.id,
                 segmentName: segment.name,

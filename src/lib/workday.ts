@@ -38,6 +38,10 @@ export const formatProjectPeriod = (
 ) => {
   if (!startDate) return "-";
   const start = new Date(startDate);
+  const today = new Date();
+  if (start.getTime() > today.getTime()) {
+    return "项目还未开始";
+  }
   const effectiveEnd = endDate ? new Date(endDate) : new Date();
   const naturalDays =
     Math.floor(

@@ -1,0 +1,2 @@
+ALTER TABLE "ProjectFinancialStructure"
+ADD COLUMN "rentCost" DOUBLE PRECISION NOT NULL DEFAULT 0;

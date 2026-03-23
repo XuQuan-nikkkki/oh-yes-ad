@@ -5,9 +5,11 @@ import { Button, Card, Form, Input, message, Modal, Tabs, Select } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
+import PageAccessResult from "@/components/PageAccessResult";
 import TableActions from "@/components/TableActions";
 import EmployeesTable, { Employee } from "@/components/EmployeesTable";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 
 type RoleRecord = {
   id: string;
@@ -35,6 +37,11 @@ type MemberRoleFormValues = {
 
 const RolesPage = () => {
   const [messageApi, contextHolder] = message.useMessage();
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const authLoaded = useAuthStore((state) => state.loaded);
+  const fetchMe = useAuthStore((state) => state.fetchMe);
+  const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
+  const isAdmin = roleCodes.includes("ADMIN");
   const [roles, setRoles] = useState<RoleRecord[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,6 +59,14 @@ const RolesPage = () => {
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
 
   const isEditRole = Boolean(editingRole?.id);
+
+  useEffect(() => {
+    if (!authLoaded) {
+      void fetchMe();
+    }
+  }, [authLoaded, fetchMe]);
+
+  const shouldBlockAccess = !authLoaded || !isAdmin;
 
   const fetchRoles = useCallback(async () => {
     setLoading(true);
@@ -86,8 +101,9 @@ const RolesPage = () => {
   );
 
   useEffect(() => {
+    if (!authLoaded || !isAdmin) return;
     void refreshAll();
-  }, [refreshAll]);
+  }, [authLoaded, isAdmin, refreshAll]);
 
   useEffect(() => {
     if (!roles.length) return;
@@ -304,6 +320,21 @@ const RolesPage = () => {
       })),
     [roles],
   );
+
+  if (shouldBlockAccess) {
+    return (
+      <>
+        {contextHolder}
+        {authLoaded ? (
+          <Card>
+            <PageAccessResult type="forbidden" />
+          </Card>
+        ) : (
+          <Card loading />
+        )}
+      </>
+    );
+  }
 
   const tabItems = [
     {

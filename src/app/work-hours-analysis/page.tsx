@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Radio, Select, Space, message } from "antd";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
@@ -8,11 +8,16 @@ import dayjs from "dayjs";
 import ActualWorkEntriesTable, {
   type ActualWorkEntryRow,
 } from "@/components/ActualWorkEntriesTable";
+import {
+  getSystemSettingNumberFromRecords,
+  SYSTEM_SETTING_KEYS,
+} from "@/lib/system-settings";
 import ListPageContainer from "@/components/ListPageContainer";
 import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useProjectsStore } from "@/stores/projectsStore";
+import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
 
 type ActualWorkEntry = {
   id: string;
@@ -67,6 +72,7 @@ type RowData = {
   employeeId: string;
   employeeName: string;
   functionName: string;
+  humanCostWithRent: number;
   totalDays: number;
   isSummary?: boolean;
   values: Record<
@@ -78,15 +84,20 @@ type RowData = {
   >;
 };
 
-const WORK_DAYS_BASE = 21.5;
 const formatNumber = (value: number) => value.toFixed(2).replace(/\.?0+$/, "");
 const hoursToDays = (hours: number) => hours / 8;
 const FUNCTION_SORT_ORDER = ["设计组", "品牌组", "项目组", "新媒体"] as const;
+const PLATFORM_PROJECT_NAME = "中台项目";
 const toNumber = (value?: string | number | null) => {
   if (value === null || value === undefined || value === "") return 0;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
+const isPlatformProject = (project?: { name?: string | null } | null) =>
+  (project?.name ?? "").includes(PLATFORM_PROJECT_NAME);
+const getProjectDisplayName = (project?: { name?: string | null } | null) =>
+  isPlatformProject(project) ? "中台" : project?.name ?? "";
+const formatCurrency = (value: number) => `¥${formatNumber(value)}`;
 const isDepartedEmployee = (employee: Employee) => {
   const status = (
     employee.employmentStatusOption?.value ??
@@ -99,6 +110,8 @@ const isDepartedEmployee = (employee: Employee) => {
 };
 
 export default function WorkHoursAnalysisPage() {
+  const [messageApi, contextHolder] = message.useMessage();
+  const mountedRef = useRef(true);
   const currentDate = dayjs();
   const currentYear = currentDate.year();
   const currentMonth = currentDate.month() + 1;
@@ -122,6 +135,10 @@ export default function WorkHoursAnalysisPage() {
   const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
+  const systemSettings = useSystemSettingsStore((state) => state.records);
+  const fetchSystemSettings = useSystemSettingsStore(
+    (state) => state.fetchSystemSettings,
+  );
   const [exporting, setExporting] = useState(false);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
@@ -142,6 +159,13 @@ export default function WorkHoursAnalysisPage() {
   );
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     (async () => {
       setLoading(true);
       try {
@@ -150,9 +174,11 @@ export default function WorkHoursAnalysisPage() {
           fetchEmployeesFromStore({ full: true }),
           fetchProjectsFromStore(),
         ]);
+        if (!mountedRef.current) return;
         const entriesData = entriesRes.ok ? await entriesRes.json() : [];
         const employeesData = Array.isArray(employeesRes) ? employeesRes : [];
         const projectsData = Array.isArray(projectsRes) ? projectsRes : [];
+        if (!mountedRef.current) return;
         setEntries(Array.isArray(entriesData) ? entriesData : []);
         setEmployees(Array.isArray(employeesData) ? employeesData : []);
         setProjects(
@@ -184,10 +210,37 @@ export default function WorkHoursAnalysisPage() {
             : [],
         );
       } finally {
-        setLoading(false);
+        if (mountedRef.current) {
+          setLoading(false);
+        }
       }
     })();
   }, [fetchEmployeesFromStore, fetchProjectsFromStore]);
+
+  useEffect(() => {
+    void fetchSystemSettings();
+  }, [fetchSystemSettings]);
+
+  const monthlyWorkdayBase = useMemo(
+    () =>
+      getSystemSettingNumberFromRecords(
+        systemSettings,
+        SYSTEM_SETTING_KEYS.employeeMonthlyWorkdayBase,
+      ),
+    [systemSettings],
+  );
+  const defaultMonthlyRentCost = useMemo(
+    () =>
+      getSystemSettingNumberFromRecords(
+        systemSettings,
+        SYSTEM_SETTING_KEYS.employeeDefaultWorkstationCost,
+      ) +
+      getSystemSettingNumberFromRecords(
+        systemSettings,
+        SYSTEM_SETTING_KEYS.employeeDefaultUtilityCost,
+      ),
+    [systemSettings],
+  );
 
   const projectMap = useMemo(() => {
     const map = new Map<
@@ -224,12 +277,11 @@ export default function WorkHoursAnalysisPage() {
         toNumber(employee.salary) +
         toNumber(employee.socialSecurity) +
         toNumber(employee.providentFund) +
-        toNumber(employee.workstationCost) +
-        toNumber(employee.utilityCost);
+        defaultMonthlyRentCost;
       map.set(employee.id, totalHumanCost);
     }
     return map;
-  }, [employees]);
+  }, [defaultMonthlyRentCost, employees]);
 
   const employeeOptions = useMemo(
     () =>
@@ -285,6 +337,20 @@ export default function WorkHoursAnalysisPage() {
     [employeeOptions],
   );
 
+  const projectFilterOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          filteredEntriesForRecords
+            .map((entry) => entry.project?.name?.trim())
+            .filter((value): value is string => Boolean(value)),
+        ),
+      )
+        .sort((left, right) => left.localeCompare(right, "zh-CN"))
+        .map((value) => ({ label: value, value })),
+    [filteredEntriesForRecords],
+  );
+
   const projectColumns = useMemo<ProjectColumn[]>(() => {
     const map = new Map<string, ProjectColumn>();
     for (const entry of filteredEntries) {
@@ -330,7 +396,7 @@ export default function WorkHoursAnalysisPage() {
       const end = dayjs(entry.endDate);
       const hours = Math.max(end.diff(start, "minute") / 60, 0);
       const days = hoursToDays(hours);
-      const percent = (days / WORK_DAYS_BASE) * 100;
+      const percent = (days / monthlyWorkdayBase) * 100;
 
       const existing =
         rows.get(employeeId) ??
@@ -339,6 +405,7 @@ export default function WorkHoursAnalysisPage() {
           employeeId,
           employeeName,
           functionName,
+          humanCostWithRent: employeeHumanCostMap.get(employeeId) ?? 0,
           totalDays: 0,
           values: {},
         } as RowData);
@@ -375,21 +442,33 @@ export default function WorkHoursAnalysisPage() {
         if (byFunction !== 0) return byFunction;
         return left.employeeName.localeCompare(right.employeeName, "zh-CN");
       });
-  }, [employeeMap, filteredEntries]);
+  }, [employeeHumanCostMap, employeeMap, filteredEntries, monthlyWorkdayBase]);
 
   const summaryData = useMemo(() => {
     const daysByProject: Record<string, number> = {};
     const costByProject: Record<string, number> = {};
     let totalDays = 0;
 
+    const platformProjectId =
+      projectColumns.find((project) => isPlatformProject(project))?.id ?? null;
+
     for (const row of tableData) {
       totalDays += row.totalDays;
+      const nonPlatformPercentSum = projectColumns.reduce((sum, project) => {
+        if (project.id === platformProjectId) return sum;
+        const cell = row.values[project.id] ?? { days: 0, percent: 0 };
+        return sum + cell.percent;
+      }, 0);
+
       for (const project of projectColumns) {
         const cell = row.values[project.id] ?? { days: 0, percent: 0 };
         daysByProject[project.id] = (daysByProject[project.id] ?? 0) + cell.days;
 
-        const humanCost = employeeHumanCostMap.get(row.employeeId) ?? 0;
-        const projectCost = (cell.percent / 100) * humanCost;
+        const displayPercent =
+          project.id === platformProjectId
+            ? Math.max(0, 100 - nonPlatformPercentSum)
+            : cell.percent;
+        const projectCost = (displayPercent / 100) * row.humanCostWithRent;
         costByProject[project.id] = (costByProject[project.id] ?? 0) + projectCost;
       }
     }
@@ -399,7 +478,7 @@ export default function WorkHoursAnalysisPage() {
       daysByProject,
       costByProject,
     };
-  }, [employeeHumanCostMap, projectColumns, tableData]);
+  }, [projectColumns, tableData]);
 
   const dataSourceWithSummary = useMemo<RowData[]>(() => {
     const summaryRow: RowData = {
@@ -407,6 +486,10 @@ export default function WorkHoursAnalysisPage() {
       employeeId: "__summary__",
       employeeName: "汇总",
       functionName: "汇总",
+      humanCostWithRent: tableData.reduce(
+        (sum, row) => sum + row.humanCostWithRent,
+        0,
+      ),
       totalDays: summaryData.totalDays,
       isSummary: true,
       values: Object.fromEntries(
@@ -423,17 +506,91 @@ export default function WorkHoursAnalysisPage() {
     return [...tableData, summaryRow];
   }, [projectColumns, summaryData.daysByProject, summaryData.totalDays, tableData]);
 
+  const platformProjectId = useMemo(
+    () => projectColumns.find((project) => isPlatformProject(project))?.id ?? null,
+    [projectColumns],
+  );
+
+  const getProjectPercentValue = useMemo(
+    () =>
+      (row: RowData, projectId: string) => {
+        const cell = row.values[projectId] ?? { days: 0, percent: 0 };
+        if (projectId === platformProjectId) {
+          return Math.max(
+            0,
+            100 -
+              projectColumns.reduce((sum, currentProject) => {
+                if (currentProject.id === platformProjectId) return sum;
+                const currentCell = row.values[currentProject.id] ?? {
+                  days: 0,
+                  percent: 0,
+                };
+                return sum + currentCell.percent;
+              }, 0),
+          );
+        }
+        return cell.percent;
+      },
+    [platformProjectId, projectColumns],
+  );
+
+  const getProjectDaysDisplay = useMemo(
+    () =>
+      (row: RowData, projectId: string) => {
+        if (projectId === platformProjectId) return "";
+        if (row.isSummary) {
+          const totalDays = summaryData.daysByProject[projectId] ?? 0;
+          return `${formatNumber(totalDays)}d`;
+        }
+        const cell = row.values[projectId] ?? { days: 0, percent: 0 };
+        if (cell.days === 0) return "-";
+        return `${formatNumber(cell.days)}d`;
+      },
+    [platformProjectId, summaryData.daysByProject],
+  );
+
+  const getProjectPercentDisplay = useMemo(
+    () =>
+      (row: RowData, projectId: string) => {
+        if (row.isSummary) return "";
+        const cell = row.values[projectId] ?? { days: 0, percent: 0 };
+        const percent = getProjectPercentValue(row, projectId);
+        if (projectId !== platformProjectId && cell.days === 0) return "-";
+        if (projectId === platformProjectId && percent === 0) return "0%";
+        return `${formatNumber(percent)}%`;
+      },
+    [getProjectPercentValue, platformProjectId],
+  );
+
+  const getProjectCostDisplay = useMemo(
+    () =>
+      (row: RowData, projectId: string) => {
+        if (row.isSummary) {
+          const totalCost = summaryData.costByProject[projectId] ?? 0;
+          return formatCurrency(totalCost);
+        }
+        const cell = row.values[projectId] ?? { days: 0, percent: 0 };
+        const percent = getProjectPercentValue(row, projectId);
+        if (projectId !== platformProjectId && cell.days === 0) return "-";
+        if (projectId === platformProjectId && percent === 0) return formatCurrency(0);
+        const projectCost = (percent / 100) * row.humanCostWithRent;
+        return formatCurrency(projectCost);
+      },
+    [getProjectPercentValue, platformProjectId, summaryData.costByProject],
+  );
+
   const columns = useMemo<ProColumns<RowData>[]>(() => {
+    const fixedColumnSpan = canViewProjectCost ? 4 : 3;
     const fixedColumns: ProColumns<RowData>[] = [
       {
         title: "职能",
         dataIndex: "functionName",
-        width: 100,
+        width: 84,
         fixed: "left",
         onCell: (row) =>
           row.isSummary
             ? {
-                colSpan: 3,
+                colSpan: fixedColumnSpan,
                 style: { fontWeight: 700 },
               }
             : {},
@@ -442,7 +599,7 @@ export default function WorkHoursAnalysisPage() {
       {
         title: "人员",
         dataIndex: "employeeName",
-        width: 100,
+        width: 60,
         fixed: "left",
         onCell: (row) =>
           row.isSummary
@@ -451,10 +608,34 @@ export default function WorkHoursAnalysisPage() {
               }
             : {},
       },
+      ...(canViewProjectCost
+        ? [
+            {
+              title: (
+                <span>
+                  <div>人力成本</div>
+                  <div>(含租金成本)</div>
+                </span>
+              ),
+              dataIndex: "humanCostWithRent",
+              width: 100,
+              fixed: "left" as const,
+              align: "right" as const,
+              onCell: (row: RowData) =>
+                row.isSummary
+                  ? {
+                      colSpan: 0,
+                    }
+                  : {},
+              render: (_dom: unknown, row: RowData) =>
+                row.isSummary ? null : formatCurrency(row.humanCostWithRent),
+            } satisfies ProColumns<RowData>,
+          ]
+        : []),
       {
         title: "工时总数",
         dataIndex: "totalDays",
-        width: 120,
+        width: 80,
         fixed: "left",
         onCell: (row) =>
           row.isSummary
@@ -468,32 +649,18 @@ export default function WorkHoursAnalysisPage() {
     ];
 
     const dynamicColumns: ProColumns<RowData>[] = projectColumns.map((project) => {
+      const isPlatform = project.id === platformProjectId;
       const groupChildren: ProColumns<RowData>[] = [
-        {
-          title: "工时(天)",
-          key: `${project.id}-days`,
-          width: 120,
-          align: "right",
-          render: (_value, row) => {
-            if (row.isSummary) {
-              const totalDays = summaryData.daysByProject[project.id] ?? 0;
-              return `${formatNumber(totalDays)}d`;
-            }
-            const cell = row.values[project.id] ?? { days: 0, percent: 0 };
-            if (cell.days === 0) return "-";
-            return `${formatNumber(cell.days)}d`;
-          },
-        },
         {
           title: "占比",
           key: `${project.id}-percent`,
-          width: 120,
+          width: 68,
           align: "right",
           render: (_value, row) => {
-            if (row.isSummary) return "";
-            const cell = row.values[project.id] ?? { days: 0, percent: 0 };
-            if (cell.days === 0) return "-";
-            const isOverLimit = cell.percent > 100;
+            const percentText = getProjectPercentDisplay(row, project.id);
+            if (!percentText) return percentText;
+            const percent = getProjectPercentValue(row, project.id);
+            const isOverLimit = percent > 100;
             return (
               <span
                 style={
@@ -502,42 +669,50 @@ export default function WorkHoursAnalysisPage() {
                     : undefined
                 }
               >
-                {`${formatNumber(cell.percent)}%`}
+                {percentText}
               </span>
             );
           },
         },
       ];
 
+      if (!isPlatform) {
+        groupChildren.unshift({
+          title: "工时",
+          key: `${project.id}-days`,
+          width: 68,
+          align: "right",
+          render: (_value, row) => getProjectDaysDisplay(row, project.id),
+        });
+      }
+
       if (canViewProjectCost) {
         groupChildren.push({
           title: "项目成本",
           key: `${project.id}-cost`,
-          width: 140,
+          width: 80,
           align: "right",
-          render: (_value, row) => {
-            if (row.isSummary) {
-              const totalCost = summaryData.costByProject[project.id] ?? 0;
-              return `¥${formatNumber(totalCost)}`;
-            }
-            const cell = row.values[project.id] ?? { days: 0, percent: 0 };
-            if (cell.days === 0) return "-";
-            const humanCost = employeeHumanCostMap.get(row.employeeId) ?? 0;
-            const projectCost = (cell.percent / 100) * humanCost;
-            return `¥${formatNumber(projectCost)}`;
-          },
+          render: (_value, row) => getProjectCostDisplay(row, project.id),
         });
       }
 
       return {
-        title: project.name,
+        title: getProjectDisplayName(project),
         key: project.id,
         children: groupChildren,
       };
     });
 
     return [...fixedColumns, ...dynamicColumns];
-  }, [canViewProjectCost, employeeHumanCostMap, projectColumns, summaryData.costByProject, summaryData.daysByProject]);
+  }, [
+    canViewProjectCost,
+    getProjectCostDisplay,
+    getProjectDaysDisplay,
+    getProjectPercentDisplay,
+    getProjectPercentValue,
+    platformProjectId,
+    projectColumns,
+  ]);
 
   const downloadAnalysisXlsx = async () => {
     try {
@@ -546,39 +721,125 @@ export default function WorkHoursAnalysisPage() {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("工时分析");
 
-      const headers = ["职能", "人员", "工时总数(天)"];
-      for (const project of projectColumns) {
-        headers.push(`${project.name}-工时(天)`);
-        headers.push(`${project.name}-占比`);
-        if (canViewProjectCost) {
-          headers.push(`${project.name}-项目成本`);
-        }
-      }
-      worksheet.addRow(headers);
+      const topHeader: string[] = [];
+      const subHeader: string[] = [];
+      const mergeRanges: Array<{
+        fromRow: number;
+        fromCol: number;
+        toRow: number;
+        toCol: number;
+      }> = [];
+      const columnWidths: number[] = [];
 
-      for (const row of tableData) {
+      const pushFixedHeader = (title: string, width: number) => {
+        const col = topHeader.length + 1;
+        topHeader.push(title);
+        subHeader.push("");
+        columnWidths.push(width);
+        mergeRanges.push({
+          fromRow: 1,
+          fromCol: col,
+          toRow: 2,
+          toCol: col,
+        });
+      };
+
+      pushFixedHeader("职能", 12);
+      pushFixedHeader("人员", 10);
+      if (canViewProjectCost) {
+        pushFixedHeader("人力成本(含租金成本)", 16);
+      }
+      pushFixedHeader("工时总数(天)", 12);
+
+      for (const project of projectColumns) {
+        const displayName = getProjectDisplayName(project);
+        const childTitles = [
+          ...(project.id !== platformProjectId ? ["工时"] : []),
+          "占比",
+          ...(canViewProjectCost ? ["项目成本"] : []),
+        ];
+        const startCol = topHeader.length + 1;
+        topHeader.push(displayName, ...Array(Math.max(childTitles.length - 1, 0)).fill(""));
+        subHeader.push(...childTitles);
+        columnWidths.push(
+          ...childTitles.map((title) => {
+            if (title === "项目成本") return 14;
+            if (title === "占比") return 10;
+            return 10;
+          }),
+        );
+        mergeRanges.push({
+          fromRow: 1,
+          fromCol: startCol,
+          toRow: 1,
+          toCol: startCol + childTitles.length - 1,
+        });
+      }
+
+      worksheet.addRow(topHeader);
+      worksheet.addRow(subHeader);
+
+      mergeRanges.forEach((range) => {
+        worksheet.mergeCells(
+          range.fromRow,
+          range.fromCol,
+          range.toRow,
+          range.toCol,
+        );
+      });
+
+      for (const row of dataSourceWithSummary) {
         const rowValues: Array<string | number> = [
           row.functionName,
           row.employeeName,
-          Number(formatNumber(row.totalDays)),
+          ...(canViewProjectCost
+            ? [row.isSummary ? "" : formatCurrency(row.humanCostWithRent)]
+            : []),
+          row.isSummary ? "" : `${formatNumber(row.totalDays)}d`,
         ];
         for (const project of projectColumns) {
-          const cell = row.values[project.id] ?? { days: 0, percent: 0 };
-          rowValues.push(cell.days === 0 ? "-" : Number(formatNumber(cell.days)));
-          rowValues.push(cell.days === 0 ? "-" : `${formatNumber(cell.percent)}%`);
+          if (project.id !== platformProjectId) {
+            rowValues.push(getProjectDaysDisplay(row, project.id));
+          }
+          rowValues.push(getProjectPercentDisplay(row, project.id));
           if (canViewProjectCost) {
-            const humanCost = employeeHumanCostMap.get(row.employeeId) ?? 0;
-            const projectCost = (cell.percent / 100) * humanCost;
-            rowValues.push(cell.days === 0 ? "-" : Number(formatNumber(projectCost)));
+            rowValues.push(getProjectCostDisplay(row, project.id));
           }
         }
         worksheet.addRow(rowValues);
       }
 
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.columns.forEach((column) => {
-        column.width = 16;
+      [1, 2].forEach((rowNumber) => {
+        const row = worksheet.getRow(rowNumber);
+        row.font = { bold: true };
+        row.alignment = {
+          vertical: "middle",
+          horizontal: "center",
+          wrapText: true,
+        };
       });
+      worksheet.columns.forEach((column, index) => {
+        column.width = columnWidths[index] ?? 14;
+      });
+      worksheet.eachRow((row, rowNumber) => {
+        row.eachCell((cell) => {
+          cell.alignment = {
+            vertical: "middle",
+            horizontal:
+              rowNumber <= 2 ? "center" : typeof cell.value === "string" && cell.value.startsWith("¥")
+                ? "right"
+                : "left",
+            wrapText: true,
+          };
+          cell.border = {
+            top: { style: "thin", color: { argb: "FFD9D9D9" } },
+            left: { style: "thin", color: { argb: "FFD9D9D9" } },
+            bottom: { style: "thin", color: { argb: "FFD9D9D9" } },
+            right: { style: "thin", color: { argb: "FFD9D9D9" } },
+          };
+        });
+      });
+      worksheet.views = [{ state: "frozen", xSplit: 4, ySplit: 2 }];
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
@@ -591,12 +852,18 @@ export default function WorkHoursAnalysisPage() {
       anchor.download = `工时分析_${now}.xlsx`;
       anchor.click();
       window.URL.revokeObjectURL(url);
-      message.success("表格已下载");
+      if (mountedRef.current) {
+        messageApi.success("表格已下载");
+      }
     } catch (error) {
       console.error(error);
-      message.error("下载失败");
+      if (mountedRef.current) {
+        messageApi.error("下载失败");
+      }
     } finally {
-      setExporting(false);
+      if (mountedRef.current) {
+        setExporting(false);
+      }
     }
   };
 
@@ -626,11 +893,14 @@ export default function WorkHoursAnalysisPage() {
         }
         if (
           normalizedEmployee &&
-          !(row.employee?.name ?? "").includes(normalizedEmployee)
+          (row.employee?.name ?? "").trim() !== normalizedEmployee
         ) {
           return false;
         }
-        if (normalizedProject && !(row.project?.name ?? "").includes(normalizedProject)) {
+        if (
+          normalizedProject &&
+          (row.project?.name ?? "").trim() !== normalizedProject
+        ) {
           return false;
         }
         if (
@@ -717,6 +987,7 @@ export default function WorkHoursAnalysisPage() {
 
   return (
     <ListPageContainer>
+      {contextHolder}
       {viewMode === "records" ? (
         <ActualWorkEntriesTable
           requestData={recordsRequestData}
@@ -724,12 +995,15 @@ export default function WorkHoursAnalysisPage() {
           toolbarActions={[toolbarFilters]}
           showTableOptions={false}
           employeeFilterOptions={employeeFilterOptions}
+          projectFilterOptions={projectFilterOptions}
+          enableStartDateFilter={false}
           columnKeys={["title", "employeeName", "projectName", "startDate", "workDay"]}
         />
       ) : (
         <ProTable<RowData>
           rowKey="key"
           bordered
+          size="small"
           loading={loading}
           search={false}
           options={false}

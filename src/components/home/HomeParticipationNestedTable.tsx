@@ -89,6 +89,12 @@ const HomeParticipationNestedTable = ({
           projectMap.set(project.id, {
             id: project.id,
             name: project.name,
+            status: project.statusOption?.value ?? null,
+            stage: project.stageOption?.value ?? null,
+            statusOption: project.statusOption ?? null,
+            stageOption: project.stageOption ?? null,
+            startDate: project.startDate ?? null,
+            endDate: project.endDate ?? null,
           });
         }
         setTasks(nextTasks);
@@ -143,17 +149,17 @@ const HomeParticipationNestedTable = ({
       if (!availableProjectIds.has(project.id)) continue;
       if ((project.name ?? "").includes("中台项目")) continue;
 
-      const projectRow =
+      const projectRow: ProjectNestedRow =
         projectMap.get(project.id) ?? {
           id: project.id,
           name: project.name,
           tasksCount: 0,
-          status: null,
-          stage: null,
-          statusOption: null,
-          stageOption: null,
-          startDate: null,
-          endDate: null,
+          status: project.statusOption?.value ?? null,
+          stage: project.stageOption?.value ?? null,
+          statusOption: project.statusOption ?? null,
+          stageOption: project.stageOption ?? null,
+          startDate: project.startDate ?? null,
+          endDate: project.endDate ?? null,
           tasks: [],
         };
 

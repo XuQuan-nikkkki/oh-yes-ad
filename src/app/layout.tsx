@@ -8,6 +8,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useNavigationStore } from "@/stores/navigationStore";
+import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
 import ResetPasswordModal from "@/components/layout/PasswordResetModal";
 import BasicLayout from "@/components/layout/BasicLayout";
 import LayoutSider from "@/components/layout/LayoutSider";
@@ -35,6 +36,9 @@ export default function RootLayout({
   const [, contextHolder] = message.useMessage();
   const fetchAllOptions = useSelectOptionsStore(
     (state) => state.fetchAllOptions,
+  );
+  const fetchSystemSettings = useSystemSettingsStore(
+    (state) => state.fetchSystemSettings,
   );
   const isLoginPage = pathname === "/login";
 
@@ -67,6 +71,11 @@ export default function RootLayout({
     if (isLoginPage) return;
     void fetchAllOptions();
   }, [isLoginPage, fetchAllOptions]);
+
+  useEffect(() => {
+    if (isLoginPage) return;
+    void fetchSystemSettings();
+  }, [isLoginPage, fetchSystemSettings]);
 
   const renderContent = () => {
     if (isLoginPage) {

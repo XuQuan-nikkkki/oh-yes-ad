@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Input, Space, Tag } from "antd";
+import { Tag } from "antd";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import type { Key } from "react";
@@ -65,6 +65,12 @@ type Props = {
   refreshKey?: number;
   showTableOptions?: boolean;
   actionsDisabled?: boolean;
+  projectFilterOptions?: { text?: string; label?: string; value: string }[];
+  segmentFilterOptions?: { text?: string; label?: string; value: string }[];
+  taskFilterOptions?: { text?: string; label?: string; value: string }[];
+  ownerFilterOptions?: { text?: string; label?: string; value: string }[];
+  yearFilterOptions?: { text?: string; label?: string; value: string }[];
+  weekNumberFilterOptions?: { text?: string; label?: string; value: string }[];
   columnKeys?: Array<
     | "name"
     | "projectName"
@@ -72,10 +78,14 @@ type Props = {
     | "taskName"
     | "ownerName"
     | "year"
+    | "month"
     | "weekNumber"
     | "plannedDays"
     | "actions"
   >;
+  renderYearCell?: (row: PlannedWorkEntryRow) => React.ReactNode;
+  monthTitle?: React.ReactNode;
+  renderMonthCell?: (row: PlannedWorkEntryRow) => React.ReactNode;
 };
 
 const PlannedWorkEntriesTable = ({
@@ -88,6 +98,12 @@ const PlannedWorkEntriesTable = ({
   refreshKey = 0,
   showTableOptions = false,
   actionsDisabled = false,
+  projectFilterOptions = [],
+  segmentFilterOptions = [],
+  taskFilterOptions = [],
+  ownerFilterOptions = [],
+  yearFilterOptions = [],
+  weekNumberFilterOptions = [],
   columnKeys = [
     "name",
     "projectName",
@@ -95,47 +111,39 @@ const PlannedWorkEntriesTable = ({
     "taskName",
     "ownerName",
     "year",
+    "month",
     "weekNumber",
     "plannedDays",
     "actions",
   ],
+  renderYearCell,
+  monthTitle = "月份",
+  renderMonthCell,
 }: Props) => {
-  const renderTextFilterDropdown = (
-    placeholder: string,
-    selectedKeys: Key[],
-    setSelectedKeys: (keys: Key[]) => void,
-    confirm: () => void,
-    clearFilters?: () => void,
-  ) => (
-    <div style={{ padding: 8 }}>
-      <Input
-        allowClear
-        placeholder={placeholder}
-        value={selectedKeys[0] ? String(selectedKeys[0]) : ""}
-        onChange={(e) => {
-          const value = e.target.value;
-          setSelectedKeys(value ? [value] : []);
-        }}
-        onPressEnter={() => confirm()}
-        style={{ width: 220, marginBottom: 8, display: "block" }}
-      />
-      <Space>
-        <Button type="primary" size="small" onClick={() => confirm()}>
-          确定
-        </Button>
-        <Button
-          size="small"
-          onClick={() => {
-            clearFilters?.();
-            confirm();
-          }}
-        >
-          重置
-        </Button>
-      </Space>
-    </div>
-  );
-
+  const normalizedProjectFilterOptions = projectFilterOptions.map((item) => ({
+    text: item.text ?? item.label ?? item.value,
+    value: item.value,
+  }));
+  const normalizedSegmentFilterOptions = segmentFilterOptions.map((item) => ({
+    text: item.text ?? item.label ?? item.value,
+    value: item.value,
+  }));
+  const normalizedTaskFilterOptions = taskFilterOptions.map((item) => ({
+    text: item.text ?? item.label ?? item.value,
+    value: item.value,
+  }));
+  const normalizedOwnerFilterOptions = ownerFilterOptions.map((item) => ({
+    text: item.text ?? item.label ?? item.value,
+    value: item.value,
+  }));
+  const normalizedYearFilterOptions = yearFilterOptions.map((item) => ({
+    text: item.text ?? item.label ?? item.value,
+    value: item.value,
+  }));
+  const normalizedWeekNumberFilterOptions = weekNumberFilterOptions.map((item) => ({
+    text: item.text ?? item.label ?? item.value,
+    value: item.value,
+  }));
   const getNumericYear = (row: PlannedWorkEntryRow) => {
     const raw = row.yearOption?.value ?? (row.year !== null && row.year !== undefined ? String(row.year) : "");
     const value = Number(raw);
@@ -208,6 +216,17 @@ const PlannedWorkEntriesTable = ({
       </span>
     );
   };
+  const renderMonth = (row: PlannedWorkEntryRow) => {
+    const year = getNumericYear(row);
+    const week = getNumericWeek(row);
+    if (year === null || week === null) return "-";
+    const weekStart = dayjs(`${year}-01-04`).startOf("isoWeek").add(week - 1, "week");
+    const weekEnd = weekStart.add(6, "day");
+    const startMonth = weekStart.month() + 1;
+    const endMonth = weekEnd.month() + 1;
+    if (startMonth === endMonth) return `${startMonth}月`;
+    return `${startMonth}-${endMonth}月`;
+  };
   const getNameText = (row: PlannedWorkEntryRow) => {
     const week =
       row.weekNumberOption?.value ??
@@ -241,19 +260,8 @@ const PlannedWorkEntriesTable = ({
       width: 200,
       ellipsis: true,
       onCell: () => ({ style: { maxWidth: 200 } }),
-      filterDropdown: ({
-        selectedKeys,
-        setSelectedKeys,
-        confirm,
-        clearFilters,
-      }) =>
-        renderTextFilterDropdown(
-          "筛选项目",
-          selectedKeys,
-          setSelectedKeys,
-          confirm,
-          clearFilters,
-        ),
+      filters: normalizedProjectFilterOptions,
+      filterSearch: true,
       render: (_, row) =>
         row.task?.segment?.project ? (
           <AppLink href={`/projects/${row.task.segment.project.id}`}>
@@ -269,19 +277,8 @@ const PlannedWorkEntriesTable = ({
       width: 200,
       ellipsis: true,
       onCell: () => ({ style: { maxWidth: 200 } }),
-      filterDropdown: ({
-        selectedKeys,
-        setSelectedKeys,
-        confirm,
-        clearFilters,
-      }) =>
-        renderTextFilterDropdown(
-          "筛选环节",
-          selectedKeys,
-          setSelectedKeys,
-          confirm,
-          clearFilters,
-        ),
+      filters: normalizedSegmentFilterOptions,
+      filterSearch: true,
       render: (_, row) =>
         row.task?.segment ? (
           <AppLink href={`/project-segments/${row.task.segment.id}`}>
@@ -297,59 +294,28 @@ const PlannedWorkEntriesTable = ({
       width: 200,
       ellipsis: true,
       onCell: () => ({ style: { maxWidth: 200 } }),
-      filterDropdown: ({
-        selectedKeys,
-        setSelectedKeys,
-        confirm,
-        clearFilters,
-      }) =>
-        renderTextFilterDropdown(
-          "筛选任务",
-          selectedKeys,
-          setSelectedKeys,
-          confirm,
-          clearFilters,
-        ),
+      filters: normalizedTaskFilterOptions,
+      filterSearch: true,
       render: (_, row) =>
         row.task ? <AppLink href={`/planned-work-entries/${row.id}`}>{row.task.name}</AppLink> : "-",
     },
     ownerName: {
       key: "ownerName",
       title: "任务责任人",
-      filterDropdown: ({
-        selectedKeys,
-        setSelectedKeys,
-        confirm,
-        clearFilters,
-      }) =>
-        renderTextFilterDropdown(
-          "筛选责任人",
-          selectedKeys,
-          setSelectedKeys,
-          confirm,
-          clearFilters,
-        ),
+      filters: normalizedOwnerFilterOptions,
+      filterSearch: true,
       render: (_, row) => row.task?.owner?.name ?? "-",
     },
     year: {
       key: "year",
       title: "年份",
       dataIndex: "yearOption",
-      filterDropdown: ({
-        selectedKeys,
-        setSelectedKeys,
-        confirm,
-        clearFilters,
-      }) =>
-        renderTextFilterDropdown(
-          "筛选年份",
-          selectedKeys,
-          setSelectedKeys,
-          confirm,
-          clearFilters,
-        ),
+      filters: normalizedYearFilterOptions,
+      filterSearch: true,
       render: (_, row) =>
-        row.yearOption?.value ? (
+        renderYearCell ? (
+          renderYearCell(row)
+        ) : row.yearOption?.value ? (
           <SelectOptionTag
             option={{
               id: row.yearOption.id ?? "",
@@ -363,23 +329,18 @@ const PlannedWorkEntriesTable = ({
           "-"
         ),
     },
+    month: {
+      key: "month",
+      title: monthTitle,
+      filters: normalizedWeekNumberFilterOptions,
+      filterSearch: true,
+      render: (_, row) =>
+        renderMonthCell ? renderMonthCell(row) : renderMonth(row),
+    },
     weekNumber: {
       key: "weekNumber",
       title: "时间",
       dataIndex: "weekNumberOption",
-      filterDropdown: ({
-        selectedKeys,
-        setSelectedKeys,
-        confirm,
-        clearFilters,
-      }) =>
-        renderTextFilterDropdown(
-          "筛选周数",
-          selectedKeys,
-          setSelectedKeys,
-          confirm,
-          clearFilters,
-        ),
       render: (_, row) => renderTime(row),
     },
     plannedDays: {
@@ -432,8 +393,10 @@ const PlannedWorkEntriesTable = ({
             year: Array.isArray(filter.year)
               ? String((filter.year as Key[])[0] ?? "")
               : undefined,
-            weekNumber: Array.isArray(filter.weekNumber)
-              ? String((filter.weekNumber as Key[])[0] ?? "")
+            weekNumber: Array.isArray(filter.month)
+              ? String((filter.month as Key[])[0] ?? "")
+              : Array.isArray(filter.weekNumber)
+                ? String((filter.weekNumber as Key[])[0] ?? "")
               : undefined,
           },
         });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, Empty } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -19,6 +19,9 @@ type Props = {
   withContainerCard?: boolean;
   layout?: "grid" | "masonry";
   cardHeight?: number;
+  gridMinWidth?: number;
+  gridMaxWidth?: number;
+  gridColumns?: number;
 };
 
 const ProjectMilestoneSection = ({
@@ -32,8 +35,45 @@ const ProjectMilestoneSection = ({
   withContainerCard = true,
   layout = "grid",
   cardHeight,
+  gridMinWidth = 250,
+  gridMaxWidth = 360,
+  gridColumns,
 }: Props) => {
   const [masonryColumnCount, setMasonryColumnCount] = useState(1);
+  const [gridColumnCount, setGridColumnCount] = useState(1);
+  const gridContainerRef = useRef<HTMLDivElement | null>(null);
+  const effectiveGridColumns = Math.max(1, gridColumns ?? gridColumnCount);
+
+  useEffect(() => {
+    if (layout !== "grid" || gridColumns) {
+      return;
+    }
+
+    const updateGridColumnCount = () => {
+      const width = gridContainerRef.current?.clientWidth ?? 0;
+      if (!width) {
+        setGridColumnCount(1);
+        return;
+      }
+
+      const nextColumnCount = Math.max(
+        1,
+        Math.floor(width / Math.max(gridMinWidth, 1)),
+      );
+      setGridColumnCount(nextColumnCount);
+    };
+
+    updateGridColumnCount();
+    const observer = new ResizeObserver(() => {
+      updateGridColumnCount();
+    });
+    if (gridContainerRef.current) {
+      observer.observe(gridContainerRef.current);
+    }
+    return () => {
+      observer.disconnect();
+    };
+  }, [gridColumns, gridMinWidth, layout]);
 
   useEffect(() => {
     if (layout !== "masonry") return;
@@ -111,9 +151,10 @@ const ProjectMilestoneSection = ({
 
   const gridContent = (
     <div
+      ref={gridContainerRef}
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+        gridTemplateColumns: `repeat(${effectiveGridColumns}, minmax(0, 1fr))`,
         gap: 12,
         alignItems: "stretch",
         width: "100%",
@@ -121,13 +162,21 @@ const ProjectMilestoneSection = ({
         overflowX: "hidden",
       }}
     >
-      {visibleMilestones.map((milestone) => (
-        <MilestoneCard
-          key={milestone.id}
-          milestone={milestone}
-          height={cardHeight}
-        />
-      ))}
+      {visibleMilestones.map((milestone) => {
+        return (
+          <div
+            key={milestone.id}
+            style={{
+              minWidth: 0,
+              width: "100%",
+              maxWidth: gridMaxWidth,
+              minInlineSize: Math.min(gridMinWidth, gridMaxWidth),
+            }}
+          >
+            <MilestoneCard milestone={milestone} height={cardHeight} />
+          </div>
+        );
+      })}
     </div>
   );
 

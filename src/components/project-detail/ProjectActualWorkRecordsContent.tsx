@@ -22,6 +22,7 @@ type Props = {
   refreshKey: number;
   onEdit: (row: ActualWorkEntryRow) => void;
   onAfterDelete?: () => Promise<void> | void;
+  canManageRow?: (row: ActualWorkEntryRow) => boolean;
 };
 
 const ProjectActualWorkRecordsContent = ({
@@ -31,6 +32,7 @@ const ProjectActualWorkRecordsContent = ({
   refreshKey,
   onEdit,
   onAfterDelete,
+  canManageRow,
 }: Props) => {
   return (
     <ActualWorkEntriesTable
@@ -42,6 +44,7 @@ const ProjectActualWorkRecordsContent = ({
       columnKeys={["title", "employeeName", "startDate", "workDay", "actions"]}
       requestData={requestData}
       onEdit={onEdit}
+      canManageRow={canManageRow}
       onDelete={async (id) => {
         await fetch(`/api/projects/${projectId}/actual-work-entries/${id}`, {
           method: "DELETE",

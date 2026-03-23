@@ -6,6 +6,7 @@ import ProjectDocumentsTable from "@/components/ProjectDocumentsTable";
 type Props = {
   projectId: string;
   rows: ProjectDocumentRow[];
+  canManageProject: boolean;
   onEdit: (record: ProjectDocumentRow) => void;
   onAfterDelete?: () => Promise<void> | void;
 };
@@ -13,6 +14,7 @@ type Props = {
 const ProjectDocumentsContent = ({
   projectId,
   rows,
+  canManageProject,
   onEdit,
   onAfterDelete,
 }: Props) => {
@@ -29,8 +31,10 @@ const ProjectDocumentsContent = ({
         "internalLink",
         "actions",
       ]}
+      actionsDisabled={!canManageProject}
       onEdit={onEdit}
       onDelete={async (id) => {
+        if (!canManageProject) return;
         await fetch(`/api/projects/${projectId}/documents/${id}`, {
           method: "DELETE",
         });

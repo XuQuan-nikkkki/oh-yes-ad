@@ -102,25 +102,40 @@ const syncClientContact = async (contact: PageObjectResponse) => {
   const phone = getPhoneValue(contact, "电话");
   const email = getEmailValue(contact, "邮箱");
   const clientRelation = getRelationValue(contact, "所属客户", true);
-
-  const clientPageId = clientRelation[0].id;
-  const client = await prisma.client.findUnique({
+  const clientPageIds = Array.from(new Set(clientRelation.map((item) => item.id).filter(Boolean)));
+  const clients = await prisma.client.findMany({
     where: {
-      notionPageId: clientPageId,
+      notionPageId: {
+        in: clientPageIds,
+      },
+    },
+    select: {
+      id: true,
+      notionPageId: true,
     },
   });
+  const clientByPageId = new Map(clients.map((client) => [client.notionPageId, client]));
 
-  if (!client) {
-    throw new Error(`未找到对应的客户，Page ID: ${clientPageId}`);
+  for (const clientPageId of clientPageIds) {
+    if (!clientByPageId.has(clientPageId)) {
+      throw new Error(`未找到对应的客户，Page ID: ${clientPageId}`);
+    }
   }
 
-  const nextOrderIndex = (clientContactOrderCounter.get(client.id) ?? 0) + 1;
-  clientContactOrderCounter.set(client.id, nextOrderIndex);
+  const clientLinks = clientPageIds.map((clientPageId) => {
+    const client = clientByPageId.get(clientPageId)!;
+    const nextOrderIndex = (clientContactOrderCounter.get(client.id) ?? 0) + 1;
+    clientContactOrderCounter.set(client.id, nextOrderIndex);
+
+    return {
+      clientId: client.id,
+      order: nextOrderIndex * 1000,
+    };
+  });
 
   const data = {
     notionPageId: id,
     name,
-    order: nextOrderIndex * 1000,
     title,
     scope,
     preference,
@@ -128,7 +143,9 @@ const syncClientContact = async (contact: PageObjectResponse) => {
     wechat,
     phone,
     email,
-    clientId: client.id,
+    clientLinks: {
+      create: clientLinks,
+    },
   };
 
   await prisma.clientContact.create({

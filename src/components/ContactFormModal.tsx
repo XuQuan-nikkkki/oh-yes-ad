@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { Modal, Form, Input, Button, Select } from "antd";
 import { useClientsStore } from "@/stores/clientsStore";
+import type { ClientContact as Contact } from "@/types/clientContact";
 
-type Contact = {
-  id?: string;
+type ContactFormValues = {
   name: string;
   title?: string | null;
   scope?: string | null;
@@ -14,11 +14,7 @@ type Contact = {
   email?: string | null;
   wechat?: string | null;
   address?: string | null;
-  clientId?: string;
-  client?: {
-    id: string;
-    name: string;
-  };
+  clientIds: string[];
 };
 
 type Props = {
@@ -46,22 +42,36 @@ const ContactFormModal = ({
   const isEdit = !!initialValues?.id;
   const fetchClientsFromStore = useClientsStore((state) => state.fetchClients);
   const storeClients = useClientsStore((state) => state.clients);
-  const clients = useMemo(() => {
-    if (clientOptions.length > 0) return clientOptions;
-    return storeClients
-      .filter(
-        (
-          item,
-        ): item is {
-          id: string;
-          name: string;
-        } => Boolean(item?.id) && typeof item?.name === "string",
-      )
-      .map((item) => ({
-        id: item.id,
-        name: item.name,
-      }));
-  }, [clientOptions, storeClients]);
+  const clients = (() => {
+    const options = new Map<string, { id: string; name: string }>();
+
+    for (const item of clientOptions) {
+      if (item?.id && item?.name) {
+        options.set(item.id, item);
+      }
+    }
+
+    for (const item of storeClients) {
+      if (item?.id && typeof item?.name === "string") {
+        options.set(item.id, {
+          id: item.id,
+          name: item.name,
+        });
+      }
+    }
+
+    for (const item of initialValues?.clients ?? []) {
+      if (item?.id && item?.name) {
+        options.set(item.id, item);
+      }
+    }
+
+    if (initialValues?.client?.id && initialValues.client.name) {
+      options.set(initialValues.client.id, initialValues.client);
+    }
+
+    return Array.from(options.values());
+  })();
 
   useEffect(() => {
     if (!open) return;
@@ -72,14 +82,21 @@ const ContactFormModal = ({
 
   useEffect(() => {
     if (open) {
+      const normalizedClientIds = Array.from(
+        new Set(
+          initialValues?.clientIds?.filter(Boolean) ??
+            initialValues?.clients?.map((item) => item.id).filter(Boolean) ??
+            (initialValues?.client?.id ? [initialValues.client.id] : clientId ? [clientId] : []),
+        ),
+      );
       form.setFieldsValue({
         ...initialValues,
-        clientId: initialValues?.clientId ?? clientId,
+        clientIds: normalizedClientIds,
       });
     }
   }, [open, initialValues, clientId, form]);
 
-  const handleSubmit = async (values: Contact) => {
+  const handleSubmit = async (values: ContactFormValues) => {
     let savedContact: Contact | undefined;
     if (isEdit) {
       const res = await fetch(`/api/client-contacts/${initialValues?.id}`, {
@@ -128,10 +145,11 @@ const ContactFormModal = ({
         </Form.Item>
         <Form.Item
           label="客户"
-          name="clientId"
-          rules={[{ required: true, message: "请选择客户" }]}
+          name="clientIds"
+          rules={[{ required: true, message: "请选择至少一个客户" }]}
         >
           <Select
+            mode="multiple"
             options={clients.map((c) => ({
               label: c.name,
               value: c.id,

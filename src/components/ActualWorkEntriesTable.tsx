@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, DatePicker, Input, Popover, Select, Space } from "antd";
+import { Button, DatePicker, Popover, Space } from "antd";
 import dayjs from "dayjs";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
@@ -49,7 +49,10 @@ type Props = {
   columnKeys?: ColumnKey[];
   showTableOptions?: boolean;
   compactHorizontalPadding?: boolean;
-  employeeFilterOptions?: { label: string; value: string }[];
+  employeeFilterOptions?: { text?: string; label?: string; value: string }[];
+  projectFilterOptions?: { text?: string; label?: string; value: string }[];
+  enableStartDateFilter?: boolean;
+  canManageRow?: (row: ActualWorkEntryRow) => boolean;
 };
 
 const ActualWorkEntriesTable = ({
@@ -70,92 +73,46 @@ const ActualWorkEntriesTable = ({
   showTableOptions = false,
   compactHorizontalPadding = false,
   employeeFilterOptions = [],
+  projectFilterOptions = [],
+  enableStartDateFilter = true,
+  canManageRow,
 }: Props) => {
   type TableRow = ActualWorkEntryRow & {
     __hours?: number;
     __baseHours?: number;
     __workDays?: number;
   };
-  const renderTextFilterDropdown = (
-    placeholder: string,
-    selectedKeys: Key[],
-    setSelectedKeys: (keys: Key[]) => void,
-    confirm: () => void,
-    clearFilters?: () => void,
-  ) => (
-    <div style={{ padding: 8 }}>
-      <Input
-        allowClear
-        placeholder={placeholder}
-        value={selectedKeys[0] ? String(selectedKeys[0]) : ""}
-        onChange={(e) => {
-          const value = e.target.value;
-          setSelectedKeys(value ? [value] : []);
-        }}
-        onPressEnter={() => confirm()}
-        style={{ width: 220, marginBottom: 8, display: "block" }}
-      />
-      <Space>
-        <Button type="primary" size="small" onClick={() => confirm()}>
-          确定
-        </Button>
-        <Button
-          size="small"
-          onClick={() => {
-            clearFilters?.();
-            confirm();
-          }}
-        >
-          重置
-        </Button>
-      </Space>
-    </div>
-  );
-  const renderSelectFilterDropdown = (
-    placeholder: string,
-    selectedKeys: Key[],
-    setSelectedKeys: (keys: Key[]) => void,
-    confirm: () => void,
-    clearFilters: (() => void) | undefined,
-    options: { label: string; value: string }[],
-  ) => (
-    <div style={{ padding: 8 }}>
-      <Select
-        className="table-filter-single-select"
-        allowClear
-        showSearch
-        placeholder={placeholder}
-        value={selectedKeys[0] ? String(selectedKeys[0]) : undefined}
-        options={options}
-        onChange={(value) => setSelectedKeys(value ? [value] : [])}
-        style={{
-          width: 220,
-          marginBottom: 8,
-          display: "flex",
-          flexWrap: "nowrap",
-          alignItems: "center",
-        }}
-      />
-      <Space>
-        <Button type="primary" size="small" onClick={() => confirm()}>
-          确定
-        </Button>
-        <Button
-          size="small"
-          onClick={() => {
-            clearFilters?.();
-            confirm();
-          }}
-        >
-          重置
-        </Button>
-      </Space>
-    </div>
-  );
-
+  const normalizedEmployeeFilterOptions = employeeFilterOptions.map((item) => ({
+    text: item.text ?? item.label ?? item.value,
+    value: item.value,
+  }));
+  const normalizedProjectFilterOptions = projectFilterOptions.map((item) => ({
+    text: item.text ?? item.label ?? item.value,
+    value: item.value,
+  }));
   const getHours = (start: string, end: string) =>
     Math.max(dayjs(end).diff(dayjs(start), "minute") / 60, 0);
   const getWorkDateKey = (start: string) => dayjs(start).format("YYYY-MM-DD");
+  const getSingleFilterValue = (
+    value: Key[] | string | number | undefined,
+  ) =>
+    Array.isArray(value)
+      ? String(value[0] ?? "")
+      : typeof value === "string" || typeof value === "number"
+        ? String(value)
+        : undefined;
+  const getFirstAvailableFilterValue = (
+    filter: Record<string, Key[] | string | number | undefined>,
+    keys: string[],
+  ) => {
+    for (const key of keys) {
+      const value = getSingleFilterValue(filter[key]);
+      if (value !== undefined && value.trim()) {
+        return value;
+      }
+    }
+    return undefined;
+  };
 
   const calcWorkDay = (hours: number, total: number) => {
     if (hours === 0) return 0;
@@ -169,19 +126,6 @@ const ActualWorkEntriesTable = ({
       key: "title",
       title: "事件",
       dataIndex: "title",
-      filterDropdown: ({
-        selectedKeys,
-        setSelectedKeys,
-        confirm,
-        clearFilters,
-      }) =>
-        renderTextFilterDropdown(
-          "搜索事件",
-          selectedKeys,
-          setSelectedKeys,
-          confirm,
-          clearFilters,
-        ),
       render: (_, row) => (
         <AppLink href={`/actual-work-entries/${row.id}`}>{row.title}</AppLink>
       ),
@@ -190,28 +134,8 @@ const ActualWorkEntriesTable = ({
       key: "employeeName",
       title: "人员",
       dataIndex: ["employee", "name"],
-      filterDropdown: ({
-        selectedKeys,
-        setSelectedKeys,
-        confirm,
-        clearFilters,
-      }) =>
-        employeeFilterOptions.length > 0
-          ? renderSelectFilterDropdown(
-              "筛选人员",
-              selectedKeys,
-              setSelectedKeys,
-              confirm,
-              clearFilters,
-              employeeFilterOptions,
-            )
-          : renderTextFilterDropdown(
-              "筛选人员",
-              selectedKeys,
-              setSelectedKeys,
-              confirm,
-              clearFilters,
-            ),
+      filters: normalizedEmployeeFilterOptions,
+      filterSearch: true,
       render: (_, row) => (
         <AppLink href={`/employees/${row.employee?.id}`}>
           {row.employee?.name ?? "-"}
@@ -221,19 +145,8 @@ const ActualWorkEntriesTable = ({
     projectName: {
       key: "projectName",
       title: "所属项目",
-      filterDropdown: ({
-        selectedKeys,
-        setSelectedKeys,
-        confirm,
-        clearFilters,
-      }) =>
-        renderTextFilterDropdown(
-          "筛选项目",
-          selectedKeys,
-          setSelectedKeys,
-          confirm,
-          clearFilters,
-        ),
+      filters: normalizedProjectFilterOptions,
+      filterSearch: true,
       render: (_, row) =>
         row.project ? (
           <AppLink href={`/projects/${row.project.id}`}>
@@ -246,50 +159,52 @@ const ActualWorkEntriesTable = ({
     startDate: {
       key: "startDate",
       title: "时间",
-      filterDropdown: ({
-        selectedKeys,
-        setSelectedKeys,
-        confirm,
-        clearFilters,
-      }) => (
-        <div style={{ padding: 8 }}>
-          <DatePicker.RangePicker
-            value={
-              selectedKeys.length >= 2
-                ? [
-                    dayjs(String(selectedKeys[0])),
-                    dayjs(String(selectedKeys[1])),
-                  ]
-                : null
-            }
-            onChange={(dates) => {
-              if (!dates || !dates[0] || !dates[1]) {
-                setSelectedKeys([]);
-                return;
-              }
-              setSelectedKeys([
-                dates[0].format("YYYY-MM-DD"),
-                dates[1].format("YYYY-MM-DD"),
-              ]);
-            }}
-            style={{ width: 260, marginBottom: 8, display: "block" }}
-          />
-          <Space>
-            <Button type="primary" size="small" onClick={() => confirm()}>
-              确定
-            </Button>
-            <Button
-              size="small"
-              onClick={() => {
-                clearFilters?.();
-                confirm();
-              }}
-            >
-              重置
-            </Button>
-          </Space>
-        </div>
-      ),
+      filterDropdown: enableStartDateFilter
+        ? ({
+            selectedKeys,
+            setSelectedKeys,
+            confirm,
+            clearFilters,
+          }) => (
+            <div style={{ padding: 8 }}>
+              <DatePicker.RangePicker
+                value={
+                  selectedKeys.length >= 2
+                    ? [
+                        dayjs(String(selectedKeys[0])),
+                        dayjs(String(selectedKeys[1])),
+                      ]
+                    : null
+                }
+                onChange={(dates) => {
+                  if (!dates || !dates[0] || !dates[1]) {
+                    setSelectedKeys([]);
+                    return;
+                  }
+                  setSelectedKeys([
+                    dates[0].format("YYYY-MM-DD"),
+                    dates[1].format("YYYY-MM-DD"),
+                  ]);
+                }}
+                style={{ width: 260, marginBottom: 8, display: "block" }}
+              />
+              <Space>
+                <Button type="primary" size="small" onClick={() => confirm()}>
+                  确定
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    clearFilters?.();
+                    confirm();
+                  }}
+                >
+                  重置
+                </Button>
+              </Space>
+            </div>
+          )
+        : undefined,
       render: (_, row) => (
         <TimeRangeValue
           start={row.startDate}
@@ -336,6 +251,7 @@ const ActualWorkEntriesTable = ({
           key={row.id}
           onEdit={() => onEdit?.(row)}
           onDelete={() => onDelete?.(row.id, row.title)}
+          disabled={typeof canManageRow === "function" ? !canManageRow(row) : false}
           deleteTitle={`确定删除实际工时「${row.title}」？`}
         />,
       ],
@@ -350,11 +266,18 @@ const ActualWorkEntriesTable = ({
       rowKey="id"
       columns={columns}
       request={async (params, _sort, filter) => {
-        const startDateFilter = filter.startDate as Key[] | string | undefined;
+        const normalizedFilter = filter as Record<
+          string,
+          Key[] | string | number | undefined
+        >;
+        const startDateFilter = normalizedFilter.startDate;
         const startDateValues = Array.isArray(startDateFilter)
           ? startDateFilter.map((value: Key) => String(value)).filter(Boolean)
-          : typeof startDateFilter === "string" && startDateFilter.trim()
+          : (typeof startDateFilter === "string" ||
+              typeof startDateFilter === "number") &&
+            String(startDateFilter).trim()
             ? startDateFilter
+                .toString()
                 .split(",")
                 .map((value: string) => value.trim())
                 .filter(Boolean)
@@ -363,15 +286,17 @@ const ActualWorkEntriesTable = ({
           current: params.current ?? 1,
           pageSize: params.pageSize ?? 10,
           filters: {
-            title: Array.isArray(filter.title)
-              ? String(filter.title[0] ?? "")
-              : undefined,
-            employeeName: Array.isArray(filter.employeeName)
-              ? String(filter.employeeName[0] ?? "")
-              : undefined,
-            projectName: Array.isArray(filter.projectName)
-              ? String(filter.projectName[0] ?? "")
-              : undefined,
+            title: getFirstAvailableFilterValue(normalizedFilter, ["title"]),
+            employeeName: getFirstAvailableFilterValue(normalizedFilter, [
+              "employeeName",
+              "employee.name",
+              "employee",
+            ]),
+            projectName: getFirstAvailableFilterValue(normalizedFilter, [
+              "projectName",
+              "project.name",
+              "project",
+            ]),
             startDate:
               startDateValues.length === 1 ? startDateValues[0] : undefined,
             startDateFrom:

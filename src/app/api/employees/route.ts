@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { DEFAULT_COLOR } from "@/lib/constants";
+import { getNumericSystemSettings } from "@/lib/system-settings.server";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -171,7 +172,13 @@ type EmployeePayload = Record<string, unknown> & {
   employmentStatusOption?: OptionValue;
 };
 
-const serializeEmployee = (employee: EmployeePayload) => ({
+const serializeEmployee = (
+  employee: EmployeePayload,
+  employeeCostDefaults?: {
+    workstationCost: number;
+    utilityCost: number;
+  },
+) => ({
   ...employee,
   function: employee.functionOption?.value ?? null,
   position: employee.positionOption?.value ?? employee.position ?? null,
@@ -179,6 +186,10 @@ const serializeEmployee = (employee: EmployeePayload) => ({
   departmentLevel2: employee.departmentLevel2Option?.value ?? null,
   employmentType: employee.employmentTypeOption?.value ?? null,
   employmentStatus: employee.employmentStatusOption?.value ?? null,
+  workstationCost:
+    employeeCostDefaults?.workstationCost ?? employee.workstationCost ?? null,
+  utilityCost:
+    employeeCostDefaults?.utilityCost ?? employee.utilityCost ?? null,
 });
 
 export async function GET(req: Request) {
@@ -187,11 +198,21 @@ export async function GET(req: Request) {
 
   const select = list === "full" ? employeePublicSelect : employeeListSelect;
 
-  const employees = await prisma.employee.findMany({
-    select,
-    orderBy: { name: "asc" },
-  });
-  return Response.json(employees.map(serializeEmployee));
+  const [employees, systemSettings] = await Promise.all([
+    prisma.employee.findMany({
+      select,
+      orderBy: { name: "asc" },
+    }),
+    getNumericSystemSettings(),
+  ]);
+  return Response.json(
+    employees.map((employee) =>
+      serializeEmployee(employee, {
+        workstationCost: systemSettings.employeeDefaultWorkstationCost,
+        utilityCost: systemSettings.employeeDefaultUtilityCost,
+      }),
+    ),
+  );
 }
 
 export async function POST(req: Request) {
@@ -227,6 +248,8 @@ export async function POST(req: Request) {
     upsertSelectOption("employee.employmentStatus", body.employmentStatus),
   ]);
 
+  const systemSettings = await getNumericSystemSettings();
+
   try {
     const employee = await prisma.employee.create({
       data: {
@@ -236,6 +259,8 @@ export async function POST(req: Request) {
         password: body.password || undefined,
         functionOptionId,
         employmentStatusOptionId,
+        workstationCost: systemSettings.employeeDefaultWorkstationCost,
+        utilityCost: systemSettings.employeeDefaultUtilityCost,
         roles: {
           create:
             roleIds.length > 0
@@ -252,7 +277,12 @@ export async function POST(req: Request) {
       select: employeePublicSelect,
     });
 
-    return Response.json(serializeEmployee(employee));
+    return Response.json(
+      serializeEmployee(employee, {
+        workstationCost: systemSettings.employeeDefaultWorkstationCost,
+        utilityCost: systemSettings.employeeDefaultUtilityCost,
+      }),
+    );
   } catch (error: unknown) {
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
       return new Response("Phone already exists", { status: 400 });
@@ -294,6 +324,7 @@ export async function PUT(req: Request) {
     }
   }
 
+  const systemSettingsPromise = getNumericSystemSettings();
   const [
     functionOptionId,
     positionOptionId,
@@ -301,6 +332,7 @@ export async function PUT(req: Request) {
     departmentLevel2OptionId,
     employmentTypeOptionId,
     employmentStatusOptionId,
+    systemSettings,
   ] = await Promise.all([
     has("function")
       ? upsertSelectOption("employee.function", body.function)
@@ -320,6 +352,7 @@ export async function PUT(req: Request) {
     has("employmentStatus")
       ? upsertSelectOption("employee.employmentStatus", body.employmentStatus)
       : Promise.resolve(undefined),
+    systemSettingsPromise,
   ]);
 
   const toNullableNumber = (value: unknown) => {
@@ -356,8 +389,12 @@ export async function PUT(req: Request) {
   if (has("salary")) data.salary = toNullableNumber(body.salary);
   if (has("socialSecurity")) data.socialSecurity = toNullableNumber(body.socialSecurity);
   if (has("providentFund")) data.providentFund = toNullableNumber(body.providentFund);
-  if (has("workstationCost")) data.workstationCost = toNullableNumber(body.workstationCost);
-  if (has("utilityCost")) data.utilityCost = toNullableNumber(body.utilityCost);
+  if (has("workstationCost")) {
+    data.workstationCost = systemSettings.employeeDefaultWorkstationCost;
+  }
+  if (has("utilityCost")) {
+    data.utilityCost = systemSettings.employeeDefaultUtilityCost;
+  }
   if (has("bankAccountNumber")) data.bankAccountNumber = toStringOrNull(body.bankAccountNumber);
   if (has("bankName")) data.bankName = toStringOrNull(body.bankName);
   if (has("bankBranch")) data.bankBranch = toStringOrNull(body.bankBranch);
@@ -391,7 +428,12 @@ export async function PUT(req: Request) {
       select: employeePublicSelect,
     });
 
-    return Response.json(serializeEmployee(employee));
+    return Response.json(
+      serializeEmployee(employee, {
+        workstationCost: systemSettings.employeeDefaultWorkstationCost,
+        utilityCost: systemSettings.employeeDefaultUtilityCost,
+      }),
+    );
   } catch (error: unknown) {
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
       return new Response("Phone already exists", { status: 400 });

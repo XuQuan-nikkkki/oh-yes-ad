@@ -2,6 +2,8 @@ import { PrismaClient } from "@prisma/client";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
+import { requireAuthenticatedEmployee } from "@/lib/api-permissions";
+import { extractRoleCodes } from "@/lib/role-permissions";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -107,7 +109,7 @@ export async function GET(req: NextRequest) {
           project: { select: { id: true, name: true } },
           employee: { select: { id: true, name: true } },
         },
-        orderBy: { startDate: "desc" },
+        orderBy: [{ createdAt: "desc" }, { startDate: "desc" }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
@@ -127,12 +129,14 @@ export async function GET(req: NextRequest) {
       project: { select: { id: true, name: true } },
       employee: { select: { id: true, name: true } },
     },
-    orderBy: { startDate: "desc" },
+    orderBy: [{ createdAt: "desc" }, { startDate: "desc" }],
   });
   return Response.json(items);
 }
 
 export async function POST(req: NextRequest) {
+  const authResult = await requireAuthenticatedEmployee();
+  if (authResult.response) return authResult.response;
   const body = await sanitizeRequestBody(req);
   const projectType = req.nextUrl.searchParams.get("projectType");
   if (!body?.title || typeof body.title !== "string") {
@@ -152,6 +156,11 @@ export async function POST(req: NextRequest) {
   }
   if (new Date(body.endDate).getTime() < new Date(body.startDate).getTime()) {
     return new Response("End date must be after start date", { status: 400 });
+  }
+  const roleCodes = extractRoleCodes(authResult.employee);
+  const isAdmin = roleCodes.includes("ADMIN");
+  if (!isAdmin && body.employeeId !== authResult.session.employeeId) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   const project = await prisma.project.findFirst({

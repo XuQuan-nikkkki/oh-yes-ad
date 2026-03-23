@@ -48,6 +48,10 @@ interface ProjectsTableProps {
   onEdit?: (project: Project) => void;
   onDelete?: (id: string) => void;
   actionsDisabled?: boolean;
+  renderActions?: (project: Project) => ReactNode;
+  renderTypeOption?: (project: Project) => ReactNode;
+  renderStatusOption?: (project: Project) => ReactNode;
+  renderStageOption?: (project: Project) => ReactNode;
 }
 
 const ProjectsTable = ({
@@ -77,6 +81,10 @@ const ProjectsTable = ({
   onEdit,
   onDelete,
   actionsDisabled,
+  renderActions,
+  renderTypeOption,
+  renderStatusOption,
+  renderStageOption,
 }: ProjectsTableProps) => {
   const { canManageProject } = useProjectPermission();
   const resolvedActionsDisabled = actionsDisabled ?? !canManageProject;
@@ -164,6 +172,7 @@ const ProjectsTable = ({
       onFilter: (value: string | number | boolean, record: Project) =>
         (record.typeOption?.value ?? record.type ?? "") === String(value),
       render: (value: string | null, record: Project) => {
+        if (renderTypeOption) return renderTypeOption(record);
         const optionValue =
           record.typeOption?.value ??
           (value
@@ -208,6 +217,7 @@ const ProjectsTable = ({
       onFilter: (value: string | number | boolean, record: Project) =>
         (record.statusOption?.value ?? record.status ?? "") === String(value),
       render: (value: string | null, record: Project) => {
+        if (renderStatusOption) return renderStatusOption(record);
         if (!value) return "-";
         return (
           <SelectOptionTag
@@ -238,6 +248,7 @@ const ProjectsTable = ({
       onFilter: (value: string | number | boolean, record: Project) =>
         (record.stageOption?.value ?? record.stage ?? "") === String(value),
       render: (value: string | null, record: Project) => {
+        if (renderStageOption) return renderStageOption(record);
         if (!value) return "-";
         return (
           <SelectOptionTag
@@ -319,12 +330,14 @@ const ProjectsTable = ({
       title: "操作",
       fixed: "right" as const,
       render: (_: unknown, record: Project) => (
-        <TableActions
-          onEdit={() => onEdit?.(record)}
-          onDelete={() => onDelete?.(record.id)}
-          disabled={resolvedActionsDisabled}
-          deleteTitle="确定删除这个项目？"
-        />
+        renderActions?.(record) ?? (
+          <TableActions
+            onEdit={() => onEdit?.(record)}
+            onDelete={() => onDelete?.(record.id)}
+            disabled={resolvedActionsDisabled}
+            deleteTitle="确定删除这个项目？"
+          />
+        )
       ),
     },
   };

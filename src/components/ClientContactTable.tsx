@@ -22,7 +22,11 @@ type ClientContact = {
   client?: {
     id: string;
     name: string;
-  };
+  } | null;
+  clients?: {
+    id: string;
+    name: string;
+  }[];
 };
 
 type ColumnKey =
@@ -87,6 +91,9 @@ const ClientContactTable = ({
   columnsStatePersistenceKey,
   onDragSortEnd,
 }: Props) => {
+  const effectiveColumnKeys = actionsDisabled
+    ? columnKeys.filter((key) => key !== "actions")
+    : columnKeys;
   const [current, setCurrent] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -99,8 +106,9 @@ const ClientContactTable = ({
   const clientFilters = Array.from(
     new Map(
       contacts
-        .filter((c) => c.client)
-        .map((c) => [c.client!.id, c.client!.name]),
+        .flatMap((c) => c.clients ?? (c.client ? [c.client] : []))
+        .filter((client) => client?.id && client?.name)
+        .map((client) => [client.id, client.name]),
     ).entries(),
   ).map(([id, name]) => ({
     text: name,
@@ -132,20 +140,29 @@ const ClientContactTable = ({
       filters: clientFilters,
       filterSearch: true,
       onFilter: (value, record) =>
-        record.client?.id === value,
-      sorter: (a: ClientContact, b: ClientContact) =>
-        (a.client?.name ?? "").localeCompare(b.client?.name ?? ""),
-      render: (_: unknown, record: ClientContact) =>
-        record.client ? (
-          <AppLink
-            href={`/clients/${record.client.id}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {record.client.name}
-          </AppLink>
-        ) : (
-          "-"
+        (record.clients ?? (record.client ? [record.client] : [])).some(
+          (client) => client.id === value,
         ),
+      sorter: (a: ClientContact, b: ClientContact) =>
+        (a.clients?.[0]?.name ?? a.client?.name ?? "").localeCompare(
+          b.clients?.[0]?.name ?? b.client?.name ?? "",
+        ),
+      render: (_: unknown, record: ClientContact) => {
+        const clients = record.clients ?? (record.client ? [record.client] : []);
+        if (clients.length === 0) return "-";
+
+        return clients.map((client, index) => (
+          <span key={client.id}>
+            {index > 0 ? "、" : ""}
+            <AppLink
+              href={`/clients/${client.id}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {client.name}
+            </AppLink>
+          </span>
+        ));
+      },
     },
     title: {
       key: "title",
@@ -215,13 +232,13 @@ const ClientContactTable = ({
 
   const dragSortEnabled =
     !actionsDisabled && !pagination && Boolean(onDragSortEnd);
-  const columns: ProColumns<ClientContact>[] = columnKeys.map(
+  const columns: ProColumns<ClientContact>[] = effectiveColumnKeys.map(
     (key) => allColumns[key],
   );
   const allowColumnSetting = enableColumnSetting && !dragSortEnabled;
-  const visibleColumnKeys = defaultVisibleColumnKeys ?? columnKeys;
+  const visibleColumnKeys = defaultVisibleColumnKeys ?? effectiveColumnKeys;
   const columnsStateDefaultValue = Object.fromEntries(
-    columnKeys.map((key) => [key, { show: visibleColumnKeys.includes(key) }]),
+    effectiveColumnKeys.map((key) => [key, { show: visibleColumnKeys.includes(key) }]),
   );
 
   const paginationConfig: false | TablePaginationConfig = pagination

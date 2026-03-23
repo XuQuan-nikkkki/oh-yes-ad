@@ -23,6 +23,15 @@ export const PROJECT_RESOURCE_MANAGER_ROLES: readonly AppRoleCode[] = [
   "ADMIN",
   "PROJECT_MANAGER",
 ];
+export const WORKDAY_ADJUSTMENT_MANAGER_ROLES: readonly AppRoleCode[] = [
+  "ADMIN",
+  "HR",
+];
+export const LEAVE_RECORD_MANAGER_ROLES: readonly AppRoleCode[] = [
+  "ADMIN",
+  "PROJECT_MANAGER",
+  "HR",
+];
 
 export const extractRoleCodes = (input: HasRoles | null | undefined) => {
   if (!input?.roles || !Array.isArray(input.roles)) return [] as string[];
@@ -45,3 +54,21 @@ export const canManageProjectResources = (roleCodes: readonly string[]) =>
 export const canManageProjectResourcesByRoles = (
   input: HasRoles | null | undefined,
 ) => canManageProjectResources(extractRoleCodes(input));
+
+export const canManageWorkdayAdjustments = (roleCodes: readonly string[]) =>
+  roleCodes.some((roleCode) =>
+    WORKDAY_ADJUSTMENT_MANAGER_ROLES.includes(roleCode as AppRoleCode),
+  );
+
+export const canManageWorkdayAdjustmentsByRoles = (
+  input: HasRoles | null | undefined,
+) => canManageWorkdayAdjustments(extractRoleCodes(input));
+
+export const canManageLeaveRecords = (roleCodes: readonly string[]) =>
+  roleCodes.some((roleCode) =>
+    LEAVE_RECORD_MANAGER_ROLES.includes(roleCode as AppRoleCode),
+  );
+
+export const canManageLeaveRecordsByRoles = (
+  input: HasRoles | null | undefined,
+) => canManageLeaveRecords(extractRoleCodes(input));

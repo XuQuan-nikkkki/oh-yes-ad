@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { requireLeaveRecordWritePermission } from "@/lib/api-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -96,6 +97,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const permissionResponse = await requireLeaveRecordWritePermission();
+    if (permissionResponse) return permissionResponse;
+
     const { id } = await params;
     const body = await sanitizeRequestBody(req);
     const typeOptionId = await ensureLeaveTypeOptionId(body.type);
@@ -135,6 +139,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const permissionResponse = await requireLeaveRecordWritePermission();
+    if (permissionResponse) return permissionResponse;
+
     const { id } = await params;
     await prisma.leaveRecord.delete({
       where: { id },

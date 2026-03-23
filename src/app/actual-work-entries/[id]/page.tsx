@@ -10,6 +10,8 @@ import DetailPageContainer from "@/components/DetailPageContainer";
 import ActualWorkEntryForm, { ActualWorkEntryFormPayload } from "@/components/project-detail/ActualWorkEntryForm";
 import { DATE_FORMAT, DEFAULT_COLOR } from "@/lib/constants";
 import { formatDate, formatDateRange } from "@/lib/date";
+import { useActualWorkEntriesStore } from "@/stores/actualWorkEntriesStore";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 
 type Detail = {
@@ -39,7 +41,13 @@ export default function Page() {
   const [employees, setEmployees] = useState<{ id: string; name: string; employmentStatus?: string }[]>([]);
   const [dayTotalHours, setDayTotalHours] = useState(0);
   const [messageApi, contextHolder] = message.useMessage();
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const roleCodes = getRoleCodesFromUser(currentUser);
+  const isAdmin = roleCodes.includes("ADMIN");
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const clearEntriesCache = useActualWorkEntriesStore(
+    (state) => state.clearEntriesCache,
+  );
   const getWorkDateKey = (start: string) => formatDate(start, DATE_FORMAT, "");
 
   const fetchDetail = useCallback(async () => {
@@ -124,6 +132,7 @@ export default function Page() {
       messageApi.error("删除失败");
       return;
     }
+    clearEntriesCache();
     messageApi.success("删除成功");
     router.push("/actual-work-entries");
   };
@@ -152,6 +161,9 @@ export default function Page() {
   const actualWorkdays = workdayDenominator > 0 ? actualHours / workdayDenominator : 0;
   const formatNumber = (value: number, fractionDigits: number) =>
     Number(value.toFixed(fractionDigits)).toString();
+  const canManageEntry =
+    isAdmin ||
+    (Boolean(currentUser?.id) && data?.employee?.id === currentUser?.id);
 
   if (loading) {
     return (
@@ -175,22 +187,24 @@ export default function Page() {
       <Card
         title={data.title}
         extra={
-          <Space>
-            <Button icon={<EditOutlined />} onClick={() => void handleOpenEdit()}>
-              编辑
-            </Button>
-            <Popconfirm
-              title="确定删除这条实际工时记录？"
-              okText="删除"
-              cancelText="取消"
-              onConfirm={() => void onDelete()}
-              okButtonProps={{ danger: true, loading: deleting }}
-            >
-              <Button danger loading={deleting}>
-                删除
+          canManageEntry ? (
+            <Space>
+              <Button icon={<EditOutlined />} onClick={() => void handleOpenEdit()}>
+                编辑
               </Button>
-            </Popconfirm>
-          </Space>
+              <Popconfirm
+                title="确定删除这条实际工时记录？"
+                okText="删除"
+                cancelText="取消"
+                onConfirm={() => void onDelete()}
+                okButtonProps={{ danger: true, loading: deleting }}
+              >
+                <Button danger loading={deleting}>
+                  删除
+                </Button>
+              </Popconfirm>
+            </Space>
+          ) : null
         }
       >
         <Descriptions column={3} size="small">

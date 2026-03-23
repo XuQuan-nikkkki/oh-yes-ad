@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
+import { requireProjectWritePermission } from "@/lib/api-permissions";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -17,8 +18,37 @@ const prismaCompat = prisma as unknown as ProjectDocumentCompatClient;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+const parseSelectOptionInput = (value: unknown) => {
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    return {
+      value: normalized || null,
+      color: null as string | null,
+    };
+  }
+  if (value && typeof value === "object") {
+    const candidateValue =
+      "value" in value && typeof value.value === "string"
+        ? value.value.trim()
+        : "";
+    const candidateColor =
+      "color" in value && typeof value.color === "string"
+        ? value.color.trim()
+        : "";
+    return {
+      value: candidateValue || null,
+      color: candidateColor || null,
+    };
+  }
+  return {
+    value: null as string | null,
+    color: null as string | null,
+  };
+};
+
 const upsertSelectOption = async (field: string, value: unknown) => {
-  const normalized = typeof value === "string" ? value.trim() : "";
+  const parsed = parseSelectOptionInput(value);
+  const normalized = parsed.value ?? "";
   if (!normalized) return null;
 
   const option = await prisma.selectOption.upsert({
@@ -31,7 +61,7 @@ const upsertSelectOption = async (field: string, value: unknown) => {
     create: {
       field,
       value: normalized,
-      color: DEFAULT_COLOR,
+      color: parsed.color ?? DEFAULT_COLOR,
     },
     update: {},
   });
@@ -47,7 +77,7 @@ const extractTypeOptionValue = (body: Record<string, unknown>) => {
     return typeof value === "string" ? value : "";
   }
   const legacyType = body.type;
-  return typeof legacyType === "string" ? legacyType : "";
+  return legacyType;
 };
 
 const documentIncludeV2 = {
@@ -133,6 +163,9 @@ export async function GET(_req: NextRequest, context: RouteContext) {
 }
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
+  const permissionResponse = await requireProjectWritePermission();
+  if (permissionResponse) return permissionResponse;
+
   const { id } = await context.params;
   const found = await prisma.projectDocument.findUnique({
     where: { id },
@@ -151,10 +184,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (!project) return new Response("Project not found", { status: 400 });
   }
 
-  const typeOptionId = await upsertSelectOption(
-    "projectDocument.type",
-    extractTypeOptionValue(body),
-  );
+  const hasTypeUpdate =
+    Object.prototype.hasOwnProperty.call(body, "typeOption") ||
+    Object.prototype.hasOwnProperty.call(body, "type");
+  const typeOptionId = hasTypeUpdate
+    ? await upsertSelectOption("projectDocument.type", extractTypeOptionValue(body))
+    : undefined;
   const milestoneId =
     typeof body.milestoneId === "string"
       ? body.milestoneId
@@ -174,12 +209,18 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     item = await prismaCompat.projectDocument.update({
       where: { id },
       data: {
-        name: body.name,
-        typeOptionId,
-        date: body.date ? new Date(body.date) : null,
-        isFinal: Boolean(body.isFinal),
-        internalLink: body.internalLink ?? null,
-        projectId: body.projectId,
+        ...(typeof body.name === "string" ? { name: body.name } : {}),
+        ...(hasTypeUpdate ? { typeOptionId: typeOptionId ?? null } : {}),
+        ...(Object.prototype.hasOwnProperty.call(body, "date")
+          ? { date: body.date ? new Date(String(body.date)) : null }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(body, "isFinal")
+          ? { isFinal: Boolean(body.isFinal) }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(body, "internalLink")
+          ? { internalLink: body.internalLink ?? null }
+          : {}),
+        ...(typeof body.projectId === "string" ? { projectId: body.projectId } : {}),
         ...(milestoneId !== undefined ? { milestoneId } : {}),
       },
       include: documentIncludeV2,
@@ -189,12 +230,18 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     item = await prismaCompat.projectDocument.update({
       where: { id },
       data: {
-        name: body.name,
-        typeOptionId,
-        date: body.date ? new Date(body.date) : null,
-        isFinal: Boolean(body.isFinal),
-        internalLink: body.internalLink ?? null,
-        projectId: body.projectId,
+        ...(typeof body.name === "string" ? { name: body.name } : {}),
+        ...(hasTypeUpdate ? { typeOptionId: typeOptionId ?? null } : {}),
+        ...(Object.prototype.hasOwnProperty.call(body, "date")
+          ? { date: body.date ? new Date(String(body.date)) : null }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(body, "isFinal")
+          ? { isFinal: Boolean(body.isFinal) }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(body, "internalLink")
+          ? { internalLink: body.internalLink ?? null }
+          : {}),
+        ...(typeof body.projectId === "string" ? { projectId: body.projectId } : {}),
         ...(milestoneId !== undefined
           ? {
               milestones: milestoneId
@@ -212,6 +259,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(_req: NextRequest, context: RouteContext) {
+  const permissionResponse = await requireProjectWritePermission();
+  if (permissionResponse) return permissionResponse;
+
   const { id } = await context.params;
   const found = await prisma.projectDocument.findUnique({ where: { id }, select: { id: true } });
   if (!found) return new Response("Not Found", { status: 404 });

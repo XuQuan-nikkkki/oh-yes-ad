@@ -37,10 +37,13 @@ const upsertSelectOption = async (field: string, value?: string | null) => {
 };
 
 const serializeSegment = (segment: {
+  startDate?: Date | string | null;
+  endDate?: Date | string | null;
   statusOption?: { value: string; color: string | null } | null;
 } & Record<string, unknown>) => ({
   ...segment,
   status: segment.statusOption?.value ?? null,
+  dueDate: segment.endDate ?? null,
 });
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
@@ -72,7 +75,14 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       name: body.name,
       statusOptionId,
       ownerId: body.ownerId ?? null,
-      dueDate: body.dueDate ? new Date(body.dueDate) : null,
+      startDate:
+        typeof body.startDate === "string" && body.startDate
+          ? new Date(body.startDate)
+          : null,
+      endDate:
+        typeof (body.endDate ?? body.dueDate) === "string" && (body.endDate ?? body.dueDate)
+          ? new Date(body.endDate ?? body.dueDate)
+          : null,
     },
     include: {
       owner: { select: { id: true, name: true } },

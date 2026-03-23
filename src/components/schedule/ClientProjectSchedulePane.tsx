@@ -1,10 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Collapse, Space, Typography } from "antd";
-import { ProCard } from "@ant-design/pro-components";
+import { Collapse, Space, Tag, Typography } from "antd";
 import AppLink from "@/components/AppLink";
-import SelectOptionTag from "@/components/SelectOptionTag";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 
 type ProjectListItemView = {
   id: string;
@@ -24,6 +23,12 @@ type GroupedVisibleProject = {
 type SelectedProjectView = {
   id: string;
   name: string;
+  status?: string | null;
+  statusOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
 } | null;
 
 type Props = {
@@ -31,6 +36,8 @@ type Props = {
   groupedVisibleProjects: GroupedVisibleProject[];
   selectedClientProject: SelectedProjectView;
   customerScheduleContent: ReactNode;
+  statusActionsDisabled?: boolean;
+  onProjectStatusUpdated?: () => Promise<void> | void;
   onSelectProject: (projectId: string) => void;
 };
 
@@ -39,25 +46,36 @@ const ClientProjectSchedulePane = ({
   groupedVisibleProjects,
   selectedClientProject,
   customerScheduleContent,
+  statusActionsDisabled = false,
+  onProjectStatusUpdated,
   onSelectProject,
 }: Props) => {
   return (
-    <ProCard
-      split="vertical"
-      bordered
-      style={{ width: "100%", minWidth: 0, overflow: "hidden" }}
+    <div
+      style={{
+        width: "100%",
+        minWidth: 0,
+        display: "flex",
+        border: "1px solid #f0f0f0",
+        borderRadius: 8,
+        overflow: "hidden",
+        background: "#fff",
+      }}
     >
-      <ProCard
-        colSpan="200px"
-        title="项目列表"
+      <div
         style={{
           minHeight: 520,
           flex: "0 0 200px",
           minWidth: 200,
           maxWidth: 200,
           borderInlineEnd: "1px solid #f0f0f0",
+          padding: 16,
+          boxSizing: "border-box",
         }}
       >
+        <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>
+          项目列表
+        </Typography.Title>
         <Space orientation="vertical" size={8} style={{ width: "100%" }}>
           <Typography.Text type="secondary">
             共 {visibleProjectCount} 个项目
@@ -76,22 +94,9 @@ const ClientProjectSchedulePane = ({
                 key: group.status,
                 label: (
                   <Space size={6}>
-                    <SelectOptionTag
-                      option={
-                        group.statusOption?.value
-                          ? {
-                              id: group.statusOption.id ?? "",
-                              value: group.statusOption.value,
-                              color: group.statusOption.color ?? null,
-                            }
-                          : {
-                              id: "",
-                              value: group.status,
-                              color: null,
-                            }
-                      }
-                      fallbackText={group.status}
-                    />
+                    <Tag color={group.statusOption?.color ?? "default"}>
+                      {group.statusOption?.value ?? group.status}
+                    </Tag>
                     <Typography.Text type="secondary">
                       （{group.projects.length}）
                     </Typography.Text>
@@ -101,7 +106,11 @@ const ClientProjectSchedulePane = ({
                   marginBottom: 8,
                 },
                 children: (
-                  <Space orientation="vertical" size={6} style={{ width: "100%" }}>
+                  <Space
+                    orientation="vertical"
+                    size={6}
+                    style={{ width: "100%" }}
+                  >
                     {group.projects.map((project) => (
                       <Typography.Text
                         key={project.id}
@@ -110,7 +119,9 @@ const ClientProjectSchedulePane = ({
                           display: "block",
                           cursor: "pointer",
                           fontWeight:
-                            project.id === selectedClientProject?.id ? 600 : 400,
+                            project.id === selectedClientProject?.id
+                              ? 600
+                              : 400,
                           color:
                             project.id === selectedClientProject?.id
                               ? "#1677ff"
@@ -124,46 +135,98 @@ const ClientProjectSchedulePane = ({
                   </Space>
                 ),
               }))}
-              defaultActiveKey={groupedVisibleProjects.map((group) => group.status)}
+              defaultActiveKey={groupedVisibleProjects.map(
+                (group) => group.status,
+              )}
             />
           )}
         </Space>
-      </ProCard>
-      <ProCard
-        title={
-          selectedClientProject ? (
-            <AppLink
-              href={`/projects/${selectedClientProject.id}`}
-              style={{
-                color: "inherit",
-                display: "inline-block",
-                maxWidth: "100%",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {selectedClientProject.name}
-            </AppLink>
-          ) : (
-            "项目排期"
-          )
-        }
-        headerBordered
+      </div>
+      <div
         style={{
           minWidth: 0,
-          width: "calc(100% - 200px)",
-          maxWidth: "calc(100% - 200px)",
-          flex: "0 0 calc(100% - 200px)",
-          overflow: "hidden",
-        }}
-        bodyStyle={{
-          minWidth: 0,
-          backgroundColor: "#F5F5F5",
-          padding: "8px",
-          overflowX: "hidden",
+          width: "auto",
+          maxWidth: "100%",
+          flex: "1 1 0",
+          overflow: "auto",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
+        <div
+          style={{
+            padding: "12px 16px",
+            borderBottom: "1px solid #f0f0f0",
+            minWidth: 0,
+            background: "#fff",
+          }}
+        >
+          {selectedClientProject ? (
+            <Space size={8} wrap style={{ maxWidth: "100%" }}>
+              <AppLink
+                href={`/projects/${selectedClientProject.id}`}
+                style={{
+                  color: "inherit",
+                  display: "inline-block",
+                  maxWidth: "100%",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  fontWeight: 600,
+                }}
+              >
+                {selectedClientProject.name}
+              </AppLink>
+              <SelectOptionQuickEditTag
+                field="project.status"
+                option={
+                  selectedClientProject.statusOption?.value
+                    ? {
+                        id: selectedClientProject.statusOption.id ?? "",
+                        value: selectedClientProject.statusOption.value,
+                        color: selectedClientProject.statusOption.color ?? null,
+                      }
+                    : selectedClientProject.status
+                      ? { value: selectedClientProject.status, color: null }
+                      : null
+                }
+                disabled={statusActionsDisabled}
+                fallbackText="未设置状态"
+                modalTitle="修改项目状态"
+                modalDescription="勾选只会暂存状态切换。点击保存后会一并保存选项改动、排序和项目状态。"
+                emptyText="暂无项目状态"
+                saveSuccessText="项目状态已保存"
+                optionValueLabel="状态值"
+                onSaveSelection={async (selectedOption) => {
+                  const response = await fetch(
+                    `/api/projects/${selectedClientProject.id}`,
+                    {
+                      method: "PATCH",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        status: {
+                          value: selectedOption.value,
+                          color: selectedOption.color,
+                        },
+                      }),
+                    },
+                  );
+
+                  if (!response.ok) {
+                    throw new Error(
+                      (await response.text()) || "更新项目状态失败",
+                    );
+                  }
+                }}
+                onUpdated={onProjectStatusUpdated}
+              />
+            </Space>
+          ) : (
+            <Typography.Text strong>项目排期</Typography.Text>
+          )}
+        </div>
         <div
           style={{
             display: "flex",
@@ -172,13 +235,16 @@ const ClientProjectSchedulePane = ({
             width: "100%",
             minWidth: 0,
             maxWidth: "100%",
-            overflowX: "hidden",
+            overflowX: "auto",
+            backgroundColor: "#F5F5F5",
+            padding: "8px",
+            boxSizing: "border-box",
           }}
         >
           {customerScheduleContent}
         </div>
-      </ProCard>
-    </ProCard>
+      </div>
+    </div>
   );
 };
 

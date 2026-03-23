@@ -17,7 +17,10 @@ import {
   FileTextOutlined,
   IdcardOutlined,
   BankOutlined,
+  WalletOutlined,
   ClockCircleOutlined,
+  CalculatorOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 
@@ -49,15 +52,9 @@ const HomeSiteMap = ({ isAdmin, onNavigate }: Props) => {
 
   const modules: HomeSiteMapModule[] = [
     {
-      title: "客户与供应商",
+      title: "团队协作",
       items: [
-        { label: "客户管理", icon: <UserOutlined />, path: "/clients" },
-        {
-          label: "客户人员",
-          icon: <IdcardOutlined />,
-          path: "/client-contacts",
-        },
-        { label: "供应商管理", icon: <ShopOutlined />, path: "/vendors" },
+        { label: "项目排期", icon: <CalendarOutlined />, path: "/schedule" },
       ],
     },
     {
@@ -116,6 +113,18 @@ const HomeSiteMap = ({ isAdmin, onNavigate }: Props) => {
       ],
     },
     {
+      title: "客户与供应商",
+      items: [
+        { label: "客户管理", icon: <UserOutlined />, path: "/clients" },
+        {
+          label: "客户人员",
+          icon: <IdcardOutlined />,
+          path: "/client-contacts",
+        },
+        { label: "供应商管理", icon: <ShopOutlined />, path: "/vendors" },
+      ],
+    },
+    {
       title: "团队管理",
       items: [
         { label: "团队成员", icon: <TeamOutlined />, path: "/employees" },
@@ -132,6 +141,12 @@ const HomeSiteMap = ({ isAdmin, onNavigate }: Props) => {
           visible: isAdmin,
         },
         {
+          label: "系统参数",
+          icon: <SettingOutlined />,
+          path: "/system-settings",
+          visible: isAdmin,
+        },
+        {
           label: "请假日历",
           icon: <CalendarFilled />,
           path: "/leave-calendar",
@@ -144,20 +159,30 @@ const HomeSiteMap = ({ isAdmin, onNavigate }: Props) => {
       ],
     },
     {
-      title: "公司财务",
-      visible: canViewCompanyFinance,
+      title: "财务管理",
       items: [
+        {
+          label: "项目收付款",
+          icon: <CalculatorOutlined />,
+          path: "/project-receivable-payable",
+        },
+        {
+          label: "项目收款延期",
+          icon: <CalendarOutlined />,
+          path: "/project-receivable-delays",
+        },
         {
           label: "公司主体",
           icon: <BankOutlined />,
           path: "/legal-entities",
+          visible: canViewCompanyFinance,
         },
-      ],
-    },
-    {
-      title: "团队协作",
-      items: [
-        { label: "项目排期", icon: <CalendarOutlined />, path: "/schedule" },
+        {
+          label: "公司账户余额",
+          icon: <WalletOutlined />,
+          path: "/company-account-balances",
+          visible: canViewCompanyFinance,
+        },
       ],
     },
   ];

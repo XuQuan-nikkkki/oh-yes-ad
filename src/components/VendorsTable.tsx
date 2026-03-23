@@ -53,6 +53,9 @@ type Props = {
   toolbarActions?: React.ReactNode[];
   showColumnSetting?: boolean;
   cardBodyStyle?: CSSProperties;
+  renderVendorTypeOption?: (vendor: Vendor) => React.ReactNode;
+  renderBusinessTypeOptions?: (vendor: Vendor) => React.ReactNode;
+  renderServiceOptions?: (vendor: Vendor) => React.ReactNode;
 };
 
 const VendorsTable = ({
@@ -87,9 +90,15 @@ const VendorsTable = ({
   toolbarActions = [],
   showColumnSetting = true,
   cardBodyStyle,
+  renderVendorTypeOption,
+  renderBusinessTypeOptions,
+  renderServiceOptions,
 }: Props) => {
   const { canManageCrm } = useCrmPermission();
   const resolvedActionsDisabled = actionsDisabled ?? !canManageCrm;
+  const effectiveColumnKeys = resolvedActionsDisabled
+    ? columnKeys.filter((key) => key !== "actions")
+    : columnKeys;
   const vendorTypeOptions = useSelectOptionsStore(
     (state) => state.optionsByField["vendor.vendorType"] ?? EMPTY_SELECT_OPTIONS,
   );
@@ -179,7 +188,7 @@ const VendorsTable = ({
         onFilter: (value, record) =>
           record.vendorTypeOptionId === String(value),
         render: (_dom, record) => (
-          <VendorOptionValue option={record.vendorTypeOption} />
+          renderVendorTypeOption ? renderVendorTypeOption(record) : <VendorOptionValue option={record.vendorTypeOption} />
         ),
       },
       businessType: {
@@ -190,7 +199,7 @@ const VendorsTable = ({
         onFilter: (value, record) =>
           record.businessTypeOptionIds?.includes(String(value)) ?? false,
         render: (_dom, record) => (
-          <VendorOptionListValue
+          renderBusinessTypeOptions ? renderBusinessTypeOptions(record) : <VendorOptionListValue
             options={record.businessTypeOptions}
             fallbackOption={
               record.businessTypeOption
@@ -212,7 +221,7 @@ const VendorsTable = ({
         onFilter: (value, record) =>
           record.serviceOptionIds?.includes(String(value)) ?? false,
         render: (_dom, record) => (
-          <VendorOptionListValue options={record.serviceOptions} />
+          renderServiceOptions ? renderServiceOptions(record) : <VendorOptionListValue options={record.serviceOptions} />
         ),
       },
       cooperationStatus: {
@@ -313,7 +322,7 @@ const VendorsTable = ({
       },
     };
 
-    return columnKeys.map((key) => allColumns[key]);
+    return effectiveColumnKeys.map((key) => allColumns[key]);
   }, [
     vendors,
     vendorTypeFilters,
@@ -326,7 +335,10 @@ const VendorsTable = ({
     actionDeleteText,
     actionDeleteTitle,
     resolvedActionsDisabled,
-    columnKeys,
+    effectiveColumnKeys,
+    renderVendorTypeOption,
+    renderBusinessTypeOptions,
+    renderServiceOptions,
   ]);
 
   const tableOptions = useMemo(

@@ -5,6 +5,7 @@ import { message } from "antd";
 import { useRouter } from "next/navigation";
 import TableActions from "@/components/TableActions";
 import { useCrmPermission } from "@/hooks/useCrmPermission";
+import { useClientsStore } from "@/stores/clientsStore";
 
 type Props = {
   clientId: string;
@@ -17,6 +18,7 @@ const ClientDetailActions = ({ clientId, clientName, onEdit }: Props) => {
   const [deleting, setDeleting] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
   const { canManageCrm } = useCrmPermission();
+  const removeClientFromStore = useClientsStore((state) => state.removeClient);
 
   const handleDeleteClient = async () => {
     if (!clientId) return;
@@ -32,6 +34,7 @@ const ClientDetailActions = ({ clientId, clientName, onEdit }: Props) => {
         throw new Error("删除失败");
       }
 
+      removeClientFromStore(clientId);
       messageApi.success("删除成功");
       router.push("/clients");
     } catch (error) {
@@ -51,6 +54,7 @@ const ClientDetailActions = ({ clientId, clientName, onEdit }: Props) => {
         disabled={!canManageCrm}
         deleteLoading={deleting}
         deleteTitle={`确定删除客户「${clientName ?? ""}」？`}
+        disableTextVairant
       />
     </>
   );

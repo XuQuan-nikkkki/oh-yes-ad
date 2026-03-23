@@ -1,26 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, DatePicker, Form, Input, Modal, Select } from "antd";
-import dayjs from "dayjs";
+import { Button, Modal } from "antd";
 import ProjectTasksListTable, {
   type ProjectTaskListRow,
 } from "@/components/ProjectTasksListTable";
 import ListPageContainer from "@/components/ListPageContainer";
 import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
+import ProjectTaskForm, {
+  type ProjectTaskFormPayload,
+} from "@/components/project-detail/ProjectTaskForm";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
+import { PROJECT_TASK_STATUS_FIELD } from "@/lib/constants";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useProjectTasksStore } from "@/stores/projectTasksStore";
+import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 
 type Row = ProjectTaskListRow;
 const EMPTY_ROWS: Row[] = [];
-
-type FormValues = {
-  name: string;
-  segmentId: string;
-  ownerId?: string;
-  dueDate?: dayjs.Dayjs;
-};
 
 export default function ProjectTasksPage() {
   const [employees, setEmployees] = useState<{ id: string; name: string }[]>(
@@ -28,7 +26,6 @@ export default function ProjectTasksPage() {
   );
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
-  const [form] = Form.useForm<FormValues>();
   const { canManageProject } = useProjectPermission();
   const rowsByKey = useProjectTasksStore((state) => state.tasksByKey);
   const rows = (rowsByKey["owner:all"] ?? EMPTY_ROWS) as Row[];
@@ -39,22 +36,44 @@ export default function ProjectTasksPage() {
   const upsertTasks = useProjectTasksStore((state) => state.upsertTasks);
   const removeTask = useProjectTasksStore((state) => state.removeTask);
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
+  const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
+
+  const statusFilterOptions = useMemo(
+    () =>
+      (optionsByField[PROJECT_TASK_STATUS_FIELD] ?? [])
+        .slice()
+        .sort((left, right) => {
+          const leftOrder = left.order ?? Number.MAX_SAFE_INTEGER;
+          const rightOrder = right.order ?? Number.MAX_SAFE_INTEGER;
+          if (leftOrder !== rightOrder) {
+            return leftOrder - rightOrder;
+          }
+          return left.value.localeCompare(right.value, "zh-CN");
+        })
+        .map((option) => ({
+          text: option.value,
+          value: option.value,
+        })),
+    [optionsByField],
+  );
 
   const fetchBaseData = useCallback(async () => {
     const [taskRows, employeeRows] = await Promise.all([
       fetchTasksFromStore(),
       fetchEmployeesFromStore(),
+      fetchAllOptions(),
     ]);
     if (Array.isArray(taskRows) && taskRows.length > 0) {
       upsertTasks(taskRows);
     }
     setEmployees(Array.isArray(employeeRows) ? employeeRows : []);
-  }, [fetchEmployeesFromStore, fetchTasksFromStore, upsertTasks]);
+  }, [fetchAllOptions, fetchEmployeesFromStore, fetchTasksFromStore, upsertTasks]);
 
   const segments = useMemo(() => {
     const segmentMap = new Map<
       string,
-      { id: string; name: string; project?: { name: string } }
+      { id: string; name: string; project?: { id?: string; name: string } }
     >();
     for (const row of rows) {
       const segmentId = row.segment?.id;
@@ -65,7 +84,7 @@ export default function ProjectTasksPage() {
         id: segmentId,
         name: segmentName,
         project: row.segment?.project
-          ? { name: row.segment.project.name }
+          ? { id: row.segment.project.id, name: row.segment.project.name }
           : undefined,
       });
     }
@@ -102,14 +121,8 @@ export default function ProjectTasksPage() {
     removeTask(id);
   };
 
-  const onSubmit = async (values: FormValues) => {
+  const onSubmit = async (payload: ProjectTaskFormPayload) => {
     if (!canManageProject) return;
-    const payload = {
-      name: values.name,
-      segmentId: values.segmentId,
-      ownerId: values.ownerId ?? null,
-      dueDate: values.dueDate ? values.dueDate.toISOString() : null,
-    };
     let res: Response;
     if (editing) {
       res = await fetch(`/api/project-tasks/${editing.id}`, {
@@ -137,19 +150,32 @@ export default function ProjectTasksPage() {
     await fetchTasksFromStore({ force: true });
   };
 
-  useEffect(() => {
-    if (!open) return;
-    if (!editing) {
-      form.resetFields();
-      return;
-    }
-    form.setFieldsValue({
-      name: editing.name,
-      segmentId: editing.segment?.id,
-      ownerId: editing.owner?.id,
-      dueDate: editing.dueDate ? dayjs(editing.dueDate) : undefined,
-    });
-  }, [editing, form, open]);
+  const refreshTasks = useCallback(async () => {
+    await fetchTasksFromStore({ force: true });
+  }, [fetchTasksFromStore]);
+
+  const updateTaskStatus = useCallback(
+    async (
+      taskId: string,
+      nextOption: { id: string; value: string; color: string },
+    ) => {
+      const res = await fetch(`/api/project-tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: nextOption,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error((await res.text()) || "更新任务状态失败");
+      }
+      const next = (await res.json()) as Row | null;
+      if (next?.id) {
+        upsertTasks([next]);
+      }
+    },
+    [upsertTasks],
+  );
 
   return (
     <ListPageContainer>
@@ -158,6 +184,23 @@ export default function ProjectTasksPage() {
         loading={rowsLoading}
         headerTitle={<ProTableHeaderTitle>项目任务</ProTableHeaderTitle>}
         showTableOptions
+        statusFilterOptions={statusFilterOptions}
+        renderStatusOption={(record) => (
+          <SelectOptionQuickEditTag
+            field="projectTask.status"
+            option={record.statusOption ?? null}
+            fallbackText={record.status ?? "-"}
+            disabled={!canManageProject}
+            modalTitle="修改任务状态"
+            modalDescription="勾选只会暂存状态切换。点击保存后会一并保存选项改动、排序和任务状态。"
+            optionValueLabel="状态值"
+            saveSuccessText="任务状态已保存"
+            onSaveSelection={(nextOption) => updateTaskStatus(record.id, nextOption)}
+            onUpdated={async () => {
+              await refreshTasks();
+            }}
+          />
+        )}
         onEdit={(row) => onEdit(row)}
         onDelete={(id) => onDelete(id)}
         actionsDisabled={!canManageProject}
@@ -174,36 +217,31 @@ export default function ProjectTasksPage() {
         onCancel={() => setOpen(false)}
         footer={null}
         destroyOnHidden
+        width={860}
       >
-        <Form layout="vertical" form={form} onFinish={onSubmit}>
-          <Form.Item label="任务名称" name="name" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item
-            label="所属环节"
-            name="segmentId"
-            rules={[{ required: true }]}
-          >
-            <Select
-              options={segments.map((s) => ({
-                label: `${s.project?.name ?? ""}-${s.name}`,
-                value: s.id,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item label="负责人" name="ownerId">
-            <Select
-              allowClear
-              options={employees.map((e) => ({ label: e.name, value: e.id }))}
-            />
-          </Form.Item>
-          <Form.Item label="截止日期" name="dueDate">
-            <DatePicker style={{ width: "100%" }} />
-          </Form.Item>
-          <Button block type="primary" htmlType="submit">
-            保存
-          </Button>
-        </Form>
+        <ProjectTaskForm
+          segmentOptions={segments.map((segment) => ({
+            id: segment.id,
+            name: segment.name,
+            projectId: segment.project?.id,
+            projectName: segment.project?.name,
+          }))}
+          employees={employees}
+          initialValues={
+            editing
+              ? {
+                  id: editing.id,
+                  name: editing.name,
+                  segmentId: editing.segment?.id,
+                  status: editing.status ?? null,
+                  statusOption: editing.statusOption ?? null,
+                  owner: editing.owner ?? null,
+                  dueDate: editing.dueDate ?? null,
+                }
+              : null
+          }
+          onSubmit={onSubmit}
+        />
       </Modal>
     </ListPageContainer>
   );

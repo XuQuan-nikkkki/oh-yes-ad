@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Button, message, Select } from "antd";
+import { Button, message, Radio } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import EmployeeFormModal from "@/components/EmployeeFormModal";
 import EmployeesTable, {
@@ -12,7 +12,7 @@ import ListPageContainer from "@/components/ListPageContainer";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 
-type EmployeeViewMode = "basic" | "role" | "position";
+type EmployeeViewMode = "basic" | "position";
 type RoleCode = "ADMIN" | "PROJECT_MANAGER" | "HR" | "FINANCE" | "STAFF";
 
 const EmployeesPage = () => {
@@ -64,20 +64,18 @@ const EmployeesPage = () => {
     })();
   }, []);
 
-  const isAdmin = roleCodes.includes("ADMIN");
-  const canUseRoleView = isAdmin;
   const canUsePositionView =
-    isAdmin || roleCodes.includes("HR") || roleCodes.includes("FINANCE");
+    roleCodes.includes("ADMIN") ||
+    roleCodes.includes("HR") ||
+    roleCodes.includes("FINANCE");
+  const canViewRolesInBasic =
+    roleCodes.includes("ADMIN") || roleCodes.includes("HR");
 
   useEffect(() => {
-    if (viewMode === "role" && !canUseRoleView) {
-      setViewMode("basic");
-      return;
-    }
     if (viewMode === "position" && !canUsePositionView) {
       setViewMode("basic");
     }
-  }, [viewMode, canUseRoleView, canUsePositionView]);
+  }, [viewMode, canUsePositionView]);
 
   const functionOptions = Array.from(
     new Set(employees.map((e) => e.function).filter(Boolean) as string[]),
@@ -142,11 +140,19 @@ const EmployeesPage = () => {
   };
 
   const columnKeysByMode: Record<EmployeeViewMode, EmployeeColumnKey[]> = {
-    basic: ["name", "fullName", "function", "employmentStatus", "actions"],
-    role: ["name", "roles", "actions"],
+    basic: [
+      "name",
+      "fullName",
+      "function",
+      "phone",
+      "employmentStatus",
+      ...(canViewRolesInBasic ? (["roles"] as EmployeeColumnKey[]) : []),
+      "actions",
+    ],
     position: [
       "name",
       "fullName",
+      "phone",
       "function",
       "legalEntity",
       "departmentLevel1",
@@ -183,21 +189,17 @@ const EmployeesPage = () => {
           onDelete={handleDelete}
           onOptionUpdated={fetchEmployees}
           toolbarActions={[
-            <Select
+            <Radio.Group
               key="employees-view-mode"
               value={viewMode}
               style={{ minWidth: 140 }}
-              options={[
-                { label: "基础信息", value: "basic" },
-                { label: "角色信息", value: "role", disabled: !canUseRoleView },
-                {
-                  label: "岗位信息",
-                  value: "position",
-                  disabled: !canUsePositionView,
-                },
-              ]}
-              onChange={(value: EmployeeViewMode) => setViewMode(value)}
-            />,
+              onChange={(event) => setViewMode(event.target.value as EmployeeViewMode)}
+            >
+              <Radio.Button value="basic">基础信息</Radio.Button>
+              <Radio.Button value="position" disabled={!canUsePositionView}>
+                岗位信息
+              </Radio.Button>
+            </Radio.Group>,
             <Button
               key="create-employee"
               type="primary"

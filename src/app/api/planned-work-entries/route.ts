@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { DEFAULT_COLOR } from "@/lib/constants";
+import { requireProjectWritePermission } from "@/lib/api-permissions";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -234,6 +235,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const permissionResponse = await requireProjectWritePermission();
+  if (permissionResponse) return permissionResponse;
+
   const body = await sanitizeRequestBody(req);
   const projectType = req.nextUrl.searchParams.get("projectType");
   if (!body?.taskId || typeof body.taskId !== "string") {

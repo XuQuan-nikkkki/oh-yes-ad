@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { Modal, Form, Input, Select, Button } from "antd";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Col, DatePicker, Input, Modal, Row, Select, Switch } from "antd";
+import { ProForm, StepsForm } from "@ant-design/pro-components";
+import type { FormInstance } from "antd/es/form";
+import dayjs from "dayjs";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import SelectOptionSelector, {
   type SelectOptionSelectorValue,
@@ -14,10 +17,13 @@ type Project = {
   id?: string;
   name?: string;
   type?: string;
+  isArchived?: boolean | null;
   status?: string | null;
   stage?: string | null;
   clientId?: string | null;
   ownerId?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
 };
 
 type Employee = {
@@ -39,11 +45,55 @@ type Props = {
 
 type ProjectFormValues = {
   name: string;
-  type: string;
-  status?: SelectOptionSelectorValue;
-  stage?: SelectOptionSelectorValue;
+  type?: string;
   clientId?: string | null;
   ownerId?: string | null;
+  status?: SelectOptionSelectorValue;
+  stage?: SelectOptionSelectorValue;
+  startDate?: dayjs.Dayjs;
+  endDate?: dayjs.Dayjs;
+  isArchived?: boolean;
+};
+
+const normalizeProjectTypeCode = (value: unknown): string | null => {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!normalized) return null;
+  if (normalized === "客户项目") return "CLIENT";
+  if (normalized === "内部项目") return "INTERNAL";
+  return normalized;
+};
+
+const normalizeIdValue = (value: unknown): string | null => {
+  return typeof value === "string" && value.trim() ? value : null;
+};
+
+const normalizeSelectOptionValue = (value: unknown) => {
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    return normalized || null;
+  }
+  if (value && typeof value === "object") {
+    const candidateValue =
+      "value" in value && typeof value.value === "string"
+        ? value.value.trim()
+        : "";
+    const candidateColor =
+      "color" in value && typeof value.color === "string"
+        ? value.color.trim()
+        : "";
+    if (!candidateValue) return null;
+    return {
+      value: candidateValue,
+      color: candidateColor || null,
+    };
+  }
+  return null;
+};
+
+const normalizeDateValue = (value: unknown) => {
+  if (!value) return null;
+  const parsed = dayjs.isDayjs(value) ? value : dayjs(value as string | Date);
+  return parsed.isValid() ? parsed.toISOString() : null;
 };
 
 const ProjectFormModal = ({
@@ -56,18 +106,18 @@ const ProjectFormModal = ({
   projectType,
   clientEditable = true,
 }: Props) => {
-  const [form] = Form.useForm<ProjectFormValues>();
-  const projectTypeValue = Form.useWatch("type", form);
-  const fetchAllOptions = useSelectOptionsStore(
-    (state) => state.fetchAllOptions,
+  const [submitting, setSubmitting] = useState(false);
+  const [currentTypeCode, setCurrentTypeCode] = useState<string | null>(
+    normalizeProjectTypeCode(initialValues?.type ?? projectType),
   );
+  const baseFormRef = useRef<FormInstance<ProjectFormValues> | undefined>(undefined);
+  const progressFormRef = useRef<FormInstance<ProjectFormValues> | undefined>(undefined);
+  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const statusOptions = optionsByField["project.status"] ?? [];
   const stageOptions = optionsByField["project.stage"] ?? [];
 
-  const fetchEmployeesFromStore = useEmployeesStore(
-    (state) => state.fetchEmployees,
-  );
+  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const storedEmployeesRaw = useEmployeesStore((state) => state.employees);
   const storedEmployees = useMemo(
     () =>
@@ -80,58 +130,72 @@ const ProjectFormModal = ({
       ),
     [storedEmployeesRaw],
   );
-
-  // 优先使用 store 中的数据，如果 store 为空才使用传入的 props
   const employees =
     storedEmployees.length > 0 ? storedEmployees : employeesFromProps;
 
   const isEdit = !!initialValues?.id;
-  const normalizeProjectTypeCode = (value: unknown): string | null => {
-    const normalized = typeof value === "string" ? value.trim() : "";
-    if (!normalized) return null;
-    if (normalized === "客户项目") return "CLIENT";
-    if (normalized === "内部项目") return "INTERNAL";
-    return normalized;
-  };
   const fixedTypeCode = normalizeProjectTypeCode(projectType);
-  const currentTypeCode = normalizeProjectTypeCode(
-    (projectTypeValue as string | undefined) ??
-      initialValues?.type ??
-      projectType,
-  );
   const isInternalProject = currentTypeCode === "INTERNAL";
 
   useEffect(() => {
     if (!open) return;
     void fetchAllOptions();
     void fetchEmployeesFromStore();
-  }, [fetchAllOptions, fetchEmployeesFromStore, open]);
+    setCurrentTypeCode(normalizeProjectTypeCode(initialValues?.type ?? projectType));
+  }, [
+    fetchAllOptions,
+    fetchEmployeesFromStore,
+    initialValues?.type,
+    open,
+    projectType,
+  ]);
 
-  const normalizeIdValue = (value: unknown): string | null => {
-    return typeof value === "string" && value.trim() ? value : null;
-  };
+  const baseValues = useMemo<ProjectFormValues>(
+    () => ({
+      name: initialValues?.name ?? "",
+      type:
+        normalizeProjectTypeCode(initialValues?.type) ??
+        fixedTypeCode ??
+        undefined,
+      clientId:
+        normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) === "INTERNAL"
+          ? undefined
+          : initialValues?.clientId ?? undefined,
+      ownerId: initialValues?.ownerId ?? undefined,
+      status:
+        normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) === "INTERNAL"
+          ? undefined
+          : initialValues?.status ?? undefined,
+      stage:
+        normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) === "INTERNAL"
+          ? undefined
+          : initialValues?.stage ?? undefined,
+      startDate: initialValues?.startDate ? dayjs(initialValues.startDate) : undefined,
+      endDate: initialValues?.endDate ? dayjs(initialValues.endDate) : undefined,
+      isArchived: Boolean(initialValues?.isArchived),
+    }),
+    [
+      fixedTypeCode,
+      initialValues?.clientId,
+      initialValues?.endDate,
+      initialValues?.isArchived,
+      initialValues?.name,
+      initialValues?.ownerId,
+      initialValues?.stage,
+      initialValues?.startDate,
+      initialValues?.status,
+      initialValues?.type,
+    ],
+  );
 
-  const normalizeSelectOptionValue = (value: unknown) => {
-    if (typeof value === "string") {
-      const normalized = value.trim();
-      return normalized || null;
+  const handleTypeChange = (nextType: string) => {
+    const normalizedType = normalizeProjectTypeCode(nextType);
+    setCurrentTypeCode(normalizedType);
+    if (normalizedType === "INTERNAL") {
+      baseFormRef.current?.setFieldValue("clientId", undefined);
+      progressFormRef.current?.setFieldValue("status", undefined);
+      progressFormRef.current?.setFieldValue("stage", undefined);
     }
-    if (value && typeof value === "object") {
-      const candidateValue =
-        "value" in value && typeof value.value === "string"
-          ? value.value.trim()
-          : "";
-      const candidateColor =
-        "color" in value && typeof value.color === "string"
-          ? value.color.trim()
-          : "";
-      if (!candidateValue) return null;
-      return {
-        value: candidateValue,
-        color: candidateColor || null,
-      };
-    }
-    return null;
   };
 
   const handleSubmit = async (values: ProjectFormValues) => {
@@ -141,142 +205,203 @@ const ProjectFormModal = ({
     const payload = {
       name: values.name,
       type,
-      status: isInternal ? null : normalizeSelectOptionValue(values.status),
-      stage: isInternal ? null : normalizeSelectOptionValue(values.stage),
       clientId: isInternal ? null : normalizeIdValue(values.clientId),
       ownerId: normalizeIdValue(values.ownerId),
+      status: isInternal ? null : normalizeSelectOptionValue(values.status),
+      stage: isInternal ? null : normalizeSelectOptionValue(values.stage),
+      startDate: normalizeDateValue(values.startDate),
+      endDate: normalizeDateValue(values.endDate),
+      isArchived: Boolean(values.isArchived),
     };
 
-    const res = await fetch("/api/projects", {
-      method: isEdit ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        isEdit ? { id: initialValues?.id, ...payload } : payload,
-      ),
-    });
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/projects", {
+        method: isEdit ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          isEdit ? { id: initialValues?.id, ...payload } : payload,
+        ),
+      });
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || "保存项目失败");
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "保存项目失败");
+      }
+
+      onSuccess();
+      return true;
+    } finally {
+      setSubmitting(false);
     }
-
-    onSuccess();
   };
 
   return (
     <Modal
       title={isEdit ? "编辑项目" : "新建项目"}
       open={open}
-      onCancel={onCancel}
+      onCancel={() => {
+        if (submitting) return;
+        onCancel();
+      }}
       footer={null}
       destroyOnHidden
+      width={860}
     >
-      <Form
-        form={form}
-        key={initialValues?.id || "new"}
-        layout="horizontal"
-        labelCol={{ span: 6 }}
-        wrapperCol={{ span: 18 }}
-        initialValues={{
-          name: initialValues?.name,
-          type:
-            normalizeProjectTypeCode(initialValues?.type) ??
-            fixedTypeCode ??
-            undefined,
-          status: isInternalProject
-            ? undefined
-            : (initialValues?.status ?? undefined),
-          stage: isInternalProject
-            ? undefined
-            : (initialValues?.stage ?? undefined),
-          clientId: isInternalProject ? undefined : initialValues?.clientId,
-          ownerId: initialValues?.ownerId,
-        }}
+      <StepsForm<ProjectFormValues>
         onFinish={handleSubmit}
+        stepsProps={{ size: "small" }}
+        submitter={{
+          submitButtonProps: { loading: submitting },
+        }}
       >
-        <Form.Item
-          label="项目名称"
-          name="name"
-          rules={[{ required: true, message: "请输入项目名称" }]}
+        <StepsForm.StepForm<ProjectFormValues>
+          title="基础信息"
+          initialValues={baseValues}
+          formRef={baseFormRef}
         >
-          <Input />
-        </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProForm.Item
+                label="项目名称"
+                name="name"
+                rules={[{ required: true, message: "请输入项目名称" }]}
+              >
+                <Input />
+              </ProForm.Item>
+            </Col>
+            <Col span={12}>
+              <ProForm.Item
+                label="项目类型"
+                name="type"
+                rules={[{ required: true, message: "请选择项目类型" }]}
+              >
+                <Select
+                  options={[
+                    { label: "客户项目", value: "CLIENT" },
+                    { label: "内部项目", value: "INTERNAL" },
+                  ]}
+                  placeholder="选择项目类型"
+                  disabled={Boolean(fixedTypeCode)}
+                  onChange={handleTypeChange}
+                />
+              </ProForm.Item>
+            </Col>
+          </Row>
 
-        <Form.Item
-          label="项目类型"
-          name="type"
-          rules={[{ required: true, message: "请选择项目类型" }]}
+          <Row gutter={16}>
+            {!isInternalProject ? (
+              <Col span={12}>
+                <ProForm.Item
+                  label="所属客户"
+                  name="clientId"
+                  rules={[{ required: true, message: "请选择客户" }]}
+                >
+                  <Select
+                    options={clients.map((client) => ({
+                      label: client.name,
+                      value: client.id,
+                    }))}
+                    placeholder="选择客户"
+                    disabled={!clientEditable}
+                  />
+                </ProForm.Item>
+              </Col>
+            ) : null}
+
+            <Col span={12}>
+              <ProForm.Item
+                label="项目负责人"
+                name="ownerId"
+                rules={[{ required: true, message: "请选择项目负责人" }]}
+              >
+                <Select
+                  options={employees
+                    .filter((employee) => employee.employmentStatus === "在职")
+                    .map((employee) => ({
+                      label: employee.name,
+                      value: employee.id,
+                    }))}
+                  placeholder="选择负责人"
+                />
+              </ProForm.Item>
+            </Col>
+          </Row>
+        </StepsForm.StepForm>
+
+        <StepsForm.StepForm<ProjectFormValues>
+          title="项目进度"
+          initialValues={baseValues}
+          formRef={progressFormRef}
         >
-          <Select
-            options={[
-              { label: "客户项目", value: "CLIENT" },
-              { label: "内部项目", value: "INTERNAL" },
-            ]}
-            placeholder="选择项目类型"
-            disabled={Boolean(fixedTypeCode)}
-          />
-        </Form.Item>
+          <Row gutter={16}>
+            {!isInternalProject ? (
+              <Col span={12}>
+                <ProForm.Item
+                  label="项目状态"
+                  name="status"
+                  rules={[{ required: true, message: "请选择项目状态" }]}
+                >
+                  <SelectOptionSelector
+                    placeholder="选择或新增项目状态"
+                    allowClear={false}
+                    options={statusOptions.map((item) => ({
+                      label: item.value,
+                      value: item.value,
+                      color: item.color ?? DEFAULT_COLOR,
+                    }))}
+                  />
+                </ProForm.Item>
+              </Col>
+            ) : null}
 
-        {!isInternalProject && (
-          <Form.Item
-            label="所属客户"
-            name="clientId"
-            rules={[{ required: true, message: "请选择客户" }]}
-          >
-            <Select
-              options={clients.map((c) => ({
-                label: c.name,
-                value: c.id,
-              }))}
-              placeholder="选择客户"
-              disabled={!clientEditable}
-            />
-          </Form.Item>
-        )}
+            {!isInternalProject ? (
+              <Col span={12}>
+                <ProForm.Item
+                  label="项目阶段"
+                  name="stage"
+                  rules={[{ required: true, message: "请选择项目阶段" }]}
+                >
+                  <SelectOptionSelector
+                    placeholder="选择或新增项目阶段"
+                    allowClear={false}
+                    options={stageOptions.map((item) => ({
+                      label: item.value,
+                      value: item.value,
+                      color: item.color ?? DEFAULT_COLOR,
+                    }))}
+                  />
+                </ProForm.Item>
+              </Col>
+            ) : null}
+          </Row>
 
-        <Form.Item label="项目负责人" name="ownerId">
-          <Select
-            options={employees
-              .filter((e) => e.employmentStatus === "在职")
-              .map((e) => ({
-                label: e.name,
-                value: e.id,
-              }))}
-            placeholder="选择负责人（可选）"
-            allowClear
-          />
-        </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProForm.Item
+                label="开始时间"
+                name="startDate"
+                rules={[{ required: true, message: "请选择开始时间" }]}
+              >
+                <DatePicker style={{ width: "100%" }} />
+              </ProForm.Item>
+            </Col>
+            <Col span={12}>
+              <ProForm.Item label="结束时间" name="endDate">
+                <DatePicker style={{ width: "100%" }} />
+              </ProForm.Item>
+            </Col>
+          </Row>
 
-        {!isInternalProject && (
-          <Form.Item label="项目状态" name="status">
-            <SelectOptionSelector
-              placeholder="选择或新增项目状态（可选）"
-              options={statusOptions.map((item) => ({
-                label: item.value,
-                value: item.value,
-                color: item.color ?? DEFAULT_COLOR,
-              }))}
-            />
-          </Form.Item>
-        )}
-
-        {!isInternalProject && (
-          <Form.Item label="项目阶段" name="stage">
-            <SelectOptionSelector
-              placeholder="选择或新增项目阶段（可选）"
-              options={stageOptions.map((item) => ({
-                label: item.value,
-                value: item.value,
-                color: item.color ?? DEFAULT_COLOR,
-              }))}
-            />
-          </Form.Item>
-        )}
-
-        <Button type="primary" htmlType="submit" block>
-          保存
-        </Button>
-      </Form>
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProForm.Item label="是否归档" name="isArchived" valuePropName="checked">
+                <Switch checkedChildren="已归档" unCheckedChildren="未归档" />
+              </ProForm.Item>
+            </Col>
+          </Row>
+        </StepsForm.StepForm>
+      </StepsForm>
     </Modal>
   );
 };

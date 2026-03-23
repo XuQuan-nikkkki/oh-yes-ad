@@ -5,7 +5,7 @@ import { Card, Descriptions } from "antd";
 import { useParams } from "next/navigation";
 import ClientFormModal from "@/components/ClientFormModal";
 import DetailPageContainer from "@/components/DetailPageContainer";
-import SelectOptionTag from "@/components/SelectOptionTag";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useSelectOptionsByField } from "@/hooks/useSelectOptions";
 import { useClientsStore } from "@/stores/clientsStore";
@@ -99,10 +99,14 @@ const ClientDetailPage = () => {
         >
           <Descriptions column={2} size="small">
             <Descriptions.Item label="行业">
-              <SelectOptionTag
+              <SelectOptionQuickEditTag
+                field="client.industry"
                 option={displayClient.industryOption}
                 fallbackText="-"
-                successMessage="行业标签已更新"
+                disabled={!canManageProject}
+                modalTitle="修改行业"
+                optionValueLabel="行业名称"
+                saveSuccessText="行业标签已更新"
                 onUpdated={async () => {
                   await fetchClient(false);
                   await fetchAllOptions(true);

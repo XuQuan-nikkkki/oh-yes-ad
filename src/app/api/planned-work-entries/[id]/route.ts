@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { DEFAULT_COLOR } from "@/lib/constants";
+import { requireProjectWritePermission } from "@/lib/api-permissions";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -89,6 +90,9 @@ export async function GET(req: NextRequest, context: RouteContext) {
         select: {
           id: true,
           name: true,
+          statusOption: {
+            select: { id: true, value: true, color: true },
+          },
           owner: {
             select: {
               id: true,
@@ -117,6 +121,9 @@ export async function GET(req: NextRequest, context: RouteContext) {
 }
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
+  const permissionResponse = await requireProjectWritePermission();
+  if (permissionResponse) return permissionResponse;
+
   const { id } = await context.params;
   const internalOnly = isInternalOnly(req.nextUrl.searchParams.get("projectType"));
   const found = await prisma.plannedWorkEntry.findFirst({
@@ -179,6 +186,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         select: {
           id: true,
           name: true,
+          statusOption: {
+            select: { id: true, value: true, color: true },
+          },
           owner: {
             select: {
               id: true,
@@ -206,6 +216,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(req: NextRequest, context: RouteContext) {
+  const permissionResponse = await requireProjectWritePermission();
+  if (permissionResponse) return permissionResponse;
+
   const { id } = await context.params;
   const internalOnly = isInternalOnly(req.nextUrl.searchParams.get("projectType"));
   const found = await prisma.plannedWorkEntry.findFirst({

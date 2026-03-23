@@ -10,6 +10,7 @@ import ProjectMilestonesTable, {
 } from "@/components/ProjectMilestonesTable";
 import AppLink from "@/components/AppLink";
 import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import type { ProjectMilestoneFormPayload } from "@/components/project-detail/ProjectMilestoneForm";
 import ProjectMilestoneFormModal from "@/components/project-detail/ProjectMilestoneFormModal";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
@@ -63,10 +64,11 @@ function ProjectMilestonesPageContent() {
   const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
 
   const fetchData = useCallback(async () => {
-    const [, employees] = await Promise.all([
-      fetchMilestonesFromStore(),
-      fetchEmployeesFromStore(),
-    ]);
+    await fetchMilestonesFromStore();
+  }, [fetchMilestonesFromStore]);
+
+  const fetchEmployees = useCallback(async () => {
+    const employees = await fetchEmployeesFromStore();
     setAllEmployees(
       Array.isArray(employees)
         ? employees.map((item) => ({
@@ -76,7 +78,7 @@ function ProjectMilestonesPageContent() {
           }))
         : [],
     );
-  }, [fetchEmployeesFromStore, fetchMilestonesFromStore]);
+  }, [fetchEmployeesFromStore]);
 
   const fetchProjectOptions = useCallback(async () => {
     const projects = await fetchProjectsFromStore();
@@ -146,13 +148,14 @@ function ProjectMilestonesPageContent() {
 
   useEffect(() => {
     if (!open) return;
-    void fetchProjectOptions();
-  }, [fetchProjectOptions, open]);
+    if (allEmployees.length > 0) return;
+    void fetchEmployees();
+  }, [allEmployees.length, fetchEmployees, open]);
 
   useEffect(() => {
-    if (!open || selectedProjectId || projectOptions.length === 0) return;
-    setSelectedProjectId(projectOptions[0].id);
-  }, [open, projectOptions, selectedProjectId]);
+    if (!open) return;
+    void fetchProjectOptions();
+  }, [fetchProjectOptions, open]);
 
   const onEdit = (row: ProjectMilestoneRow) => {
     if (!canManageProject) return;
@@ -205,6 +208,48 @@ function ProjectMilestonesPageContent() {
     }
     await fetchMilestonesFromStore(true);
   };
+
+  const refreshMilestone = useCallback(
+    async (milestoneId: string) => {
+      const res = await fetch(`/api/project-milestones/${milestoneId}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        throw new Error((await res.text()) || "获取里程碑失败");
+      }
+      const next = (await res.json()) as ProjectMilestoneRow | null;
+      if (next?.id) {
+        upsertMilestones([next]);
+      }
+    },
+    [upsertMilestones],
+  );
+
+  const updateMilestoneSelectOption = useCallback(
+    async (
+      milestoneId: string,
+      field: "type" | "method",
+      nextOption: { id: string; value: string; color: string },
+    ) => {
+      const res = await fetch(`/api/project-milestones/${milestoneId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          [field]: nextOption,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error((await res.text()) || "更新里程碑选项失败");
+      }
+
+      const next = (await res.json()) as ProjectMilestoneRow | null;
+      if (next?.id) {
+        upsertMilestones([next]);
+      }
+    },
+    [upsertMilestones],
+  );
 
   const milestonesByDate = rows.reduce<Record<string, ProjectMilestoneRow[]>>(
     (acc, row) => {
@@ -289,6 +334,40 @@ function ProjectMilestonesPageContent() {
           onDelete={(id) => {
             void onDelete(id);
           }}
+          renderTypeOption={(record) => (
+            <SelectOptionQuickEditTag
+              field="projectMilestone.type"
+              option={record.typeOption ?? null}
+              disabled={!canManageProject}
+              modalTitle="修改里程碑类型"
+              modalDescription="勾选只会暂存类型切换。点击保存后会一并保存选项改动、排序和里程碑类型。"
+              optionValueLabel="类型值"
+              saveSuccessText="里程碑类型已保存"
+              onSaveSelection={(nextOption) =>
+                updateMilestoneSelectOption(record.id, "type", nextOption)
+              }
+              onUpdated={async () => {
+                await refreshMilestone(record.id);
+              }}
+            />
+          )}
+          renderMethodOption={(record) => (
+            <SelectOptionQuickEditTag
+              field="projectMilestone.method"
+              option={record.methodOption ?? null}
+              disabled={!canManageProject}
+              modalTitle="修改里程碑方式"
+              modalDescription="勾选只会暂存方式切换。点击保存后会一并保存选项改动、排序和里程碑方式。"
+              optionValueLabel="方式值"
+              saveSuccessText="里程碑方式已保存"
+              onSaveSelection={(nextOption) =>
+                updateMilestoneSelectOption(record.id, "method", nextOption)
+              }
+              onUpdated={async () => {
+                await refreshMilestone(record.id);
+              }}
+            />
+          )}
           actionsDisabled={!canManageProject}
           headerTitle={<ProTableHeaderTitle>项目里程碑</ProTableHeaderTitle>}
           toolbarActions={toolbarActions}

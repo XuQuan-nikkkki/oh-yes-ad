@@ -47,6 +47,14 @@ export const formatDateRange = (options: {
   if (!endAt.isValid()) return startText;
   if (endAt.valueOf() === startAt.valueOf()) return startText;
 
+  const compactEndFormat = withTime
+    ? endAt.isSame(startAt, "year")
+      ? "MM-DD HH:mm"
+      : DATETIME_FORMAT
+    : endAt.isSame(startAt, "year")
+      ? "MM-DD"
+      : DATE_FORMAT;
+
   if (compactEndTimeOnSameDay && withTime && endAt.isSame(startAt, "day")) {
     const dayDiff = endAt.startOf("day").diff(startAt.startOf("day"), "day");
     const suffix = showDayOffset && dayDiff > 0 ? `(+${dayDiff})` : "";
@@ -58,5 +66,5 @@ export const formatDateRange = (options: {
   }
 
   if (!withTime && endAt.isSame(startAt, "day")) return startText;
-  return `${startText}${separator}${endAt.format(fullFormat)}`;
+  return `${startText}${separator}${endAt.format(compactEndFormat)}`;
 };

@@ -9,6 +9,7 @@ export type SelectOptionItem = {
 
 export type SelectOptionValue = {
   id?: string;
+  field?: string;
   value?: string | null;
   color?: string | null;
 };

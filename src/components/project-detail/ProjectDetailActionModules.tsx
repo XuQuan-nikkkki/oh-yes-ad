@@ -85,16 +85,16 @@ export const ProjectMilestoneAction = ({
           statusOptionValue={project?.statusOption?.value}
           milestones={project?.milestones ?? []}
         />
-        <Button
-          type="primary"
-          disabled={!canManageProject}
-          onClick={() => {
-            if (!canManageProject) return;
-            onOpenCreate();
-          }}
-        >
-          新增里程碑
-        </Button>
+        {canManageProject ? (
+          <Button
+            type="primary"
+            onClick={() => {
+              onOpenCreate();
+            }}
+          >
+            新增里程碑
+          </Button>
+        ) : null}
       </Space>
     ) : null}
     <ProjectMilestoneFormModal
@@ -155,12 +155,10 @@ export const ProjectSegmentAction = ({
   onSaved,
 }: SegmentActionProps) => (
   <>
-    {visible ? (
+    {visible && canManageProject ? (
       <Button
         type="primary"
-        disabled={!canManageProject}
         onClick={() => {
-          if (!canManageProject) return;
           onOpenCreate();
         }}
       >
@@ -197,6 +195,7 @@ export const ProjectSegmentAction = ({
 
 type DocumentActionProps = {
   projectId: string;
+  canManageProject: boolean;
   visible: boolean;
   open: boolean;
   editing: EditingDocument;
@@ -207,6 +206,7 @@ type DocumentActionProps = {
 
 export const ProjectDocumentAction = ({
   projectId,
+  canManageProject,
   visible,
   open,
   editing,
@@ -215,7 +215,7 @@ export const ProjectDocumentAction = ({
   onSaved,
 }: DocumentActionProps) => (
   <>
-    {visible ? (
+    {visible && canManageProject ? (
       <Button
         type="primary"
         onClick={() => {
@@ -230,11 +230,13 @@ export const ProjectDocumentAction = ({
       open={open}
       onCancel={onCancel}
       footer={null}
+      width={860}
       destroyOnHidden
     >
       <ProjectDocumentForm
         initialValues={editing}
         onSubmit={async (payload: ProjectDocumentFormPayload) => {
+          if (!canManageProject) return;
           if (editing) {
             await fetch(`/api/projects/${projectId}/documents/${editing.id}`, {
               method: "PATCH",
@@ -356,6 +358,7 @@ export const ProjectActualWorkAction = ({
 
 type TaskModalProps = {
   projectId: string;
+  projectName?: string;
   canManageProject: boolean;
   open: boolean;
   editing: ProjectTaskRow | null;
@@ -369,6 +372,7 @@ type TaskModalProps = {
 
 export const ProjectTaskModal = ({
   projectId,
+  projectName,
   canManageProject,
   open,
   editing,
@@ -386,6 +390,8 @@ export const ProjectTaskModal = ({
     segmentOptions={segmentRows.map((segment) => ({
       id: segment.id,
       name: segment.name,
+      projectId,
+      projectName,
     }))}
     defaultSegmentId={defaultSegmentId}
     employees={employees}
@@ -434,6 +440,7 @@ export const ProjectPlannedWorkModal = ({
     onCancel={onCancel}
     footer={null}
     destroyOnHidden
+    width={860}
   >
     <PlannedWorkEntryForm
       projectOptions={
@@ -448,6 +455,7 @@ export const ProjectPlannedWorkModal = ({
       }
       selectedProjectId={project?.id}
       disableProjectSelect
+      disableTaskSelect
       taskOptions={
         project?.segments?.flatMap((segment) =>
           (segment.projectTasks ?? []).map((task) => ({
@@ -504,11 +512,14 @@ export const ProjectPlannedWorkModal = ({
       }
       onSubmit={async (payload: PlannedWorkEntryFormPayload) => {
         if (editing) {
-          await fetch(`/api/projects/${projectId}/planned-work-entries/${editing.id}`, {
+          const res = await fetch(`/api/projects/${projectId}/planned-work-entries/${editing.id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
+          if (!res.ok) {
+            throw new Error(await res.text());
+          }
         } else {
           await onCreate(payload);
         }

@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { requireLeaveRecordWritePermission } from "@/lib/api-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -97,6 +98,9 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const permissionResponse = await requireLeaveRecordWritePermission();
+    if (permissionResponse) return permissionResponse;
+
     const body = await sanitizeRequestBody(req);
     const typeOptionId = await ensureLeaveTypeOptionId(body.type);
     const temporal = parseLeaveTemporalPayload(body);

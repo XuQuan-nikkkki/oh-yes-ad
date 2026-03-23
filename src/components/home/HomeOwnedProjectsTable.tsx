@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Card, Spin } from "antd";
 import ProjectsTable from "@/components/ProjectsTable";
+import MilestoneNoticeTemplate from "@/components/project-detail/MilestoneNoticeTemplate";
 import type { Project } from "@/types/project";
 import { useAuthStore } from "@/stores/authStore";
 import { useProjectsStore } from "@/stores/projectsStore";
@@ -69,9 +70,24 @@ const HomeOwnedProjectsTable = ({ active = false }: Props) => {
         loading={loading}
         projects={projects}
         compactHorizontalPadding
-        columnKeys={["name", "type", "status", "stage", "period"]}
-        defaultVisibleColumnKeys={["name", "type", "status", "stage", "period"]}
+        columnKeys={["name", "type", "status", "stage", "period", "actions"]}
+        defaultVisibleColumnKeys={[
+          "name",
+          "type",
+          "status",
+          "stage",
+          "period",
+          "actions",
+        ]}
         headerTitle={null}
+        renderActions={(project) => (
+          <MilestoneNoticeTemplate
+            projectId={project.id}
+            buttonText="生成里程碑通知"
+            status={project.status}
+            statusOptionValue={project.statusOption?.value}
+          />
+        )}
       />
     </Spin>
   );

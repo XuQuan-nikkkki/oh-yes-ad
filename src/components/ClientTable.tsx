@@ -6,7 +6,7 @@ import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import TableActions from "@/components/TableActions";
 import AppLink from "@/components/AppLink";
-import SelectOptionTag from "@/components/SelectOptionTag";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 
 export type Client = {
   id: string;
@@ -82,10 +82,14 @@ const ClientTable = ({
           b.industryOption?.value ?? "",
         ),
       render: (_dom, record) => (
-        <SelectOptionTag
+        <SelectOptionQuickEditTag
+          field="client.industry"
           option={record.industryOption}
           fallbackText="-"
-          successMessage="行业标签已更新"
+          disabled={actionsDisabled}
+          modalTitle="修改行业"
+          optionValueLabel="行业名称"
+          saveSuccessText="行业标签已更新"
           onUpdated={onIndustryOptionUpdated}
         />
       ),

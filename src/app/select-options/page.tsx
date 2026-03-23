@@ -11,14 +11,15 @@ import {
   InputNumber,
   message,
   Table,
-  Tag,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import Modal from "antd/es/modal/Modal";
-import SelectOptionTag from "@/components/SelectOptionTag";
+import PageAccessResult from "@/components/PageAccessResult";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import TableActions from "@/components/TableActions";
 import { DEFAULT_COLOR } from "@/lib/constants";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 
 type SelectOptionRecord = {
   id: string;
@@ -42,6 +43,11 @@ type SelectOptionFormValues = {
 
 const SelectOptionsPage = () => {
   const [messageApi, contextHolder] = message.useMessage();
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const authLoaded = useAuthStore((state) => state.loaded);
+  const fetchMe = useAuthStore((state) => state.fetchMe);
+  const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
+  const isAdmin = roleCodes.includes("ADMIN");
   const [form] = Form.useForm<SelectOptionFormValues>();
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -71,8 +77,17 @@ const SelectOptionsPage = () => {
   }, []);
 
   useEffect(() => {
+    if (!authLoaded) {
+      void fetchMe();
+    }
+  }, [authLoaded, fetchMe]);
+
+  const shouldBlockAccess = !authLoaded || !isAdmin;
+
+  useEffect(() => {
+    if (!authLoaded || !isAdmin) return;
     void fetchOptions();
-  }, [fetchOptions]);
+  }, [authLoaded, isAdmin, fetchOptions]);
 
   const sortedOptions = useMemo(
     () =>
@@ -216,7 +231,8 @@ const SelectOptionsPage = () => {
       title: "值",
       dataIndex: "value",
       render: (_value, row) => (
-        <SelectOptionTag
+        <SelectOptionQuickEditTag
+          field={row.field}
           option={{
             id: row.id,
             value: row.value,
@@ -230,12 +246,20 @@ const SelectOptionsPage = () => {
       title: "颜色",
       dataIndex: "color",
       width: 220,
-      render: (value?: string | null) => {
+      render: (value: string | null | undefined, row) => {
         const resolved = value ?? DEFAULT_COLOR;
         return (
-          <Tag color={resolved} style={{ marginInlineEnd: 0 }}>
-            {resolved}
-          </Tag>
+          <SelectOptionQuickEditTag
+            field={row.field}
+            option={{
+              id: row.id,
+              value: row.value,
+              color: row.color ?? null,
+            }}
+            tagText={resolved}
+            tagColor={resolved}
+            onUpdated={fetchOptions}
+          />
         );
       },
     },
@@ -259,6 +283,21 @@ const SelectOptionsPage = () => {
       ),
     },
   ];
+
+  if (shouldBlockAccess) {
+    return (
+      <>
+        {contextHolder}
+        {authLoaded ? (
+          <Card>
+            <PageAccessResult type="forbidden" />
+          </Card>
+        ) : (
+          <Card loading />
+        )}
+      </>
+    );
+  }
 
   return (
     <>

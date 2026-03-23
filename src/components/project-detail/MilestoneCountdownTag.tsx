@@ -46,7 +46,20 @@ const MilestoneCountdownTag = ({ date }: Props) => {
   const countdown = formatCountdown(date);
 
   return (
-    <Tag color={countdown.color} style={{ fontWeight: 600, fontSize: 11 }}>
+    <Tag
+      color={countdown.color}
+      style={{
+        fontWeight: 600,
+        fontSize: 11,
+        whiteSpace: "normal",
+        overflowWrap: "anywhere",
+        wordBreak: "break-word",
+        maxWidth: "100%",
+        height: "auto",
+        lineHeight: 1.5,
+        display: "inline-flex",
+      }}
+    >
       {countdown.text}
     </Tag>
   );

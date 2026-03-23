@@ -10,6 +10,69 @@ export type PeriodInfo = {
   display: string;
 };
 
+export type ProjectCostEstimationSummary = {
+  id: string;
+  projectId: string;
+  ownerId?: string | null;
+  owner?: {
+    id: string;
+    name: string;
+    function?: string | null;
+    functionOption?: {
+      id?: string;
+      value?: string | null;
+      color?: string | null;
+    } | null;
+    employmentStatus?: string | null;
+    employmentStatusOption?: {
+      id?: string;
+      value?: string | null;
+      color?: string | null;
+    } | null;
+  } | null;
+  version: number;
+  type: "planning" | "baseline";
+  estimatedDuration: number;
+  clientBudget?: string | null;
+  contractAmountSnapshot?: number | null;
+  totalLaborCost: number;
+  agencyFeeRate?: number | null;
+  outsourceCost?: number | null;
+  outsourceRemark?: string | null;
+  outsourceItems?: {
+    id: string;
+    type: string;
+    amount: number;
+  }[];
+  otherExecutionCostRemark?: string | null;
+  executionCostTypes?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  }[];
+  members?: {
+    id: string;
+    estimationId: string;
+    employeeId: string;
+    allocationPercent: number;
+    laborCostSnapshot: number;
+    rentCostSnapshot: number;
+    employee?: {
+      id: string;
+      name: string;
+      function?: string | null;
+      functionOption?: {
+        id?: string;
+        value?: string | null;
+        color?: string | null;
+      } | null;
+      employmentStatus?: string | null;
+    } | null;
+  }[];
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type Project = {
   id: string;
   name: string;
@@ -53,6 +116,11 @@ export type Project = {
     name: string;
     function?: string | null;
     employmentStatus?: string | null;
+    salary?: string | number | null;
+    socialSecurity?: string | number | null;
+    providentFund?: string | number | null;
+    workstationCost?: string | number | null;
+    utilityCost?: string | number | null;
   }[];
   milestones?: {
     id: string;
@@ -105,6 +173,11 @@ export type Project = {
       id: string;
       name: string;
       status?: string | null;
+      statusOption?: {
+        id?: string;
+        value?: string | null;
+        color?: string | null;
+      } | null;
       segmentId: string;
       owner?: {
         id: string;
@@ -131,7 +204,15 @@ export type Project = {
     title: string;
     startDate: string;
     endDate: string;
-    employee?: { id: string; name: string };
+    employee?: {
+      id: string;
+      name: string;
+      salary?: string | number | null;
+      socialSecurity?: string | number | null;
+      providentFund?: string | number | null;
+      workstationCost?: string | number | null;
+      utilityCost?: string | number | null;
+    };
   }[];
   documents?: {
     id: string;
@@ -146,6 +227,9 @@ export type Project = {
     internalLink?: string | null;
     milestone?: { id: string; name: string } | null;
   }[];
+  latestCostEstimation?: ProjectCostEstimationSummary | null;
+  latestBaselineCostEstimation?: ProjectCostEstimationSummary | null;
+  latestPlanningCostEstimation?: ProjectCostEstimationSummary | null;
   periodInfo?: PeriodInfo;
 };
 
@@ -158,7 +242,17 @@ export type Employee = {
   id: string;
   name: string;
   employmentStatus?: string | null;
+  employmentStatusOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
   function?: string | null;
+  functionOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+  } | null;
 };
 
 export type PlannedWorkRow = {

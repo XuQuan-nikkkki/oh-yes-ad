@@ -8,7 +8,9 @@ import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
 import DetailPageContainer from "@/components/DetailPageContainer";
 import EmployeeFormModal from "@/components/EmployeeFormModal";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import SelectOptionTag from "@/components/SelectOptionTag";
+import EmployeeFunctionValue from "@/components/employee/EmployeeFunctionValue";
 import ProjectsTable, { type Project } from "@/components/ProjectsTable";
 import ActualWorkEntriesTable, {
   type ActualWorkEntryRow,
@@ -158,6 +160,7 @@ const EmployeeDetailPage = () => {
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const removeEmployeeFromStore = useEmployeesStore((state) => state.removeEmployee);
   const fetchAdjustmentsFromStore = useWorkdayAdjustmentsStore(
     (state) => state.fetchAdjustments,
   );
@@ -223,12 +226,16 @@ const EmployeeDetailPage = () => {
       const legalEntities = await legalEntitiesRes.json();
       setLegalEntityOptions(Array.isArray(legalEntities) ? legalEntities : []);
     })();
-  }, []);
+  }, [fetchEmployeesFromStore]);
 
   const canViewHrFinanceInfo =
     roleCodes.includes("ADMIN") ||
     roleCodes.includes("HR") ||
     roleCodes.includes("FINANCE");
+  const canEditEmployeeOptions =
+    roleCodes.includes("ADMIN") ||
+    roleCodes.includes("PROJECT_MANAGER") ||
+    roleCodes.includes("HR");
 
   useEffect(() => {
     if (canViewHrFinanceInfo) return;
@@ -249,6 +256,7 @@ const EmployeeDetailPage = () => {
       messageApi.error("删除失败");
       return;
     }
+    removeEmployeeFromStore(id);
     messageApi.success("删除成功");
     router.push("/employees");
   };
@@ -267,7 +275,8 @@ const EmployeeDetailPage = () => {
   const totalHumanCost =
     toNumber(employee?.salary) +
     toNumber(employee?.socialSecurity) +
-    toNumber(employee?.providentFund) +
+    toNumber(employee?.providentFund);
+  const totalRentCost =
     toNumber(employee?.workstationCost) +
     toNumber(employee?.utilityCost);
 
@@ -346,6 +355,96 @@ const EmployeeDetailPage = () => {
     employee.employmentStatusOption,
   );
 
+  const renderEditableOption = (
+    field:
+      | "employee.departmentLevel1"
+      | "employee.departmentLevel2"
+      | "employee.position"
+      | "employee.employmentType"
+      | "employee.employmentStatus",
+    payloadKey:
+      | "departmentLevel1"
+      | "departmentLevel2"
+      | "position"
+      | "employmentType"
+      | "employmentStatus",
+    option:
+      | {
+          id: string;
+          value: string;
+          color?: string | null;
+        }
+      | null,
+    fallbackText: string,
+    label: string,
+  ) => (
+    <SelectOptionQuickEditTag
+      field={field}
+      option={option}
+      fallbackText={fallbackText}
+      disabled={!canEditEmployeeOptions}
+      modalTitle={`修改${label}`}
+      optionValueLabel={label}
+      saveSuccessText={`${label}已保存`}
+      onSaveSelection={async (nextOption) => {
+        const res = await fetch(`/api/employees/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [payloadKey]: nextOption }),
+        });
+        if (!res.ok) {
+          throw new Error((await res.text()) || "更新失败");
+        }
+      }}
+      onUpdated={fetchEmployee}
+    />
+  );
+
+  const renderProjectQuickEditTag = (
+    project: Project,
+    field: "project.type" | "project.status" | "project.stage",
+    payloadKey: "type" | "status" | "stage",
+    option:
+      | {
+          id?: string;
+          value?: string | null;
+          color?: string | null;
+        }
+      | null
+      | undefined,
+    fallbackText: string,
+    label: string,
+  ) => (
+    <SelectOptionQuickEditTag
+      field={field}
+      option={
+        option?.id && option.value
+          ? {
+              id: option.id,
+              value: option.value,
+              color: option.color ?? null,
+            }
+          : null
+      }
+      fallbackText={fallbackText}
+      disabled={!canEditEmployeeOptions}
+      modalTitle={`修改${label}`}
+      optionValueLabel={label}
+      saveSuccessText={`${label}已保存`}
+      onSaveSelection={async (nextOption) => {
+        const res = await fetch(`/api/projects/${project.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [payloadKey]: nextOption.value }),
+        });
+        if (!res.ok) {
+          throw new Error((await res.text()) || "更新失败");
+        }
+      }}
+      onUpdated={fetchEmployee}
+    />
+  );
+
   return (
     <DetailPageContainer>
       {contextHolder}
@@ -374,11 +473,12 @@ const EmployeeDetailPage = () => {
         <Descriptions column={3} size="small">
           <Descriptions.Item label="全名">{employee.fullName ?? "-"}</Descriptions.Item>
           <Descriptions.Item label="职能">
-            {normalizeEditableOption(employee.functionOption) ? (
-              <SelectOptionTag option={normalizeEditableOption(employee.functionOption)} onUpdated={fetchEmployee} />
-            ) : (
-              "-"
-            )}
+            <EmployeeFunctionValue
+              employeeId={employee.id}
+              functionOption={normalizeEditableOption(employee.functionOption)}
+              fallbackText={employee.function ?? "-"}
+              onUpdated={fetchEmployee}
+            />
           </Descriptions.Item>
           <Descriptions.Item label="手机号">{employee.phone ?? "-"}</Descriptions.Item>
         </Descriptions>
@@ -409,36 +509,30 @@ const EmployeeDetailPage = () => {
                               )}
                             </Descriptions.Item>
                             <Descriptions.Item label="一级部门(中心)">
-                              {departmentLevel1Option ? (
-                                <SelectOptionTag
-                                  option={departmentLevel1Option}
-                                  onUpdated={fetchEmployee}
-                                />
-                              ) : employee?.departmentLevel1 ? (
-                                employee.departmentLevel1
-                              ) : (
-                                null
+                              {renderEditableOption(
+                                "employee.departmentLevel1",
+                                "departmentLevel1",
+                                departmentLevel1Option,
+                                employee.departmentLevel1 ?? "-",
+                                "一级部门",
                               )}
                             </Descriptions.Item>
                             <Descriptions.Item label="二级部门(部门)">
-                              {departmentLevel2Option ? (
-                                <SelectOptionTag
-                                  option={departmentLevel2Option}
-                                  onUpdated={fetchEmployee}
-                                />
-                              ) : employee?.departmentLevel2 ? (
-                                employee.departmentLevel2
-                              ) : (
-                                null
+                              {renderEditableOption(
+                                "employee.departmentLevel2",
+                                "departmentLevel2",
+                                departmentLevel2Option,
+                                employee.departmentLevel2 ?? "-",
+                                "二级部门",
                               )}
                             </Descriptions.Item>
                             <Descriptions.Item label="职位">
-                              {positionOption ? (
-                                <SelectOptionTag option={positionOption} onUpdated={fetchEmployee} />
-                              ) : employee?.position ? (
-                                employee.position
-                              ) : (
-                                null
+                              {renderEditableOption(
+                                "employee.position",
+                                "position",
+                                positionOption,
+                                employee.position ?? "-",
+                                "职位",
                               )}
                             </Descriptions.Item>
                             <Descriptions.Item label="职级">{employee?.level ?? "-"}</Descriptions.Item>
@@ -449,19 +543,21 @@ const EmployeeDetailPage = () => {
                           <h4 style={{ margin: "0 0 12px 0" }}>在/离职信息</h4>
                           <Descriptions column={3} size="small">
                             <Descriptions.Item label="用工性质">
-                              {employmentTypeOption ? (
-                                <SelectOptionTag option={employmentTypeOption} onUpdated={fetchEmployee} />
-                              ) : (
-                                null
+                              {renderEditableOption(
+                                "employee.employmentType",
+                                "employmentType",
+                                employmentTypeOption,
+                                employee.employmentType ?? "-",
+                                "用工性质",
                               )}
                             </Descriptions.Item>
                             <Descriptions.Item label="用工状态">
-                              {employmentStatusOption ? (
-                                <SelectOptionTag option={employmentStatusOption} onUpdated={fetchEmployee} />
-                              ) : employee?.employmentStatus ? (
-                                employee.employmentStatus
-                              ) : (
-                                null
+                              {renderEditableOption(
+                                "employee.employmentStatus",
+                                "employmentStatus",
+                                employmentStatusOption,
+                                employee.employmentStatus ?? "-",
+                                "用工状态",
                               )}
                             </Descriptions.Item>
                             <Descriptions.Item label="入职日期">
@@ -505,6 +601,9 @@ const EmployeeDetailPage = () => {
                             <Descriptions.Item label="人力成本">
                               <strong>{formatMoney(totalHumanCost)}</strong>
                             </Descriptions.Item>
+                            <Descriptions.Item label="租金成本">
+                              <strong>{formatMoney(totalRentCost)}</strong>
+                            </Descriptions.Item>
                           </Descriptions>
                         </div>
 
@@ -534,6 +633,36 @@ const EmployeeDetailPage = () => {
                   columnKeys={["name", "type", "status", "stage", "period"]}
                   defaultVisibleColumnKeys={["name", "type", "status", "stage", "period"]}
                   onOptionUpdated={fetchEmployee}
+                  renderTypeOption={(project) =>
+                    renderProjectQuickEditTag(
+                      project,
+                      "project.type",
+                      "type",
+                      project.typeOption,
+                      project.type ?? "-",
+                      "项目类型",
+                    )
+                  }
+                  renderStatusOption={(project) =>
+                    renderProjectQuickEditTag(
+                      project,
+                      "project.status",
+                      "status",
+                      project.statusOption,
+                      project.status ?? "-",
+                      "项目状态",
+                    )
+                  }
+                  renderStageOption={(project) =>
+                    renderProjectQuickEditTag(
+                      project,
+                      "project.stage",
+                      "stage",
+                      project.stageOption,
+                      project.stage ?? "-",
+                      "项目阶段",
+                    )
+                  }
                 />
               ),
             },

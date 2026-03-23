@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, Checkbox, Form, InputNumber, Select, Space, message } from "antd";
+import {
+  Button,
+  Checkbox,
+  Col,
+  Form,
+  Input,
+  InputNumber,
+  Row,
+  Select,
+  message,
+} from "antd";
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
 import { DEFAULT_COLOR } from "@/lib/constants";
@@ -97,11 +107,15 @@ const PlannedWorkEntryForm = ({
   const [messageApi, contextHolder] = message.useMessage();
   const [yearSearch, setYearSearch] = useState("");
   const [weekSearch, setWeekSearch] = useState("");
+  const [yearSelectOpen, setYearSelectOpen] = useState(false);
+  const [weekSelectOpen, setWeekSelectOpen] = useState(false);
   const [creatingYear, setCreatingYear] = useState(false);
   const [creatingWeek, setCreatingWeek] = useState(false);
+  const [taskOwnerName, setTaskOwnerName] = useState("");
   const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
-  const initialTask = taskOptions.find((task) => task.id === initialValues?.taskId);
+  const resolvedInitialTaskId = initialValues?.taskId ?? defaultTaskId;
+  const initialTask = taskOptions.find((task) => task.id === resolvedInitialTaskId);
   const initialProjectId =
     selectedProjectId ??
     initialTask?.projectId;
@@ -117,6 +131,7 @@ const PlannedWorkEntryForm = ({
   ].filter(Boolean) as string[];
   const watchProjectId = Form.useWatch("projectId", form) ?? initialProjectId;
   const watchSegmentId = Form.useWatch("segmentId", form) ?? initialSegmentId;
+  const watchTaskId = Form.useWatch("taskId", form) ?? resolvedInitialTaskId;
   const filteredSegmentOptions = useMemo(() => {
     const map = new Map<string, { id: string; name: string }>();
     taskOptions.forEach((task) => {
@@ -144,7 +159,17 @@ const PlannedWorkEntryForm = ({
   );
   const weekNumberOptions = useMemo<SelectOptionItem[]>(
     () =>
-      (optionsByField["plannedWorkEntry.weekNumber"] ?? []) as SelectOptionItem[],
+      [
+        ...((optionsByField["plannedWorkEntry.weekNumber"] ?? []) as SelectOptionItem[]),
+      ].sort((left, right) => {
+        const leftNumber = Number(left.value);
+        const rightNumber = Number(right.value);
+        const leftIsNumeric = Number.isFinite(leftNumber);
+        const rightIsNumeric = Number.isFinite(rightNumber);
+        if (leftIsNumeric && rightIsNumeric) return leftNumber - rightNumber;
+        if (leftIsNumeric !== rightIsNumeric) return leftIsNumeric ? -1 : 1;
+        return left.value.localeCompare(right.value, "zh-CN");
+      }),
     [optionsByField],
   );
   const isCreateMode = !initialValues || initialValues.id === "new";
@@ -202,6 +227,39 @@ const PlannedWorkEntryForm = ({
   }, [filteredTaskOptions, form]);
 
   useEffect(() => {
+    const taskId = typeof watchTaskId === "string" ? watchTaskId : "";
+    if (!taskId) {
+      setTaskOwnerName("");
+      return;
+    }
+
+    let active = true;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/project-tasks/${taskId}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          if (active) setTaskOwnerName("");
+          return;
+        }
+        const payload = (await res.json()) as {
+          owner?: { name?: string | null } | null;
+        };
+        if (active) {
+          setTaskOwnerName(payload.owner?.name ?? "");
+        }
+      } catch {
+        if (active) setTaskOwnerName("");
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [watchTaskId]);
+
+  useEffect(() => {
     if (!isCreateMode) return;
     if (!form.getFieldValue("yearOption")) {
       form.setFieldValue("yearOption", defaultYearOptionValue);
@@ -241,7 +299,7 @@ const PlannedWorkEntryForm = ({
       if (value) {
         form.setFieldValue("yearOption", value);
         setYearSearch("");
-        messageApi.success("年份已新增");
+        setYearSelectOpen(false);
       }
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "新增年份失败");
@@ -258,7 +316,7 @@ const PlannedWorkEntryForm = ({
       if (value) {
         form.setFieldValue("weekNumberOption", value);
         setWeekSearch("");
-        messageApi.success("周数已新增");
+        setWeekSelectOpen(false);
       }
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "新增周数失败");
@@ -272,7 +330,9 @@ const PlannedWorkEntryForm = ({
     placeholder: string,
     searchValue: string,
     onSearchChange: (value: string) => void,
-    onCreate: () => void,
+    open: boolean,
+    onOpenChange: (nextOpen: boolean) => void,
+    onCreate: () => Promise<void>,
     creating: boolean,
   ) => {
     const keyword = searchValue.trim();
@@ -285,9 +345,13 @@ const PlannedWorkEntryForm = ({
       <Select
         placeholder={placeholder}
         showSearch
+        popupMatchSelectWidth={false}
+        open={open}
         searchValue={searchValue}
+        onOpenChange={onOpenChange}
         onSearch={onSearchChange}
         optionFilterProp="label"
+        style={{ width: "100%" }}
         filterOption={(input, option) =>
           String(option?.label ?? "")
             .toLowerCase()
@@ -324,7 +388,7 @@ const PlannedWorkEntryForm = ({
       initialValues={{
         projectId: initialProjectId,
         segmentId: initialSegmentId,
-        taskId: initialValues?.taskId ?? defaultTaskId,
+        taskId: resolvedInitialTaskId,
         yearOption: isCreateMode
           ? (defaultYearOptionValue ?? initialYearOptionValue)
           : initialYearOptionValue,
@@ -351,97 +415,134 @@ const PlannedWorkEntryForm = ({
         });
       }}
     >
-      <Form.Item
-        label="所属项目"
-        name="projectId"
-        rules={[{ required: true, message: "请选择项目" }]}
-      >
-        <Select
-          disabled={disableProjectSelect}
-          placeholder="请选择项目"
-          options={projectOptions.map((project) => ({
-            label: project.name,
-            value: project.id,
-          }))}
-        />
-      </Form.Item>
+      <Row gutter={16}>
+        <Col span={12}>
+          <Form.Item
+            label="所属项目"
+            name="projectId"
+            rules={[{ required: true, message: "请选择项目" }]}
+          >
+            <Select
+              disabled={disableProjectSelect}
+              placeholder="请选择项目"
+              options={projectOptions.map((project) => ({
+                label: project.name,
+                value: project.id,
+              }))}
+            />
+          </Form.Item>
+        </Col>
+        <Col span={12}>
+          <Form.Item
+            label="所属环节"
+            name="segmentId"
+            rules={[{ required: true, message: "请选择环节" }]}
+          >
+            <Select
+              disabled={disableSegmentSelect}
+              placeholder="请选择环节"
+              options={filteredSegmentOptions.map((segment) => ({
+                label: segment.name,
+                value: segment.id,
+              }))}
+            />
+          </Form.Item>
+        </Col>
+      </Row>
 
-      <Form.Item label="所属环节" name="segmentId" rules={[{ required: true, message: "请选择环节" }]}>
-        <Select
-          disabled={disableSegmentSelect}
-          placeholder="请选择环节"
-          options={filteredSegmentOptions.map((segment) => ({
-            label: segment.name,
-            value: segment.id,
-          }))}
-        />
-      </Form.Item>
+      <Row gutter={16}>
+        <Col span={12}>
+          <Form.Item
+            label="所属任务"
+            name="taskId"
+            rules={[{ required: true, message: "请选择任务" }]}
+          >
+            <Select
+              disabled={disableTaskSelect}
+              placeholder="请选择任务"
+              options={filteredTaskOptions.map((task) => ({
+                label: task.name,
+                value: task.id,
+              }))}
+            />
+          </Form.Item>
+        </Col>
+        <Col span={12}>
+          <Form.Item label="任务负责人">
+            <Input value={taskOwnerName} placeholder="" disabled />
+          </Form.Item>
+        </Col>
+      </Row>
 
-      <Form.Item label="所属任务" name="taskId" rules={[{ required: true, message: "请选择任务" }]}>
-        <Select
-          disabled={disableTaskSelect}
-          placeholder="请选择任务"
-          options={filteredTaskOptions.map((task) => ({
-            label: task.name,
-            value: task.id,
-          }))}
-        />
-      </Form.Item>
+      <Row gutter={16}>
+        <Col span={12}>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item
+                label="年份"
+                name="yearOption"
+                rules={[{ required: true, message: "请选择年份" }]}
+              >
+                {renderCreatableSelect(
+                  yearOptions.map((option) => ({
+                    label: option.value,
+                    value: option.value,
+                  })),
+                  "请选择年份",
+                  yearSearch,
+                  setYearSearch,
+                  yearSelectOpen,
+                  setYearSelectOpen,
+                  handleCreateYear,
+                  creatingYear,
+                )}
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="周数"
+                name="weekNumberOption"
+                rules={[{ required: true, message: "请选择周数" }]}
+              >
+                {renderCreatableSelect(
+                  weekNumberOptions.map((option) => ({
+                    label: option.value,
+                    value: option.value,
+                  })),
+                  "请选择周数",
+                  weekSearch,
+                  setWeekSearch,
+                  weekSelectOpen,
+                  setWeekSelectOpen,
+                  handleCreateWeek,
+                  creatingWeek,
+                )}
+              </Form.Item>
+            </Col>
+          </Row>
+        </Col>
+        <Col span={12}>
+          <Form.Item
+            label="工作日"
+            name="weekdays"
+            rules={[{ required: true, message: "请至少选择一个工作日", type: "array", min: 1 }]}
+          >
+            <Checkbox.Group options={[...weekdayOptions]} />
+          </Form.Item>
+        </Col>
+      </Row>
 
-      <Space style={{ width: "100%" }} size={12}>
-        <Form.Item
-          label="年份"
-          name="yearOption"
-          rules={[{ required: true, message: "请选择年份" }]}
-          style={{ flex: 1 }}
-        >
-          {renderCreatableSelect(
-            yearOptions.map((option) => ({
-              label: option.value,
-              value: option.value,
-            })),
-            "请选择年份",
-            yearSearch,
-            setYearSearch,
-            handleCreateYear,
-            creatingYear,
-          )}
-        </Form.Item>
-        <Form.Item
-          label="周数"
-          name="weekNumberOption"
-          rules={[{ required: true, message: "请选择周数" }]}
-          style={{ flex: 1 }}
-        >
-          {renderCreatableSelect(
-            weekNumberOptions.map((option) => ({
-              label: option.value,
-              value: option.value,
-            })),
-            "请选择周数",
-            weekSearch,
-            setWeekSearch,
-            handleCreateWeek,
-            creatingWeek,
-          )}
-        </Form.Item>
-      </Space>
-
-      <Form.Item
-        label="工作日"
-        name="weekdays"
-        rules={[{ required: true, message: "请至少选择一个工作日", type: "array", min: 1 }]}
-      >
-        <Checkbox.Group options={[...weekdayOptions]} />
-      </Form.Item>
-
-      <Form.Item
-        label="工时(天)"
-        name="plannedDays"
-        rules={[{ required: true, message: "请输入工时" }]}
-      >
-        <InputNumber style={{ width: "100%" }} min={0} step={0.5} />
-      </Form.Item>
+      <Row gutter={16}>
+        <Col span={12}>
+          <Form.Item
+            label="计划天数"
+            name="plannedDays"
+            rules={[{ required: true, message: "请输入工时" }]}
+          >
+            <InputNumber style={{ width: "100%" }} min={0} step={0.5} />
+          </Form.Item>
+        </Col>
+      </Row>
 
       <Button type="primary" htmlType="submit" block>
         保存
