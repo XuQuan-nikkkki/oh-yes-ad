@@ -872,8 +872,8 @@ model ProjectTask {
 
   // 基础字段
   name           String
-  statusOptionId String
-  statusOption   SelectOption @relation("ProjectTaskStatus", fields: [statusOptionId], references: [id])
+  statusOptionId String?
+  statusOption   SelectOption? @relation("ProjectTaskStatus", fields: [statusOptionId], references: [id])
   dueDate        DateTime?
 
   // 所属环节
