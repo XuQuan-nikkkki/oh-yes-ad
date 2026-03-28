@@ -11,7 +11,7 @@ import AppLink from "@/components/AppLink";
 import PlannedWorkScheduleValue from "@/components/project-detail/PlannedWorkScheduleValue";
 import ProjectTaskStatusQuickEditTag from "@/components/project-detail/ProjectTaskStatusQuickEditTag";
 import ProjectTaskStepFormModal from "@/components/project-detail/ProjectTaskStepFormModal";
-import SelectOptionTag from "@/components/SelectOptionTag";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import TableActions from "@/components/TableActions";
 import {
   DATE_FORMAT,
@@ -44,6 +44,10 @@ type Props = {
   }>;
   onAddTask?: (segment: ProjectProgressSegmentRow) => void;
   onEditSegment?: (segment: ProjectProgressSegmentRow) => void;
+  onUpdateSegmentStatus?: (
+    segment: ProjectProgressSegmentRow,
+    nextOption: { id: string; value: string; color: string },
+  ) => Promise<void> | void;
   onAfterDeleteSegment?: () => Promise<void> | void;
   onAddPlannedWork?: (task: ProjectProgressTaskRow) => void;
   onAfterUpdateTask?: () => Promise<void> | void;
@@ -93,6 +97,7 @@ const ProjectDetailProgressContent = ({
   employees = [],
   onAddTask,
   onAddPlannedWork,
+  onUpdateSegmentStatus,
   onAfterUpdateTask,
   onAfterDeleteTask,
 }: Props) => {
@@ -350,11 +355,21 @@ const ProjectDetailProgressContent = ({
                   >
                     <AppLink href={`/project-segments/${segment.id}`}>{segment.name}</AppLink>
                   </span>
-                  <SelectOptionTag
+                  <SelectOptionQuickEditTag
+                    field="projectSegment.status"
                     option={
                       segment.statusOption ??
                       (segment.status ? { value: segment.status, color: null } : null)
                     }
+                    disabled={actionsDisabled}
+                    modalTitle="修改环节状态"
+                    modalDescription="勾选只会暂存状态切换。点击保存后会一并保存选项改动、排序和环节状态。"
+                    optionValueLabel="状态值"
+                    saveSuccessText="环节状态已保存"
+                    onSaveSelection={async (nextOption) => {
+                      await onUpdateSegmentStatus?.(segment, nextOption);
+                    }}
+                    onUpdated={onAfterUpdateTask}
                   />
                   <span style={{ color: "rgba(0,0,0,0.65)", whiteSpace: "nowrap" }}>
                     截止日期：{formatDateOrEmpty(segment.dueDate) || "-"}

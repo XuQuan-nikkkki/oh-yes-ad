@@ -9,6 +9,11 @@ import { DEFAULT_COLOR } from "@/lib/constants";
 import SelectOptionSelector, {
   type SelectOptionSelectorValue,
 } from "@/components/SelectOptionSelector";
+import {
+  buildEmployeeLabelMap,
+  buildFlatEmployeeOptions,
+  renderEmployeeSelectedLabel,
+} from "@/lib/employee-select";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import type { SimpleClient } from "@/types/client";
@@ -30,6 +35,9 @@ type Employee = {
   id: string;
   name: string;
   employmentStatus?: string | null;
+  employmentStatusOption?: {
+    value?: string | null;
+  } | null;
 };
 
 type Props = {
@@ -126,12 +134,42 @@ const ProjectFormModal = ({
           id: item.id,
           name: item.name,
           employmentStatus: item.employmentStatus ?? undefined,
+          employmentStatusOption:
+            item.employmentStatusOption &&
+            typeof item.employmentStatusOption === "object" &&
+            "value" in item.employmentStatusOption
+              ? {
+                  value:
+                    typeof item.employmentStatusOption.value === "string"
+                      ? item.employmentStatusOption.value
+                      : undefined,
+                }
+              : undefined,
         }),
       ),
     [storedEmployeesRaw],
   );
   const employees =
     storedEmployees.length > 0 ? storedEmployees : employeesFromProps;
+  const projectOwnerOptions = useMemo(
+    () => buildFlatEmployeeOptions(employees),
+    [employees],
+  );
+  const projectOwnerLabelMap = useMemo(
+    () =>
+      buildEmployeeLabelMap(
+        employees,
+        initialValues?.ownerId
+          ? [
+              employees.find((employee) => employee.id === initialValues.ownerId) ?? {
+                id: initialValues.ownerId,
+                name: initialValues.ownerId,
+              },
+            ]
+          : [],
+      ),
+    [employees, initialValues?.ownerId],
+  );
 
   const isEdit = !!initialValues?.id;
   const fixedTypeCode = normalizeProjectTypeCode(projectType);
@@ -316,13 +354,9 @@ const ProjectFormModal = ({
                 rules={[{ required: true, message: "请选择项目负责人" }]}
               >
                 <Select
-                  options={employees
-                    .filter((employee) => employee.employmentStatus === "在职")
-                    .map((employee) => ({
-                      label: employee.name,
-                      value: employee.id,
-                    }))}
+                  options={projectOwnerOptions}
                   placeholder="选择负责人"
+                  labelRender={renderEmployeeSelectedLabel(projectOwnerLabelMap)}
                 />
               </ProForm.Item>
             </Col>

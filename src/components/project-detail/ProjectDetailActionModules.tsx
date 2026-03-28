@@ -133,6 +133,7 @@ export const ProjectMilestoneAction = ({
 
 type SegmentActionProps = {
   projectId: string;
+  project?: Project | null;
   visible: boolean;
   canManageProject: boolean;
   open: boolean;
@@ -145,6 +146,7 @@ type SegmentActionProps = {
 
 export const ProjectSegmentAction = ({
   projectId,
+  project,
   visible,
   canManageProject,
   open,
@@ -170,7 +172,20 @@ export const ProjectSegmentAction = ({
       open={open}
       onCancel={onCancel}
       initialValues={editing}
+      projectOptions={
+        project
+          ? [
+              {
+                id: project.id,
+                name: project.name,
+              },
+            ]
+          : []
+      }
+      selectedProjectId={project?.id}
+      disableProjectSelect={Boolean(project?.id)}
       employees={employees}
+      projectMembers={project?.members ?? []}
       onSubmit={async (payload: ProjectSegmentFormPayload) => {
         if (!canManageProject) return;
         if (editing) {
@@ -195,6 +210,7 @@ export const ProjectSegmentAction = ({
 
 type DocumentActionProps = {
   projectId: string;
+  project: Project | null;
   canManageProject: boolean;
   visible: boolean;
   open: boolean;
@@ -206,6 +222,7 @@ type DocumentActionProps = {
 
 export const ProjectDocumentAction = ({
   projectId,
+  project,
   canManageProject,
   visible,
   open,
@@ -234,6 +251,27 @@ export const ProjectDocumentAction = ({
       destroyOnHidden
     >
       <ProjectDocumentForm
+        showProjectField
+        showMilestoneField
+        projectOptions={
+          project
+            ? [
+                {
+                  id: project.id,
+                  name: project.name,
+                },
+              ]
+            : []
+        }
+        milestoneOptions={
+          project?.milestones?.map((milestone) => ({
+            id: milestone.id,
+            name: milestone.name,
+            projectId: project.id,
+          })) ?? []
+        }
+        selectedProjectId={project?.id}
+        disableProjectSelect={Boolean(project?.id)}
         initialValues={editing}
         onSubmit={async (payload: ProjectDocumentFormPayload) => {
           if (!canManageProject) return;

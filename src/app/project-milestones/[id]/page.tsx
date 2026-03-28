@@ -4,11 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
   Card,
-  Checkbox,
-  DatePicker,
   Descriptions,
-  Form,
-  Input,
   Modal,
   Popconfirm,
   Select,
@@ -21,13 +17,9 @@ import { useParams, useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
 import "dayjs/locale/zh-cn";
-import { DEFAULT_COLOR } from "@/lib/constants";
 import AppLink from "@/components/AppLink";
 import DetailPageContainer from "@/components/DetailPageContainer";
 import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
-import SelectOptionSelector, {
-  type SelectOptionSelectorValue,
-} from "@/components/SelectOptionSelector";
 import EmployeesTable, { type Employee } from "@/components/EmployeesTable";
 import ClientContactTable from "@/components/ClientContactTable";
 import VendorsTable, { type Vendor } from "@/components/VendorsTable";
@@ -37,6 +29,8 @@ import ProjectDocumentsTable, {
 import ProjectDocumentForm, {
   type ProjectDocumentFormPayload,
 } from "@/components/project-detail/ProjectDocumentForm";
+import ProjectMilestoneFormModal from "@/components/project-detail/ProjectMilestoneFormModal";
+import type { ProjectMilestoneFormPayload } from "@/components/project-detail/ProjectMilestoneForm";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useProjectMilestonesStore } from "@/stores/projectMilestonesStore";
 import { useProjectsStore } from "@/stores/projectsStore";
@@ -72,18 +66,6 @@ type MilestoneDetail = {
   vendorParticipants?: Vendor[];
   clientParticipants?: ClientContact[];
   documents?: ProjectDocumentRow[];
-};
-
-type FormValues = {
-  name: string;
-  projectId: string;
-  type?: SelectOptionSelectorValue;
-  includeTime?: boolean;
-  isRange?: boolean;
-  startAt?: dayjs.Dayjs;
-  endAt?: dayjs.Dayjs;
-  location?: string;
-  method?: SelectOptionSelectorValue;
 };
 
 type ProjectContext = {
@@ -275,19 +257,13 @@ export default function Page() {
   const [vendorPage, setVendorPage] = useState(1);
   const [vendorPageSize, setVendorPageSize] = useState(10);
 
-  const [form] = Form.useForm<FormValues>();
   const [messageApi, contextHolder] = message.useMessage();
   const { canManageProject } = useProjectPermission();
   const fetchProjectsFromStore = useProjectsStore(
     (state) => state.fetchProjects,
   );
 
-  const fetchAllOptions = useSelectOptionsStore(
-    (state) => state.fetchAllOptions,
-  );
-  const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
-  const typeOptions = optionsByField["projectMilestone.type"] ?? [];
-  const methodOptions = optionsByField["projectMilestone.method"] ?? [];
+  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
 
   const fetchDetail = useCallback(async () => {
     if (!id) return null;
@@ -376,23 +352,6 @@ export default function Page() {
     setOpen(true);
   };
 
-  useEffect(() => {
-    if (!open || !data) return;
-    const start = resolveStart(data);
-    const end = resolveEnd(data);
-    form.setFieldsValue({
-      name: data.name,
-      projectId: data.project?.id,
-      type: data.typeOption?.value ?? data.type ?? undefined,
-      includeTime: data.datePrecision === "DATETIME",
-      isRange: isRange(start, end),
-      startAt: start ? dayjs(start) : undefined,
-      endAt: end ? dayjs(end) : undefined,
-      location: data.location ?? undefined,
-      method: data.methodOption?.value ?? data.method ?? undefined,
-    });
-  }, [data, form, open]);
-
   const ensureProjectContextLoaded = useCallback(async () => {
     const projectId = data?.project?.id;
     if (!projectId) return;
@@ -452,30 +411,20 @@ export default function Page() {
     ensureProjectContextLoaded,
   ]);
 
-  const onSubmit = async (values: FormValues) => {
+  const onSubmit = async (values: ProjectMilestoneFormPayload) => {
     try {
-      const start = values.startAt;
-      const end =
-        values.isRange &&
-        values.endAt &&
-        !(values.startAt && values.startAt.valueOf() === values.endAt.valueOf())
-          ? values.endAt
-          : null;
-      const toPayloadDate = (value?: dayjs.Dayjs | null) => {
-        if (!value) return null;
-        return values.includeTime
-          ? value.toISOString()
-          : value.format("YYYY-MM-DD");
-      };
       await updateMilestone({
         name: values.name,
         projectId: values.projectId,
         type: values.type ?? null,
-        startAt: toPayloadDate(start),
-        endAt: toPayloadDate(end),
-        datePrecision: values.includeTime ? "DATETIME" : "DATE",
+        startAt: values.startAt ?? null,
+        endAt: values.endAt ?? null,
+        datePrecision: values.datePrecision ?? "DATE",
         location: values.location ?? null,
         method: values.method ?? null,
+        internalParticipantIds: values.internalParticipantIds,
+        clientParticipantIds: values.clientParticipantIds,
+        vendorParticipantIds: values.vendorParticipantIds,
       });
       await fetchAllOptions(true);
       messageApi.success("更新成功");
@@ -880,138 +829,28 @@ export default function Page() {
         />
       </Card>
 
-      <Modal
+      <ProjectMilestoneFormModal
         title="编辑里程碑"
         open={open}
         onCancel={() => setOpen(false)}
-        footer={null}
-        destroyOnHidden
-      >
-        <Form
-          layout="vertical"
-          form={form}
-          onValuesChange={(changedValues) => {
-            if ("isRange" in changedValues && !changedValues.isRange) {
-              form.setFieldValue("endAt", undefined);
-            }
-          }}
-          onFinish={(values) => void onSubmit(values)}
-        >
-          <Form.Item label="名称" name="name" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item
-            label="所属项目"
-            name="projectId"
-            rules={[{ required: true }]}
-          >
-            <Select
-              options={projects.map((project) => ({
-                label: project.name,
-                value: project.id,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item
-            label="类型"
-            name="type"
-            rules={[{ required: true, message: "请选择类型" }]}
-          >
-            <SelectOptionSelector
-              placeholder="请选择或新增类型"
-              options={typeOptions.map((item) => ({
-                label: item.value,
-                value: item.value,
-                color: item.color ?? DEFAULT_COLOR,
-              }))}
-            />
-          </Form.Item>
-          <Space style={{ marginBottom: 12 }}>
-            <Form.Item name="includeTime" valuePropName="checked" noStyle>
-              <Checkbox>包含时间</Checkbox>
-            </Form.Item>
-            <Form.Item name="isRange" valuePropName="checked" noStyle>
-              <Checkbox>时间段</Checkbox>
-            </Form.Item>
-          </Space>
-          <Form.Item
-            noStyle
-            shouldUpdate={(prev, next) =>
-              prev.includeTime !== next.includeTime ||
-              prev.isRange !== next.isRange
-            }
-          >
-            {({ getFieldValue }) => {
-              const includeTime = Boolean(getFieldValue("includeTime"));
-              const isRangeValue = Boolean(getFieldValue("isRange"));
-              const format = includeTime ? "YYYY-MM-DD HH:mm" : "YYYY-MM-DD";
-              return (
-                <>
-                  <Form.Item
-                    label="开始"
-                    name="startAt"
-                    rules={[{ required: true, message: "请选择开始时间" }]}
-                  >
-                    <DatePicker
-                      showTime={includeTime}
-                      format={format}
-                      style={{ width: "100%" }}
-                    />
-                  </Form.Item>
-                  {isRangeValue ? (
-                    <Form.Item
-                      label="结束"
-                      name="endAt"
-                      rules={[
-                        { required: true, message: "请选择结束时间" },
-                        ({ getFieldValue }) => ({
-                          validator(_, value: dayjs.Dayjs | undefined) {
-                            const startAt = getFieldValue("startAt") as
-                              | dayjs.Dayjs
-                              | undefined;
-                            if (
-                              !value ||
-                              !startAt ||
-                              !value.isBefore(startAt)
-                            ) {
-                              return Promise.resolve();
-                            }
-                            return Promise.reject(
-                              new Error("结束时间不能早于开始时间"),
-                            );
-                          },
-                        }),
-                      ]}
-                    >
-                      <DatePicker
-                        showTime={includeTime}
-                        format={format}
-                        style={{ width: "100%" }}
-                      />
-                    </Form.Item>
-                  ) : null}
-                </>
-              );
-            }}
-          </Form.Item>
-          <Form.Item label="方式" name="method">
-            <SelectOptionSelector
-              placeholder="请选择或新增方式"
-              options={methodOptions.map((item) => ({
-                label: item.value,
-                value: item.value,
-                color: item.color ?? DEFAULT_COLOR,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item label="地点" name="location">
-            <Input />
-          </Form.Item>
-          <Button block type="primary" htmlType="submit">
-            保存
-          </Button>
-        </Form>
-      </Modal>
+        initialValues={
+          data
+            ? {
+                ...data,
+                type: data.typeOption?.value ?? data.type ?? undefined,
+                method: data.methodOption?.value ?? data.method ?? undefined,
+              }
+            : null
+        }
+        projectMembers={context.members}
+        allEmployees={context.members}
+        clientParticipants={context.clientContacts}
+        vendors={context.vendors}
+        projectOptions={projects}
+        selectedProjectId={data?.project?.id ?? undefined}
+        onProjectChange={() => undefined}
+        onSubmit={onSubmit}
+      />
 
       <Modal
         title="添加内部参与人员"

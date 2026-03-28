@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Button,
   Card,
   Collapse,
   Empty,
@@ -698,6 +699,18 @@ function SchedulePageContent() {
     }
 
     const currentProjectId = searchParams.get("projectId");
+    if (
+      currentProjectId &&
+      !visibleProjects.some((project) => project.id === currentProjectId)
+    ) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("projectId");
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, {
+        scroll: false,
+      });
+      return;
+    }
     const nextProjectId = selectedClientProject?.id ?? null;
     if ((currentProjectId ?? null) === nextProjectId) {
       return;
@@ -713,7 +726,14 @@ function SchedulePageContent() {
     router.replace(query ? `${pathname}?${query}` : pathname, {
       scroll: false,
     });
-  }, [loadingProjects, pathname, router, searchParams, selectedClientProject]);
+  }, [
+    loadingProjects,
+    pathname,
+    router,
+    searchParams,
+    selectedClientProject,
+    visibleProjects,
+  ]);
 
   const fetchProjectDetailById = useCallback(async (projectId: string, force = false) => {
     if (!projectId) return;
@@ -865,6 +885,23 @@ function SchedulePageContent() {
       messageApi.error(text);
     } finally {
       setSegmentSubmitting(false);
+    }
+  };
+
+  const handleUpdateSegmentStatus = async (
+    segment: SegmentRow,
+    nextOption: { id: string; value: string; color: string },
+  ) => {
+    if (!canManageProject) return;
+    const res = await fetch(`/api/project-segments/${segment.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: nextOption,
+      }),
+    });
+    if (!res.ok) {
+      throw new Error((await res.text()) || "更新环节状态失败");
     }
   };
 
@@ -1421,6 +1458,19 @@ function SchedulePageContent() {
         />
         <Card
           title="项目进度"
+          extra={
+            canManageProject ? (
+              <Button
+                type="primary"
+                onClick={() => {
+                  setEditingSegment(null);
+                  setSegmentModalOpen(true);
+                }}
+              >
+                新增项目环节
+              </Button>
+            ) : null
+          }
           style={{
             width: "100%",
             minWidth: 0,
@@ -1451,6 +1501,10 @@ function SchedulePageContent() {
             employees={employees}
             onAddTask={(segment) => openCreateTaskModal(segment.id)}
             onEditSegment={(segment) => openEditSegmentModal(segment)}
+            onUpdateSegmentStatus={async (segment, nextOption) => {
+              await handleUpdateSegmentStatus(segment, nextOption);
+              refreshProjectDetails(project.id);
+            }}
             onAfterDeleteSegment={() => {
               refreshProjectDetails(project.id);
             }}

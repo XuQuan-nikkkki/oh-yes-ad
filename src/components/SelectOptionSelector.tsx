@@ -139,7 +139,7 @@ const SelectOptionSelector = ({
           );
         }}
         popupRender={(menu) => (
-          <>
+          <div>
             {menu}
             <div style={{ borderTop: "1px solid #f0f0f0", padding: 8 }}>
               <Button
@@ -160,7 +160,7 @@ const SelectOptionSelector = ({
                 {hasExact ? existsText : `${createButtonText}: ${keyword || ""}`}
               </Button>
             </div>
-          </>
+          </div>
         )}
       />
     </>

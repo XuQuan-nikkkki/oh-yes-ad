@@ -1,27 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, DatePicker, Form, Input, Modal, Select } from "antd";
-import dayjs from "dayjs";
-import { DEFAULT_COLOR } from "@/lib/constants";
+import { useCallback, useEffect, useState } from "react";
+import { Button } from "antd";
 import ProjectSegmentsProTable, {
   type ProjectSegmentsProTableRow,
 } from "@/components/ProjectSegmentsProTable";
 import ListPageContainer from "@/components/ListPageContainer";
 import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
-import SelectOptionSelector, {
-  type SelectOptionSelectorValue,
-} from "@/components/SelectOptionSelector";
+import ProjectSegmentFormModal from "@/components/project-detail/ProjectSegmentFormModal";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useProjectsStore } from "@/stores/projectsStore";
 import { useProjectSegmentsStore } from "@/stores/projectSegmentsStore";
+import type { ProjectSegmentFormPayload } from "@/components/project-detail/ProjectSegmentForm";
 
 type Row = ProjectSegmentsProTableRow;
-const DEFAULT_PROJECT_SEGMENT_STATUS = "待启动";
-
 type Option = { id: string; name: string };
 type EmployeeOption = {
   id: string;
@@ -29,23 +24,11 @@ type EmployeeOption = {
   employmentStatus?: string | null;
 };
 
-type FormValues = {
-  name: string;
-  projectId: string;
-  ownerId?: string;
-  status?: SelectOptionSelectorValue;
-  dueDate?: dayjs.Dayjs;
-};
-
 export default function ProjectSegmentsPage() {
   const [projects, setProjects] = useState<Option[]>([]);
-  const [projectsLoading, setProjectsLoading] = useState(false);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
-  const [projectMembers, setProjectMembers] = useState<EmployeeOption[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
-  const [form] = Form.useForm<FormValues>();
-  const selectedProjectId = Form.useWatch("projectId", form);
   const { canManageProject } = useProjectPermission();
   const rows = useProjectSegmentsStore((state) => state.rows);
   const rowsLoading = useProjectSegmentsStore((state) => state.loading);
@@ -57,9 +40,6 @@ export default function ProjectSegmentsPage() {
   const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
-  const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
-  const statusOptions = optionsByField["projectSegment.status"] ?? [];
-
   const fetchBaseData = useCallback(async () => {
     const employeeRows = await fetchEmployeesFromStore();
     await fetchSegmentsFromStore();
@@ -75,7 +55,6 @@ export default function ProjectSegmentsPage() {
   }, [fetchEmployeesFromStore, fetchSegmentsFromStore]);
 
   const fetchProjects = useCallback(async () => {
-    setProjectsLoading(true);
     const data = await fetchProjectsFromStore();
     setProjects(
       (Array.isArray(data) ? data : [])
@@ -92,7 +71,6 @@ export default function ProjectSegmentsPage() {
           name: p.name,
         })),
     );
-    setProjectsLoading(false);
   }, [fetchProjectsFromStore]);
 
   const ensureProjectsLoaded = useCallback(async () => {
@@ -106,91 +84,6 @@ export default function ProjectSegmentsPage() {
       await fetchAllOptions();
     })();
   }, [fetchAllOptions, fetchBaseData]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (!editing) {
-      form.resetFields();
-      form.setFieldsValue({
-        status: DEFAULT_PROJECT_SEGMENT_STATUS,
-      });
-      return;
-    }
-    form.setFieldsValue({
-      name: editing.name,
-      projectId: editing.project?.id,
-      ownerId: editing.owner?.id,
-      status: editing.statusOption?.value ?? editing.status ?? undefined,
-      dueDate: editing.dueDate ? dayjs(editing.dueDate) : undefined,
-    });
-  }, [editing, form, open]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (!selectedProjectId) return;
-
-    let cancelled = false;
-
-    void (async () => {
-      const response = await fetch(`/api/projects/${selectedProjectId}`, {
-        cache: "no-store",
-      });
-      if (!response.ok) {
-        if (!cancelled) {
-          setProjectMembers([]);
-        }
-        return;
-      }
-      const data = (await response.json()) as {
-        members?: EmployeeOption[];
-      } | null;
-      if (cancelled) return;
-      setProjectMembers(Array.isArray(data?.members) ? data.members : []);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, selectedProjectId]);
-
-  const ownerOptions = useMemo(() => {
-    const activeEmployees = employees.filter(
-      (employee) => employee.employmentStatus !== "离职",
-    );
-    const visibleProjectMembers = selectedProjectId ? projectMembers : [];
-    const projectMemberIdSet = new Set(
-      visibleProjectMembers
-        .filter((member) => member.employmentStatus !== "离职")
-        .map((member) => member.id),
-    );
-
-    const insideOptions = activeEmployees
-      .filter((employee) => projectMemberIdSet.has(employee.id))
-      .map((employee) => ({
-        label: employee.name,
-        value: employee.id,
-      }))
-      .sort((left, right) => left.label.localeCompare(right.label, "zh-CN"));
-
-    const outsideOptions = activeEmployees
-      .filter((employee) => !projectMemberIdSet.has(employee.id))
-      .map((employee) => ({
-        label: employee.name,
-        value: employee.id,
-      }))
-      .sort((left, right) => left.label.localeCompare(right.label, "zh-CN"));
-
-    return [
-      {
-        label: "项目内",
-        options: insideOptions,
-      },
-      {
-        label: "项目外",
-        options: outsideOptions,
-      },
-    ].filter((group) => group.options.length > 0);
-  }, [employees, projectMembers, selectedProjectId]);
 
   const onCreate = () => {
     if (!canManageProject) return;
@@ -252,15 +145,8 @@ export default function ProjectSegmentsPage() {
     [upsertSegments],
   );
 
-  const onSubmit = async (values: FormValues) => {
+  const onSubmit = async (payload: ProjectSegmentFormPayload) => {
     if (!canManageProject) return;
-    const payload = {
-      name: values.name,
-      projectId: values.projectId,
-      ownerId: values.ownerId ?? null,
-      status: values.status ?? null,
-      dueDate: values.dueDate ? values.dueDate.toISOString() : null,
-    };
 
     let res: Response;
     if (editing) {
@@ -325,43 +211,15 @@ export default function ProjectSegmentsPage() {
         ]}
       />
 
-      <Modal
+      <ProjectSegmentFormModal
         title={editing ? "编辑环节" : "新增环节"}
         open={open}
         onCancel={() => setOpen(false)}
-        footer={null}
-        forceRender
-        destroyOnHidden
-      >
-        <Form layout="vertical" form={form} onFinish={onSubmit}>
-          <Form.Item label="环节名称" name="name" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item label="所属项目" name="projectId" rules={[{ required: true }]}>
-            <Select
-              loading={projectsLoading}
-              options={projects.map((p) => ({ label: p.name, value: p.id }))}
-            />
-          </Form.Item>
-          <Form.Item label="负责人" name="ownerId">
-            <Select allowClear options={ownerOptions} placeholder="选择负责人" />
-          </Form.Item>
-          <Form.Item label="状态" name="status" rules={[{ required: true, message: "请选择状态" }]}>
-            <SelectOptionSelector
-              placeholder="请选择或新增状态"
-              options={statusOptions.map((item) => ({
-                label: item.value,
-                value: item.value,
-                color: item.color ?? DEFAULT_COLOR,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item label="截止日期" name="dueDate">
-            <DatePicker style={{ width: "100%" }} />
-          </Form.Item>
-          <Button block type="primary" htmlType="submit">保存</Button>
-        </Form>
-      </Modal>
+        initialValues={editing}
+        projectOptions={projects}
+        employees={employees}
+        onSubmit={onSubmit}
+      />
     </ListPageContainer>
   );
 }

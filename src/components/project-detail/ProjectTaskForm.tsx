@@ -14,6 +14,12 @@ import {
   DEFAULT_PROJECT_TASK_STATUS,
   PROJECT_TASK_STATUS_FIELD,
 } from "@/lib/constants";
+import {
+  buildEmployeeLabelMap,
+  buildGroupedEmployeeOptions,
+  isEmployeeActive,
+  renderEmployeeSelectedLabel,
+} from "@/lib/employee-select";
 
 export type ProjectTaskFormPayload = {
   name: string;
@@ -102,29 +108,10 @@ const ProjectTaskForm = ({
     void fetchAllOptions();
   }, [fetchAllOptions]);
 
-  const activeEmployees = useMemo(() => {
-    const filtered = employees.filter(
-      (employee) =>
-        employee.employmentStatus !== "离职" &&
-        employee.employmentStatusOption?.value !== "离职",
-    );
-
-    if (
-      initialValues?.owner?.id &&
-      initialValues.owner.name &&
-      !filtered.some((employee) => employee.id === initialValues.owner?.id)
-    ) {
-      return [
-        ...filtered,
-        {
-          id: initialValues.owner.id,
-          name: initialValues.owner.name,
-        },
-      ];
-    }
-
-    return filtered;
-  }, [employees, initialValues]);
+  const activeEmployees = useMemo(
+    () => employees.filter(isEmployeeActive),
+    [employees],
+  );
   const initialSegmentId = initialValues?.segmentId ?? defaultSegmentId;
   const initialProjectId = segmentOptions.find(
     (segment) => segment.id === initialSegmentId,
@@ -161,44 +148,24 @@ const ProjectTaskForm = ({
         })),
     [segmentOptions, selectedProjectId],
   );
-  const ownerOptions = useMemo(() => {
-    const projectMemberIdSet = new Set(
-      projectMembers
-        .filter(
-          (member) =>
-            member.employmentStatus !== "离职" &&
-            member.employmentStatusOption?.value !== "离职",
-        )
-        .map((member) => member.id),
-    );
-
-    const projectInsideOptions = activeEmployees
-      .filter((employee) => projectMemberIdSet.has(employee.id))
-      .map((employee) => ({
-        label: employee.name,
-        value: employee.id,
-      }))
-      .sort((left, right) => left.label.localeCompare(right.label, "zh-CN"));
-
-    const projectOutsideOptions = activeEmployees
-      .filter((employee) => !projectMemberIdSet.has(employee.id))
-      .map((employee) => ({
-        label: employee.name,
-        value: employee.id,
-      }))
-      .sort((left, right) => left.label.localeCompare(right.label, "zh-CN"));
-
-    return [
-      {
-        label: "项目内",
-        options: projectInsideOptions,
-      },
-      {
-        label: "项目外",
-        options: projectOutsideOptions,
-      },
-    ].filter((group) => group.options.length > 0);
-  }, [activeEmployees, projectMembers]);
+  const ownerOptions = useMemo(
+    () =>
+      buildGroupedEmployeeOptions(
+        activeEmployees,
+        projectMembers.filter(isEmployeeActive).map((member) => member.id),
+      ),
+    [activeEmployees, projectMembers],
+  );
+  const ownerLabelMap = useMemo(
+    () =>
+      buildEmployeeLabelMap(employees, [
+        {
+          id: initialValues?.owner?.id,
+          name: initialValues?.owner?.name,
+        },
+      ]),
+    [employees, initialValues?.owner?.id, initialValues?.owner?.name],
+  );
 
   return (
     <ConfigProvider locale={zhCN}>
@@ -292,6 +259,7 @@ const ProjectTaskForm = ({
                 options={ownerOptions}
                 showSearch
                 optionFilterProp="label"
+                labelRender={renderEmployeeSelectedLabel(ownerLabelMap)}
               />
             </Form.Item>
           </Col>

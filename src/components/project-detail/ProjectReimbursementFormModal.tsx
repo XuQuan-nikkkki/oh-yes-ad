@@ -3,10 +3,19 @@
 import { useMemo } from "react";
 import { DatePicker, Form, InputNumber, Modal, Select } from "antd";
 import dayjs from "dayjs";
+import {
+  buildEmployeeLabelMap,
+  buildFlatEmployeeOptions,
+  renderEmployeeSelectedLabel,
+} from "@/lib/employee-select";
 
 type EmployeeOption = {
   id: string;
   name: string;
+  employmentStatus?: string | null;
+  employmentStatusOption?: {
+    value?: string | null;
+  } | null;
 };
 
 type CategoryOption = {
@@ -62,13 +71,11 @@ const ProjectReimbursementFormModal = ({
   const [form] = Form.useForm();
 
   const employeeOptions = useMemo(
-    () =>
-      employees
-        .map((item) => ({
-          label: item.name,
-          value: item.id,
-        }))
-        .sort((left, right) => left.label.localeCompare(right.label, "zh-CN")),
+    () => buildFlatEmployeeOptions(employees),
+    [employees],
+  );
+  const employeeLabelMap = useMemo(
+    () => buildEmployeeLabelMap(employees),
     [employees],
   );
 
@@ -145,6 +152,7 @@ const ProjectReimbursementFormModal = ({
               optionFilterProp="label"
               options={employeeOptions}
               placeholder="请选择申请人"
+              labelRender={renderEmployeeSelectedLabel(employeeLabelMap)}
             />
           </Form.Item>
 

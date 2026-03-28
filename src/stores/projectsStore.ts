@@ -24,6 +24,7 @@ type ProjectsStore = {
   queryState: Record<string, QueryState>;
   fetchProjects: (query?: ProjectQuery & { force?: boolean }) => Promise<ProjectListItem[]>;
   upsertProjects: (rows: ProjectListItem[]) => void;
+  removeProject: (id: string) => void;
   clearProjectsCache: () => void;
 };
 
@@ -143,6 +144,26 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
     set((state) => ({
       byId: mergeRows(state.byId, rows),
     }));
+  },
+  removeProject: (id) => {
+    set((state) => {
+      if (!id) return state;
+      const nextById = { ...state.byId };
+      delete nextById[id];
+      const nextQueryState = Object.fromEntries(
+        Object.entries(state.queryState).map(([key, query]) => [
+          key,
+          {
+            ...query,
+            ids: query.ids.filter((queryId) => queryId !== id),
+          },
+        ]),
+      );
+      return {
+        byId: nextById,
+        queryState: nextQueryState,
+      };
+    });
   },
   clearProjectsCache: () => {
     set({

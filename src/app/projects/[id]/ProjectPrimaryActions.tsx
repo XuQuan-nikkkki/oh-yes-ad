@@ -7,20 +7,20 @@ import TableActions from "@/components/TableActions";
 type Props = {
   projectId: string;
   projectName?: string;
-  projectType?: string;
   canManageProject: boolean;
   deletingProject: boolean;
   setDeletingProject: (value: boolean) => void;
+  onDeleted?: () => void;
   onOpenEdit: () => void;
 };
 
 const ProjectPrimaryActions = ({
   projectId,
   projectName,
-  projectType,
   canManageProject,
   deletingProject,
   setDeletingProject,
+  onDeleted,
   onOpenEdit,
 }: Props) => {
   const router = useRouter();
@@ -51,10 +51,9 @@ const ProjectPrimaryActions = ({
             messageApi.error("删除失败");
             return;
           }
+          onDeleted?.();
           messageApi.success("删除成功");
-          router.push(
-            projectType === "INTERNAL" ? "/internal-projects" : "/client-projects",
-          );
+          router.back();
         }}
       />
     </>

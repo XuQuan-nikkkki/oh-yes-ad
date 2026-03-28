@@ -117,6 +117,7 @@ const ProjectDetailPage = () => {
   const projectId = params.id as string;
   const cachedProject = useProjectsStore((state) => state.byId[projectId]);
   const upsertProjects = useProjectsStore((state) => state.upsertProjects);
+  const removeProjectFromStore = useProjectsStore((state) => state.removeProject);
   const upsertProjectMilestones = useProjectMilestonesStore(
     (state) => state.upsertMilestones,
   );
@@ -618,12 +619,14 @@ const ProjectDetailPage = () => {
           <ProjectPrimaryActions
             projectId={projectId}
             projectName={project.name}
-            projectType={project.type}
-            canManageProject={canManageProject}
-            deletingProject={deletingProject}
-            setDeletingProject={setDeletingProject}
-            onOpenEdit={() => setActiveModal({ type: "project-edit" })}
-          />
+        canManageProject={canManageProject}
+        deletingProject={deletingProject}
+        setDeletingProject={setDeletingProject}
+        onDeleted={() => {
+          removeProjectFromStore(projectId);
+        }}
+        onOpenEdit={() => setActiveModal({ type: "project-edit" })}
+      />
         }
       >
         <ProjectInfo
@@ -667,6 +670,7 @@ const ProjectDetailPage = () => {
                 <div style={{ paddingRight: 16 }}>
                   <ProjectSegmentAction
                     projectId={projectId}
+                    project={project}
                     visible
                     canManageProject={canManageProject}
                     open={activeModal.type === "segment"}
@@ -716,6 +720,7 @@ const ProjectDetailPage = () => {
                 <div style={{ paddingRight: 16 }}>
                   <ProjectDocumentAction
                     projectId={projectId}
+                    project={project}
                     canManageProject={canManageProject}
                     visible
                     open={activeModal.type === "document"}
@@ -1206,6 +1211,7 @@ const ProjectDetailPage = () => {
                     <div style={{ paddingRight: 16 }}>
                       <ProjectSegmentAction
                         projectId={projectId}
+                        project={project}
                         visible
                         canManageProject={canManageProject}
                         open={activeModal.type === "segment"}
@@ -1255,6 +1261,7 @@ const ProjectDetailPage = () => {
                     <div style={{ paddingRight: 16 }}>
                       <ProjectDocumentAction
                         projectId={projectId}
+                        project={project}
                         canManageProject={canManageProject}
                         visible
                         open={activeModal.type === "document"}

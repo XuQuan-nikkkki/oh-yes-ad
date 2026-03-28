@@ -28,6 +28,7 @@ const ProjectSegmentFormModal = ({
       footer={null}
       confirmLoading={confirmLoading}
       destroyOnHidden
+      width={860}
     >
       <ProjectSegmentForm {...formProps} />
     </Modal>

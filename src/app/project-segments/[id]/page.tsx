@@ -26,6 +26,11 @@ import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import SelectOptionSelector, {
   type SelectOptionSelectorValue,
 } from "@/components/SelectOptionSelector";
+import {
+  buildEmployeeLabelMap,
+  buildFlatEmployeeOptions,
+  renderEmployeeSelectedLabel,
+} from "@/lib/employee-select";
 import ProjectTasksProTable, {
   type ProjectTasksProTableRow,
 } from "@/components/ProjectTasksProTable";
@@ -67,9 +72,14 @@ export default function ProjectSegmentDetailPage() {
   const [editingTask, setEditingTask] =
     useState<ProjectTasksProTableRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [employees, setEmployees] = useState<{ id: string; name: string }[]>(
-    [],
-  );
+  const [employees, setEmployees] = useState<
+    {
+      id: string;
+      name: string;
+      employmentStatus?: string | null;
+      employmentStatusOption?: { value?: string | null } | null;
+    }[]
+  >([]);
   const [form] = Form.useForm<FormValues>();
   const [taskForm] = Form.useForm<{
     projectId?: string;
@@ -93,6 +103,15 @@ export default function ProjectSegmentDetailPage() {
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const statusOptions = optionsByField["projectSegment.status"] ?? [];
   const taskStatusOptions = optionsByField["projectTask.status"] ?? [];
+  const employeeOptions = buildFlatEmployeeOptions(employees);
+  const ownerLabelMap = buildEmployeeLabelMap(
+    employees,
+    data?.owner ? [{ id: data.owner.id, name: data.owner.name }] : [],
+  );
+  const taskOwnerLabelMap = buildEmployeeLabelMap(
+    employees,
+    editingTask?.owner ? [{ id: editingTask.owner.id, name: editingTask.owner.name }] : [],
+  );
   const taskStatusFilterOptions = taskStatusOptions
     .slice()
     .sort((left, right) => {
@@ -464,10 +483,8 @@ export default function ProjectSegmentDetailPage() {
             <Form.Item label="负责人" name="ownerId">
               <Select
                 allowClear
-                options={employees.map((employee) => ({
-                  label: employee.name,
-                  value: employee.id,
-                }))}
+                options={employeeOptions}
+                labelRender={renderEmployeeSelectedLabel(ownerLabelMap)}
               />
             </Form.Item>
             <Form.Item label="状态" name="status">
@@ -568,10 +585,8 @@ export default function ProjectSegmentDetailPage() {
                   rules={[{ required: true, message: "请选择负责人" }]}
                 >
                   <Select
-                    options={employees.map((employee) => ({
-                      label: employee.name,
-                      value: employee.id,
-                    }))}
+                    options={employeeOptions}
+                    labelRender={renderEmployeeSelectedLabel(taskOwnerLabelMap)}
                   />
                 </Form.Item>
               </Col>

@@ -26,6 +26,11 @@ import {
   DEFAULT_PROJECT_TASK_STATUS,
   PROJECT_TASK_STATUS_FIELD,
 } from "@/lib/constants";
+import {
+  buildEmployeeLabelMap,
+  buildFlatEmployeeOptions,
+  renderEmployeeSelectedLabel,
+} from "@/lib/employee-select";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import type {
   ProjectProgressSegmentRow,
@@ -176,21 +181,20 @@ const ProjectTaskStepFormModal = ({
     return matched?.value ?? currentWeekValue;
   }, [currentWeekValue, weekNumberOptions]);
 
-  const ownerOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    employees.forEach((employee) => {
-      if (employee.employmentStatus !== "离职") {
-        map.set(employee.id, employee.name);
-      }
-    });
-    if (task?.ownerId && task.ownerName) {
-      map.set(task.ownerId, task.ownerName);
-    }
-    return Array.from(map.entries()).map(([id, name]) => ({
-      label: name,
-      value: id,
-    }));
-  }, [employees, task?.ownerId, task?.ownerName]);
+  const ownerOptions = useMemo(
+    () => buildFlatEmployeeOptions(employees),
+    [employees],
+  );
+  const ownerLabelMap = useMemo(
+    () =>
+      buildEmployeeLabelMap(employees, [
+        {
+          id: task?.ownerId,
+          name: task?.ownerName,
+        },
+      ]),
+    [employees, task?.ownerId, task?.ownerName],
+  );
 
   const baseValues = useMemo<FormValues | undefined>(() => {
     if (!task) return undefined;
@@ -316,7 +320,7 @@ const ProjectTaskStepFormModal = ({
         }
         options={options}
         popupRender={(menu) => (
-          <>
+          <div>
             {menu}
             <div style={{ padding: "8px" }}>
               <Button
@@ -329,7 +333,7 @@ const ProjectTaskStepFormModal = ({
                 {hasExactMatch ? "已存在同名选项" : `新增: ${keyword || ""}`}
               </Button>
             </div>
-          </>
+          </div>
         )}
       />
     );
@@ -483,6 +487,7 @@ const ProjectTaskStepFormModal = ({
                       allowClear
                       placeholder="选择负责人"
                       options={ownerOptions}
+                      labelRender={renderEmployeeSelectedLabel(ownerLabelMap)}
                     />
                   </ProForm.Item>
                 </Col>

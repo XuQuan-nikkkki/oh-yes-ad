@@ -359,7 +359,7 @@ const PlannedWorkEntryForm = ({
         }
         options={options}
         popupRender={(menu) => (
-          <>
+          <div>
             {menu}
             <div style={{ padding: "8px" }}>
               <Button
@@ -372,7 +372,7 @@ const PlannedWorkEntryForm = ({
                 {hasExactMatch ? "已存在同名选项" : `新增: ${keyword || ""}`}
               </Button>
             </div>
-          </>
+          </div>
         )}
       />
     );
