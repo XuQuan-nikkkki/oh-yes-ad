@@ -15,12 +15,13 @@ export type ProjectSegmentsProTableRow = {
   name: string;
   status?: string | null;
   statusOption?: NullableSelectOptionValue;
-  dueDate?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
   project?: { id: string; name: string } | null;
   owner?: { id: string; name: string } | null;
 };
 
-type ColumnKey = "name" | "project" | "owner" | "status" | "dueDate" | "actions";
+type ColumnKey = "name" | "project" | "owner" | "status" | "startDate" | "endDate" | "actions";
 
 type Props = {
   rows: ProjectSegmentsProTableRow[];
@@ -40,7 +41,7 @@ type Props = {
 const ProjectSegmentsProTable = ({
   rows,
   loading = false,
-  columnKeys = ["name", "project", "owner", "status", "dueDate", "actions"],
+  columnKeys = ["name", "project", "owner", "status", "startDate", "endDate", "actions"],
   defaultVisibleColumnKeys,
   headerTitle,
   toolbarActions = [],
@@ -79,10 +80,18 @@ const ProjectSegmentsProTable = ({
     ),
   ).map((value) => ({ text: value, value }));
 
-  const dueDateFilters = Array.from(
+  const startDateFilters = Array.from(
     new Set(
       rows
-        .map((row) => formatDate(row.dueDate, DATE_FORMAT, ""))
+        .map((row) => formatDate(row.startDate, DATE_FORMAT, ""))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ).map((value) => ({ text: value, value }));
+
+  const endDateFilters = Array.from(
+    new Set(
+      rows
+        .map((row) => formatDate(row.endDate, DATE_FORMAT, ""))
         .filter((value): value is string => Boolean(value)),
     ),
   ).map((value) => ({ text: value, value }));
@@ -148,15 +157,25 @@ const ProjectSegmentsProTable = ({
           record.status ?? "-"
         ),
     },
-    dueDate: {
-      title: "截止日期",
-      dataIndex: "dueDate",
-      filters: dueDateFilters,
+    startDate: {
+      title: "开始日期",
+      dataIndex: "startDate",
+      filters: startDateFilters,
       filterSearch: true,
       onFilter: (value, record) =>
-        formatDate(record.dueDate, DATE_FORMAT, "") === String(value),
-      render: (_value, record) => formatDate(record.dueDate, DATE_FORMAT),
-      sorter: (a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""),
+        formatDate(record.startDate, DATE_FORMAT, "") === String(value),
+      render: (_value, record) => formatDate(record.startDate, DATE_FORMAT, "-"),
+      sorter: (a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? ""),
+    },
+    endDate: {
+      title: "结束日期",
+      dataIndex: "endDate",
+      filters: endDateFilters,
+      filterSearch: true,
+      onFilter: (value, record) =>
+        formatDate(record.endDate, DATE_FORMAT, "") === String(value),
+      render: (_value, record) => formatDate(record.endDate, DATE_FORMAT, "-"),
+      sorter: (a, b) => (a.endDate ?? "").localeCompare(b.endDate ?? ""),
     },
     actions: {
       title: "操作",

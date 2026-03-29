@@ -254,10 +254,28 @@ export async function DELETE(req: Request) {
 
   const body = await sanitizeRequestBody(req);
 
-  await prisma.project.delete({
-    where: {
-      id: body.id,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.plannedWorkEntry.deleteMany({
+      where: {
+        task: {
+          segment: {
+            projectId: body.id,
+          },
+        },
+      },
+    });
+
+    await tx.actualWorkEntry.deleteMany({
+      where: {
+        projectId: body.id,
+      },
+    });
+
+    await tx.project.delete({
+      where: {
+        id: body.id,
+      },
+    });
   });
 
   return Response.json({ success: true });

@@ -20,6 +20,7 @@ import {
   isEmployeeActive,
   renderEmployeeSelectedLabel,
 } from "@/lib/employee-select";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 export type ProjectTaskFormPayload = {
   name: string;
@@ -101,6 +102,7 @@ const ProjectTaskForm = ({
 }: Props) => {
   dayjs.locale("zh-cn");
   const [form] = Form.useForm<FormValues & { projectId?: string }>();
+  const { submitting, runWithSubmitLock } = useSubmitLock();
   const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const statusOptions = useMemo(
@@ -191,12 +193,14 @@ const ProjectTaskForm = ({
             : undefined,
         }}
         onFinish={(values) =>
-          onSubmit({
-            name: values.name,
-            segmentId: values.segmentId,
-            status: values.status ?? DEFAULT_PROJECT_TASK_STATUS,
-            ownerId: values.ownerId ?? null,
-            dueDate: toIsoDateTimeOrNull(values.dueDate),
+          runWithSubmitLock(async () => {
+            await onSubmit({
+              name: values.name,
+              segmentId: values.segmentId,
+              status: values.status ?? DEFAULT_PROJECT_TASK_STATUS,
+              ownerId: values.ownerId ?? null,
+              dueDate: toIsoDateTimeOrNull(values.dueDate),
+            });
           })
         }
       >
@@ -275,7 +279,7 @@ const ProjectTaskForm = ({
             </Form.Item>
           </Col>
         </Row>
-        <Button type="primary" htmlType="submit" block>
+        <Button type="primary" htmlType="submit" block loading={submitting} disabled={submitting}>
           保存
         </Button>
       </Form>

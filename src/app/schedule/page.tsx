@@ -390,6 +390,8 @@ function SchedulePageContent() {
   const [milestoneProjectId, setMilestoneProjectId] = useState<string | null>(
     null,
   );
+  const [segmentProjectContext, setSegmentProjectContext] =
+    useState<ProjectListItem | null>(null);
   const [milestoneModalOpen, setMilestoneModalOpen] = useState(false);
   const [segmentModalOpen, setSegmentModalOpen] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
@@ -435,6 +437,8 @@ function SchedulePageContent() {
   const [plannedDefaultTaskId, setPlannedDefaultTaskId] = useState<
     string | undefined
   >(undefined);
+  const [taskProjectContext, setTaskProjectContext] =
+    useState<ProjectListItem | null>(null);
   const [internalExpandedProjectIds, setInternalExpandedProjectIds] = useState<
     string[]
   >([]);
@@ -636,14 +640,6 @@ function SchedulePageContent() {
     [activeClientProjectId, visibleProjects],
   );
 
-  const selectedClientProjectDetail = useMemo(
-    () =>
-      selectedClientProject
-        ? (projectDetails[selectedClientProject.id] ?? null)
-        : null,
-    [projectDetails, selectedClientProject],
-  );
-
   const activeMilestoneProjectId = useMemo(
     () => milestoneProjectId ?? selectedClientProject?.id ?? null,
     [milestoneProjectId, selectedClientProject?.id],
@@ -657,29 +653,45 @@ function SchedulePageContent() {
     [activeMilestoneProjectId, projectDetails],
   );
 
+  const activeTaskProjectId = useMemo(
+    () => taskProjectContext?.id ?? selectedClientProject?.id ?? null,
+    [taskProjectContext?.id, selectedClientProject?.id],
+  );
+
+  const activeTaskProjectDetail = useMemo(
+    () =>
+      activeTaskProjectId ? (projectDetails[activeTaskProjectId] ?? null) : null,
+    [activeTaskProjectId, projectDetails],
+  );
+
   const selectedProjectSegmentOptions = useMemo(
     () =>
-      (selectedClientProjectDetail?.segments ?? []).map((segment) => ({
+      (activeTaskProjectDetail?.segments ?? []).map((segment) => ({
         id: segment.id,
         name: segment.name,
-        projectId: selectedClientProject?.id,
-        projectName: selectedClientProject?.name,
+        projectId: activeTaskProjectId ?? undefined,
+        projectName: taskProjectContext?.name ?? selectedClientProject?.name,
       })),
-    [selectedClientProject?.id, selectedClientProject?.name, selectedClientProjectDetail],
+    [
+      activeTaskProjectDetail,
+      activeTaskProjectId,
+      selectedClientProject?.name,
+      taskProjectContext?.name,
+    ],
   );
 
   const selectedProjectTaskOptions = useMemo(
     () =>
-      (selectedClientProjectDetail?.segments ?? []).flatMap((segment) =>
+      (activeTaskProjectDetail?.segments ?? []).flatMap((segment) =>
         (segment.projectTasks ?? []).map((task) => ({
           id: task.id,
-          projectId: selectedClientProject?.id ?? "",
+          projectId: activeTaskProjectId ?? "",
           segmentId: segment.id,
           segmentName: segment.name,
           name: task.name,
         })),
       ),
-    [selectedClientProject?.id, selectedClientProjectDetail],
+    [activeTaskProjectDetail, activeTaskProjectId],
   );
 
   useEffect(() => {
@@ -839,14 +851,22 @@ function SchedulePageContent() {
     }
   };
 
-  const openEditSegmentModal = (segment: SegmentRow) => {
+  const openEditSegmentModal = (
+    segment: SegmentRow,
+    project: ProjectListItem,
+  ) => {
     if (!canManageProject) return;
+    setSegmentProjectContext(project);
     setEditingSegment(segment);
     setSegmentModalOpen(true);
   };
 
-  const openCreateTaskModal = (defaultSegmentId?: string) => {
+  const openCreateTaskModal = (
+    defaultSegmentId?: string,
+    project?: ProjectListItem,
+  ) => {
     if (!canManageProject) return;
+    setTaskProjectContext(project ?? null);
     setEditingTask(null);
     setTaskDefaultSegmentId(defaultSegmentId);
     setTaskModalOpen(true);
@@ -868,7 +888,9 @@ function SchedulePageContent() {
 
   const handleSubmitSegment = async (payload: ProjectSegmentFormPayload) => {
     if (!canManageProject) return;
-    if (!selectedClientProject?.id) {
+    const activeSegmentProjectId =
+      segmentProjectContext?.id ?? selectedClientProject?.id;
+    if (!activeSegmentProjectId) {
       messageApi.error("未选择项目");
       return;
     }
@@ -876,14 +898,14 @@ function SchedulePageContent() {
       setSegmentSubmitting(true);
       const endpoint = editingSegment
         ? `/api/project-segments/${editingSegment.id}`
-        : `/api/projects/${selectedClientProject.id}/segments`;
+        : `/api/projects/${activeSegmentProjectId}/segments`;
       const method = editingSegment ? "PATCH" : "POST";
       const res = await fetch(endpoint, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...payload,
-          projectId: selectedClientProject.id,
+          projectId: activeSegmentProjectId,
         }),
       });
       if (!res.ok) {
@@ -893,7 +915,8 @@ function SchedulePageContent() {
       messageApi.success(editingSegment ? "环节已更新" : "环节已创建");
       setSegmentModalOpen(false);
       setEditingSegment(null);
-      refreshProjectDetails(selectedClientProject?.id);
+      setSegmentProjectContext(null);
+      refreshProjectDetails(activeSegmentProjectId);
     } catch (error) {
       const text = error instanceof Error ? error.message : "保存环节失败";
       messageApi.error(text);
@@ -921,7 +944,8 @@ function SchedulePageContent() {
 
   const handleSubmitTask = async (payload: ProjectTaskFormPayload) => {
     if (!canManageProject) return;
-    if (!selectedClientProject?.id) {
+    const currentTaskProjectId = activeTaskProjectId;
+    if (!currentTaskProjectId) {
       messageApi.error("未选择项目");
       return;
     }
@@ -929,7 +953,7 @@ function SchedulePageContent() {
       setTaskSubmitting(true);
       const endpoint = editingTask
         ? `/api/project-tasks/${editingTask.id}`
-        : `/api/projects/${selectedClientProject.id}/tasks`;
+        : `/api/projects/${currentTaskProjectId}/tasks`;
       const method = editingTask ? "PATCH" : "POST";
       const res = await fetch(endpoint, {
         method,
@@ -944,7 +968,8 @@ function SchedulePageContent() {
       setTaskModalOpen(false);
       setEditingTask(null);
       setTaskDefaultSegmentId(undefined);
-      refreshProjectDetails(selectedClientProject?.id);
+      setTaskProjectContext(null);
+      refreshProjectDetails(currentTaskProjectId);
     } catch (error) {
       const text = error instanceof Error ? error.message : "保存任务失败";
       messageApi.error(text);
@@ -1472,6 +1497,7 @@ function SchedulePageContent() {
               <Button
                 type="primary"
                 onClick={() => {
+                  setSegmentProjectContext(project);
                   setEditingSegment(null);
                   setSegmentModalOpen(true);
                 }}
@@ -1508,8 +1534,8 @@ function SchedulePageContent() {
             )}
             actionsDisabled={!canManageProject}
             employees={employees}
-            onAddTask={(segment) => openCreateTaskModal(segment.id)}
-            onEditSegment={(segment) => openEditSegmentModal(segment)}
+            onAddTask={(segment) => openCreateTaskModal(segment.id, project)}
+            onEditSegment={(segment) => openEditSegmentModal(segment, project)}
             onUpdateSegmentStatus={async (segment, nextOption) => {
               await handleUpdateSegmentStatus(segment, nextOption);
               refreshProjectDetails(project.id);
@@ -1669,6 +1695,7 @@ function SchedulePageContent() {
           onCancel={() => {
             setSegmentModalOpen(false);
             setEditingSegment(null);
+            setSegmentProjectContext(null);
           }}
           confirmLoading={segmentSubmitting}
           initialValues={
@@ -1685,26 +1712,28 @@ function SchedulePageContent() {
                         name: editingSegment.ownerName,
                       }
                     : null,
-                  project: selectedClientProject
+                  project: segmentProjectContext
                     ? {
-                        id: selectedClientProject.id,
-                        name: selectedClientProject.name,
+                        id: segmentProjectContext.id,
+                        name: segmentProjectContext.name,
                       }
                     : null,
                 }
               : null
           }
           projectOptions={
-            selectedClientProject
+            segmentProjectContext
               ? [
                   {
-                    id: selectedClientProject.id,
-                    name: selectedClientProject.name,
+                    id: segmentProjectContext.id,
+                    name: segmentProjectContext.name,
                   },
                 ]
               : []
           }
-          selectedProjectId={selectedClientProject?.id}
+          selectedProjectId={
+            segmentProjectContext?.id ?? selectedClientProject?.id
+          }
           disableProjectSelect
           employees={employees}
           onSubmit={handleSubmitSegment}
@@ -1748,6 +1777,7 @@ function SchedulePageContent() {
             setTaskModalOpen(false);
             setEditingTask(null);
             setTaskDefaultSegmentId(undefined);
+            setTaskProjectContext(null);
           }}
           confirmLoading={taskSubmitting}
           segmentOptions={selectedProjectSegmentOptions}
@@ -1755,7 +1785,7 @@ function SchedulePageContent() {
           disableProjectSelect={!editingTask}
           disableSegmentSelect={!editingTask}
           employees={employees}
-          projectMembers={selectedClientProjectDetail?.members ?? []}
+          projectMembers={activeTaskProjectDetail?.members ?? []}
           initialValues={
             editingTask
               ? {

@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { DatePicker, Form, InputNumber, Modal, Select } from "antd";
 import dayjs from "dayjs";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import {
   buildEmployeeLabelMap,
   buildFlatEmployeeOptions,
@@ -69,6 +70,8 @@ const ProjectReimbursementFormModal = ({
   onSubmit,
 }: Props) => {
   const [form] = Form.useForm();
+  const { submitting: localSubmitting, runWithSubmitLock } = useSubmitLock();
+  const isSubmitting = submitting || localSubmitting;
 
   const employeeOptions = useMemo(
     () => buildFlatEmployeeOptions(employees),
@@ -109,23 +112,26 @@ const ProjectReimbursementFormModal = ({
         form.resetFields();
       }}
       onOk={() => {
+        if (isSubmitting) return;
         void form.submit();
       }}
-      confirmLoading={submitting}
+      confirmLoading={isSubmitting}
       destroyOnHidden
       width={840}
     >
       <Form
         form={form}
         layout="vertical"
-        onFinish={async (values) => {
+      onFinish={(values) =>
+        runWithSubmitLock(async () => {
           await onSubmit({
             applicantEmployeeId: values.applicantEmployeeId,
             categoryOptionId: values.categoryOptionId,
             amount: values.amount,
             occurredAt: values.occurredAt.toISOString(),
           });
-        }}
+        })
+      }
       >
         <div
           style={{

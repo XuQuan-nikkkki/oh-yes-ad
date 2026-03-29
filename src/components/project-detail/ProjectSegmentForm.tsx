@@ -16,6 +16,7 @@ import {
   isEmployeeActive,
   renderEmployeeSelectedLabel,
 } from "@/lib/employee-select";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 const DEFAULT_PROJECT_SEGMENT_STATUS = "待启动";
 const EMPTY_PROJECT_OPTIONS: ProjectOption[] = [];
@@ -121,23 +122,31 @@ const ProjectSegmentForm = ({
     [optionsByField],
   );
   const [form] = Form.useForm<FormValues>();
+  const { submitting, runWithSubmitLock } = useSubmitLock();
   const watchedProjectId = Form.useWatch("projectId", form);
   const [fetchedProjectMembers, setFetchedProjectMembers] = useState<EmployeeOption[]>(
     EMPTY_EMPLOYEE_OPTIONS,
   );
   const baseProjectId = selectedProjectId ?? initialValues?.project?.id;
   const activeProjectId = watchedProjectId ?? baseProjectId;
-  const directProjectMembers =
-    activeProjectId && projectMembers.length > 0 && activeProjectId === baseProjectId
-      ? projectMembers
-      : null;
+  const hasDirectProjectMembers =
+    Boolean(activeProjectId) &&
+    projectMembers.length > 0 &&
+    activeProjectId === baseProjectId;
 
   useEffect(() => {
-    void useSelectOptionsStore.getState().fetchAllOptions();
+    const store = useSelectOptionsStore.getState();
+    if (!store.loaded && !store.loading) {
+      void store.fetchAllOptions();
+    }
   }, []);
 
   useEffect(() => {
-    if (!activeProjectId || directProjectMembers) {
+    if (!activeProjectId) {
+      return;
+    }
+
+    if (hasDirectProjectMembers) {
       return;
     }
 
@@ -166,9 +175,13 @@ const ProjectSegmentForm = ({
     return () => {
       cancelled = true;
     };
-  }, [activeProjectId, directProjectMembers]);
+  }, [activeProjectId, hasDirectProjectMembers]);
 
-  const resolvedProjectMembers = directProjectMembers ?? (activeProjectId ? fetchedProjectMembers : EMPTY_EMPLOYEE_OPTIONS);
+  const resolvedProjectMembers = hasDirectProjectMembers
+    ? projectMembers
+    : activeProjectId
+      ? fetchedProjectMembers
+      : EMPTY_EMPLOYEE_OPTIONS;
 
   const activeEmployees = useMemo(
     () => employees.filter(isEmployeeActive),
@@ -215,13 +228,15 @@ const ProjectSegmentForm = ({
               : undefined,
         }}
         onFinish={(values) =>
-          onSubmit({
-            name: values.name,
-            projectId: values.projectId,
-            status: normalizeSelectValue(values.status),
-            ownerId: values.ownerId ?? null,
-            startDate: values.startDate ? values.startDate.toISOString() : null,
-            endDate: values.endDate ? values.endDate.toISOString() : null,
+          runWithSubmitLock(async () => {
+            await onSubmit({
+              name: values.name,
+              projectId: values.projectId,
+              status: normalizeSelectValue(values.status),
+              ownerId: values.ownerId ?? null,
+              startDate: values.startDate ? values.startDate.toISOString() : null,
+              endDate: values.endDate ? values.endDate.toISOString() : null,
+            });
           })
         }
       >
@@ -280,7 +295,7 @@ const ProjectSegmentForm = ({
             </Form.Item>
           </Col>
         </Row>
-        <Button type="primary" htmlType="submit" block>
+        <Button type="primary" htmlType="submit" block loading={submitting} disabled={submitting}>
           保存
         </Button>
       </Form>

@@ -15,6 +15,7 @@ import {
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
 import { DEFAULT_COLOR } from "@/lib/constants";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 
 dayjs.extend(isoWeek);
@@ -105,6 +106,7 @@ const PlannedWorkEntryForm = ({
 }: Props) => {
   const [form] = Form.useForm<FormValues>();
   const [messageApi, contextHolder] = message.useMessage();
+  const { submitting, runWithSubmitLock } = useSubmitLock();
   const [yearSearch, setYearSearch] = useState("");
   const [weekSearch, setWeekSearch] = useState("");
   const [yearSelectOpen, setYearSelectOpen] = useState(false);
@@ -398,22 +400,24 @@ const PlannedWorkEntryForm = ({
         plannedDays: initialValues?.plannedDays ?? 0,
         weekdays: selectedWeekdays,
       }}
-      onFinish={(values) => {
-        const weekdays = new Set(values.weekdays ?? []);
-        return onSubmit({
-          taskId: values.taskId as string,
-          yearOption: String(values.yearOption ?? ""),
-          weekNumberOption: String(values.weekNumberOption ?? ""),
-          plannedDays: values.plannedDays,
-          monday: weekdays.has("monday"),
-          tuesday: weekdays.has("tuesday"),
-          wednesday: weekdays.has("wednesday"),
-          thursday: weekdays.has("thursday"),
-          friday: weekdays.has("friday"),
-          saturday: weekdays.has("saturday"),
-          sunday: weekdays.has("sunday"),
-        });
-      }}
+      onFinish={(values) =>
+        runWithSubmitLock(async () => {
+          const weekdays = new Set(values.weekdays ?? []);
+          await onSubmit({
+            taskId: values.taskId as string,
+            yearOption: String(values.yearOption ?? ""),
+            weekNumberOption: String(values.weekNumberOption ?? ""),
+            plannedDays: values.plannedDays,
+            monday: weekdays.has("monday"),
+            tuesday: weekdays.has("tuesday"),
+            wednesday: weekdays.has("wednesday"),
+            thursday: weekdays.has("thursday"),
+            friday: weekdays.has("friday"),
+            saturday: weekdays.has("saturday"),
+            sunday: weekdays.has("sunday"),
+          });
+        })
+      }
     >
       <Row gutter={16}>
         <Col span={12}>
@@ -544,7 +548,7 @@ const PlannedWorkEntryForm = ({
         </Col>
       </Row>
 
-      <Button type="primary" htmlType="submit" block>
+      <Button type="primary" htmlType="submit" block loading={submitting} disabled={submitting}>
         保存
       </Button>
     </Form>

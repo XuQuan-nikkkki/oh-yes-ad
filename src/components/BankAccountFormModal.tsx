@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Button, Form, Input, Modal, Select, Switch } from "antd";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 type BankAccountRecord = {
   id?: string;
@@ -30,7 +31,7 @@ const BankAccountFormModal = ({
   onSuccess,
 }: Props) => {
   const [form] = Form.useForm();
-  const [submitting, setSubmitting] = useState(false);
+  const { submitting, runWithSubmitLock } = useSubmitLock();
   const isEdit = Boolean(initialValues?.id);
 
   const normalized = useMemo(
@@ -64,9 +65,8 @@ const BankAccountFormModal = ({
       <Form
         form={form}
         layout="vertical"
-        onFinish={async (values) => {
-          setSubmitting(true);
-          try {
+        onFinish={(values) =>
+          runWithSubmitLock(async () => {
             const res = await fetch(
               isEdit ? `/api/bank-accounts/${initialValues?.id}` : "/api/bank-accounts",
               {
@@ -87,10 +87,8 @@ const BankAccountFormModal = ({
             }
 
             await onSuccess();
-          } finally {
-            setSubmitting(false);
-          }
-        }}
+          })
+        }
       >
         <div
           style={{
@@ -133,7 +131,7 @@ const BankAccountFormModal = ({
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 24 }}>
           <Button onClick={onCancel}>取消</Button>
-          <Button type="primary" htmlType="submit" loading={submitting}>
+          <Button type="primary" htmlType="submit" loading={submitting} disabled={submitting}>
             保存
           </Button>
         </div>

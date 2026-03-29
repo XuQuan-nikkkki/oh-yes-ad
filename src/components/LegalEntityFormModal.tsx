@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Button, Form, Input, Modal, Switch } from "antd";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 export type LegalEntityFormValues = {
   name: string;
@@ -34,7 +35,7 @@ const LegalEntityFormModal = ({
   onSuccess,
 }: Props) => {
   const [form] = Form.useForm<LegalEntityFormValues>();
-  const [submitting, setSubmitting] = useState(false);
+  const { submitting, runWithSubmitLock } = useSubmitLock();
   const isEdit = Boolean(initialValues?.id);
 
   const normalizedInitialValues = useMemo(
@@ -68,9 +69,8 @@ const LegalEntityFormModal = ({
       <Form
         form={form}
         layout="vertical"
-        onFinish={async (values) => {
-          setSubmitting(true);
-          try {
+        onFinish={(values) =>
+          runWithSubmitLock(async () => {
             const res = await fetch(
               isEdit ? `/api/legal-entities/${initialValues?.id}` : "/api/legal-entities",
               {
@@ -91,10 +91,8 @@ const LegalEntityFormModal = ({
             }
 
             await onSuccess();
-          } finally {
-            setSubmitting(false);
-          }
-        }}
+          })
+        }
       >
         <div
           style={{
@@ -142,7 +140,7 @@ const LegalEntityFormModal = ({
           }}
         >
           <Button onClick={onCancel}>取消</Button>
-          <Button type="primary" htmlType="submit" loading={submitting}>
+          <Button type="primary" htmlType="submit" loading={submitting} disabled={submitting}>
             保存
           </Button>
         </div>

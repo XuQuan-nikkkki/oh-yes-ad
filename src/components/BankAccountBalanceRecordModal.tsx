@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button, DatePicker, Form, Input, InputNumber, Modal, Select } from "antd";
 import dayjs from "dayjs";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 type LegalEntityOption = {
   id: string;
@@ -53,20 +54,17 @@ const BankAccountBalanceRecordModal = ({
   onSuccess,
 }: Props) => {
   const [form] = Form.useForm();
-  const [submitting, setSubmitting] = useState(false);
+  const { submitting, runWithSubmitLock } = useSubmitLock();
   const [selectedLegalEntityId, setSelectedLegalEntityId] = useState("");
   const isEdit = Boolean(initialValues?.id);
 
-  const formInitialValues = useMemo(
-    () => ({
-      legalEntityId: initialValues?.legalEntityId ?? legalEntityId ?? "",
-      bankAccountId: initialValues?.bankAccountId ?? bankAccount?.id ?? "",
-      balance: initialValues?.balance ?? undefined,
-      snapshotAt: initialValues?.snapshotAt ? dayjs(initialValues.snapshotAt) : dayjs(),
-      remark: initialValues?.remark ?? "",
-    }),
-    [bankAccount?.id, initialValues?.balance, initialValues?.bankAccountId, initialValues?.legalEntityId, initialValues?.remark, initialValues?.snapshotAt, legalEntityId],
-  );
+  const formInitialValues = {
+    legalEntityId: initialValues?.legalEntityId ?? legalEntityId ?? "",
+    bankAccountId: initialValues?.bankAccountId ?? bankAccount?.id ?? "",
+    balance: initialValues?.balance ?? undefined,
+    snapshotAt: initialValues?.snapshotAt ? dayjs(initialValues.snapshotAt) : dayjs(),
+    remark: initialValues?.remark ?? "",
+  };
 
   const mergedLegalEntityOptions = useMemo(() => {
     if (legalEntityOptions.length > 0) {
@@ -97,21 +95,20 @@ const BankAccountBalanceRecordModal = ({
     }));
   }, [bankAccount, bankAccountOptions, legalEntityId, selectedLegalEntityId]);
 
-  useEffect(() => {
-    if (!open) {
-      form.resetFields();
-      setSelectedLegalEntityId("");
-      return;
-    }
-    form.setFieldsValue(formInitialValues);
-    setSelectedLegalEntityId(String(formInitialValues.legalEntityId ?? ""));
-  }, [form, formInitialValues, open]);
-
   return (
     <Modal
       title={isEdit ? "编辑余额记录" : "新增余额记录"}
       open={open}
       onCancel={onCancel}
+      afterOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          form.resetFields();
+          setSelectedLegalEntityId("");
+          return;
+        }
+        form.setFieldsValue(formInitialValues);
+        setSelectedLegalEntityId(String(formInitialValues.legalEntityId ?? ""));
+      }}
       footer={null}
       destroyOnHidden
       width={840}
@@ -119,9 +116,8 @@ const BankAccountBalanceRecordModal = ({
       <Form
         form={form}
         layout="vertical"
-        onFinish={async (values) => {
-          setSubmitting(true);
-          try {
+        onFinish={(values) =>
+          runWithSubmitLock(async () => {
             const res = await fetch(
               isEdit
                 ? `/api/bank-account-balance-records/${initialValues?.id}`
@@ -143,10 +139,8 @@ const BankAccountBalanceRecordModal = ({
             }
 
             await onSuccess();
-          } finally {
-            setSubmitting(false);
-          }
-        }}
+          })
+        }
       >
         <div
           style={{
@@ -199,7 +193,7 @@ const BankAccountBalanceRecordModal = ({
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 24 }}>
           <Button onClick={onCancel}>取消</Button>
-          <Button type="primary" htmlType="submit" loading={submitting}>
+          <Button type="primary" htmlType="submit" loading={submitting} disabled={submitting}>
             保存
           </Button>
         </div>

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { Modal, Form, Input, Button, Select } from "antd";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { useClientsStore } from "@/stores/clientsStore";
 import type { ClientContact as Contact } from "@/types/clientContact";
 
@@ -39,6 +40,7 @@ const ContactFormModal = ({
   clientOptions = EMPTY_CLIENT_OPTIONS,
 }: Props) => {
   const [form] = Form.useForm();
+  const { submitting, runWithSubmitLock } = useSubmitLock();
   const isEdit = !!initialValues?.id;
   const fetchClientsFromStore = useClientsStore((state) => state.fetchClients);
   const storeClients = useClientsStore((state) => state.clients);
@@ -97,25 +99,27 @@ const ContactFormModal = ({
   }, [open, initialValues, clientId, form]);
 
   const handleSubmit = async (values: ContactFormValues) => {
-    let savedContact: Contact | undefined;
-    if (isEdit) {
-      const res = await fetch(`/api/client-contacts/${initialValues?.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-      savedContact = await res.json();
-    } else {
-      const res = await fetch("/api/client-contacts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-      savedContact = await res.json();
-    }
+    await runWithSubmitLock(async () => {
+      let savedContact: Contact | undefined;
+      if (isEdit) {
+        const res = await fetch(`/api/client-contacts/${initialValues?.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(values),
+        });
+        savedContact = await res.json();
+      } else {
+        const res = await fetch("/api/client-contacts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(values),
+        });
+        savedContact = await res.json();
+      }
 
-    form.resetFields();
-    onSuccess(savedContact);
+      form.resetFields();
+      onSuccess(savedContact);
+    });
   };
 
   return (
@@ -185,7 +189,7 @@ const ContactFormModal = ({
         <Form.Item label="地址" name="address">
           <Input />
         </Form.Item>
-        <Button type="primary" htmlType="submit" block>
+        <Button type="primary" htmlType="submit" block loading={submitting} disabled={submitting}>
           保存
         </Button>
       </Form>

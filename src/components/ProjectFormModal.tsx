@@ -17,6 +17,7 @@ import {
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import type { SimpleClient } from "@/types/client";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 type Project = {
   id?: string;
@@ -114,7 +115,7 @@ const ProjectFormModal = ({
   projectType,
   clientEditable = true,
 }: Props) => {
-  const [submitting, setSubmitting] = useState(false);
+  const { submitting, runWithSubmitLock } = useSubmitLock();
   const [currentTypeCode, setCurrentTypeCode] = useState<string | null>(
     normalizeProjectTypeCode(initialValues?.type ?? projectType),
   );
@@ -155,20 +156,16 @@ const ProjectFormModal = ({
     () => buildFlatEmployeeOptions(employees),
     [employees],
   );
-  const projectOwnerLabelMap = useMemo(
-    () =>
-      buildEmployeeLabelMap(
-        employees,
-        initialValues?.ownerId
-          ? [
-              employees.find((employee) => employee.id === initialValues.ownerId) ?? {
-                id: initialValues.ownerId,
-                name: initialValues.ownerId,
-              },
-            ]
-          : [],
-      ),
-    [employees, initialValues?.ownerId],
+  const projectOwnerLabelMap = buildEmployeeLabelMap(
+    employees,
+    initialValues?.ownerId
+      ? [
+          employees.find((employee) => employee.id === initialValues.ownerId) ?? {
+            id: initialValues.ownerId,
+            name: initialValues.ownerId,
+          },
+        ]
+      : [],
   );
 
   const isEdit = !!initialValues?.id;
@@ -179,52 +176,35 @@ const ProjectFormModal = ({
     if (!open) return;
     void fetchAllOptions();
     void fetchEmployeesFromStore();
-    setCurrentTypeCode(normalizeProjectTypeCode(initialValues?.type ?? projectType));
   }, [
     fetchAllOptions,
     fetchEmployeesFromStore,
-    initialValues?.type,
     open,
-    projectType,
   ]);
 
-  const baseValues = useMemo<ProjectFormValues>(
-    () => ({
-      name: initialValues?.name ?? "",
-      type:
-        normalizeProjectTypeCode(initialValues?.type) ??
-        fixedTypeCode ??
-        undefined,
-      clientId:
-        normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) === "INTERNAL"
-          ? undefined
-          : initialValues?.clientId ?? undefined,
-      ownerId: initialValues?.ownerId ?? undefined,
-      status:
-        normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) === "INTERNAL"
-          ? undefined
-          : initialValues?.status ?? undefined,
-      stage:
-        normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) === "INTERNAL"
-          ? undefined
-          : initialValues?.stage ?? undefined,
-      startDate: initialValues?.startDate ? dayjs(initialValues.startDate) : undefined,
-      endDate: initialValues?.endDate ? dayjs(initialValues.endDate) : undefined,
-      isArchived: Boolean(initialValues?.isArchived),
-    }),
-    [
-      fixedTypeCode,
-      initialValues?.clientId,
-      initialValues?.endDate,
-      initialValues?.isArchived,
-      initialValues?.name,
-      initialValues?.ownerId,
-      initialValues?.stage,
-      initialValues?.startDate,
-      initialValues?.status,
-      initialValues?.type,
-    ],
-  );
+  const baseValues: ProjectFormValues = {
+    name: initialValues?.name ?? "",
+    type:
+      normalizeProjectTypeCode(initialValues?.type) ??
+      fixedTypeCode ??
+      undefined,
+    clientId:
+      normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) === "INTERNAL"
+        ? undefined
+        : initialValues?.clientId ?? undefined,
+    ownerId: initialValues?.ownerId ?? undefined,
+    status:
+      normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) === "INTERNAL"
+        ? undefined
+        : initialValues?.status ?? undefined,
+    stage:
+      normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) === "INTERNAL"
+        ? undefined
+        : initialValues?.stage ?? undefined,
+    startDate: initialValues?.startDate ? dayjs(initialValues.startDate) : undefined,
+    endDate: initialValues?.endDate ? dayjs(initialValues.endDate) : undefined,
+    isArchived: Boolean(initialValues?.isArchived),
+  };
 
   const handleTypeChange = (nextType: string) => {
     const normalizedType = normalizeProjectTypeCode(nextType);
@@ -252,25 +232,27 @@ const ProjectFormModal = ({
       isArchived: Boolean(values.isArchived),
     };
 
-    setSubmitting(true);
     try {
-      const res = await fetch("/api/projects", {
-        method: isEdit ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          isEdit ? { id: initialValues?.id, ...payload } : payload,
-        ),
+      const result = await runWithSubmitLock(async () => {
+        const res = await fetch("/api/projects", {
+          method: isEdit ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            isEdit ? { id: initialValues?.id, ...payload } : payload,
+          ),
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || "保存项目失败");
+        }
+
+        onSuccess();
+        return true;
       });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "保存项目失败");
-      }
-
-      onSuccess();
-      return true;
-    } finally {
-      setSubmitting(false);
+      return result ?? false;
+    } catch {
+      return false;
     }
   };
 
@@ -278,6 +260,10 @@ const ProjectFormModal = ({
     <Modal
       title={isEdit ? "编辑项目" : "新建项目"}
       open={open}
+      afterOpenChange={(nextOpen) => {
+        if (!nextOpen) return;
+        setCurrentTypeCode(normalizeProjectTypeCode(initialValues?.type ?? projectType));
+      }}
       onCancel={() => {
         if (submitting) return;
         onCancel();
@@ -290,7 +276,7 @@ const ProjectFormModal = ({
         onFinish={handleSubmit}
         stepsProps={{ size: "small" }}
         submitter={{
-          submitButtonProps: { loading: submitting },
+          submitButtonProps: { loading: submitting, disabled: submitting },
         }}
       >
         <StepsForm.StepForm<ProjectFormValues>

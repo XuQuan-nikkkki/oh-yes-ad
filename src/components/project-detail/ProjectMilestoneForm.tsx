@@ -10,6 +10,7 @@ import SelectOptionSelector, {
   type SelectOptionSelectorValue,
 } from "@/components/SelectOptionSelector";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 export type ProjectMilestoneFormPayload = {
   name: string;
@@ -76,6 +77,7 @@ const ProjectMilestoneForm = ({
   onProjectChange,
   onSubmit,
 }: Props) => {
+  const { submitting, runWithSubmitLock } = useSubmitLock();
   const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const typeOptions = optionsByField["projectMilestone.type"] ?? [];
@@ -147,40 +149,47 @@ const ProjectMilestoneForm = ({
     <StepsForm<FormValues>
       key={initialValues?.id || "new"}
       onFinish={async (values) => {
-        const end =
-          values.isRange &&
-          values.endAt &&
-          !(
-            values.startAt &&
-            values.startAt.valueOf() === values.endAt.valueOf()
-          )
-            ? values.endAt
-            : null;
-        const toPayloadDate = (value?: dayjs.Dayjs | string | null) => {
-          if (!value) return null;
-          const d = dayjs.isDayjs(value) ? value : dayjs(value);
-          return values.includeTime
-            ? d.toISOString()
-            : d.format("YYYY-MM-DD");
-        };
-        await onSubmit({
-          name: values.name,
-          projectId: values.projectId,
-          type: values.type,
-          startAt: toPayloadDate(values.startAt),
-          endAt: toPayloadDate(end),
-          datePrecision: values.includeTime ? "DATETIME" : "DATE",
-          location: values.location,
-          method: values.method,
-          internalParticipantIds: values.internalParticipantIds ?? [],
-          clientParticipantIds: values.clientParticipantIds ?? [],
-          vendorParticipantIds: values.vendorParticipantIds ?? [],
+        const result = await runWithSubmitLock(async () => {
+          const end =
+            values.isRange &&
+            values.endAt &&
+            !(
+              values.startAt &&
+              values.startAt.valueOf() === values.endAt.valueOf()
+            )
+              ? values.endAt
+              : null;
+          const toPayloadDate = (value?: dayjs.Dayjs | string | null) => {
+            if (!value) return null;
+            const d = dayjs.isDayjs(value) ? value : dayjs(value);
+            return values.includeTime
+              ? d.toISOString()
+              : d.format("YYYY-MM-DD");
+          };
+          await onSubmit({
+            name: values.name,
+            projectId: values.projectId,
+            type: values.type,
+            startAt: toPayloadDate(values.startAt),
+            endAt: toPayloadDate(end),
+            datePrecision: values.includeTime ? "DATETIME" : "DATE",
+            location: values.location,
+            method: values.method,
+            internalParticipantIds: values.internalParticipantIds ?? [],
+            clientParticipantIds: values.clientParticipantIds ?? [],
+            vendorParticipantIds: values.vendorParticipantIds ?? [],
+          });
+          return true;
         });
-        return true;
+        return result ?? false;
       }}
       submitter={{
         searchConfig: {
           submitText: "保存",
+        },
+        submitButtonProps: {
+          loading: submitting,
+          disabled: submitting,
         },
       }}
       formProps={{

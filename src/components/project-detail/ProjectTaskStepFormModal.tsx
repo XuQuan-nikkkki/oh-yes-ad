@@ -31,6 +31,7 @@ import {
   buildFlatEmployeeOptions,
   renderEmployeeSelectedLabel,
 } from "@/lib/employee-select";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import type {
   ProjectProgressSegmentRow,
@@ -110,7 +111,7 @@ const ProjectTaskStepFormModal = ({
   onSuccess,
 }: Props) => {
   const [messageApi, contextHolder] = message.useMessage();
-  const [submitting, setSubmitting] = useState(false);
+  const { submitting, runWithSubmitLock } = useSubmitLock();
   const [yearSearch, setYearSearch] = useState("");
   const [weekSearch, setWeekSearch] = useState("");
   const [yearSelectOpen, setYearSelectOpen] = useState(false);
@@ -341,61 +342,61 @@ const ProjectTaskStepFormModal = ({
 
   const handleFinish = async (values: FormValues) => {
     if (!task) return true;
-    setSubmitting(true);
     try {
-      const taskResponse = await fetch(`/api/projects/${projectId}/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: values.name,
-          segmentId: values.segmentId,
-          status: toNormalizedSelectValue(values.status) ?? DEFAULT_PROJECT_TASK_STATUS,
-          ownerId: values.ownerId ?? null,
-          dueDate: toIsoDateTimeOrNull(values.dueDate),
-        }),
+      const result = await runWithSubmitLock(async () => {
+        const taskResponse = await fetch(`/api/projects/${projectId}/tasks/${task.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: values.name,
+            segmentId: values.segmentId,
+            status: toNormalizedSelectValue(values.status) ?? DEFAULT_PROJECT_TASK_STATUS,
+            ownerId: values.ownerId ?? null,
+            dueDate: toIsoDateTimeOrNull(values.dueDate),
+          }),
+        });
+
+        if (!taskResponse.ok) {
+          throw new Error((await taskResponse.text()) || "更新任务失败");
+        }
+
+        const weekdays = new Set(values.weekdays ?? []);
+        const plannedPayload = {
+          taskId: task.id,
+          yearOption: String(values.yearOption ?? ""),
+          weekNumberOption: String(values.weekNumberOption ?? ""),
+          plannedDays: Number(values.plannedDays ?? 0),
+          monday: weekdays.has("monday"),
+          tuesday: weekdays.has("tuesday"),
+          wednesday: weekdays.has("wednesday"),
+          thursday: weekdays.has("thursday"),
+          friday: weekdays.has("friday"),
+          saturday: weekdays.has("saturday"),
+          sunday: weekdays.has("sunday"),
+        };
+
+        const plannedEndpoint = latestPlannedEntry
+          ? `/api/projects/${projectId}/planned-work-entries/${latestPlannedEntry.id}`
+          : `/api/projects/${projectId}/planned-work-entries`;
+        const plannedMethod = latestPlannedEntry ? "PATCH" : "POST";
+        const plannedResponse = await fetch(plannedEndpoint, {
+          method: plannedMethod,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(plannedPayload),
+        });
+
+        if (!plannedResponse.ok) {
+          throw new Error((await plannedResponse.text()) || "保存计划工时失败");
+        }
+
+        messageApi.success("任务与计划工时已保存");
+        await onSuccess?.();
+        return true;
       });
-
-      if (!taskResponse.ok) {
-        throw new Error((await taskResponse.text()) || "更新任务失败");
-      }
-
-      const weekdays = new Set(values.weekdays ?? []);
-      const plannedPayload = {
-        taskId: task.id,
-        yearOption: String(values.yearOption ?? ""),
-        weekNumberOption: String(values.weekNumberOption ?? ""),
-        plannedDays: Number(values.plannedDays ?? 0),
-        monday: weekdays.has("monday"),
-        tuesday: weekdays.has("tuesday"),
-        wednesday: weekdays.has("wednesday"),
-        thursday: weekdays.has("thursday"),
-        friday: weekdays.has("friday"),
-        saturday: weekdays.has("saturday"),
-        sunday: weekdays.has("sunday"),
-      };
-
-      const plannedEndpoint = latestPlannedEntry
-        ? `/api/projects/${projectId}/planned-work-entries/${latestPlannedEntry.id}`
-        : `/api/projects/${projectId}/planned-work-entries`;
-      const plannedMethod = latestPlannedEntry ? "PATCH" : "POST";
-      const plannedResponse = await fetch(plannedEndpoint, {
-        method: plannedMethod,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(plannedPayload),
-      });
-
-      if (!plannedResponse.ok) {
-        throw new Error((await plannedResponse.text()) || "保存计划工时失败");
-      }
-
-      messageApi.success("任务与计划工时已保存");
-      await onSuccess?.();
-      return true;
+      return result ?? false;
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "保存失败");
       return false;
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -419,7 +420,7 @@ const ProjectTaskStepFormModal = ({
             stepsProps={{ size: "small" }}
             submitter={{
               render: (_, dom) => <div style={{ paddingTop: 8 }}>{dom}</div>,
-              submitButtonProps: { loading: submitting },
+              submitButtonProps: { loading: submitting, disabled: submitting },
             }}
           >
             <StepsForm.StepForm<FormValues>

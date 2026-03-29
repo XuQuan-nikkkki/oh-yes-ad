@@ -9,12 +9,13 @@ import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
 import AppLink from "@/components/AppLink";
 import PlannedWorkScheduleValue from "@/components/project-detail/PlannedWorkScheduleValue";
+import ProjectTaskFormModal from "@/components/project-detail/ProjectTaskFormModal";
 import ProjectTaskStatusQuickEditTag from "@/components/project-detail/ProjectTaskStatusQuickEditTag";
-import ProjectTaskStepFormModal from "@/components/project-detail/ProjectTaskStepFormModal";
 import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import TableActions from "@/components/TableActions";
 import { DATE_FORMAT } from "@/lib/constants";
 import { formatDate, formatDateRange } from "@/lib/date";
+import type { ProjectTaskFormPayload } from "@/components/project-detail/ProjectTaskForm";
 import type {
   ProjectProgressSegmentRow,
   ProjectProgressTaskRow,
@@ -177,6 +178,33 @@ const ProjectDetailProgressContent = ({
       })),
     [visibleSegments],
   );
+  const segmentOptions = useMemo(
+    () =>
+      sortedVisibleSegments.map((segment) => ({
+        id: segment.id,
+        name: segment.name,
+        projectId,
+        projectName,
+      })),
+    [projectId, projectName, sortedVisibleSegments],
+  );
+
+  const handleSubmitTask = async (payload: ProjectTaskFormPayload) => {
+    if (!editingTask) return;
+
+    const res = await fetch(`/api/projects/${projectId}/tasks/${editingTask.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      throw new Error((await res.text()) || "保存任务失败");
+    }
+
+    setEditingTask(null);
+    await onAfterUpdateTask?.();
+  };
 
   const taskColumns: ProColumns<ProjectProgressTaskRow>[] = [
     {
@@ -485,18 +513,28 @@ const ProjectDetailProgressContent = ({
             };
           })}
         />
-        <ProjectTaskStepFormModal
+        <ProjectTaskFormModal
           open={Boolean(editingTask)}
-          projectId={projectId}
-          projectName={projectName}
-          data={sortedVisibleSegments}
-          task={editingTask}
+          title={editingTask ? `编辑任务：${editingTask.name}` : "编辑任务"}
+          segmentOptions={segmentOptions}
+          initialValues={
+            editingTask
+              ? {
+                  id: editingTask.id,
+                  name: editingTask.name,
+                  segmentId: editingTask.segmentId,
+                  status: editingTask.status ?? null,
+                  statusOption: editingTask.statusOption ?? null,
+                  dueDate: editingTask.dueDate ?? null,
+                  owner: editingTask.ownerId
+                    ? { id: editingTask.ownerId, name: editingTask.ownerName }
+                    : null,
+                }
+              : null
+          }
           employees={employees}
           onCancel={() => setEditingTask(null)}
-          onSuccess={async () => {
-            setEditingTask(null);
-            await onAfterUpdateTask?.();
-          }}
+          onSubmit={handleSubmitTask}
         />
       </>
     )

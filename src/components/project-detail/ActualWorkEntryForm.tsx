@@ -4,6 +4,7 @@ import { Button, DatePicker, Form, Input, Select } from "antd";
 import dayjs from "dayjs";
 import type { DefaultOptionType } from "antd/es/select";
 import { useAuthStore } from "@/stores/authStore";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 export type ActualWorkEntryFormPayload = {
   projectId: string;
@@ -57,6 +58,7 @@ const ActualWorkEntryForm = ({
   onSubmit,
 }: Props) => {
   const currentUser = useAuthStore((state) => state.currentUser);
+  const { submitting, runWithSubmitLock } = useSubmitLock();
   const employeeOptions = employees
     .filter((employee) => employee.employmentStatus !== "离职")
     .map((employee) => ({ label: employee.name, value: employee.id }));
@@ -84,16 +86,18 @@ const ActualWorkEntryForm = ({
             ? [dayjs(initialValues.startDate), dayjs(initialValues.endDate)]
             : undefined,
       }}
-      onFinish={(values) => {
-        const [startDate, endDate] = values.timeRange;
-        return onSubmit({
-          projectId: values.projectId,
-          title: values.title,
-          employeeId: values.employeeId,
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
-        });
-      }}
+      onFinish={(values) =>
+        runWithSubmitLock(async () => {
+          const [startDate, endDate] = values.timeRange;
+          await onSubmit({
+            projectId: values.projectId,
+            title: values.title,
+            employeeId: values.employeeId,
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+          });
+        })
+      }
     >
       <Form.Item
         label="所属项目"
@@ -146,7 +150,7 @@ const ActualWorkEntryForm = ({
         />
       </Form.Item>
 
-      <Button type="primary" htmlType="submit" block>
+      <Button type="primary" htmlType="submit" block loading={submitting} disabled={submitting}>
         保存
       </Button>
     </Form>

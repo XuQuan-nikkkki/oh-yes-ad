@@ -16,6 +16,7 @@ import SelectOptionSelector, {
   type SelectOptionSelectorValue,
 } from "@/components/SelectOptionSelector";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 export type ProjectDocumentFormPayload = {
   name: string;
@@ -89,6 +90,7 @@ const ProjectDocumentForm = ({
   onSubmit,
 }: Props) => {
   const [form] = Form.useForm<FormValues>();
+  const { submitting, runWithSubmitLock } = useSubmitLock();
   const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const typeOptions = optionsByField["projectDocument.type"] ?? [];
@@ -160,22 +162,24 @@ const ProjectDocumentForm = ({
         key={initialValues?.id || "new"}
         layout="vertical"
         onFinish={(values) =>
-          onSubmit({
-            name: values.name,
-            projectId: selectedProjectId ?? values.projectId,
-            milestoneId: selectedMilestoneId ?? values.milestoneId ?? null,
-            typeOption:
-              typeof values.typeOption === "string"
-                ? values.typeOption.trim() || null
-                : values.typeOption?.value?.trim()
-                  ? {
-                      value: values.typeOption.value.trim(),
-                      color: values.typeOption.color ?? null,
-                    }
-                  : null,
-            date: values.date ? values.date.toISOString() : null,
-            isFinal: Boolean(values.isFinal),
-            internalLink: values.internalLink?.trim() ? values.internalLink : null,
+          runWithSubmitLock(async () => {
+            await onSubmit({
+              name: values.name,
+              projectId: selectedProjectId ?? values.projectId,
+              milestoneId: selectedMilestoneId ?? values.milestoneId ?? null,
+              typeOption:
+                typeof values.typeOption === "string"
+                  ? values.typeOption.trim() || null
+                  : values.typeOption?.value?.trim()
+                    ? {
+                        value: values.typeOption.value.trim(),
+                        color: values.typeOption.color ?? null,
+                      }
+                    : null,
+              date: values.date ? values.date.toISOString() : null,
+              isFinal: Boolean(values.isFinal),
+              internalLink: values.internalLink?.trim() ? values.internalLink : null,
+            });
           })
         }
       >
@@ -253,7 +257,7 @@ const ProjectDocumentForm = ({
           <Checkbox>终稿</Checkbox>
         </Form.Item>
 
-        <Button type="primary" htmlType="submit" block>
+        <Button type="primary" htmlType="submit" block loading={submitting} disabled={submitting}>
           保存
         </Button>
       </Form>

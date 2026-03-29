@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Form, Input, Select, Button, Divider, Space, Tag, ColorPicker } from "antd";
 import type { DefaultOptionType } from "antd/es/select";
 import { DEFAULT_COLOR } from "@/lib/constants";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 export type ClientFormValues = {
   name: string;
@@ -42,6 +43,7 @@ const ClientForm = ({
   submitText = "保存",
 }: Props) => {
   const [form] = Form.useForm<ClientFormValues>();
+  const { submitting, runWithSubmitLock } = useSubmitLock();
   const [searchText, setSearchText] = useState("");
   const [showCreateIndustry, setShowCreateIndustry] = useState(false);
   const newIndustryColor = Form.useWatch("newIndustryColor", form);
@@ -98,7 +100,7 @@ const ClientForm = ({
         industryOptionId:
           initialValues?.industryOptionId ?? initialValues?.industryOption?.id,
       }}
-      onFinish={onSubmit}
+      onFinish={(values) => runWithSubmitLock(() => onSubmit(values))}
     >
       <Form.Item
         label="名称"
@@ -212,7 +214,7 @@ const ClientForm = ({
         </Space>
       ) : null}
 
-      <Button type="primary" htmlType="submit" block>
+      <Button type="primary" htmlType="submit" block loading={submitting} disabled={submitting}>
         {submitText}
       </Button>
     </Form>
