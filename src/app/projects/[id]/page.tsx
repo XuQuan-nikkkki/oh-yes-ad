@@ -632,6 +632,10 @@ const ProjectDetailPage = () => {
         <ProjectInfo
           project={project}
           workdayAdjustments={workdayAdjustments}
+          onProjectUpdated={(updatedProject) => {
+            setProject(updatedProject);
+            upsertProjects([updatedProject]);
+          }}
         />
       </Card>
 

@@ -95,6 +95,7 @@ export async function GET(req: NextRequest) {
                   id: true,
                   value: true,
                   color: true,
+                  order: true,
                 },
               },
               stageOption: {
@@ -167,6 +168,7 @@ export async function POST(req: NextRequest) {
                   id: true,
                   value: true,
                   color: true,
+                  order: true,
                 },
               },
               stageOption: {

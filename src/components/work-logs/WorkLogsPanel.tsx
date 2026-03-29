@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Modal, Space, Spin, message } from "antd";
+import type { DefaultOptionType } from "antd/es/select";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -48,11 +49,7 @@ type CopiedWorkLog = {
 type ProjectOption = { id: string; name: string };
 type ProjectOptionWithStatus = ProjectOption & {
   status?: string | null;
-};
-
-type ProjectOptionGroup = {
-  label: string;
-  options: ProjectOption[];
+  statusOrder?: number | null;
 };
 
 type CalendarViewType =
@@ -114,7 +111,7 @@ export default function WorkLogsPanel() {
     ProjectOptionWithStatus[]
   >([]);
   const [workLogProjectOptionGroups, setWorkLogProjectOptionGroups] = useState<
-    ProjectOptionGroup[]
+    DefaultOptionType[]
   >([]);
   const [workLogOptionsLoading, setWorkLogOptionsLoading] = useState(false);
   const [workLogOptionsLoadedUserId, setWorkLogOptionsLoadedUserId] = useState<
@@ -188,13 +185,17 @@ export default function WorkLogsPanel() {
           name?: string | null;
           isArchived?: boolean | null;
           status?: string | null;
-          statusOption?: { value?: string | null } | null;
+          statusOption?: {
+            value?: string | null;
+            order?: number | null;
+          } | null;
         }>) {
           if (!project.id || !project.name || isArchivedProject(project)) continue;
           projectMap.set(project.id, {
             id: project.id,
             name: project.name,
             status: project.statusOption?.value ?? project.status ?? null,
+            statusOrder: project.statusOption?.order ?? null,
           });
         }
       }
@@ -206,7 +207,10 @@ export default function WorkLogsPanel() {
               id?: string | null;
               name?: string | null;
               status?: string | null;
-              statusOption?: { value?: string | null } | null;
+              statusOption?: {
+                value?: string | null;
+                order?: number | null;
+              } | null;
             } | null;
           } | null;
         }>) {
@@ -218,7 +222,38 @@ export default function WorkLogsPanel() {
             id: project.id,
             name: project.name,
             status: project.statusOption?.value ?? project.status ?? null,
+            statusOrder: project.statusOption?.order ?? null,
           });
+        }
+      }
+
+      const hasPlatformProject = Array.from(projectMap.values()).some((project) =>
+        project.name.trim().includes("中台项目"),
+      );
+
+      if (!hasPlatformProject) {
+        const allProjects = await fetchProjectsFromStore();
+        if (Array.isArray(allProjects)) {
+          for (const project of allProjects as Array<{
+            id?: string | null;
+            name?: string | null;
+            isArchived?: boolean | null;
+            status?: string | null;
+            statusOption?: {
+              value?: string | null;
+              order?: number | null;
+            } | null;
+          }>) {
+            if (!project.id || !project.name || isArchivedProject(project)) continue;
+            if (!project.name.trim().includes("中台项目")) continue;
+            projectMap.set(project.id, {
+              id: project.id,
+              name: project.name,
+              status: project.statusOption?.value ?? project.status ?? null,
+              statusOrder: project.statusOption?.order ?? null,
+            });
+            break;
+          }
         }
       }
 
@@ -226,27 +261,64 @@ export default function WorkLogsPanel() {
         a.name.localeCompare(b.name, "zh-CN"),
       );
 
-      const groupedProjectOptions = Array.from(
-        projectList.reduce<Map<string, ProjectOptionWithStatus[]>>((groups, project) => {
-          const groupLabel = project.status?.trim() || "未设置状态";
-          if (!groups.has(groupLabel)) {
-            groups.set(groupLabel, []);
-          }
-          groups.get(groupLabel)?.push(project);
-          return groups;
-        }, new Map()),
-      )
-        .sort(([leftLabel], [rightLabel]) => leftLabel.localeCompare(rightLabel, "zh-CN"))
-        .map(([label, options]) => ({
-          label,
-          options: options
-            .slice()
-            .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"))
-            .map(({ id, name }) => ({
-              id,
-              name,
-            })),
-        }));
+      const platformProjects = projectList.filter(
+        (project) => project.name.trim().includes("中台项目"),
+      );
+      const nonPlatformProjects = projectList.filter(
+        (project) => !project.name.trim().includes("中台项目"),
+      );
+
+      const groupedProjectOptions = [
+        ...platformProjects.map((project) => ({
+          label: project.name,
+          value: project.id,
+        })),
+        ...Array.from(
+          nonPlatformProjects.reduce<
+            Map<
+              string,
+              {
+                label: string;
+                order: number;
+                options: ProjectOptionWithStatus[];
+              }
+            >
+          >((groups, project) => {
+            const label = project.status?.trim() || "未设置状态";
+            const existing = groups.get(label);
+            const nextOrder = Number.isFinite(project.statusOrder)
+              ? Number(project.statusOrder)
+              : Number.MAX_SAFE_INTEGER;
+            if (!existing) {
+              groups.set(label, {
+                label,
+                order: nextOrder,
+                options: [project],
+              });
+              return groups;
+            }
+            existing.options.push(project);
+            existing.order = Math.min(existing.order, nextOrder);
+            return groups;
+          }, new Map()),
+        )
+          .sort((left, right) => {
+            if (left[1].order !== right[1].order) {
+              return left[1].order - right[1].order;
+            }
+            return left[1].label.localeCompare(right[1].label, "zh-CN");
+          })
+          .map(([, group]) => ({
+            label: group.label,
+            options: group.options
+              .slice()
+              .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"))
+              .map(({ id, name }) => ({
+                label: name,
+                value: id,
+              })),
+          })),
+      ];
 
       setWorkLogProjectOptions(projectList);
       setWorkLogProjectOptionGroups(groupedProjectOptions);
@@ -475,7 +547,7 @@ export default function WorkLogsPanel() {
     setWorkLogSelectedProjectId(undefined);
     setWorkLogInitialValues({
       id: `new-calendar-${Date.now()}`,
-      projectId: workLogProjectOptions[0]?.id ?? "",
+      projectId: "",
       title: "",
       employeeId: currentUser.id,
       startDate: start.toISOString(),
@@ -493,7 +565,7 @@ export default function WorkLogsPanel() {
     setWorkLogSelectedProjectId(entry.project?.id);
     setWorkLogInitialValues({
       id: entry.id,
-      projectId: entry.project?.id ?? workLogProjectOptions[0]?.id ?? "",
+      projectId: entry.project?.id ?? "",
       title: entry.title,
       employeeId: entry.employee?.id ?? currentUser.id,
       startDate: entry.startDate,

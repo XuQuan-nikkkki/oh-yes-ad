@@ -55,6 +55,7 @@ type ProjectListItem = {
     id?: string;
     value?: string | null;
     color?: string | null;
+    order?: number | null;
   } | null;
 };
 
@@ -174,6 +175,8 @@ type ProjectDetail = {
       value?: string | null;
       color?: string | null;
     } | null;
+    startDate?: string | null;
+    endDate?: string | null;
     dueDate?: string | null;
     owner?: {
       id: string;
@@ -209,6 +212,8 @@ type SegmentRow = {
   } | null;
   ownerName: string;
   ownerId?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
   dueDate?: string | null;
   tasks: TaskRow[];
 };
@@ -314,6 +319,15 @@ const WEEKEND_DAY_KEYS = new Set<(typeof DAY_KEYS)[number]>([
   "saturday",
   "sunday",
 ]);
+const ASCII_INITIAL_RE = /^[A-Za-z0-9]/;
+const EN_NAME_COLLATOR = new Intl.Collator("en", {
+  numeric: true,
+  sensitivity: "base",
+});
+const ZH_NAME_COLLATOR = new Intl.Collator("zh-CN-u-co-pinyin", {
+  numeric: true,
+  sensitivity: "base",
+});
 
 const FUNCTION_GROUP_PRIORITY: Record<string, number> = {
   设计组: 1,
@@ -335,6 +349,21 @@ const SCHEDULE_TAB_KEYS = new Set([
 
 const toDisplayDays = (value: number) =>
   `${Number(value.toFixed(2)).toString().replace(/\.0$/, "")}天`;
+
+const compareDisplayNames = (left?: string | null, right?: string | null) => {
+  const leftName = left?.trim() ?? "";
+  const rightName = right?.trim() ?? "";
+  const leftPriority = ASCII_INITIAL_RE.test(leftName) ? 0 : 1;
+  const rightPriority = ASCII_INITIAL_RE.test(rightName) ? 0 : 1;
+
+  if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+
+  if (leftPriority === 0) {
+    return EN_NAME_COLLATOR.compare(leftName, rightName);
+  }
+
+  return ZH_NAME_COLLATOR.compare(leftName, rightName);
+};
 
 function SchedulePageContent() {
   const router = useRouter();
@@ -523,7 +552,7 @@ function SchedulePageContent() {
             project.typeOption?.value?.trim() || project.type?.trim() || "";
           return typeValue !== "INTERNAL" && typeValue !== "内部项目";
         })
-        .sort((left, right) => left.name.localeCompare(right.name, "zh-CN")),
+        .sort((left, right) => compareDisplayNames(left.name, right.name)),
     [allProjects],
   );
 
@@ -539,23 +568,11 @@ function SchedulePageContent() {
           if (project.name.includes("中台")) return false;
           return true;
         })
-        .sort((left, right) => left.name.localeCompare(right.name, "zh-CN")),
+        .sort((left, right) => compareDisplayNames(left.name, right.name)),
     [allProjects],
   );
 
   const groupedVisibleProjects = useMemo(() => {
-    const statusOrderByValue = new Map<string, number>();
-    for (const option of optionsByField["project.status"] ?? []) {
-      const statusValue = (option.value ?? "").trim();
-      if (!statusValue) continue;
-      statusOrderByValue.set(
-        statusValue,
-        typeof option.order === "number"
-          ? option.order
-          : Number.MAX_SAFE_INTEGER,
-      );
-    }
-
     const groups = new Map<string, ProjectListItem[]>();
     for (const project of visibleProjects) {
       const status =
@@ -575,28 +592,25 @@ function SchedulePageContent() {
             (option) => (option.value ?? "").trim() === status,
           ) ?? null,
         projects: [...projects].sort((left, right) =>
-          left.name.localeCompare(right.name, "zh-CN"),
+          compareDisplayNames(left.name, right.name),
         ),
       }))
       .sort((left, right) => {
-        const leftOrder =
-          statusOrderByValue.get(left.status) ?? Number.MAX_SAFE_INTEGER;
+        const leftOrder = left.statusOption?.order ?? Number.MAX_SAFE_INTEGER;
         const rightOrder =
-          statusOrderByValue.get(right.status) ?? Number.MAX_SAFE_INTEGER;
-        if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+          right.statusOption?.order ?? Number.MAX_SAFE_INTEGER;
+
+        if (leftOrder !== rightOrder) {
+          return leftOrder - rightOrder;
+        }
+
         return left.status.localeCompare(right.status, "zh-CN");
       });
   }, [optionsByField, visibleProjects]);
 
   const defaultClientProjectId = useMemo(() => {
-    const inProgressGroup = groupedVisibleProjects.find(
-      (group) => group.status === "推进中",
-    );
-    if (inProgressGroup?.projects?.length) {
-      return inProgressGroup.projects[0].id;
-    }
     return visibleProjects[0]?.id ?? null;
-  }, [groupedVisibleProjects, visibleProjects]);
+  }, [visibleProjects]);
 
   const activeClientProjectId = useMemo(() => {
     const projectId = searchParams.get("projectId");
@@ -1102,7 +1116,7 @@ function SchedulePageContent() {
         return left.hasSchedule ? -1 : 1;
       }
 
-      return left.name.localeCompare(right.name, "zh-CN");
+      return compareDisplayNames(left.name, right.name);
     });
   }, [activeEmployees, weeklyEntriesByEmployee]);
 
@@ -1392,6 +1406,8 @@ function SchedulePageContent() {
           statusOption: segment.statusOption ?? null,
           ownerName: segment.owner?.name ?? "-",
           ownerId: segment.owner?.id ?? null,
+          startDate: segment.startDate ?? null,
+          endDate: segment.endDate ?? null,
           dueDate: segment.dueDate,
           tasks: (segment.projectTasks ?? [])
             .filter((task) => !(task.status ?? "").includes("完成"))
@@ -1426,14 +1442,7 @@ function SchedulePageContent() {
                 }),
             })),
         }))
-        ?.sort((left, right) => {
-          const isLeftDone = (left.status ?? "").includes("完成");
-          const isRightDone = (right.status ?? "").includes("完成");
-          if (isLeftDone !== isRightDone) {
-            return isLeftDone ? 1 : -1;
-          }
-          return left.name.localeCompare(right.name, "zh-CN");
-        }) ?? [];
+        ?.sort((left, right) => compareDisplayNames(left.name, right.name)) ?? [];
 
     return (
       <div
@@ -1743,6 +1752,8 @@ function SchedulePageContent() {
           confirmLoading={taskSubmitting}
           segmentOptions={selectedProjectSegmentOptions}
           defaultSegmentId={taskDefaultSegmentId}
+          disableProjectSelect={!editingTask}
+          disableSegmentSelect={!editingTask}
           employees={employees}
           projectMembers={selectedClientProjectDetail?.members ?? []}
           initialValues={

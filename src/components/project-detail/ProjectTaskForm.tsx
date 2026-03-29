@@ -75,6 +75,8 @@ type InitialValues = {
 type Props = {
   segmentOptions: SegmentOption[];
   defaultSegmentId?: string;
+  disableProjectSelect?: boolean;
+  disableSegmentSelect?: boolean;
   employees?: EmployeeOption[];
   projectMembers?: EmployeeOption[];
   initialValues?: InitialValues;
@@ -90,6 +92,8 @@ const toIsoDateTimeOrNull = (value?: dayjs.Dayjs | string | Date | null) => {
 const ProjectTaskForm = ({
   segmentOptions,
   defaultSegmentId,
+  disableProjectSelect = false,
+  disableSegmentSelect = false,
   employees = [],
   projectMembers = [],
   initialValues,
@@ -204,6 +208,7 @@ const ProjectTaskForm = ({
               rules={[{ required: true, message: "请选择所属项目" }]}
             >
               <Select
+                disabled={disableProjectSelect}
                 options={projectOptions}
                 placeholder="请选择所属项目"
                 onChange={() => {
@@ -219,6 +224,7 @@ const ProjectTaskForm = ({
               rules={[{ required: true, message: "请选择所属环节" }]}
             >
               <Select
+                disabled={disableSegmentSelect}
                 options={visibleSegmentOptions}
                 placeholder="请选择所属环节"
               />

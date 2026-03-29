@@ -23,10 +23,7 @@ type ProjectOption = {
   id: string;
   name: string;
 };
-type ProjectOptionGroup = {
-  label: string;
-  options: ProjectOption[];
-};
+type ProjectOptionEntry = DefaultOptionType;
 
 type InitialValues = ActualWorkEntryFormPayload & {
   id: string;
@@ -41,7 +38,7 @@ type FormValues = {
 
 type Props = {
   projectOptions: ProjectOption[];
-  projectOptionGroups?: ProjectOptionGroup[];
+  projectOptionGroups?: ProjectOptionEntry[];
   selectedProjectId?: string;
   disableProjectSelect?: boolean;
   disableEmployeeSelect?: boolean;
@@ -63,25 +60,12 @@ const ActualWorkEntryForm = ({
   const employeeOptions = employees
     .filter((employee) => employee.employmentStatus !== "离职")
     .map((employee) => ({ label: employee.name, value: employee.id }));
-  const flattenedProjects =
-    projectOptionGroups && projectOptionGroups.length > 0
-      ? projectOptionGroups.flatMap((group) => group.options)
-      : projectOptions;
-  const initialProjectId =
-    selectedProjectId ?? initialValues?.projectId ?? flattenedProjects[0]?.id;
+  const initialProjectId = selectedProjectId ?? initialValues?.projectId;
   const currentEmployeeId = currentUser?.id ?? "";
   const initialEmployeeId = initialValues?.employeeId ?? currentEmployeeId;
   const selectOptions: DefaultOptionType[] =
     projectOptionGroups && projectOptionGroups.length > 0
       ? projectOptionGroups
-          .filter((group) => group.options.length > 0)
-          .map((group) => ({
-            label: group.label,
-            options: group.options.map((project) => ({
-              label: project.name,
-              value: project.id,
-            })),
-          }))
       : projectOptions.map((project) => ({
           label: project.name,
           value: project.id,

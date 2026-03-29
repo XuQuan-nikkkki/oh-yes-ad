@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Button, Collapse, Empty, Popover } from "antd";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { PlusOutlined } from "@ant-design/icons";
+import { EditOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
 import AppLink from "@/components/AppLink";
@@ -13,19 +13,24 @@ import ProjectTaskStatusQuickEditTag from "@/components/project-detail/ProjectTa
 import ProjectTaskStepFormModal from "@/components/project-detail/ProjectTaskStepFormModal";
 import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import TableActions from "@/components/TableActions";
-import {
-  DATE_FORMAT,
-  PROJECT_TASK_STATUS_FIELD,
-  PROJECT_TASK_STATUS_OPTIONS,
-} from "@/lib/constants";
-import { formatDate } from "@/lib/date";
-import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import { DATE_FORMAT } from "@/lib/constants";
+import { formatDate, formatDateRange } from "@/lib/date";
 import type {
   ProjectProgressSegmentRow,
   ProjectProgressTaskRow,
 } from "@/types/projectProgress";
 
 dayjs.extend(isoWeek);
+
+const ASCII_INITIAL_RE = /^[A-Za-z0-9]/;
+const EN_NAME_COLLATOR = new Intl.Collator("en", {
+  numeric: true,
+  sensitivity: "base",
+});
+const ZH_NAME_COLLATOR = new Intl.Collator("zh-CN-u-co-pinyin", {
+  numeric: true,
+  sensitivity: "base",
+});
 
 type Props = {
   projectId: string;
@@ -78,12 +83,50 @@ const formatDateOrEmpty = (value?: string | null) => {
   return formatDate(value, DATE_FORMAT, "").replaceAll("-", "/");
 };
 
-const getTaskStatusSortValue = (
-  task: ProjectProgressTaskRow,
-  statusOrderMap: Map<string, number>,
+const formatSegmentDateRange = (
+  startDate?: string | null,
+  endDate?: string | null,
 ) => {
-  const statusValue = task.statusOption?.value ?? task.status ?? "";
-  return statusOrderMap.get(statusValue) ?? Number.MAX_SAFE_INTEGER;
+  if (startDate && endDate) {
+    return formatDateRange({
+      start: startDate,
+      end: endDate,
+      emptyText: "",
+      separator: " - ",
+    });
+  }
+
+  if (startDate) {
+    const startText = formatDate(startDate, DATE_FORMAT, "");
+    return startText ? `${startText}-` : "";
+  }
+
+  return "";
+};
+
+const isCurrentOrFutureIsoWeek = (
+  year: number,
+  weekNumber: number,
+  currentYear: number,
+  currentWeek: number,
+) => {
+  if (year !== currentYear) return year > currentYear;
+  return weekNumber >= currentWeek;
+};
+
+const compareDisplayNames = (left?: string | null, right?: string | null) => {
+  const leftName = left?.trim() ?? "";
+  const rightName = right?.trim() ?? "";
+  const leftPriority = ASCII_INITIAL_RE.test(leftName) ? 0 : 1;
+  const rightPriority = ASCII_INITIAL_RE.test(rightName) ? 0 : 1;
+
+  if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+
+  if (leftPriority === 0) {
+    return EN_NAME_COLLATOR.compare(leftName, rightName);
+  }
+
+  return ZH_NAME_COLLATOR.compare(leftName, rightName);
 };
 
 const ProjectDetailProgressContent = ({
@@ -96,6 +139,7 @@ const ProjectDetailProgressContent = ({
   actionsDisabled = false,
   employees = [],
   onAddTask,
+  onEditSegment,
   onAddPlannedWork,
   onUpdateSegmentStatus,
   onAfterUpdateTask,
@@ -105,43 +149,12 @@ const ProjectDetailProgressContent = ({
     Record<string, PaginationState>
   >({});
   const [editingTask, setEditingTask] = useState<ProjectProgressTaskRow | null>(null);
-  const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const currentIsoWeek = dayjs().isoWeek();
   const currentIsoWeekYear = dayjs().isoWeekYear();
-  const taskStatusOrderMap = useMemo(() => {
-    const options = optionsByField[PROJECT_TASK_STATUS_FIELD] ?? [];
-    if (options.length === 0) {
-      return new Map(
-        PROJECT_TASK_STATUS_OPTIONS.map((item, index) => [item.value, index + 1]),
-      );
-    }
-
-    return new Map(
-      [...options]
-        .sort((left, right) => {
-          const leftOrder = left.order ?? Number.MAX_SAFE_INTEGER;
-          const rightOrder = right.order ?? Number.MAX_SAFE_INTEGER;
-          if (leftOrder !== rightOrder) return leftOrder - rightOrder;
-          return left.value.localeCompare(right.value, "zh-CN");
-        })
-        .map((item, index) => [item.value, index + 1]),
-    );
-  }, [optionsByField]);
-  const taskStatusOrderSignature = useMemo(
-    () => JSON.stringify(Array.from(taskStatusOrderMap.entries())),
-    [taskStatusOrderMap],
-  );
   const sortedSegments = useMemo(() => {
-    return [...data].sort((left, right) => {
-      const leftStatus = left.status ?? "";
-      const rightStatus = right.status ?? "";
-      const isLeftDone = leftStatus.includes("完成");
-      const isRightDone = rightStatus.includes("完成");
-      if (isLeftDone !== isRightDone) return isLeftDone ? 1 : -1;
-      const statusCompare = leftStatus.localeCompare(rightStatus, "zh-CN");
-      if (statusCompare !== 0) return statusCompare;
-      return left.name.localeCompare(right.name, "zh-CN");
-    });
+    return [...data].sort((left, right) =>
+      compareDisplayNames(left.name, right.name),
+    );
   }, [data]);
   const visibleSegments = useMemo(() => {
     if (!hideCompletedItems) return sortedSegments;
@@ -159,14 +172,10 @@ const ProjectDetailProgressContent = ({
       visibleSegments.map((segment) => ({
         ...segment,
         tasks: [...(segment.tasks ?? [])].sort((left, right) => {
-          const statusCompare =
-            getTaskStatusSortValue(left, taskStatusOrderMap) -
-            getTaskStatusSortValue(right, taskStatusOrderMap);
-          if (statusCompare !== 0) return statusCompare;
-          return left.name.localeCompare(right.name, "zh-CN");
+          return compareDisplayNames(left.name, right.name);
         }),
       })),
-    [taskStatusOrderMap, visibleSegments],
+    [visibleSegments],
   );
 
   const taskColumns: ProColumns<ProjectProgressTaskRow>[] = [
@@ -198,10 +207,6 @@ const ProjectDetailProgressContent = ({
       title: "任务状态",
       dataIndex: "status",
       width: 90,
-      sorter: (left, right) =>
-        getTaskStatusSortValue(left, taskStatusOrderMap) -
-        getTaskStatusSortValue(right, taskStatusOrderMap),
-      defaultSortOrder: "ascend",
       render: (_value, row) => (
         <ProjectTaskStatusQuickEditTag
           projectId={projectId}
@@ -237,11 +242,24 @@ const ProjectDetailProgressContent = ({
       key: "plannedSchedules",
       width: 320,
       render: (_value, row) => {
-        const entries = [...(row.plannedEntries ?? [])].sort((left, right) => {
-          if (left.year !== right.year) return right.year - left.year;
-          if (left.weekNumber !== right.weekNumber) return right.weekNumber - left.weekNumber;
-          return left.id.localeCompare(right.id, "zh-CN");
-        });
+        const entries = [...(row.plannedEntries ?? [])]
+          .filter((entry) =>
+            !showPlannedDaysForCurrentWeekOnly
+              ? true
+              : isCurrentOrFutureIsoWeek(
+                  entry.year,
+                  entry.weekNumber,
+                  currentIsoWeekYear,
+                  currentIsoWeek,
+                ),
+          )
+          .sort((left, right) => {
+            if (left.year !== right.year) return right.year - left.year;
+            if (left.weekNumber !== right.weekNumber) {
+              return right.weekNumber - left.weekNumber;
+            }
+            return left.id.localeCompare(right.id, "zh-CN");
+          });
 
         if (entries.length === 0) return "-";
 
@@ -371,29 +389,50 @@ const ProjectDetailProgressContent = ({
                     }}
                     onUpdated={onAfterUpdateTask}
                   />
-                  <span style={{ color: "rgba(0,0,0,0.65)", whiteSpace: "nowrap" }}>
-                    截止日期：{formatDateOrEmpty(segment.dueDate) || "-"}
-                  </span>
+                  {formatSegmentDateRange(segment.startDate, segment.endDate) ? (
+                    <span style={{ color: "rgba(0,0,0,0.65)", whiteSpace: "nowrap" }}>
+                      {formatSegmentDateRange(segment.startDate, segment.endDate)}
+                    </span>
+                  ) : null}
                 </div>
               ),
               extra: (
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<PlusOutlined />}
-                  disabled={actionsDisabled}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onAddTask?.(segment);
-                  }}
-                >
-                  新建任务
-                </Button>
+                actionsDisabled ? null : (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        onEditSegment?.(segment);
+                      }}
+                    >
+                      编辑环节
+                    </Button>
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<PlusOutlined />}
+                      onClick={() => {
+                        onAddTask?.(segment);
+                      }}
+                    >
+                      新建任务
+                    </Button>
+                  </div>
+                )
               ),
               children: (
                 <div style={{ width: "100%", minWidth: 0, overflowX: "auto" }}>
                   <ProTable<ProjectProgressTaskRow>
-                    key={`${segment.id}-${taskStatusOrderSignature}`}
+                    key={segment.id}
                     rowKey="id"
                     columns={taskColumns}
                     dataSource={segment.tasks}

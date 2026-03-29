@@ -139,12 +139,18 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     data: {
       name: typeof body.name === "string" ? body.name : undefined,
       segmentId: typeof body.segmentId === "string" ? body.segmentId : undefined,
-      statusOptionId,
-      ownerId: typeof body.ownerId === "string" ? body.ownerId : null,
-      dueDate:
-        typeof body.dueDate === "string" && body.dueDate
-          ? new Date(body.dueDate)
-          : null,
+      ...(typeof statusOptionId === "string" ? { statusOptionId } : {}),
+      ...("ownerId" in body
+        ? { ownerId: typeof body.ownerId === "string" ? body.ownerId : null }
+        : {}),
+      ...("dueDate" in body
+        ? {
+            dueDate:
+              typeof body.dueDate === "string" && body.dueDate
+                ? new Date(body.dueDate)
+                : null,
+          }
+        : {}),
     },
   });
 

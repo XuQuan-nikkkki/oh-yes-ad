@@ -6,10 +6,14 @@ import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import type { NullableSelectOptionValue } from "@/types/selectOption";
 
 type Props = {
+  field?: string;
   option?: NullableSelectOptionValue;
   fallbackText?: string;
   rounded?: boolean;
   disabled?: boolean;
+  onSaveSelection?: (
+    option: { id: string; value: string; color: string },
+  ) => void | Promise<void>;
   onUpdated?: () => void | Promise<void>;
   modalTitle?: string;
   fieldLabel?: string;
@@ -20,9 +24,11 @@ type Props = {
 };
 
 const SelectOptionTag = ({
+  field,
   option,
   fallbackText = "-",
   disabled = false,
+  onSaveSelection,
   onUpdated,
   modalTitle = "修改选项",
   fieldLabel = "选项值",
@@ -44,12 +50,13 @@ const SelectOptionTag = ({
   );
 
   const resolvedField =
+    field ??
     option?.field ??
     flattenedOptions.find((item) => item.id === option?.id)?.field ??
     fetchedField;
 
   useEffect(() => {
-    if (option?.field || !option?.id || resolvedField) return;
+    if (field || option?.field || !option?.id || resolvedField) return;
 
     let active = true;
     void (async () => {
@@ -69,7 +76,7 @@ const SelectOptionTag = ({
     return () => {
       active = false;
     };
-  }, [fetchAllOptions, option?.field, option?.id, resolvedField]);
+  }, [fetchAllOptions, field, option?.field, option?.id, resolvedField]);
 
   return (
     <SelectOptionQuickEditTag
@@ -80,6 +87,7 @@ const SelectOptionTag = ({
       optionValueLabel={fieldLabel}
       saveSuccessText={successMessage}
       disabled={disabled || !resolvedField}
+      onSaveSelection={onSaveSelection}
       onUpdated={onUpdated}
     />
   );

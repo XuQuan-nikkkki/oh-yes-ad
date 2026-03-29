@@ -1,10 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import { canManageProjectResources } from "@/lib/role-permissions";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 
 type Props = {
+  projectId: string;
   type?: string | null;
   typeOption?: {
     id?: string;
@@ -18,13 +20,15 @@ const PROJECT_TYPE_MAP: Record<string, string> = {
   INTERNAL: "内部项目",
 };
 
-const ProjectTypeValue = ({ type, typeOption }: Props) => {
+const ProjectTypeValue = ({ projectId, type, typeOption }: Props) => {
+  const router = useRouter();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
   const canManageProject = canManageProjectResources(roleCodes);
 
   return (
     <SelectOptionTag
+      field="project.type"
       disabled={!canManageProject}
       option={
         typeOption?.value
@@ -41,6 +45,24 @@ const ProjectTypeValue = ({ type, typeOption }: Props) => {
               }
             : null
       }
+      onSaveSelection={async (nextOption) => {
+        const response = await fetch(`/api/projects/${projectId}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            type: nextOption.value,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error((await response.text()) || "更新项目类型失败");
+        }
+      }}
+      onUpdated={async () => {
+        router.refresh();
+      }}
     />
   );
 };

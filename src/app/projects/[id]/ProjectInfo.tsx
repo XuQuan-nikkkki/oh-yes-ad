@@ -12,12 +12,13 @@ import type { Project, WorkdayAdjustment } from "@/types/projectDetail";
 type Props = {
   project: Project;
   workdayAdjustments: WorkdayAdjustment[];
+  onProjectUpdated?: (project: Project) => void;
 };
 
 const titleStyle = { fontSize: "14px", fontWeight: 500 } as const;
 const sectionStyle = { marginBottom: "24px" } as const;
 
-const ProjectInfo = ({ project, workdayAdjustments }: Props) => {
+const ProjectInfo = ({ project, workdayAdjustments, onProjectUpdated }: Props) => {
   const isInternalProject = project.type === "INTERNAL";
 
   return (
@@ -30,6 +31,7 @@ const ProjectInfo = ({ project, workdayAdjustments }: Props) => {
       >
         <Descriptions.Item label="项目类型">
           <ProjectTypeValue
+            projectId={project.id}
             type={project.type}
             typeOption={project.typeOption}
           />
@@ -79,14 +81,18 @@ const ProjectInfo = ({ project, workdayAdjustments }: Props) => {
         >
           <Descriptions.Item label="项目状态">
             <ProjectStatusValue
+              projectId={project.id}
               status={project.status}
               statusOption={project.statusOption}
+              onSaved={onProjectUpdated}
             />
           </Descriptions.Item>
           <Descriptions.Item label="项目阶段">
             <ProjectStageValue
+              projectId={project.id}
               stage={project.stage}
               stageOption={project.stageOption}
+              onSaved={onProjectUpdated}
             />
           </Descriptions.Item>
           <Descriptions.Item label="已归档">

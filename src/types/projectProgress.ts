@@ -39,6 +39,8 @@ export type ProjectProgressSegmentRow = {
   statusOption?: OptionValue;
   ownerName: string;
   ownerId?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
   dueDate?: string | null;
   tasks: ProjectProgressTaskRow[];
 };

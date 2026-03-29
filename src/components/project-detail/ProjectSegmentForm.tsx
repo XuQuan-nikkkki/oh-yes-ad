@@ -115,7 +115,6 @@ const ProjectSegmentForm = ({
   };
 
   dayjs.locale("zh-cn");
-  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const statusOptions = useMemo(
     () => optionsByField["projectSegment.status"] ?? [],
@@ -134,8 +133,8 @@ const ProjectSegmentForm = ({
       : null;
 
   useEffect(() => {
-    void fetchAllOptions();
-  }, [fetchAllOptions]);
+    void useSelectOptionsStore.getState().fetchAllOptions();
+  }, []);
 
   useEffect(() => {
     if (!activeProjectId || directProjectMembers) {

@@ -103,6 +103,45 @@ export async function POST(req: NextRequest, context: RouteContext) {
       ownerId: body.ownerId ?? null,
       dueDate: body.dueDate ? new Date(body.dueDate) : null,
     },
+    include: {
+      statusOption: {
+        select: {
+          id: true,
+          value: true,
+          color: true,
+        },
+      },
+      segment: {
+        select: {
+          id: true,
+          name: true,
+          project: {
+            select: {
+              id: true,
+              name: true,
+              statusOption: {
+                select: {
+                  id: true,
+                  value: true,
+                  color: true,
+                  order: true,
+                },
+              },
+              stageOption: {
+                select: {
+                  id: true,
+                  value: true,
+                  color: true,
+                },
+              },
+              startDate: true,
+              endDate: true,
+            },
+          },
+        },
+      },
+      owner: { select: { id: true, name: true } },
+    },
   });
 
   return Response.json(task);
