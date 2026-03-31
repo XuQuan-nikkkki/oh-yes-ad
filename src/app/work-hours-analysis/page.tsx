@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Radio, Select, Space, message } from "antd";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button, Modal, Popover, Radio, Select, Space, message } from "antd";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import dayjs from "dayjs";
@@ -12,6 +12,11 @@ import {
   getSystemSettingNumberFromRecords,
   SYSTEM_SETTING_KEYS,
 } from "@/lib/system-settings";
+import {
+  calculateActualWorkdays,
+  getActualWorkEntryHours,
+  getActualWorkdayGroupKey,
+} from "@/lib/actual-workdays";
 import ListPageContainer from "@/components/ListPageContainer";
 import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
@@ -85,18 +90,29 @@ type RowData = {
 };
 
 const formatNumber = (value: number) => value.toFixed(2).replace(/\.?0+$/, "");
-const hoursToDays = (hours: number) => hours / 8;
 const FUNCTION_SORT_ORDER = ["设计组", "品牌组", "项目组", "新媒体"] as const;
-const PLATFORM_PROJECT_NAME = "中台项目";
+const PLATFORM_STATS_COLUMN_ID = "__platform_stats__";
+const PLATFORM_STATS_COLUMN_NAME = "中台";
 const toNumber = (value?: string | number | null) => {
   if (value === null || value === undefined || value === "") return 0;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
-const isPlatformProject = (project?: { name?: string | null } | null) =>
-  (project?.name ?? "").includes(PLATFORM_PROJECT_NAME);
-const getProjectDisplayName = (project?: { name?: string | null } | null) =>
-  isPlatformProject(project) ? "中台" : project?.name ?? "";
+const isClientProject = (project?: {
+  type?: string | null;
+  typeOption?: {
+    value?: string | null;
+  } | null;
+} | null) => {
+  const typeText = (
+    project?.typeOption?.value ??
+    project?.type ??
+    ""
+  )
+    .trim()
+    .toUpperCase();
+  return typeText.includes("客户") || typeText === "CLIENT";
+};
 const formatCurrency = (value: number) => `¥${formatNumber(value)}`;
 const isDepartedEmployee = (employee: Employee) => {
   const status = (
@@ -143,6 +159,12 @@ export default function WorkHoursAnalysisPage() {
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number>(currentMonth);
+  const [projectEntriesModal, setProjectEntriesModal] = useState<{
+    employeeId: string;
+    employeeName: string;
+    projectId: string;
+    projectName: string;
+  } | null>(null);
   const canViewProjectCost = useMemo(
     () =>
       roleCodes.includes("ADMIN") ||
@@ -337,6 +359,34 @@ export default function WorkHoursAnalysisPage() {
     [employeeOptions],
   );
 
+  const selectedProjectEntries = useMemo(() => {
+    if (!projectEntriesModal) return [];
+    return filteredEntriesForRecords
+      .filter(
+        (entry) =>
+          entry.employee?.id === projectEntriesModal.employeeId &&
+          entry.project?.id === projectEntriesModal.projectId,
+      )
+      .sort((left, right) => {
+        const startCompare =
+          dayjs(right.startDate).valueOf() - dayjs(left.startDate).valueOf();
+        if (startCompare !== 0) return startCompare;
+        return dayjs(right.endDate).valueOf() - dayjs(left.endDate).valueOf();
+      });
+  }, [filteredEntriesForRecords, projectEntriesModal]);
+
+  const filteredDailyHoursMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const entry of filteredEntriesForRecords) {
+      const employeeId = entry.employee?.id;
+      if (!employeeId) continue;
+      const key = getActualWorkdayGroupKey(employeeId, entry.startDate);
+      const hours = getActualWorkEntryHours(entry.startDate, entry.endDate);
+      map.set(key, (map.get(key) ?? 0) + hours);
+    }
+    return map;
+  }, [filteredEntriesForRecords]);
+
   const projectFilterOptions = useMemo(
     () =>
       Array.from(
@@ -356,6 +406,7 @@ export default function WorkHoursAnalysisPage() {
     for (const entry of filteredEntries) {
       if (!entry.project?.id || !entry.project?.name) continue;
       const projectMeta = projectMap.get(entry.project.id);
+      if (!isClientProject(projectMeta)) continue;
       map.set(entry.project.id, {
         id: entry.project.id,
         name: entry.project.name,
@@ -363,22 +414,22 @@ export default function WorkHoursAnalysisPage() {
         typeOption: projectMeta?.typeOption ?? null,
       });
     }
-    const getTypePriority = (project: ProjectColumn) => {
-      const typeText =
-        (project.typeOption?.value ?? project.type ?? "").trim().toUpperCase();
-      if (typeText.includes("客户") || typeText === "CLIENT") return 0;
-      if (typeText.includes("内部") || typeText === "INTERNAL") return 1;
-      return 2;
-    };
     return Array.from(map.values()).sort((left, right) => {
-      const typeCompare = getTypePriority(left) - getTypePriority(right);
-      if (typeCompare !== 0) return typeCompare;
       return left.name.localeCompare(right.name, "zh-CN");
     });
   }, [filteredEntries, projectMap]);
 
   const tableData = useMemo<RowData[]>(() => {
     const rows = new Map<string, RowData>();
+    const employeeDailyHours = new Map<string, number>();
+
+    for (const entry of filteredEntries) {
+      const employeeId = entry.employee?.id;
+      if (!employeeId) continue;
+      const hours = getActualWorkEntryHours(entry.startDate, entry.endDate);
+      const key = getActualWorkdayGroupKey(employeeId, entry.startDate);
+      employeeDailyHours.set(key, (employeeDailyHours.get(key) ?? 0) + hours);
+    }
 
     for (const entry of filteredEntries) {
       const employeeId = entry.employee?.id;
@@ -392,10 +443,11 @@ export default function WorkHoursAnalysisPage() {
         employee?.function?.trim() ||
         "未设置";
 
-      const start = dayjs(entry.startDate);
-      const end = dayjs(entry.endDate);
-      const hours = Math.max(end.diff(start, "minute") / 60, 0);
-      const days = hoursToDays(hours);
+      const hours = getActualWorkEntryHours(entry.startDate, entry.endDate);
+      const dailyHours =
+        employeeDailyHours.get(getActualWorkdayGroupKey(employeeId, entry.startDate)) ??
+        hours;
+      const days = calculateActualWorkdays(hours, dailyHours);
       const percent = (days / monthlyWorkdayBase) * 100;
 
       const existing =
@@ -410,21 +462,18 @@ export default function WorkHoursAnalysisPage() {
           values: {},
         } as RowData);
 
-      const cell = existing.values[projectId] ?? { days: 0, percent: 0 };
-      cell.days += days;
-      cell.percent += percent;
-      existing.values[projectId] = cell;
+      const projectMeta = projectMap.get(projectId);
+      if (isClientProject(projectMeta)) {
+        existing.totalDays += days;
+        const cell = existing.values[projectId] ?? { days: 0, percent: 0 };
+        cell.days += days;
+        cell.percent += percent;
+        existing.values[projectId] = cell;
+      }
       rows.set(employeeId, existing);
     }
 
     return Array.from(rows.values())
-      .map((row) => ({
-        ...row,
-        totalDays: Object.values(row.values).reduce(
-          (sum, cell) => sum + cell.days,
-          0,
-        ),
-      }))
       .sort((left, right) => {
         const leftFunctionRank = FUNCTION_SORT_ORDER.indexOf(
           left.functionName as (typeof FUNCTION_SORT_ORDER)[number],
@@ -442,20 +491,22 @@ export default function WorkHoursAnalysisPage() {
         if (byFunction !== 0) return byFunction;
         return left.employeeName.localeCompare(right.employeeName, "zh-CN");
       });
-  }, [employeeHumanCostMap, employeeMap, filteredEntries, monthlyWorkdayBase]);
+  }, [
+    employeeHumanCostMap,
+    employeeMap,
+    filteredEntries,
+    monthlyWorkdayBase,
+    projectMap,
+  ]);
 
   const summaryData = useMemo(() => {
     const daysByProject: Record<string, number> = {};
     const costByProject: Record<string, number> = {};
     let totalDays = 0;
 
-    const platformProjectId =
-      projectColumns.find((project) => isPlatformProject(project))?.id ?? null;
-
     for (const row of tableData) {
       totalDays += row.totalDays;
-      const nonPlatformPercentSum = projectColumns.reduce((sum, project) => {
-        if (project.id === platformProjectId) return sum;
+      const customerProjectPercentSum = projectColumns.reduce((sum, project) => {
         const cell = row.values[project.id] ?? { days: 0, percent: 0 };
         return sum + cell.percent;
       }, 0);
@@ -463,14 +514,14 @@ export default function WorkHoursAnalysisPage() {
       for (const project of projectColumns) {
         const cell = row.values[project.id] ?? { days: 0, percent: 0 };
         daysByProject[project.id] = (daysByProject[project.id] ?? 0) + cell.days;
-
-        const displayPercent =
-          project.id === platformProjectId
-            ? Math.max(0, 100 - nonPlatformPercentSum)
-            : cell.percent;
-        const projectCost = (displayPercent / 100) * row.humanCostWithRent;
+        const projectCost = (cell.percent / 100) * row.humanCostWithRent;
         costByProject[project.id] = (costByProject[project.id] ?? 0) + projectCost;
       }
+
+      const platformPercent = Math.max(0, 100 - customerProjectPercentSum);
+      costByProject[PLATFORM_STATS_COLUMN_ID] =
+        (costByProject[PLATFORM_STATS_COLUMN_ID] ?? 0) +
+        (platformPercent / 100) * row.humanCostWithRent;
     }
 
     return {
@@ -506,38 +557,31 @@ export default function WorkHoursAnalysisPage() {
     return [...tableData, summaryRow];
   }, [projectColumns, summaryData.daysByProject, summaryData.totalDays, tableData]);
 
-  const platformProjectId = useMemo(
-    () => projectColumns.find((project) => isPlatformProject(project))?.id ?? null,
-    [projectColumns],
-  );
-
   const getProjectPercentValue = useMemo(
     () =>
       (row: RowData, projectId: string) => {
         const cell = row.values[projectId] ?? { days: 0, percent: 0 };
-        if (projectId === platformProjectId) {
+        if (projectId === PLATFORM_STATS_COLUMN_ID) {
           return Math.max(
             0,
-            100 -
-              projectColumns.reduce((sum, currentProject) => {
-                if (currentProject.id === platformProjectId) return sum;
-                const currentCell = row.values[currentProject.id] ?? {
-                  days: 0,
-                  percent: 0,
-                };
-                return sum + currentCell.percent;
-              }, 0),
+            100 - projectColumns.reduce((sum, currentProject) => {
+              const currentCell = row.values[currentProject.id] ?? {
+                days: 0,
+                percent: 0,
+              };
+              return sum + currentCell.percent;
+            }, 0),
           );
         }
         return cell.percent;
       },
-    [platformProjectId, projectColumns],
+    [projectColumns],
   );
 
   const getProjectDaysDisplay = useMemo(
     () =>
       (row: RowData, projectId: string) => {
-        if (projectId === platformProjectId) return "";
+        if (projectId === PLATFORM_STATS_COLUMN_ID) return "";
         if (row.isSummary) {
           const totalDays = summaryData.daysByProject[projectId] ?? 0;
           return `${formatNumber(totalDays)}d`;
@@ -546,7 +590,7 @@ export default function WorkHoursAnalysisPage() {
         if (cell.days === 0) return "-";
         return `${formatNumber(cell.days)}d`;
       },
-    [platformProjectId, summaryData.daysByProject],
+    [summaryData.daysByProject],
   );
 
   const getProjectPercentDisplay = useMemo(
@@ -555,11 +599,49 @@ export default function WorkHoursAnalysisPage() {
         if (row.isSummary) return "";
         const cell = row.values[projectId] ?? { days: 0, percent: 0 };
         const percent = getProjectPercentValue(row, projectId);
-        if (projectId !== platformProjectId && cell.days === 0) return "-";
-        if (projectId === platformProjectId && percent === 0) return "0%";
+        if (projectId !== PLATFORM_STATS_COLUMN_ID && cell.days === 0) return "-";
+        if (projectId === PLATFORM_STATS_COLUMN_ID && percent === 0) return "0%";
         return `${formatNumber(percent)}%`;
       },
-    [getProjectPercentValue, platformProjectId],
+    [getProjectPercentValue],
+  );
+
+  const getProjectPercentFormula = useCallback(
+    (row: RowData, projectId: string) => {
+      const percent = getProjectPercentValue(row, projectId);
+      const days =
+        projectId === PLATFORM_STATS_COLUMN_ID
+          ? (percent / 100) * monthlyWorkdayBase
+          : row.values[projectId]?.days ?? 0;
+      return `计算公式：${formatNumber(days)}d / ${formatNumber(monthlyWorkdayBase)}d`;
+    },
+    [getProjectPercentValue, monthlyWorkdayBase],
+  );
+
+  const getPlatformPercentBreakdownContent = useCallback(
+    (row: RowData) => {
+      const items = projectColumns
+        .map((project) => ({
+          name: project.name,
+          percent: getProjectPercentValue(row, project.id),
+        }))
+        .filter((item) => item.percent > 0);
+      const totalPercent = items.reduce((sum, item) => sum + item.percent, 0);
+
+      return (
+        <div>
+          {items.map((item) => (
+            <div key={item.name}>
+              {item.name}: {formatNumber(item.percent)}%
+            </div>
+          ))}
+          <div style={{ marginTop: 8, fontWeight: 600 }}>
+            项目总占比：{formatNumber(totalPercent)}%
+          </div>
+        </div>
+      );
+    },
+    [getProjectPercentValue, projectColumns],
   );
 
   const getProjectCostDisplay = useMemo(
@@ -571,12 +653,40 @@ export default function WorkHoursAnalysisPage() {
         }
         const cell = row.values[projectId] ?? { days: 0, percent: 0 };
         const percent = getProjectPercentValue(row, projectId);
-        if (projectId !== platformProjectId && cell.days === 0) return "-";
-        if (projectId === platformProjectId && percent === 0) return formatCurrency(0);
+        if (projectId !== PLATFORM_STATS_COLUMN_ID && cell.days === 0) return "-";
+        if (projectId === PLATFORM_STATS_COLUMN_ID && percent === 0) {
+          return formatCurrency(0);
+        }
         const projectCost = (percent / 100) * row.humanCostWithRent;
         return formatCurrency(projectCost);
       },
-    [getProjectPercentValue, platformProjectId, summaryData.costByProject],
+    [getProjectPercentValue, summaryData.costByProject],
+  );
+
+  const getTotalDaysBreakdownContent = useCallback(
+    (row: RowData) => {
+      const items = projectColumns
+        .map((project) => ({
+          name: project.name,
+          days: row.values[project.id]?.days ?? 0,
+        }))
+        .filter((item) => item.days > 0);
+
+      if (items.length === 0) {
+        return "暂无项目工时";
+      }
+
+      return (
+        <div>
+          {items.map((item) => (
+            <div key={item.name}>
+              {item.name}: {formatNumber(item.days)}d
+            </div>
+          ))}
+        </div>
+      );
+    },
+    [projectColumns],
   );
 
   const columns = useMemo<ProColumns<RowData>[]>(() => {
@@ -644,12 +754,22 @@ export default function WorkHoursAnalysisPage() {
               }
             : {},
         render: (_dom, row) =>
-          row.isSummary ? null : `${formatNumber(row.totalDays)}d`,
+          row.isSummary ? null : (
+            <Popover content={getTotalDaysBreakdownContent(row)}>
+              <span>{`${formatNumber(row.totalDays)}d`}</span>
+            </Popover>
+          ),
       },
     ];
 
-    const dynamicColumns: ProColumns<RowData>[] = projectColumns.map((project) => {
-      const isPlatform = project.id === platformProjectId;
+    const dynamicColumns: ProColumns<RowData>[] = [
+      ...projectColumns,
+      {
+        id: PLATFORM_STATS_COLUMN_ID,
+        name: PLATFORM_STATS_COLUMN_NAME,
+      },
+    ].map((project) => {
+      const isPlatform = project.id === PLATFORM_STATS_COLUMN_ID;
       const groupChildren: ProColumns<RowData>[] = [
         {
           title: "占比",
@@ -662,15 +782,23 @@ export default function WorkHoursAnalysisPage() {
             const percent = getProjectPercentValue(row, project.id);
             const isOverLimit = percent > 100;
             return (
-              <span
-                style={
-                  isOverLimit
-                    ? { color: "#ff4d4f", fontWeight: 700 }
-                    : undefined
+              <Popover
+                content={
+                  project.id === PLATFORM_STATS_COLUMN_ID
+                    ? getPlatformPercentBreakdownContent(row)
+                    : getProjectPercentFormula(row, project.id)
                 }
               >
-                {percentText}
-              </span>
+                <span
+                  style={
+                    isOverLimit
+                      ? { color: "#ff4d4f", fontWeight: 700 }
+                      : undefined
+                  }
+                >
+                  {percentText}
+                </span>
+              </Popover>
             );
           },
         },
@@ -682,7 +810,29 @@ export default function WorkHoursAnalysisPage() {
           key: `${project.id}-days`,
           width: 68,
           align: "right",
-          render: (_value, row) => getProjectDaysDisplay(row, project.id),
+          render: (_value, row) => {
+            const daysText = getProjectDaysDisplay(row, project.id);
+            if (row.isSummary || daysText === "-") {
+              return daysText;
+            }
+            return (
+              <Button
+                type="link"
+                size="small"
+                style={{ paddingInline: 0, height: "auto" }}
+                onClick={() =>
+                  setProjectEntriesModal({
+                    employeeId: row.employeeId,
+                    employeeName: row.employeeName,
+                    projectId: project.id,
+                    projectName: project.name,
+                  })
+                }
+              >
+                {daysText}
+              </Button>
+            );
+          },
         });
       }
 
@@ -697,7 +847,7 @@ export default function WorkHoursAnalysisPage() {
       }
 
       return {
-        title: getProjectDisplayName(project),
+        title: project.name,
         key: project.id,
         children: groupChildren,
       };
@@ -706,12 +856,15 @@ export default function WorkHoursAnalysisPage() {
     return [...fixedColumns, ...dynamicColumns];
   }, [
     canViewProjectCost,
+    getTotalDaysBreakdownContent,
     getProjectCostDisplay,
     getProjectDaysDisplay,
     getProjectPercentDisplay,
+    getProjectPercentFormula,
+    getPlatformPercentBreakdownContent,
     getProjectPercentValue,
-    platformProjectId,
     projectColumns,
+    setProjectEntriesModal,
   ]);
 
   const downloadAnalysisXlsx = async () => {
@@ -752,9 +905,9 @@ export default function WorkHoursAnalysisPage() {
       pushFixedHeader("工时总数(天)", 12);
 
       for (const project of projectColumns) {
-        const displayName = getProjectDisplayName(project);
+        const displayName = project.name;
         const childTitles = [
-          ...(project.id !== platformProjectId ? ["工时"] : []),
+          "工时",
           "占比",
           ...(canViewProjectCost ? ["项目成本"] : []),
         ];
@@ -775,6 +928,25 @@ export default function WorkHoursAnalysisPage() {
           toCol: startCol + childTitles.length - 1,
         });
       }
+      const platformChildTitles = [
+        "占比",
+        ...(canViewProjectCost ? ["项目成本"] : []),
+      ];
+      const platformStartCol = topHeader.length + 1;
+      topHeader.push(
+        PLATFORM_STATS_COLUMN_NAME,
+        ...Array(Math.max(platformChildTitles.length - 1, 0)).fill(""),
+      );
+      subHeader.push(...platformChildTitles);
+      columnWidths.push(
+        ...platformChildTitles.map((title) => (title === "项目成本" ? 14 : 10)),
+      );
+      mergeRanges.push({
+        fromRow: 1,
+        fromCol: platformStartCol,
+        toRow: 1,
+        toCol: platformStartCol + platformChildTitles.length - 1,
+      });
 
       worksheet.addRow(topHeader);
       worksheet.addRow(subHeader);
@@ -798,13 +970,15 @@ export default function WorkHoursAnalysisPage() {
           row.isSummary ? "" : `${formatNumber(row.totalDays)}d`,
         ];
         for (const project of projectColumns) {
-          if (project.id !== platformProjectId) {
-            rowValues.push(getProjectDaysDisplay(row, project.id));
-          }
+          rowValues.push(getProjectDaysDisplay(row, project.id));
           rowValues.push(getProjectPercentDisplay(row, project.id));
           if (canViewProjectCost) {
             rowValues.push(getProjectCostDisplay(row, project.id));
           }
+        }
+        rowValues.push(getProjectPercentDisplay(row, PLATFORM_STATS_COLUMN_ID));
+        if (canViewProjectCost) {
+          rowValues.push(getProjectCostDisplay(row, PLATFORM_STATS_COLUMN_ID));
         }
         worksheet.addRow(rowValues);
       }
@@ -1016,6 +1190,76 @@ export default function WorkHoursAnalysisPage() {
           toolBarRender={() => [toolbarFilters]}
         />
       )}
+      <Modal
+        title={
+          projectEntriesModal
+            ? `${projectEntriesModal.employeeName} - ${projectEntriesModal.projectName} 实际工时`
+            : "实际工时"
+        }
+        open={Boolean(projectEntriesModal)}
+        onCancel={() => setProjectEntriesModal(null)}
+        footer={null}
+        width={960}
+        destroyOnHidden
+        styles={{
+          body: {
+            height: 560,
+            overflowY: "auto",
+          },
+        }}
+      >
+        <ActualWorkEntriesTable
+          requestData={async (params) => {
+            const normalizedTitle = params.filters.title?.trim() ?? "";
+            const normalizedDate = params.filters.startDate?.trim() ?? "";
+            const normalizedDateFrom = params.filters.startDateFrom?.trim() ?? "";
+            const normalizedDateTo = params.filters.startDateTo?.trim() ?? "";
+
+            const filtered = selectedProjectEntries.filter((row) => {
+              if (normalizedTitle && !(row.title ?? "").includes(normalizedTitle)) {
+                return false;
+              }
+              if (
+                normalizedDate &&
+                dayjs(row.startDate).format("YYYY-MM-DD") !== normalizedDate
+              ) {
+                return false;
+              }
+              if (normalizedDateFrom || normalizedDateTo) {
+                const rowDate = dayjs(row.startDate);
+                if (normalizedDateFrom) {
+                  const from = dayjs(normalizedDateFrom).startOf("day");
+                  if (rowDate.isBefore(from)) return false;
+                }
+                if (normalizedDateTo) {
+                  const to = dayjs(normalizedDateTo).endOf("day");
+                  if (rowDate.isAfter(to)) return false;
+                }
+              }
+              return true;
+            });
+
+            const start = Math.max((params.current - 1) * params.pageSize, 0);
+            const end = start + params.pageSize;
+            return {
+              data: filtered.slice(start, end) as ActualWorkEntryRow[],
+              total: filtered.length,
+            };
+          }}
+          headerTitle={false}
+          columnKeys={["title", "startDate", "workDay"]}
+          compactHorizontalPadding
+          enableStartDateFilter={false}
+          workDayPrecision={3}
+          getDailyTotalHours={(row) => {
+            const employeeId = row.employee?.id;
+            if (!employeeId) return undefined;
+            return filteredDailyHoursMap.get(
+              getActualWorkdayGroupKey(employeeId, row.startDate),
+            );
+          }}
+        />
+      </Modal>
     </ListPageContainer>
   );
 }

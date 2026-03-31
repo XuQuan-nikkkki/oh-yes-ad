@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Card, Empty } from "antd";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Button, Card, Empty, Space } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import MilestoneCard, {
@@ -22,6 +22,7 @@ type Props = {
   gridMinWidth?: number;
   gridMaxWidth?: number;
   gridColumns?: number;
+  extra?: ReactNode;
 };
 
 const ProjectMilestoneSection = ({
@@ -38,6 +39,7 @@ const ProjectMilestoneSection = ({
   gridMinWidth = 250,
   gridMaxWidth = 360,
   gridColumns,
+  extra,
 }: Props) => {
   const [masonryColumnCount, setMasonryColumnCount] = useState(1);
   const [gridColumnCount, setGridColumnCount] = useState(1);
@@ -197,10 +199,15 @@ const ProjectMilestoneSection = ({
     <Card
       title={title}
       extra={
-        showAddButton ? (
-          <Button type="primary" icon={<PlusOutlined />} onClick={onAdd}>
-            {addButtonText}
-          </Button>
+        extra || showAddButton ? (
+          <Space size={8} wrap>
+            {extra}
+            {showAddButton ? (
+              <Button type="primary" icon={<PlusOutlined />} onClick={onAdd}>
+                {addButtonText}
+              </Button>
+            ) : null}
+          </Space>
         ) : null
       }
       styles={{

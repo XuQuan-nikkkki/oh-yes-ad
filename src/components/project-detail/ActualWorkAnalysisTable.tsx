@@ -3,8 +3,12 @@
 import { useMemo } from "react";
 import { Button, Progress, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
+import {
+  calculateActualWorkdays,
+  getActualWorkDateKey,
+  getActualWorkEntryHours,
+} from "@/lib/actual-workdays";
 
 export type ActualWorkAnalysisRow = {
   key: string;
@@ -44,26 +48,38 @@ const ActualWorkAnalysisTable = ({ entries, members, onViewDetail }: Props) => {
     const memberByName = new Map(members.map((member) => [member.name, member]));
     const memberMap = new Map<
       string,
-      { id: string; name: string; hours: number; isDeparted: boolean }
+      { id: string; name: string; hours: number; days: number; isDeparted: boolean }
     >();
+    const dailyHoursMap = new Map<string, number>();
 
     for (const entry of entries) {
-      const start = dayjs(entry.startDate);
-      const end = dayjs(entry.endDate);
-      const hours = round2(Math.max(end.diff(start, "minute") / 60, 0));
+      const employeeId = entry.employee?.id ?? `unknown-${entry.id}`;
+      const hours = round2(getActualWorkEntryHours(entry.startDate, entry.endDate));
+      const key = `${employeeId}__${getActualWorkDateKey(entry.startDate)}`;
+      dailyHoursMap.set(key, round2((dailyHoursMap.get(key) ?? 0) + hours));
+    }
+
+    for (const entry of entries) {
+      const hours = round2(getActualWorkEntryHours(entry.startDate, entry.endDate));
       const employeeId = entry.employee?.id ?? `unknown-${entry.id}`;
       const employeeName = entry.employee?.name ?? "未分配成员";
+      const totalDailyHours =
+        dailyHoursMap.get(`${employeeId}__${getActualWorkDateKey(entry.startDate)}`) ??
+        hours;
+      const days = round2(calculateActualWorkdays(hours, totalDailyHours));
       const matchedMember =
         (entry.employee?.id ? memberById.get(entry.employee.id) : undefined) ??
         (entry.employee?.name ? memberByName.get(entry.employee.name) : undefined);
       const existing = memberMap.get(employeeId);
       if (existing) {
         existing.hours = round2(existing.hours + hours);
+        existing.days = round2(existing.days + days);
       } else {
         memberMap.set(employeeId, {
           id: employeeId,
           name: employeeName,
           hours,
+          days,
           isDeparted: departedMatcher(matchedMember?.employmentStatus),
         });
       }
@@ -75,6 +91,7 @@ const ActualWorkAnalysisTable = ({ entries, members, onViewDetail }: Props) => {
           id: member.id,
           name: member.name,
           hours: 0,
+          days: 0,
           isDeparted: departedMatcher(member.employmentStatus),
         });
       }
@@ -96,11 +113,13 @@ const ActualWorkAnalysisTable = ({ entries, members, onViewDetail }: Props) => {
     const totalHours = round2(
       memberRows.reduce((sum, row) => sum + row.hours, 0),
     );
+    const totalDays = round2(
+      memberRows.reduce((sum, row) => sum + row.days, 0),
+    );
     const formatPercent = (value: number) => `${(value * 100).toFixed(2)}%`;
     const formatHours = (hours: number) =>
       hours.toFixed(2).replace(/\.?0+$/, "");
-    const formatDays = (hours: number) =>
-      (hours / 8).toFixed(2).replace(/\.?0+$/, "");
+    const formatDays = (days: number) => days.toFixed(2).replace(/\.?0+$/, "");
 
     return [
       {
@@ -108,6 +127,7 @@ const ActualWorkAnalysisTable = ({ entries, members, onViewDetail }: Props) => {
         memberKey: "total",
         name: "项目总工时",
         hours: totalHours,
+        days: totalDays,
         ratioValue: totalHours > 0 ? 100 : 0,
         ratio: totalHours > 0 ? "100.00%" : "0.00%",
         isTotal: true,
@@ -118,6 +138,7 @@ const ActualWorkAnalysisTable = ({ entries, members, onViewDetail }: Props) => {
         employeeId: row.id.startsWith("unknown-") ? null : row.id,
         name: row.name,
         hours: row.hours,
+        days: row.days,
         isDeparted: row.isDeparted,
         ratioValue: totalHours > 0 ? round2((row.hours / totalHours) * 100) : 0,
         ratio: totalHours > 0 ? formatPercent(row.hours / totalHours) : "0.00%",
@@ -126,7 +147,7 @@ const ActualWorkAnalysisTable = ({ entries, members, onViewDetail }: Props) => {
     ].map((row) => ({
       ...row,
       hoursDisplay: `${formatHours(row.hours)}h`,
-      daysDisplay: `${formatDays(row.hours)}d`,
+      daysDisplay: `${formatDays(row.days)}d`,
     }));
   }, [entries, members]);
 

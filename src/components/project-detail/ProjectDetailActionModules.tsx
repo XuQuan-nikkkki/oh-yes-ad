@@ -19,7 +19,7 @@ import ActualWorkEntryForm, {
 import PlannedWorkEntryForm, {
   type PlannedWorkEntryFormPayload,
 } from "@/components/project-detail/PlannedWorkEntryForm";
-import MilestoneNoticeTemplate from "@/components/project-detail/MilestoneNoticeTemplate";
+import ProjectMilestoneSectionActions from "@/components/project-detail/ProjectMilestoneSectionActions";
 import type {
   ClientContact,
   Employee,
@@ -79,23 +79,13 @@ export const ProjectMilestoneAction = ({
 }: MilestoneActionProps) => (
   <>
     {visible ? (
-      <Space size={8}>
-        <MilestoneNoticeTemplate
-          status={project?.status}
-          statusOptionValue={project?.statusOption?.value}
-          milestones={project?.milestones ?? []}
-        />
-        {canManageProject ? (
-          <Button
-            type="primary"
-            onClick={() => {
-              onOpenCreate();
-            }}
-          >
-            新增里程碑
-          </Button>
-        ) : null}
-      </Space>
+      <ProjectMilestoneSectionActions
+        canManageProject={canManageProject}
+        onCreate={onOpenCreate}
+        status={project?.status}
+        statusOptionValue={project?.statusOption?.value}
+        milestones={project?.milestones ?? []}
+      />
     ) : null}
     <ProjectMilestoneFormModal
       title={editing ? "编辑里程碑" : "新增里程碑"}

@@ -1,27 +1,43 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Button, Modal } from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button, Modal, Radio, Select, Space } from "antd";
+import type { DefaultOptionType } from "antd/es/select";
 import ActualWorkEntryForm, {
   ActualWorkEntryFormPayload,
 } from "@/components/project-detail/ActualWorkEntryForm";
 import ActualWorkEntriesTable from "@/components/ActualWorkEntriesTable";
 import ListPageContainer from "@/components/ListPageContainer";
 import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
+import WorkLogsCalendar, {
+  type WorkLogsCalendarEmployee,
+} from "@/components/work-logs/WorkLogsCalendar";
+import { canManageProjectResources } from "@/lib/role-permissions";
 import { useActualWorkEntriesStore } from "@/stores/actualWorkEntriesStore";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useProjectsStore } from "@/stores/projectsStore";
+import dayjs from "dayjs";
+
+type EmployeeOptionItem = {
+  id: string;
+  name: string;
+  employmentStatus?: string;
+  function?: string | null;
+  leaveDate?: string | null;
+};
 
 export default function Page() {
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
-  const isAdmin = roleCodes.includes("ADMIN");
+  const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [employees, setEmployees] = useState<
-    { id: string; name: string; employmentStatus?: string }[]
-  >([]);
+  const [employees, setEmployees] = useState<EmployeeOptionItem[]>([]);
   const [open, setOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"table" | "calendar">("table");
+  const [selectedCalendarEmployeeId, setSelectedCalendarEmployeeId] = useState<
+    string | undefined
+  >(undefined);
   const [editing, setEditing] = useState<{
     id: string;
     title: string;
@@ -46,7 +62,7 @@ export default function Page() {
   const fetchOptions = useCallback(async () => {
     const [projectRows, employeeRows] = await Promise.all([
       fetchProjectsFromStore(),
-      fetchEmployeesFromStore(),
+      fetchEmployeesFromStore({ full: true }),
     ]);
     setProjects(
       (Array.isArray(projectRows) ? projectRows : [])
@@ -69,6 +85,10 @@ export default function Page() {
             id: row.id,
             name: row.name,
             employmentStatus: row.employmentStatus ?? undefined,
+            function:
+              typeof row.function === "string" ? row.function : null,
+            leaveDate:
+              typeof row.leaveDate === "string" ? row.leaveDate : null,
           }))
         : [],
     );
@@ -165,50 +185,151 @@ export default function Page() {
     return () => window.clearTimeout(timer);
   }, [ensureOptionsLoaded]);
 
+  useEffect(() => {
+    if (!currentEmployeeId) return;
+    setSelectedCalendarEmployeeId((prev) => prev ?? currentEmployeeId);
+  }, [currentEmployeeId]);
+
+  const shouldShowEmployeeInCalendar = useCallback((employee: EmployeeOptionItem) => {
+    const status = employee.employmentStatus ?? "";
+    if (!status.includes("离职")) return true;
+    if (!employee.leaveDate) return false;
+    const leaveDate = dayjs(employee.leaveDate);
+    if (!leaveDate.isValid()) return false;
+    return leaveDate.isAfter(dayjs().subtract(1, "month").startOf("day"));
+  }, []);
+
+  const employeeFilterOptions = useMemo(
+    () =>
+      employees
+        .map((item) => ({ label: item.name, value: item.name }))
+        .sort((left, right) =>
+          left.label.localeCompare(right.label, "zh-CN"),
+        ),
+    [employees],
+  );
+
+  const calendarEmployeeOptions = useMemo(() => {
+    const grouped = employees
+      .filter(shouldShowEmployeeInCalendar)
+      .reduce<Map<string, { label: string; value: string }[]>>((map, employee) => {
+        const functionLabel = employee.function?.trim() || "未设置职能";
+        const isDeparted = (employee.employmentStatus ?? "").includes("离职");
+        const option = {
+          label: `${employee.name}${isDeparted ? "（离职）" : ""}`,
+          value: employee.id,
+        };
+        const current = map.get(functionLabel) ?? [];
+        current.push(option);
+        map.set(functionLabel, current);
+        return map;
+      }, new Map());
+
+    return Array.from(grouped.entries())
+      .sort((left, right) => left[0].localeCompare(right[0], "zh-CN"))
+      .map(([label, options]) => ({
+        label,
+        options: options.sort((left, right) =>
+          left.label.localeCompare(right.label, "zh-CN"),
+        ),
+      })) satisfies DefaultOptionType[];
+  }, [employees, shouldShowEmployeeInCalendar]);
+
+  const selectedCalendarEmployee = useMemo<WorkLogsCalendarEmployee | null>(() => {
+    if (!selectedCalendarEmployeeId) return null;
+    const matched = employees.find((item) => item.id === selectedCalendarEmployeeId);
+    if (!matched) return null;
+    return {
+      id: matched.id,
+      name: matched.name,
+      employmentStatus: matched.employmentStatus,
+    };
+  }, [employees, selectedCalendarEmployeeId]);
+
+  const toolbarNode = (
+    <Space key="actual-work-toolbar" size={12} wrap>
+      <Radio.Group
+        value={viewMode}
+        onChange={(event) => {
+          setViewMode(event.target.value as "table" | "calendar");
+        }}
+        optionType="button"
+        buttonStyle="solid"
+        options={[
+          { label: "表格", value: "table" },
+          { label: "日历", value: "calendar" },
+        ]}
+      />
+      {viewMode === "table" ? (
+        <Button
+          key="create-actual-work-entry"
+          type="primary"
+          onClick={() => {
+            void ensureOptionsLoaded().then(() => {
+              setEditing(null);
+              setOpen(true);
+            });
+          }}
+          loading={optionsLoading}
+        >
+          新增实际工时
+        </Button>
+      ) : (
+        <Select
+          showSearch
+          virtual={false}
+          style={{ width: 160 }}
+          placeholder="请选择人员"
+          options={calendarEmployeeOptions}
+          value={selectedCalendarEmployeeId}
+          onChange={(value) => {
+            setSelectedCalendarEmployeeId(value);
+          }}
+          filterOption={(input, option) =>
+            String(option?.label ?? "")
+              .toLowerCase()
+              .includes(input.toLowerCase())
+          }
+        />
+      )}
+    </Space>
+  );
+
   return (
     <ListPageContainer>
-      <ActualWorkEntriesTable
-        requestData={fetchRows}
-        employeeFilterOptions={employees
-          .map((item) => ({ label: item.name, value: item.name }))
-          .sort((left, right) =>
-            left.label.localeCompare(right.label, "zh-CN"),
-          )}
-        projectFilterOptions={projects
-          .map((item) => ({ label: item.name, value: item.name }))
-          .sort((left, right) =>
-            left.label.localeCompare(right.label, "zh-CN"),
-          )}
-        headerTitle={<ProTableHeaderTitle>实际工时</ProTableHeaderTitle>}
-        toolbarActions={[
-          <Button
-            key="create-actual-work-entry"
-            type="primary"
-            onClick={() => {
-              void ensureOptionsLoaded().then(() => {
-                setEditing(null);
-                setOpen(true);
-              });
-            }}
-            loading={optionsLoading}
-          >
-            新增实际工时
-          </Button>,
-        ]}
-        onEdit={(row) => {
-          void ensureOptionsLoaded().then(() => {
-            setEditing(row);
-            setOpen(true);
-          });
-        }}
-        canManageRow={(row) =>
-          isAdmin || (Boolean(currentEmployeeId) && row.employee?.id === currentEmployeeId)
-        }
-        onDelete={(id) => {
-          void onDelete(id);
-        }}
-        refreshKey={refreshKey}
-      />
+      {viewMode === "table" ? (
+        <ActualWorkEntriesTable
+          requestData={fetchRows}
+          employeeFilterOptions={employeeFilterOptions}
+          projectFilterOptions={projects
+            .map((item) => ({ label: item.name, value: item.name }))
+            .sort((left, right) =>
+              left.label.localeCompare(right.label, "zh-CN"),
+            )}
+          headerTitle={<ProTableHeaderTitle>实际工时</ProTableHeaderTitle>}
+          toolbarActions={[toolbarNode]}
+          onEdit={(row) => {
+            void ensureOptionsLoaded().then(() => {
+              setEditing(row);
+              setOpen(true);
+            });
+          }}
+          canManageRow={(row) =>
+            canManageAnyActualWorkEntry ||
+            (Boolean(currentEmployeeId) && row.employee?.id === currentEmployeeId)
+          }
+          onDelete={(id) => {
+            void onDelete(id);
+          }}
+          refreshKey={refreshKey}
+        />
+      ) : (
+        <WorkLogsCalendar
+          employee={selectedCalendarEmployee}
+          title={<ProTableHeaderTitle>实际工时</ProTableHeaderTitle>}
+          extra={toolbarNode}
+        />
+      )}
 
       <Modal
         title={editing ? "编辑实际工时" : "新增实际工时"}

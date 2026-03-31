@@ -2,7 +2,10 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { requireAuthenticatedEmployee } from "@/lib/api-permissions";
-import { extractRoleCodes } from "@/lib/role-permissions";
+import {
+  canManageProjectResources,
+  extractRoleCodes,
+} from "@/lib/role-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -34,8 +37,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     return new Response("Not Found", { status: 404 });
   }
   const roleCodes = extractRoleCodes(authResult.employee);
-  const isAdmin = roleCodes.includes("ADMIN");
-  if (!isAdmin && found.employeeId !== authResult.session.employeeId) {
+  const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
+  if (
+    !canManageAnyActualWorkEntry &&
+    found.employeeId !== authResult.session.employeeId
+  ) {
     return new Response("Forbidden", { status: 403 });
   }
 
@@ -64,7 +70,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   if (!employee) {
     return new Response("Employee not found", { status: 400 });
   }
-  if (!isAdmin && body.employeeId !== authResult.session.employeeId) {
+  if (
+    !canManageAnyActualWorkEntry &&
+    body.employeeId !== authResult.session.employeeId
+  ) {
     return new Response("Forbidden", { status: 403 });
   }
 
@@ -94,8 +103,11 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
     return new Response("Not Found", { status: 404 });
   }
   const roleCodes = extractRoleCodes(authResult.employee);
-  const isAdmin = roleCodes.includes("ADMIN");
-  if (!isAdmin && found.employeeId !== authResult.session.employeeId) {
+  const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
+  if (
+    !canManageAnyActualWorkEntry &&
+    found.employeeId !== authResult.session.employeeId
+  ) {
     return new Response("Forbidden", { status: 403 });
   }
 

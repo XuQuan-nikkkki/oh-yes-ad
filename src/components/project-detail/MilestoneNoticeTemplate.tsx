@@ -146,11 +146,11 @@ const MilestoneNoticeTemplate = ({
       const inThisWeek = !item.start.isAfter(sunday, "day");
       const inNextWeek =
         item.start.isAfter(sunday, "day") && !item.start.isAfter(nextSunday, "day");
-      const inFollowingWeeks = item.start.isAfter(nextSunday, "day");
+      const inFollowingWeeks = item.start.isAfter(sunday, "day");
 
       if (inThisWeek) return true;
-      if (showNextWeekMilestones && inNextWeek) return true;
       if (showFollowingMilestones && inFollowingWeeks) return true;
+      if (showNextWeekMilestones && inNextWeek) return true;
       return false;
     });
 

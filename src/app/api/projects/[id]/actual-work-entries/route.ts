@@ -3,7 +3,10 @@ import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { requireAuthenticatedEmployee } from "@/lib/api-permissions";
-import { extractRoleCodes } from "@/lib/role-permissions";
+import {
+  canManageProjectResources,
+  extractRoleCodes,
+} from "@/lib/role-permissions";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -40,8 +43,11 @@ export async function POST(req: NextRequest, context: RouteContext) {
     return new Response("End date must be after start date", { status: 400 });
   }
   const roleCodes = extractRoleCodes(authResult.employee);
-  const isAdmin = roleCodes.includes("ADMIN");
-  if (!isAdmin && body.employeeId !== authResult.session.employeeId) {
+  const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
+  if (
+    !canManageAnyActualWorkEntry &&
+    body.employeeId !== authResult.session.employeeId
+  ) {
     return new Response("Forbidden", { status: 403 });
   }
 

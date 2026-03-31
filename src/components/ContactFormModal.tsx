@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Modal, Form, Input, Button, Select } from "antd";
+import { Modal, Form, Input, Button, Select, Row, Col } from "antd";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { useClientsStore } from "@/stores/clientsStore";
 import type { ClientContact as Contact } from "@/types/clientContact";
@@ -126,6 +126,7 @@ const ContactFormModal = ({
     <Modal
       title={isEdit ? "编辑人员" : "新建人员"}
       open={open}
+      width={760}
       onCancel={() => {
         form.resetFields();
         onCancel();
@@ -135,60 +136,78 @@ const ContactFormModal = ({
     >
       <Form
         form={form}
-        layout="horizontal"
-        labelCol={{ flex: "80px" }} // 固定宽度
-        wrapperCol={{ flex: 1 }}
+        layout="vertical"
         onFinish={handleSubmit}
       >
-        <Form.Item
-          label="姓名"
-          name="name"
-          rules={[{ required: true, message: "请输入姓名" }]}
-        >
-          <Input />
-        </Form.Item>
-        <Form.Item
-          label="客户"
-          name="clientIds"
-          rules={[{ required: true, message: "请选择至少一个客户" }]}
-        >
-          <Select
-            mode="multiple"
-            options={clients.map((c) => ({
-              label: c.name,
-              value: c.id,
-            }))}
-            showSearch
-            filterOption={(input, option) =>
-              String(option?.label ?? "")
-                .toLowerCase()
-                .includes(input.toLowerCase())
-            }
-            disabled={!clientEditable}
-            placeholder="搜索并选择客户"
-          />
-        </Form.Item>
-        <Form.Item label="职位" name="title">
-          <Input />
-        </Form.Item>
-        <Form.Item label="职责范围" name="scope">
-          <Input />
-        </Form.Item>
-        <Form.Item label="偏好" name="preference">
-          <Input />
-        </Form.Item>
-        <Form.Item label="电话" name="phone">
-          <Input />
-        </Form.Item>
-        <Form.Item label="邮箱" name="email">
-          <Input />
-        </Form.Item>
-        <Form.Item label="微信" name="wechat">
-          <Input />
-        </Form.Item>
-        <Form.Item label="地址" name="address">
-          <Input />
-        </Form.Item>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item
+              label="姓名"
+              name="name"
+              rules={[{ required: true, message: "请输入姓名" }]}
+            >
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item
+              label="所属客户"
+              name="clientIds"
+              rules={[{ required: true, message: "请选择至少一个客户" }]}
+            >
+              <Select
+                mode="multiple"
+                options={clients.map((c) => ({
+                  label: c.name,
+                  value: c.id,
+                }))}
+                showSearch
+                filterOption={(input, option) =>
+                  String(option?.label ?? "")
+                    .toLowerCase()
+                    .includes(input.toLowerCase())
+                }
+                disabled={!clientEditable}
+                placeholder="搜索并选择客户"
+              />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="职位" name="title">
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="职责范围" name="scope">
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col span={24}>
+            <Form.Item label="偏好" name="preference">
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="电话" name="phone">
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="微信" name="wechat">
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="邮箱" name="email">
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="地址" name="address">
+              <Input />
+            </Form.Item>
+          </Col>
+        </Row>
         <Button type="primary" htmlType="submit" block loading={submitting} disabled={submitting}>
           保存
         </Button>

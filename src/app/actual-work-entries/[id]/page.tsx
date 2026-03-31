@@ -10,6 +10,7 @@ import DetailPageContainer from "@/components/DetailPageContainer";
 import ActualWorkEntryForm, { ActualWorkEntryFormPayload } from "@/components/project-detail/ActualWorkEntryForm";
 import { DATE_FORMAT, DEFAULT_COLOR } from "@/lib/constants";
 import { formatDate, formatDateRange } from "@/lib/date";
+import { canManageProjectResources } from "@/lib/role-permissions";
 import { useActualWorkEntriesStore } from "@/stores/actualWorkEntriesStore";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
@@ -43,7 +44,7 @@ export default function Page() {
   const [messageApi, contextHolder] = message.useMessage();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
-  const isAdmin = roleCodes.includes("ADMIN");
+  const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const clearEntriesCache = useActualWorkEntriesStore(
     (state) => state.clearEntriesCache,
@@ -162,7 +163,7 @@ export default function Page() {
   const formatNumber = (value: number, fractionDigits: number) =>
     Number(value.toFixed(fractionDigits)).toString();
   const canManageEntry =
-    isAdmin ||
+    canManageAnyActualWorkEntry ||
     (Boolean(currentUser?.id) && data?.employee?.id === currentUser?.id);
 
   if (loading) {

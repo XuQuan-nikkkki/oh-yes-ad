@@ -16,7 +16,7 @@ function LoginPageContent() {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/";
   const [messageApi, contextHolder] = message.useMessage();
-  const fetchMe = useAuthStore((state) => state.fetchMe);
+  const setCurrentUser = useAuthStore((state) => state.setCurrentUser);
 
   const handleSubmit = async (values: LoginFormValues) => {
     setSubmitting(true);
@@ -32,7 +32,8 @@ function LoginPageContent() {
         throw new Error(text || "登录失败");
       }
 
-      await fetchMe(true);
+      const user = (await res.json()) as Parameters<typeof setCurrentUser>[0];
+      setCurrentUser(user);
       messageApi.success("登录成功");
       router.replace(nextPath);
       router.refresh();

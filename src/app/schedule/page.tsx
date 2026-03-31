@@ -33,6 +33,7 @@ import PlannedWorkEntryForm, {
   PlannedWorkEntryFormPayload,
 } from "@/components/project-detail/PlannedWorkEntryForm";
 import ProjectMilestoneSection from "@/components/project-detail/ProjectMilestoneSection";
+import ProjectMilestoneSectionActions from "@/components/project-detail/ProjectMilestoneSectionActions";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useProjectsStore } from "@/stores/projectsStore";
@@ -139,6 +140,13 @@ type WeeklyPlannedEntry = {
 type ProjectDetail = {
   id: string;
   name: string;
+  status?: string | null;
+  statusOption?: {
+    id?: string;
+    value?: string | null;
+    color?: string | null;
+    order?: number | null;
+  } | null;
   client?: {
     id: string;
     name: string;
@@ -161,7 +169,16 @@ type ProjectDetail = {
       value?: string | null;
       color?: string | null;
     } | null;
+    startAt?: string | null;
+    endAt?: string | null;
     date?: string | null;
+    location?: string | null;
+    method?: string | null;
+    methodOption?: {
+      id?: string;
+      value?: string | null;
+      color?: string | null;
+    } | null;
     internalParticipants?: Participant[];
     clientParticipants?: ClientParticipant[];
     vendorParticipants?: Participant[];
@@ -1483,12 +1500,20 @@ function SchedulePageContent() {
       >
         <ProjectMilestoneSection
           milestones={detail?.milestones ?? []}
-          showAddButton={canManageProject}
-          onAdd={() => {
-            if (!canManageProject) return;
-            setMilestoneProjectId(project.id);
-            setMilestoneModalOpen(true);
-          }}
+          extra={
+            <ProjectMilestoneSectionActions
+              canManageProject={canManageProject}
+              onCreate={() => {
+                if (!canManageProject) return;
+                setMilestoneProjectId(project.id);
+                setMilestoneModalOpen(true);
+              }}
+              status={detail.status}
+              statusOptionValue={detail.statusOption?.value}
+              milestones={detail.milestones ?? []}
+            />
+          }
+          showAddButton={false}
         />
         <Card
           title="项目进度"

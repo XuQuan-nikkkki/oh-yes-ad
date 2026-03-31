@@ -2,7 +2,10 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { requireAuthenticatedEmployee } from "@/lib/api-permissions";
-import { extractRoleCodes } from "@/lib/role-permissions";
+import {
+  canManageProjectResources,
+  extractRoleCodes,
+} from "@/lib/role-permissions";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -55,8 +58,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   });
   if (!found) return new Response("Not Found", { status: 404 });
   const roleCodes = extractRoleCodes(authResult.employee);
-  const isAdmin = roleCodes.includes("ADMIN");
-  if (!isAdmin && found.employeeId !== authResult.session.employeeId) {
+  const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
+  if (
+    !canManageAnyActualWorkEntry &&
+    found.employeeId !== authResult.session.employeeId
+  ) {
     return new Response("Forbidden", { status: 403 });
   }
 
@@ -80,7 +86,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
 
   if (body.employeeId) {
-    if (!isAdmin && body.employeeId !== authResult.session.employeeId) {
+    if (
+      !canManageAnyActualWorkEntry &&
+      body.employeeId !== authResult.session.employeeId
+    ) {
       return new Response("Forbidden", { status: 403 });
     }
     const employee = await prisma.employee.findUnique({ where: { id: body.employeeId }, select: { id: true } });
@@ -111,8 +120,11 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
   });
   if (!found) return new Response("Not Found", { status: 404 });
   const roleCodes = extractRoleCodes(authResult.employee);
-  const isAdmin = roleCodes.includes("ADMIN");
-  if (!isAdmin && found.employeeId !== authResult.session.employeeId) {
+  const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
+  if (
+    !canManageAnyActualWorkEntry &&
+    found.employeeId !== authResult.session.employeeId
+  ) {
     return new Response("Forbidden", { status: 403 });
   }
   await prisma.actualWorkEntry.delete({ where: { id } });

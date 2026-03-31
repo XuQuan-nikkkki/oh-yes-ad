@@ -55,6 +55,7 @@ import { useProjectMilestonesStore } from "@/stores/projectMilestonesStore";
 import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
 import { DATE_FORMAT } from "@/lib/constants";
 import { formatDate } from "@/lib/date";
+import { canManageProjectResources } from "@/lib/role-permissions";
 import type {
   ClientContact,
   Employee,
@@ -215,7 +216,7 @@ const ProjectDetailPage = () => {
     project?.type === "客户项目" ||
     project?.typeOption?.value === "客户项目";
   const shouldShowDevelopingCommercialSteps = isClientProject && !isAdmin;
-  const canManageAnyActualWorkEntry = roleCodes.includes("ADMIN");
+  const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
   const storeClients = useClientsStore((state) => state.clients);
   const fetchClientsFromStore = useClientsStore((state) => state.fetchClients);
   const clients = useMemo(

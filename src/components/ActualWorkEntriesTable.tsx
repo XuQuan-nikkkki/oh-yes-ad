@@ -10,6 +10,11 @@ import TableActions from "@/components/TableActions";
 import TimeRangeValue from "@/components/TimeRangeValue";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import { DEFAULT_COLOR } from "@/lib/constants";
+import {
+  calculateActualWorkdays,
+  getActualWorkEntryHours,
+  getActualWorkdayGroupKey,
+} from "@/lib/actual-workdays";
 
 export type ActualWorkEntryRow = {
   id: string;
@@ -53,6 +58,8 @@ type Props = {
   projectFilterOptions?: { text?: string; label?: string; value: string }[];
   enableStartDateFilter?: boolean;
   canManageRow?: (row: ActualWorkEntryRow) => boolean;
+  getDailyTotalHours?: (row: ActualWorkEntryRow) => number | undefined;
+  workDayPrecision?: number;
 };
 
 const ActualWorkEntriesTable = ({
@@ -76,6 +83,8 @@ const ActualWorkEntriesTable = ({
   projectFilterOptions = [],
   enableStartDateFilter = true,
   canManageRow,
+  getDailyTotalHours,
+  workDayPrecision = 2,
 }: Props) => {
   type TableRow = ActualWorkEntryRow & {
     __hours?: number;
@@ -90,9 +99,6 @@ const ActualWorkEntriesTable = ({
     text: item.text ?? item.label ?? item.value,
     value: item.value,
   }));
-  const getHours = (start: string, end: string) =>
-    Math.max(dayjs(end).diff(dayjs(start), "minute") / 60, 0);
-  const getWorkDateKey = (start: string) => dayjs(start).format("YYYY-MM-DD");
   const getSingleFilterValue = (
     value: Key[] | string | number | undefined,
   ) =>
@@ -114,20 +120,28 @@ const ActualWorkEntriesTable = ({
     return undefined;
   };
 
-  const calcWorkDay = (hours: number, total: number) => {
-    if (hours === 0) return 0;
-    if (total > 7.5) return hours / total;
-    return hours / 7.5;
-  };
-
-  const fmtNum = (num: number) => num.toFixed(2);
+  const fmtNum = (num: number, precision = 2) => num.toFixed(precision);
   const allColumns: Record<ColumnKey, ProColumns<TableRow>> = {
     title: {
       key: "title",
       title: "事件",
       dataIndex: "title",
+      width: 200,
       render: (_, row) => (
-        <AppLink href={`/actual-work-entries/${row.id}`}>{row.title}</AppLink>
+        <Popover content={row.title}>
+          <span
+            style={{
+              display: "inline-block",
+              maxWidth: 200,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              verticalAlign: "bottom",
+            }}
+          >
+            <AppLink href={`/actual-work-entries/${row.id}`}>{row.title}</AppLink>
+          </span>
+        </Popover>
       ),
     },
     employeeName: {
@@ -222,19 +236,19 @@ const ActualWorkEntriesTable = ({
         const hours =
           typeof row.__hours === "number"
             ? row.__hours
-            : getHours(row.startDate, row.endDate);
+            : getActualWorkEntryHours(row.startDate, row.endDate);
         const base =
           typeof row.__baseHours === "number"
             ? row.__baseHours
-            : Math.max(hours, 7.5);
+            : Math.max(hours, 0);
         const workDays =
           typeof row.__workDays === "number"
             ? row.__workDays
-            : Number(calcWorkDay(hours, base).toFixed(2));
-        const text = `记录时长 ${fmtNum(hours)}h，当天总工时 ${fmtNum(base)}h，折合 ${fmtNum(workDays)}d`;
+            : Number(calculateActualWorkdays(hours, base).toFixed(workDayPrecision));
+        const text = `记录时长 ${fmtNum(hours)}h，当天总工时 ${fmtNum(base)}h，折合 ${fmtNum(workDays, workDayPrecision)}d`;
         return (
           <Space size={4}>
-            <span>{fmtNum(workDays)}d</span>
+            <span>{fmtNum(workDays, workDayPrecision)}d</span>
             <Popover content={text}>
               <InfoCircleOutlined style={{ color: DEFAULT_COLOR }} />
             </Popover>
@@ -309,22 +323,26 @@ const ActualWorkEntriesTable = ({
         result.data.forEach((row) => {
           const employeeId = row.employee?.id;
           if (!employeeId) return;
-          const key = `${employeeId}__${getWorkDateKey(row.startDate)}`;
+          const key = getActualWorkdayGroupKey(employeeId, row.startDate);
           groupHours.set(
             key,
-            (groupHours.get(key) ?? 0) + getHours(row.startDate, row.endDate),
+            (groupHours.get(key) ?? 0) +
+              getActualWorkEntryHours(row.startDate, row.endDate),
           );
         });
         const tableData: TableRow[] = result.data.map((row) => {
-          const hours = getHours(row.startDate, row.endDate);
-          const key = `${row.employee?.id ?? ""}__${getWorkDateKey(row.startDate)}`;
-          const total = groupHours.get(key) ?? hours;
-          const base = total > 7.5 ? total : 7.5;
-          const workDays = Number(calcWorkDay(hours, total).toFixed(2));
+          const hours = getActualWorkEntryHours(row.startDate, row.endDate);
+          const key = row.employee?.id
+            ? getActualWorkdayGroupKey(row.employee.id, row.startDate)
+            : "";
+          const total = getDailyTotalHours?.(row) ?? groupHours.get(key) ?? hours;
+          const workDays = Number(
+            calculateActualWorkdays(hours, total).toFixed(workDayPrecision),
+          );
           return {
             ...row,
             __hours: hours,
-            __baseHours: base,
+            __baseHours: total,
             __workDays: workDays,
           };
         });
