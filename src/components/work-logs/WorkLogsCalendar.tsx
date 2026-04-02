@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Card, Empty, Modal, Spin, message } from "antd";
+import { Button, Card, Empty, Modal, Spin, message } from "antd";
 import type { DefaultOptionType } from "antd/es/select";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -124,6 +124,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
   const [actualRowsLoading, setActualRowsLoading] = useState(false);
   const [workLogModalOpen, setWorkLogModalOpen] = useState(false);
   const [workLogSubmitting, setWorkLogSubmitting] = useState(false);
+  const [workLogDeleting, setWorkLogDeleting] = useState(false);
   const [workLogMode, setWorkLogMode] = useState<"create" | "edit">("create");
   const [editingWorkLogId, setEditingWorkLogId] = useState<string | null>(null);
   const [workLogProjectOptions, setWorkLogProjectOptions] = useState<
@@ -755,12 +756,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
       }
 
       messageApi.success(workLogMode === "edit" ? "编辑工时成功" : "登记工时成功");
-      setWorkLogModalOpen(false);
-      setWorkLogInitialValues(null);
-      setWorkLogMode("create");
-      setEditingWorkLogId(null);
-      setWorkLogSelectedProjectId(undefined);
-      setWorkLogDisableProjectSelect(false);
+      resetWorkLogModalState();
       if (calendarVisibleRange && employee?.id) {
         await fetchActualRowsInRange(calendarVisibleRange, employee.id);
       }
@@ -769,6 +765,44 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
       messageApi.error(text);
     } finally {
       setWorkLogSubmitting(false);
+    }
+  };
+
+  const resetWorkLogModalState = () => {
+    setWorkLogModalOpen(false);
+    setWorkLogInitialValues(null);
+    setWorkLogMode("create");
+    setEditingWorkLogId(null);
+    setWorkLogSelectedProjectId(undefined);
+    setWorkLogDisableProjectSelect(false);
+  };
+
+  const handleDeleteWorkLog = async () => {
+    if (workLogMode !== "edit" || !editingWorkLogId) return;
+    const confirmed = window.confirm("确定删除这条工时记录？");
+    if (!confirmed) return;
+
+    setWorkLogDeleting(true);
+    try {
+      const res = await fetch(
+        `/api/actual-work-entries/${editingWorkLogId}?projectType=all`,
+        { method: "DELETE" },
+      );
+
+      if (!res.ok) {
+        throw new Error((await res.text()) || "删除工时失败");
+      }
+
+      messageApi.success("删除工时成功");
+      resetWorkLogModalState();
+      if (calendarVisibleRange && employee?.id) {
+        await fetchActualRowsInRange(calendarVisibleRange, employee.id);
+      }
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "删除工时失败";
+      messageApi.error(text);
+    } finally {
+      setWorkLogDeleting(false);
     }
   };
 
@@ -1053,13 +1087,8 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
         title={workLogMode === "edit" ? "编辑实际工时" : "登记实际工时"}
         open={workLogModalOpen}
         onCancel={() => {
-          if (workLogSubmitting) return;
-          setWorkLogModalOpen(false);
-          setWorkLogInitialValues(null);
-          setWorkLogMode("create");
-          setEditingWorkLogId(null);
-          setWorkLogSelectedProjectId(undefined);
-          setWorkLogDisableProjectSelect(false);
+          if (workLogSubmitting || workLogDeleting) return;
+          resetWorkLogModalState();
         }}
         footer={null}
         destroyOnHidden
@@ -1073,6 +1102,20 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
             initialValues={workLogInitialValues}
             disableProjectSelect={workLogDisableProjectSelect}
             disableEmployeeSelect
+            submitBlock={workLogMode !== "edit"}
+            extraActions={
+              workLogMode === "edit" ? (
+                <Button
+                  danger
+                  onClick={() => void handleDeleteWorkLog()}
+                  loading={workLogDeleting}
+                  disabled={workLogSubmitting || workLogDeleting}
+                  style={{ flex: 1, width: "50%" }}
+                >
+                  删除
+                </Button>
+              ) : null
+            }
             onSubmit={handleSubmitWorkLog}
           />
         </Spin>

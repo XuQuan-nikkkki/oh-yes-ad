@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Button, DatePicker, Form, Input, Select } from "antd";
 import dayjs from "dayjs";
 import type { DefaultOptionType } from "antd/es/select";
@@ -46,6 +47,8 @@ type Props = {
   employees: EmployeeOption[];
   initialValues?: InitialValues | null;
   onSubmit: (payload: ActualWorkEntryFormPayload) => Promise<void> | void;
+  extraActions?: ReactNode;
+  submitBlock?: boolean;
 };
 
 const ActualWorkEntryForm = ({
@@ -56,6 +59,8 @@ const ActualWorkEntryForm = ({
   employees,
   initialValues,
   onSubmit,
+  extraActions,
+  submitBlock = true,
 }: Props) => {
   const currentUser = useAuthStore((state) => state.currentUser);
   const { submitting, runWithSubmitLock } = useSubmitLock();
@@ -150,9 +155,19 @@ const ActualWorkEntryForm = ({
         />
       </Form.Item>
 
-      <Button type="primary" htmlType="submit" block loading={submitting} disabled={submitting}>
-        保存
-      </Button>
+      <div style={{ display: "flex", gap: 12 }}>
+        {extraActions}
+        <Button
+          type="primary"
+          htmlType="submit"
+          block={submitBlock}
+          loading={submitting}
+          disabled={submitting}
+          style={submitBlock ? undefined : { flex: 1, width: "50%" }}
+        >
+          保存
+        </Button>
+      </div>
     </Form>
   );
 };
