@@ -45,6 +45,8 @@ type Props = {
 const HomeSiteMap = ({ isAdmin, onNavigate }: Props) => {
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
+  const isStaffOnly =
+    roleCodes.length === 1 && roleCodes.includes("STAFF");
   const canViewCompanyFinance =
     roleCodes.includes("ADMIN") ||
     roleCodes.includes("HR") ||
@@ -109,11 +111,13 @@ const HomeSiteMap = ({ isAdmin, onNavigate }: Props) => {
           label: "工时分析",
           icon: <ClockCircleOutlined />,
           path: "/work-hours-analysis",
+          visible: !isStaffOnly,
         },
       ],
     },
     {
       title: "客户与供应商",
+      visible: !isStaffOnly,
       items: [
         { label: "客户管理", icon: <UserOutlined />, path: "/clients" },
         {
@@ -127,7 +131,12 @@ const HomeSiteMap = ({ isAdmin, onNavigate }: Props) => {
     {
       title: "团队管理",
       items: [
-        { label: "团队成员", icon: <TeamOutlined />, path: "/employees" },
+        {
+          label: "团队成员",
+          icon: <TeamOutlined />,
+          path: "/employees",
+          visible: !isStaffOnly,
+        },
         {
           label: "角色管理",
           icon: <IdcardOutlined />,
@@ -155,11 +164,13 @@ const HomeSiteMap = ({ isAdmin, onNavigate }: Props) => {
           label: "工作日变动",
           icon: <SwapOutlined />,
           path: "/workday-adjustments",
+          visible: !isStaffOnly,
         },
       ],
     },
     {
       title: "财务管理",
+      visible: !isStaffOnly,
       items: [
         {
           label: "项目收付款",

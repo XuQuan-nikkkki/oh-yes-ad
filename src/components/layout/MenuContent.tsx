@@ -79,6 +79,8 @@ export default function MenuContent({
   }, [selectedMenuKey]);
 
   const roleCodes = getRoleCodesFromUser(currentUser);
+  const isStaffOnly =
+    roleCodes.length === 1 && roleCodes.includes("STAFF");
   const canViewCompanyFinance =
     roleCodes.includes("ADMIN") ||
     roleCodes.includes("HR") ||
@@ -160,105 +162,118 @@ export default function MenuContent({
             key: "/work-hours-analysis",
             icon: <ClockCircleOutlined />,
             label: "工时分析",
+            visible: !isStaffOnly,
           },
         ],
       },
-      {
-        key: "crm",
-        icon: <ShopOutlined />,
-        label: "客户与供应商",
-        children: [
-          {
-            key: "/clients",
-            icon: <UserOutlined />,
-            label: "客户管理",
-          },
-          {
-            key: "/client-contacts",
-            icon: <IdcardOutlined />,
-            label: "客户人员",
-          },
-          {
-            key: "/vendors",
-            icon: <ShopOutlined />,
-            label: "供应商管理",
-          },
-        ],
-      },
-      {
-        key: "team-mgmt",
-        icon: <TeamOutlined />,
-        label: "团队管理",
-        children: [
-          {
-            key: "/employees",
-            icon: <TeamOutlined />,
-            label: "团队成员",
-          },
-          ...(isAdmin
-            ? [
+      ...(!isStaffOnly
+        ? [
+            {
+              key: "crm",
+              icon: <ShopOutlined />,
+              label: "客户与供应商",
+              children: [
                 {
-                  key: "/roles",
+                  key: "/clients",
+                  icon: <UserOutlined />,
+                  label: "客户管理",
+                },
+                {
+                  key: "/client-contacts",
                   icon: <IdcardOutlined />,
-                  label: "角色管理",
+                  label: "客户人员",
                 },
                 {
-                  key: "/select-options",
-                  icon: <AppstoreOutlined />,
-                  label: "选项管理",
+                  key: "/vendors",
+                  icon: <ShopOutlined />,
+                  label: "供应商管理",
+                },
+              ],
+            },
+            {
+              key: "team-mgmt",
+              icon: <TeamOutlined />,
+              label: "团队管理",
+              children: [
+                ...(!isStaffOnly
+                  ? [
+                      {
+                        key: "/employees",
+                        icon: <TeamOutlined />,
+                        label: "团队成员",
+                      },
+                      ...(isAdmin
+                        ? [
+                            {
+                              key: "/roles",
+                              icon: <IdcardOutlined />,
+                              label: "角色管理",
+                            },
+                            {
+                              key: "/select-options",
+                              icon: <AppstoreOutlined />,
+                              label: "选项管理",
+                            },
+                            {
+                              key: "/system-settings",
+                              icon: <SettingOutlined />,
+                              label: "系统参数",
+                            },
+                          ]
+                        : []),
+                    ]
+                  : []),
+                {
+                  key: "/leave-calendar",
+                  icon: <CalendarFilled />,
+                  label: "请假日历",
+                },
+                ...(!isStaffOnly
+                  ? [
+                      {
+                        key: "/workday-adjustments",
+                        icon: <SwapOutlined />,
+                        label: "工作日变动",
+                      },
+                    ]
+                  : []),
+              ],
+            },
+            {
+              key: "project-finance",
+              icon: <CalculatorOutlined />,
+              label: "财务管理",
+              children: [
+                {
+                  key: "/project-receivable-payable",
+                  icon: <CalculatorOutlined />,
+                  label: "项目收付款",
                 },
                 {
-                  key: "/system-settings",
-                  icon: <SettingOutlined />,
-                  label: "系统参数",
+                  key: "/project-receivable-delays",
+                  icon: <CalendarOutlined />,
+                  label: "项目收款延期",
                 },
-              ]
-            : []),
-          {
-            key: "/leave-calendar",
-            icon: <CalendarFilled />,
-            label: "请假日历",
-          },
-          {
-            key: "/workday-adjustments",
-            icon: <SwapOutlined />,
-            label: "工作日变动",
-          },
-        ],
-      },
-      {
-        key: "project-finance",
-        icon: <CalculatorOutlined />,
-        label: "财务管理",
-        children: [
-          {
-            key: "/project-receivable-payable",
-            icon: <CalculatorOutlined />,
-            label: "项目收付款",
-          },
-          {
-            key: "/project-receivable-delays",
-            icon: <CalendarOutlined />,
-            label: "项目收款延期",
-          },
-          ...(canViewCompanyFinance
-            ? [
-                {
-                  key: "/legal-entities",
-                  icon: <BankOutlined />,
-                  label: "公司主体",
-                },
-                {
-                  key: "/company-account-balances",
-                  icon: <WalletOutlined />,
-                  label: "公司账户余额",
-                },
-              ]
-            : []),
-        ],
-      },
+                ...(canViewCompanyFinance
+                  ? [
+                      {
+                        key: "/legal-entities",
+                        icon: <BankOutlined />,
+                        label: "公司主体",
+                      },
+                      {
+                        key: "/company-account-balances",
+                        icon: <WalletOutlined />,
+                        label: "公司账户余额",
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          ]
+        : []),
     ],
-    [isAdmin, canViewCompanyFinance],
+    [isAdmin, isStaffOnly, canViewCompanyFinance],
   );
 
   return (
