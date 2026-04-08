@@ -23,6 +23,8 @@ import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useProjectsStore } from "@/stores/projectsStore";
 import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
+import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
+import type { WorkdayAdjustment } from "@/types/workdayAdjustment";
 
 type ActualWorkEntry = {
   id: string;
@@ -42,6 +44,7 @@ type ActualWorkEntry = {
 type Employee = {
   id: string;
   name: string;
+  entryDate?: string | null;
   function?: string | null;
   salary?: string | number | null;
   socialSecurity?: string | number | null;
@@ -79,6 +82,14 @@ type RowData = {
   functionName: string;
   humanCostWithRent: number;
   totalDays: number;
+  workdayBaseInfo: {
+    workdayDays: number;
+    naturalDays: number;
+    weekendDays: number;
+    holidayDays: number;
+    makeupWorkdayDays: number;
+    entryDateText: string | null;
+  };
   isSummary?: boolean;
   values: Record<
     string,
@@ -93,10 +104,22 @@ const formatNumber = (value: number) => value.toFixed(2).replace(/\.?0+$/, "");
 const FUNCTION_SORT_ORDER = ["设计组", "品牌组", "项目组", "新媒体"] as const;
 const PLATFORM_STATS_COLUMN_ID = "__platform_stats__";
 const PLATFORM_STATS_COLUMN_NAME = "中台";
+const EMPTY_WORKDAY_BASE_INFO = {
+  workdayDays: 0,
+  naturalDays: 0,
+  weekendDays: 0,
+  holidayDays: 0,
+  makeupWorkdayDays: 0,
+  entryDateText: null,
+} as const;
 const toNumber = (value?: string | number | null) => {
   if (value === null || value === undefined || value === "") return 0;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+const isWeekendDay = (date: dayjs.Dayjs) => {
+  const weekday = date.day();
+  return weekday === 0 || weekday === 6;
 };
 const isClientProject = (project?: {
   type?: string | null;
@@ -154,6 +177,12 @@ export default function WorkHoursAnalysisPage() {
   const systemSettings = useSystemSettingsStore((state) => state.records);
   const fetchSystemSettings = useSystemSettingsStore(
     (state) => state.fetchSystemSettings,
+  );
+  const workdayAdjustments = useWorkdayAdjustmentsStore(
+    (state) => state.adjustments,
+  );
+  const fetchAdjustmentsFromStore = useWorkdayAdjustmentsStore(
+    (state) => state.fetchAdjustments,
   );
   const [exporting, setExporting] = useState(false);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
@@ -243,14 +272,10 @@ export default function WorkHoursAnalysisPage() {
     void fetchSystemSettings();
   }, [fetchSystemSettings]);
 
-  const monthlyWorkdayBase = useMemo(
-    () =>
-      getSystemSettingNumberFromRecords(
-        systemSettings,
-        SYSTEM_SETTING_KEYS.employeeMonthlyWorkdayBase,
-      ),
-    [systemSettings],
-  );
+  useEffect(() => {
+    void fetchAdjustmentsFromStore();
+  }, [fetchAdjustmentsFromStore]);
+
   const defaultMonthlyRentCost = useMemo(
     () =>
       getSystemSettingNumberFromRecords(
@@ -291,6 +316,116 @@ export default function WorkHoursAnalysisPage() {
     }
     return map;
   }, [employees]);
+
+  const selectedMonthAdjustmentTypeMap = useMemo(() => {
+    const map = new Map<string, WorkdayAdjustment["changeType"]>();
+    const monthStart = dayjs()
+      .year(selectedYear)
+      .month(selectedMonth - 1)
+      .startOf("month");
+    const monthEnd = monthStart.endOf("month").startOf("day");
+
+    for (const adjustment of workdayAdjustments) {
+      if (!adjustment.changeType) continue;
+      const adjustmentStart = dayjs(adjustment.startDate).startOf("day");
+      const adjustmentEnd = dayjs(adjustment.endDate).startOf("day");
+      if (!adjustmentStart.isValid() || !adjustmentEnd.isValid()) continue;
+
+      const effectiveStart = adjustmentStart.isAfter(monthStart)
+        ? adjustmentStart
+        : monthStart;
+      const effectiveEnd = adjustmentEnd.isBefore(monthEnd)
+        ? adjustmentEnd
+        : monthEnd;
+
+      if (effectiveStart.isAfter(effectiveEnd)) continue;
+
+      let cursor = effectiveStart;
+      while (cursor.isBefore(effectiveEnd) || cursor.isSame(effectiveEnd, "day")) {
+        map.set(cursor.format("YYYY-MM-DD"), adjustment.changeType);
+        cursor = cursor.add(1, "day");
+      }
+    }
+
+    return map;
+  }, [selectedMonth, selectedYear, workdayAdjustments]);
+
+  const buildWorkdayBaseInfo = useCallback(
+    (entryDate?: string | null) => {
+      const monthStart = dayjs()
+        .year(selectedYear)
+        .month(selectedMonth - 1)
+        .startOf("month");
+      const monthEnd = monthStart.endOf("month").startOf("day");
+
+      let effectiveStart = monthStart;
+      let entryDateText: string | null = null;
+
+      if (entryDate) {
+        const parsedEntryDate = dayjs(entryDate).startOf("day");
+        if (
+          parsedEntryDate.isValid() &&
+          parsedEntryDate.year() === selectedYear &&
+          parsedEntryDate.month() + 1 === selectedMonth
+        ) {
+          effectiveStart = parsedEntryDate.isAfter(monthStart)
+            ? parsedEntryDate
+            : monthStart;
+          entryDateText = `${selectedMonth}月${parsedEntryDate.date()}日入职`;
+        }
+      }
+
+      if (effectiveStart.isAfter(monthEnd)) {
+        return {
+          ...EMPTY_WORKDAY_BASE_INFO,
+          entryDateText,
+        };
+      }
+
+      let naturalDays = 0;
+      let weekendDays = 0;
+      let holidayDays = 0;
+      let makeupWorkdayDays = 0;
+      let cursor = effectiveStart;
+
+      while (cursor.isBefore(monthEnd) || cursor.isSame(monthEnd, "day")) {
+        naturalDays += 1;
+        const dateKey = cursor.format("YYYY-MM-DD");
+        const adjustmentType = selectedMonthAdjustmentTypeMap.get(dateKey);
+        const weekend = isWeekendDay(cursor);
+
+        if (weekend) {
+          weekendDays += 1;
+          if (adjustmentType === "上班") {
+            makeupWorkdayDays += 1;
+          }
+        } else if (adjustmentType === "休息") {
+          holidayDays += 1;
+        }
+
+        cursor = cursor.add(1, "day");
+      }
+
+      return {
+        workdayDays:
+          naturalDays - weekendDays - holidayDays + makeupWorkdayDays,
+        naturalDays,
+        weekendDays,
+        holidayDays,
+        makeupWorkdayDays,
+        entryDateText,
+      };
+    },
+    [selectedMonth, selectedMonthAdjustmentTypeMap, selectedYear],
+  );
+
+  const employeeWorkdayBaseInfoMap = useMemo(() => {
+    const map = new Map<string, RowData["workdayBaseInfo"]>();
+    for (const employee of employees) {
+      map.set(employee.id, buildWorkdayBaseInfo(employee.entryDate ?? null));
+    }
+    return map;
+  }, [buildWorkdayBaseInfo, employees]);
 
   const employeeHumanCostMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -442,13 +577,18 @@ export default function WorkHoursAnalysisPage() {
         employee?.functionOption?.value?.trim() ||
         employee?.function?.trim() ||
         "未设置";
+      const workdayBaseInfo =
+        employeeWorkdayBaseInfoMap.get(employeeId) ?? EMPTY_WORKDAY_BASE_INFO;
 
       const hours = getActualWorkEntryHours(entry.startDate, entry.endDate);
       const dailyHours =
         employeeDailyHours.get(getActualWorkdayGroupKey(employeeId, entry.startDate)) ??
         hours;
       const days = calculateActualWorkdays(hours, dailyHours);
-      const percent = (days / monthlyWorkdayBase) * 100;
+      const percent =
+        workdayBaseInfo.workdayDays > 0
+          ? (days / workdayBaseInfo.workdayDays) * 100
+          : 0;
 
       const existing =
         rows.get(employeeId) ??
@@ -459,6 +599,7 @@ export default function WorkHoursAnalysisPage() {
           functionName,
           humanCostWithRent: employeeHumanCostMap.get(employeeId) ?? 0,
           totalDays: 0,
+          workdayBaseInfo,
           values: {},
         } as RowData);
 
@@ -494,8 +635,8 @@ export default function WorkHoursAnalysisPage() {
   }, [
     employeeHumanCostMap,
     employeeMap,
+    employeeWorkdayBaseInfoMap,
     filteredEntries,
-    monthlyWorkdayBase,
     projectMap,
   ]);
 
@@ -542,6 +683,7 @@ export default function WorkHoursAnalysisPage() {
         0,
       ),
       totalDays: summaryData.totalDays,
+      workdayBaseInfo: buildWorkdayBaseInfo(null),
       isSummary: true,
       values: Object.fromEntries(
         projectColumns.map((project) => [
@@ -555,7 +697,13 @@ export default function WorkHoursAnalysisPage() {
     };
 
     return [...tableData, summaryRow];
-  }, [projectColumns, summaryData.daysByProject, summaryData.totalDays, tableData]);
+  }, [
+    buildWorkdayBaseInfo,
+    projectColumns,
+    summaryData.daysByProject,
+    summaryData.totalDays,
+    tableData,
+  ]);
 
   const getProjectPercentValue = useMemo(
     () =>
@@ -609,13 +757,38 @@ export default function WorkHoursAnalysisPage() {
   const getProjectPercentFormula = useCallback(
     (row: RowData, projectId: string) => {
       const percent = getProjectPercentValue(row, projectId);
+      const { workdayBaseInfo } = row;
       const days =
         projectId === PLATFORM_STATS_COLUMN_ID
-          ? (percent / 100) * monthlyWorkdayBase
+          ? (percent / 100) * workdayBaseInfo.workdayDays
           : row.values[projectId]?.days ?? 0;
-      return `计算公式：${formatNumber(days)}d / ${formatNumber(monthlyWorkdayBase)}d`;
+      const workdayDetailParts = [
+        `${workdayBaseInfo.naturalDays}天`,
+        `-${workdayBaseInfo.weekendDays}天周末`,
+        ...(workdayBaseInfo.holidayDays > 0
+          ? [`-${workdayBaseInfo.holidayDays}天放假`]
+          : []),
+        ...(workdayBaseInfo.makeupWorkdayDays > 0
+          ? [`+${workdayBaseInfo.makeupWorkdayDays}天调休`]
+          : []),
+      ];
+
+      return (
+        <div>
+          <div>
+            计算公式：{formatNumber(days)}d / {formatNumber(workdayBaseInfo.workdayDays)}d
+          </div>
+          <div style={{ marginTop: 8 }}>
+            {selectedMonth}月工作日天数：{workdayDetailParts.join("")}=
+            {formatNumber(workdayBaseInfo.workdayDays)}个工作日
+          </div>
+          {workdayBaseInfo.entryDateText ? (
+            <div style={{ marginTop: 4 }}>{workdayBaseInfo.entryDateText}</div>
+          ) : null}
+        </div>
+      );
     },
-    [getProjectPercentValue, monthlyWorkdayBase],
+    [getProjectPercentValue, selectedMonth],
   );
 
   const getPlatformPercentBreakdownContent = useCallback(
