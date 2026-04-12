@@ -1,11 +1,12 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { Button, DatePicker, Form, Input, Select } from "antd";
+import { useMemo, type ReactNode } from "react";
+import { Button, Form, Input, Select } from "antd";
 import dayjs from "dayjs";
 import type { DefaultOptionType } from "antd/es/select";
 import { useAuthStore } from "@/stores/authStore";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
+import DateTimePicker from "@/components/DateTimePicker";
 
 export type ActualWorkEntryFormPayload = {
   projectId: string;
@@ -35,7 +36,8 @@ type FormValues = {
   projectId: string;
   title: string;
   employeeId: string;
-  timeRange: [dayjs.Dayjs, dayjs.Dayjs];
+  startDate?: dayjs.Dayjs;
+  endDate?: dayjs.Dayjs;
 };
 
 type Props = {
@@ -70,6 +72,14 @@ const ActualWorkEntryForm = ({
   const initialProjectId = selectedProjectId ?? initialValues?.projectId;
   const currentEmployeeId = currentUser?.id ?? "";
   const initialEmployeeId = initialValues?.employeeId ?? currentEmployeeId;
+  const defaultStartDate = useMemo(
+    () => dayjs().second(0).millisecond(0),
+    [],
+  );
+  const defaultEndDate = useMemo(
+    () => defaultStartDate.add(1, "hour"),
+    [defaultStartDate],
+  );
   const selectOptions: DefaultOptionType[] =
     projectOptionGroups && projectOptionGroups.length > 0
       ? projectOptionGroups
@@ -86,14 +96,17 @@ const ActualWorkEntryForm = ({
         projectId: initialProjectId,
         title: initialValues?.title,
         employeeId: initialEmployeeId,
-        timeRange:
-          initialValues?.startDate && initialValues?.endDate
-            ? [dayjs(initialValues.startDate), dayjs(initialValues.endDate)]
-            : undefined,
+        startDate: initialValues?.startDate
+          ? dayjs(initialValues.startDate)
+          : defaultStartDate,
+        endDate: initialValues?.endDate
+          ? dayjs(initialValues.endDate)
+          : defaultEndDate,
       }}
       onFinish={(values) =>
         runWithSubmitLock(async () => {
-          const [startDate, endDate] = values.timeRange;
+          const startDate = values.startDate as dayjs.Dayjs;
+          const endDate = values.endDate as dayjs.Dayjs;
           await onSubmit({
             projectId: values.projectId,
             title: values.title,
@@ -130,17 +143,27 @@ const ActualWorkEntryForm = ({
         />
       </Form.Item>
       <Form.Item
-        label="时间范围"
-        name="timeRange"
+        label="开始时间"
+        name="startDate"
         rules={[
-          { required: true, message: "请选择时间范围" },
-          () => ({
-            validator(_, value: [dayjs.Dayjs, dayjs.Dayjs] | undefined) {
-              if (!value || value.length !== 2) {
+          { required: true, message: "请选择开始时间" },
+        ]}
+      >
+        <DateTimePicker placeholder="请选择开始时间" />
+      </Form.Item>
+      <Form.Item
+        label="结束时间"
+        name="endDate"
+        dependencies={["startDate"]}
+        rules={[
+          { required: true, message: "请选择结束时间" },
+          ({ getFieldValue }) => ({
+            validator(_, value: dayjs.Dayjs | undefined) {
+              const start = getFieldValue("startDate") as dayjs.Dayjs | undefined;
+              if (!value || !start) {
                 return Promise.resolve();
               }
-              const [start, end] = value;
-              if (end.isAfter(start) || end.isSame(start)) {
+              if (value.isAfter(start) || value.isSame(start)) {
                 return Promise.resolve();
               }
               return Promise.reject(new Error("结束时间需晚于或等于开始时间"));
@@ -148,11 +171,7 @@ const ActualWorkEntryForm = ({
           }),
         ]}
       >
-        <DatePicker.RangePicker
-          showTime
-          style={{ width: "100%" }}
-          format="YYYY-MM-DD HH:mm"
-        />
+        <DateTimePicker placeholder="请选择结束时间" />
       </Form.Item>
 
       <div style={{ display: "flex", gap: 12 }}>

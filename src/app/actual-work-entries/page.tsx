@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Modal, Radio, Select, Space } from "antd";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Button, Modal, Radio, Select, Space, Spin } from "antd";
 import type { DefaultOptionType } from "antd/es/select";
 import { useSearchParams } from "next/navigation";
 import ActualWorkEntryForm, {
@@ -34,7 +34,7 @@ type EmployeeOptionItem = {
   leaveDate?: string | null;
 };
 
-export default function Page() {
+function ActualWorkEntriesPageContent() {
   const searchParams = useSearchParams();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
@@ -446,5 +446,13 @@ export default function Page() {
         />
       </Modal>
     </ListPageContainer>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<Spin />}>
+      <ActualWorkEntriesPageContent />
+    </Suspense>
   );
 }
