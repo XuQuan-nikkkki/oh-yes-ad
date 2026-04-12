@@ -456,6 +456,8 @@ function SchedulePageContent() {
   >(undefined);
   const [taskProjectContext, setTaskProjectContext] =
     useState<ProjectListItem | null>(null);
+  const [plannedWorkProjectContext, setPlannedWorkProjectContext] =
+    useState<ProjectListItem | null>(null);
   const [internalExpandedProjectIds, setInternalExpandedProjectIds] = useState<
     string[]
   >([]);
@@ -681,6 +683,19 @@ function SchedulePageContent() {
     [activeTaskProjectId, projectDetails],
   );
 
+  const activePlannedWorkProjectId = useMemo(
+    () => plannedWorkProjectContext?.id ?? selectedClientProject?.id ?? null,
+    [plannedWorkProjectContext?.id, selectedClientProject?.id],
+  );
+
+  const activePlannedWorkProjectDetail = useMemo(
+    () =>
+      activePlannedWorkProjectId
+        ? (projectDetails[activePlannedWorkProjectId] ?? null)
+        : null,
+    [activePlannedWorkProjectId, projectDetails],
+  );
+
   const selectedProjectSegmentOptions = useMemo(
     () =>
       (activeTaskProjectDetail?.segments ?? []).map((segment) => ({
@@ -699,16 +714,16 @@ function SchedulePageContent() {
 
   const selectedProjectTaskOptions = useMemo(
     () =>
-      (activeTaskProjectDetail?.segments ?? []).flatMap((segment) =>
+      (activePlannedWorkProjectDetail?.segments ?? []).flatMap((segment) =>
         (segment.projectTasks ?? []).map((task) => ({
           id: task.id,
-          projectId: activeTaskProjectId ?? "",
+          projectId: activePlannedWorkProjectId ?? "",
           segmentId: segment.id,
           segmentName: segment.name,
           name: task.name,
         })),
       ),
-    [activeTaskProjectDetail, activeTaskProjectId],
+    [activePlannedWorkProjectDetail, activePlannedWorkProjectId],
   );
 
   useEffect(() => {
@@ -889,15 +904,23 @@ function SchedulePageContent() {
     setTaskModalOpen(true);
   };
 
-  const openCreatePlannedWorkModal = (defaultTaskId?: string) => {
+  const openCreatePlannedWorkModal = (
+    defaultTaskId?: string,
+    project?: ProjectListItem,
+  ) => {
     if (!canManageProject) return;
+    setPlannedWorkProjectContext(project ?? null);
     setEditingPlannedEntry(null);
     setPlannedDefaultTaskId(defaultTaskId);
     setPlannedWorkModalOpen(true);
   };
 
-  const openEditPlannedWorkModal = (entry: TaskPlannedRow) => {
+  const openEditPlannedWorkModal = (
+    entry: TaskPlannedRow,
+    project?: ProjectListItem,
+  ) => {
     if (!canManageProject) return;
+    setPlannedWorkProjectContext(project ?? null);
     setEditingPlannedEntry(entry);
     setPlannedDefaultTaskId(undefined);
     setPlannedWorkModalOpen(true);
@@ -1020,7 +1043,8 @@ function SchedulePageContent() {
       setPlannedWorkModalOpen(false);
       setEditingPlannedEntry(null);
       setPlannedDefaultTaskId(undefined);
-      refreshProjectDetails(selectedClientProject?.id);
+      setPlannedWorkProjectContext(null);
+      refreshProjectDetails(activePlannedWorkProjectId);
     } catch (error) {
       const text = error instanceof Error ? error.message : "保存计划工时失败";
       messageApi.error(text);
@@ -1568,14 +1592,16 @@ function SchedulePageContent() {
             onAfterDeleteSegment={() => {
               refreshProjectDetails(project.id);
             }}
-            onAddPlannedWork={(task) => openCreatePlannedWorkModal(task.id)}
+            onAddPlannedWork={(task) =>
+              openCreatePlannedWorkModal(task.id, project)
+            }
             onAfterUpdateTask={() => {
               refreshProjectDetails(project.id);
             }}
             onAfterDeleteTask={() => {
               refreshProjectDetails(project.id);
             }}
-            onEditPlannedWork={(entry) => openEditPlannedWorkModal(entry)}
+            onEditPlannedWork={(entry) => openEditPlannedWorkModal(entry, project)}
             onAfterDeletePlannedWork={() => {
               refreshProjectDetails(project.id);
             }}
@@ -1838,6 +1864,7 @@ function SchedulePageContent() {
             setPlannedWorkModalOpen(false);
             setEditingPlannedEntry(null);
             setPlannedDefaultTaskId(undefined);
+            setPlannedWorkProjectContext(null);
           }}
           footer={null}
           confirmLoading={plannedWorkSubmitting}
@@ -1845,16 +1872,16 @@ function SchedulePageContent() {
         >
           <PlannedWorkEntryForm
             projectOptions={
-              selectedClientProject
+              activePlannedWorkProjectId && activePlannedWorkProjectDetail
                 ? [
                     {
-                      id: selectedClientProject.id,
-                      name: selectedClientProject.name,
+                      id: activePlannedWorkProjectId,
+                      name: activePlannedWorkProjectDetail.name,
                     },
                   ]
                 : []
             }
-            selectedProjectId={selectedClientProject?.id}
+            selectedProjectId={activePlannedWorkProjectId ?? undefined}
             disableProjectSelect
             disableSegmentSelect={Boolean(editingPlannedEntry)}
             disableTaskSelect={Boolean(editingPlannedEntry)}
