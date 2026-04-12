@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, Card, Empty, Modal, Spin, message } from "antd";
 import type { DefaultOptionType } from "antd/es/select";
 import FullCalendar from "@fullcalendar/react";
+import type { DatesSetArg } from "@fullcalendar/core";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import listPlugin from "@fullcalendar/list";
@@ -80,6 +81,7 @@ type WeeklyTaskCard = {
 };
 
 const WORK_LOG_VIEW_PARAM = "workLogView";
+const WORK_LOG_DATE_PARAM = "workLogDate";
 
 const mapQueryViewToCalendarView = (value: string | null): CalendarViewType => {
   if (
@@ -106,6 +108,12 @@ const formatHours = (value: number) => {
 
 const formatSummaryNumber = (value: number) =>
   value.toFixed(2).replace(/\.?0+$/, "");
+
+const normalizeQueryDate = (value: string | null) => {
+  if (!value) return dayjs();
+  const parsed = dayjs(value);
+  return parsed.isValid() ? parsed : dayjs();
+};
 
 const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
   const [messageApi, contextHolder] = message.useMessage();
@@ -150,6 +158,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
   const lastCalendarDateRef = useRef<{ date: Date; allDay: boolean } | null>(
     null,
   );
+  const calendarRef = useRef<FullCalendar | null>(null);
   const [calendarVisibleRange, setCalendarVisibleRange] =
     useState<CalendarVisibleRange | null>(null);
   const [selectedCalendarEntryId, setSelectedCalendarEntryId] = useState<
@@ -162,6 +171,18 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
     () => mapQueryViewToCalendarView(searchParams.get(WORK_LOG_VIEW_PARAM)),
     [searchParams],
   );
+  const queryCalendarDate = useMemo(
+    () => normalizeQueryDate(searchParams.get(WORK_LOG_DATE_PARAM)),
+    [searchParams],
+  );
+
+  useEffect(() => {
+    const api = calendarRef.current?.getApi();
+    if (!api) return;
+    const currentDate = dayjs(api.getDate());
+    if (currentDate.isSame(queryCalendarDate, "day")) return;
+    api.gotoDate(queryCalendarDate.toDate());
+  }, [queryCalendarDate]);
 
   useEffect(() => {
     if (workLogOptionsLoadedUserId && workLogOptionsLoadedUserId !== employee?.id) {
@@ -881,6 +902,27 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
     }
   };
 
+  const syncCalendarSearchParams = (info: DatesSetArg) => {
+    const params = new URLSearchParams(searchParams.toString());
+    let changed = false;
+
+    if (params.get(WORK_LOG_VIEW_PARAM) !== info.view.type) {
+      params.set(WORK_LOG_VIEW_PARAM, info.view.type);
+      changed = true;
+    }
+
+    const currentStart = dayjs(info.view.currentStart).format("YYYY-MM-DD");
+    if (params.get(WORK_LOG_DATE_PARAM) !== currentStart) {
+      params.set(WORK_LOG_DATE_PARAM, currentStart);
+      changed = true;
+    }
+
+    if (!changed) return;
+    router.replace(`${pathname}?${params.toString()}`, {
+      scroll: false,
+    });
+  };
+
   if (!employee) {
     return (
       <>
@@ -943,6 +985,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
         <Spin spinning={actualRowsLoading}>
           <div className="work-logs-calendar">
             <FullCalendar
+              ref={calendarRef}
               weekNumbers
               plugins={[
                 dayGridPlugin,
@@ -952,6 +995,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
               ]}
               locale={zhCnLocale}
               initialView={initialCalendarView}
+              initialDate={queryCalendarDate.toDate()}
               headerToolbar={{
                 left: "prev,next today",
                 center: "title",
@@ -1025,14 +1069,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
                     end: info.end,
                   };
                 });
-                if (searchParams.get(WORK_LOG_VIEW_PARAM) === info.view.type) {
-                  return;
-                }
-                const params = new URLSearchParams(searchParams.toString());
-                params.set(WORK_LOG_VIEW_PARAM, info.view.type);
-                router.replace(`${pathname}?${params.toString()}`, {
-                  scroll: false,
-                });
+                syncCalendarSearchParams(info);
               }}
               eventClick={(info) => {
                 setSelectedCalendarEntryId(info.event.id);

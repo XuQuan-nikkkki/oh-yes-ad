@@ -22,6 +22,7 @@ import dayjs from "dayjs";
 
 const ACTUAL_WORK_VIEW_PARAM = "view";
 const ACTUAL_WORK_CALENDAR_EMPLOYEE_PARAM = "calendarEmployeeId";
+const ACTUAL_WORK_CALENDAR_DATE_PARAM = "workLogDate";
 const ACTUAL_WORK_VIEW_STORAGE_KEY = "actual-work-entries:view";
 const ACTUAL_WORK_CALENDAR_EMPLOYEE_STORAGE_KEY =
   "actual-work-entries:calendarEmployeeId";
@@ -372,6 +373,10 @@ function ActualWorkEntriesPageContent() {
             } else {
               nextSearchParams.delete(ACTUAL_WORK_CALENDAR_EMPLOYEE_PARAM);
             }
+            nextSearchParams.set(
+              ACTUAL_WORK_CALENDAR_DATE_PARAM,
+              dayjs().format("YYYY-MM-DD"),
+            );
             replaceCurrentSearchParams(nextSearchParams);
           }}
           filterOption={(input, option) =>
