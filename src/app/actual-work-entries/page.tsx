@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Modal, Radio, Select, Space } from "antd";
 import type { DefaultOptionType } from "antd/es/select";
+import { useSearchParams } from "next/navigation";
 import ActualWorkEntryForm, {
   ActualWorkEntryFormPayload,
 } from "@/components/project-detail/ActualWorkEntryForm";
@@ -19,6 +20,12 @@ import { useEmployeesStore } from "@/stores/employeesStore";
 import { useProjectsStore } from "@/stores/projectsStore";
 import dayjs from "dayjs";
 
+const ACTUAL_WORK_VIEW_PARAM = "view";
+const ACTUAL_WORK_CALENDAR_EMPLOYEE_PARAM = "calendarEmployeeId";
+const ACTUAL_WORK_VIEW_STORAGE_KEY = "actual-work-entries:view";
+const ACTUAL_WORK_CALENDAR_EMPLOYEE_STORAGE_KEY =
+  "actual-work-entries:calendarEmployeeId";
+
 type EmployeeOptionItem = {
   id: string;
   name: string;
@@ -28,6 +35,7 @@ type EmployeeOptionItem = {
 };
 
 export default function Page() {
+  const searchParams = useSearchParams();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
   const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
@@ -58,6 +66,24 @@ export default function Page() {
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
   const currentEmployeeId = currentUser?.id ?? "";
+  const replaceCurrentSearchParams = useCallback((nextSearchParams: URLSearchParams) => {
+    if (typeof window === "undefined") return;
+    const nextQuery = nextSearchParams.toString();
+    const nextUrl = nextQuery
+      ? `${window.location.pathname}?${nextQuery}`
+      : window.location.pathname;
+    window.history.replaceState(null, "", nextUrl);
+  }, []);
+  const viewModeFromSearchParams = useMemo<"table" | "calendar">(() => {
+    return searchParams.get(ACTUAL_WORK_VIEW_PARAM) === "calendar"
+      ? "calendar"
+      : "table";
+  }, [searchParams]);
+  const calendarEmployeeIdFromSearchParams = useMemo(
+    () =>
+      searchParams.get(ACTUAL_WORK_CALENDAR_EMPLOYEE_PARAM) ?? undefined,
+    [searchParams],
+  );
 
   const fetchOptions = useCallback(async () => {
     const [projectRows, employeeRows] = await Promise.all([
@@ -186,9 +212,57 @@ export default function Page() {
   }, [ensureOptionsLoaded]);
 
   useEffect(() => {
-    if (!currentEmployeeId) return;
-    setSelectedCalendarEmployeeId((prev) => prev ?? currentEmployeeId);
-  }, [currentEmployeeId]);
+    const storedViewMode =
+      typeof window !== "undefined"
+        ? window.sessionStorage.getItem(ACTUAL_WORK_VIEW_STORAGE_KEY)
+        : null;
+    if (viewModeFromSearchParams === "calendar" || storedViewMode !== "calendar") {
+      setViewMode(viewModeFromSearchParams);
+      return;
+    }
+    setViewMode("calendar");
+  }, [viewModeFromSearchParams]);
+
+  useEffect(() => {
+    if (calendarEmployeeIdFromSearchParams) {
+      setSelectedCalendarEmployeeId(calendarEmployeeIdFromSearchParams);
+      return;
+    }
+    const storedEmployeeId =
+      typeof window !== "undefined"
+        ? window.sessionStorage.getItem(
+            ACTUAL_WORK_CALENDAR_EMPLOYEE_STORAGE_KEY,
+          ) ?? undefined
+        : undefined;
+    if (storedEmployeeId) {
+      setSelectedCalendarEmployeeId(storedEmployeeId);
+      return;
+    }
+    setSelectedCalendarEmployeeId(currentEmployeeId || undefined);
+  }, [calendarEmployeeIdFromSearchParams, currentEmployeeId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (viewMode === "calendar") {
+      window.sessionStorage.setItem(ACTUAL_WORK_VIEW_STORAGE_KEY, viewMode);
+      return;
+    }
+    window.sessionStorage.removeItem(ACTUAL_WORK_VIEW_STORAGE_KEY);
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (selectedCalendarEmployeeId) {
+      window.sessionStorage.setItem(
+        ACTUAL_WORK_CALENDAR_EMPLOYEE_STORAGE_KEY,
+        selectedCalendarEmployeeId,
+      );
+      return;
+    }
+    window.sessionStorage.removeItem(
+      ACTUAL_WORK_CALENDAR_EMPLOYEE_STORAGE_KEY,
+    );
+  }, [selectedCalendarEmployeeId]);
 
   const shouldShowEmployeeInCalendar = useCallback((employee: EmployeeOptionItem) => {
     const status = employee.employmentStatus ?? "";
@@ -251,7 +325,15 @@ export default function Page() {
       <Radio.Group
         value={viewMode}
         onChange={(event) => {
-          setViewMode(event.target.value as "table" | "calendar");
+          const nextViewMode = event.target.value as "table" | "calendar";
+          setViewMode(nextViewMode);
+          const nextSearchParams = new URLSearchParams(searchParams.toString());
+          if (nextViewMode === "table") {
+            nextSearchParams.delete(ACTUAL_WORK_VIEW_PARAM);
+          } else {
+            nextSearchParams.set(ACTUAL_WORK_VIEW_PARAM, nextViewMode);
+          }
+          replaceCurrentSearchParams(nextSearchParams);
         }}
         optionType="button"
         buttonStyle="solid"
@@ -284,6 +366,13 @@ export default function Page() {
           value={selectedCalendarEmployeeId}
           onChange={(value) => {
             setSelectedCalendarEmployeeId(value);
+            const nextSearchParams = new URLSearchParams(searchParams.toString());
+            if (value) {
+              nextSearchParams.set(ACTUAL_WORK_CALENDAR_EMPLOYEE_PARAM, value);
+            } else {
+              nextSearchParams.delete(ACTUAL_WORK_CALENDAR_EMPLOYEE_PARAM);
+            }
+            replaceCurrentSearchParams(nextSearchParams);
           }}
           filterOption={(input, option) =>
             String(option?.label ?? "")

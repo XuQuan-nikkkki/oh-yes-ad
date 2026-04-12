@@ -1,6 +1,7 @@
 "use client";
 
 import { Menu } from "antd";
+import type { ItemType } from "antd/es/menu/interface";
 import {
   HomeOutlined,
   UserOutlined,
@@ -59,6 +60,34 @@ interface MenuContentProps {
   currentUser: CurrentUser | null;
 }
 
+type MenuItemConfig = ItemType & {
+  visible?: boolean;
+  children?: MenuItemConfig[];
+};
+
+const filterVisibleMenuItems = (items: MenuItemConfig[]): ItemType[] => {
+  return items.flatMap((item) => {
+    if (item.visible === false) return [];
+
+    const nextItem = { ...item };
+    delete nextItem.visible;
+    const nextChildren = nextItem.children
+      ? filterVisibleMenuItems(nextItem.children)
+      : undefined;
+
+    if ("type" in nextItem && nextItem.type === "divider") {
+      return [nextItem];
+    }
+
+    return [
+      {
+        ...nextItem,
+        ...(nextChildren ? { children: nextChildren } : {}),
+      } as ItemType,
+    ];
+  });
+};
+
 export default function MenuContent({
   pathname,
   currentUser,
@@ -87,7 +116,7 @@ export default function MenuContent({
     roleCodes.includes("FINANCE");
   const isAdmin = roleCodes.includes("ADMIN");
 
-  const items = useMemo(
+  const items = useMemo<MenuItemConfig[]>(
     () => [
       {
         key: "/",
@@ -276,6 +305,11 @@ export default function MenuContent({
     [isAdmin, isStaffOnly, canViewCompanyFinance],
   );
 
+  const visibleItems = useMemo(
+    () => filterVisibleMenuItems(items),
+    [items],
+  );
+
   return (
     <Menu
       theme="dark"
@@ -288,7 +322,7 @@ export default function MenuContent({
         setNavigating(true);
         router.push(key);
       }}
-      items={items}
+      items={visibleItems}
     />
   );
 }
