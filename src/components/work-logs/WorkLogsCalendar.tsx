@@ -1003,6 +1003,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
                 );
               }}
               slotMinTime="09:00:00"
+              slotMaxTime="33:00:00"
               scrollTime="09:00:00"
               dayMaxEvents
               height="auto"
