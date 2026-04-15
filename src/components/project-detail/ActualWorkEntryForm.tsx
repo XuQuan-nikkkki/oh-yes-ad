@@ -126,6 +126,16 @@ const ActualWorkEntryForm = ({
           disabled={disableProjectSelect}
           placeholder="请选择项目"
           options={selectOptions}
+          showSearch
+          optionFilterProp="label"
+          filterOption={(input, option) => {
+            if (Array.isArray((option as DefaultOptionType | undefined)?.options)) {
+              return false;
+            }
+            return String(option?.label ?? "")
+              .toLowerCase()
+              .includes(input.toLowerCase());
+          }}
         />
       </Form.Item>
       <Form.Item label="事件" name="title" rules={[{ required: true, message: "请输入事件" }]}>

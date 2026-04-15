@@ -21,7 +21,6 @@ import {
   getActualWorkDateKey,
   getActualWorkEntryHours,
 } from "@/lib/actual-workdays";
-import { useProjectTasksStore } from "@/stores/projectTasksStore";
 import { useProjectsStore } from "@/stores/projectsStore";
 
 dayjs.extend(isoWeek);
@@ -123,7 +122,6 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
   const fetchProjectsFromStore = useProjectsStore(
     (state) => state.fetchProjects,
   );
-  const fetchTasksFromStore = useProjectTasksStore((state) => state.fetchTasks);
   const employees = useMemo<WorkLogsCalendarEmployee[]>(
     () => (employee ? [employee] : []),
     [employee],
@@ -204,10 +202,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
 
     setWorkLogOptionsLoading(true);
     try {
-      const [tasks, ownedProjects] = await Promise.all([
-        fetchTasksFromStore({ ownerId: userId }),
-        fetchProjectsFromStore({ ownerId: userId }),
-      ]);
+      const allProjects = await fetchProjectsFromStore();
 
       const isArchivedProject = (project: {
         isArchived?: boolean | null;
@@ -219,148 +214,123 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
         return statusValue === "已归档";
       };
 
-      const projectMap = new Map<string, ProjectOptionWithStatus>();
-
-      if (Array.isArray(ownedProjects)) {
-        for (const project of ownedProjects as Array<{
-          id?: string | null;
-          name?: string | null;
-          isArchived?: boolean | null;
-          status?: string | null;
-          statusOption?: {
-            value?: string | null;
-            order?: number | null;
-          } | null;
-        }>) {
-          if (!project.id || !project.name || isArchivedProject(project)) continue;
-          projectMap.set(project.id, {
-            id: project.id,
-            name: project.name,
-            status: project.statusOption?.value ?? project.status ?? null,
-            statusOrder: project.statusOption?.order ?? null,
-          });
-        }
-      }
-
-      if (Array.isArray(tasks)) {
-        for (const task of tasks as Array<{
-          segment?: {
-            project?: {
-              id?: string | null;
-              name?: string | null;
-              status?: string | null;
-              statusOption?: {
-                value?: string | null;
-                order?: number | null;
-              } | null;
-            } | null;
-          } | null;
-        }>) {
-          const project = task?.segment?.project;
-          if (!project?.id || !project.name) continue;
-          if (isArchivedProject(project)) continue;
-          if (projectMap.has(project.id)) continue;
-          projectMap.set(project.id, {
-            id: project.id,
-            name: project.name,
-            status: project.statusOption?.value ?? project.status ?? null,
-            statusOrder: project.statusOption?.order ?? null,
-          });
-        }
-      }
-
-      const hasPlatformProject = Array.from(projectMap.values()).some((project) =>
-        project.name.trim().includes("中台项目"),
-      );
-
-      if (!hasPlatformProject) {
-        const allProjects = await fetchProjectsFromStore();
-        if (Array.isArray(allProjects)) {
-          for (const project of allProjects as Array<{
+      const normalizedProjects = Array.isArray(allProjects)
+        ? (allProjects as Array<{
             id?: string | null;
             name?: string | null;
             isArchived?: boolean | null;
+            type?: string | null;
+            typeOption?: { value?: string | null } | null;
             status?: string | null;
             statusOption?: {
               value?: string | null;
               order?: number | null;
             } | null;
-          }>) {
-            if (!project.id || !project.name || isArchivedProject(project)) continue;
-            if (!project.name.trim().includes("中台项目")) continue;
-            projectMap.set(project.id, {
-              id: project.id,
-              name: project.name,
-              status: project.statusOption?.value ?? project.status ?? null,
-              statusOrder: project.statusOption?.order ?? null,
+          }>)
+            .filter((project) => project.id && project.name && !isArchivedProject(project))
+            .map((project) => {
+              const typeValue = project.typeOption?.value ?? project.type ?? "";
+              return {
+                id: String(project.id),
+                name: String(project.name),
+                status: project.statusOption?.value ?? project.status ?? null,
+                statusOrder: project.statusOption?.order ?? null,
+                isInternal: typeValue === "内部项目" || typeValue === "INTERNAL",
+                isPlatform: String(project.name).trim().includes("中台项目"),
+              };
+            })
+        : [];
+
+      const statusGroupedProjects = normalizedProjects.filter(
+        (project) => !project.isInternal && !project.isPlatform,
+      );
+      const platformProjects = normalizedProjects
+        .filter((project) => project.isPlatform)
+        .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"));
+      const internalProjects = normalizedProjects
+        .filter((project) => project.isInternal && !project.isPlatform)
+        .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"));
+
+      const statusOptionGroups = Array.from(
+        statusGroupedProjects.reduce<
+          Map<
+            string,
+            {
+              label: string;
+              order: number;
+              options: ProjectOptionWithStatus[];
+            }
+          >
+        >((groups, project) => {
+          const label = project.status?.trim() || "未设置状态";
+          const existing = groups.get(label);
+          const nextOrder = Number.isFinite(project.statusOrder)
+            ? Number(project.statusOrder)
+            : Number.MAX_SAFE_INTEGER;
+          const option = {
+            id: project.id,
+            name: project.name,
+            status: project.status,
+            statusOrder: project.statusOrder,
+          };
+          if (!existing) {
+            groups.set(label, {
+              label,
+              order: nextOrder,
+              options: [option],
             });
-            break;
+            return groups;
           }
-        }
+          existing.options.push(option);
+          existing.order = Math.min(existing.order, nextOrder);
+          return groups;
+        }, new Map()),
+      )
+        .sort((left, right) => {
+          if (left[1].order !== right[1].order) {
+            return left[1].order - right[1].order;
+          }
+          return left[1].label.localeCompare(right[1].label, "zh-CN");
+        })
+        .map(([, group]) => ({
+          label: group.label,
+          options: group.options
+            .slice()
+            .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"))
+            .map(({ id, name }) => ({
+              label: name,
+              value: id,
+            })),
+        }));
+
+      const internalGroupOptions = new Map<string, { label: string; value: string }>();
+      for (const project of platformProjects) {
+        internalGroupOptions.set(project.id, { label: project.name, value: project.id });
+      }
+      for (const project of internalProjects) {
+        internalGroupOptions.set(project.id, { label: project.name, value: project.id });
       }
 
-      const projectList = Array.from(projectMap.values()).sort((a, b) =>
-        a.name.localeCompare(b.name, "zh-CN"),
-      );
-
-      const platformProjects = projectList.filter((project) =>
-        project.name.trim().includes("中台项目"),
-      );
-      const nonPlatformProjects = projectList.filter(
-        (project) => !project.name.trim().includes("中台项目"),
-      );
-
-      const groupedProjectOptions = [
-        ...platformProjects.map((project) => ({
-          label: project.name,
-          value: project.id,
-        })),
-        ...Array.from(
-          nonPlatformProjects.reduce<
-            Map<
-              string,
+      const groupedProjectOptions: DefaultOptionType[] = [
+        ...statusOptionGroups,
+        ...(internalGroupOptions.size > 0
+          ? [
               {
-                label: string;
-                order: number;
-                options: ProjectOptionWithStatus[];
-              }
-            >
-          >((groups, project) => {
-            const label = project.status?.trim() || "未设置状态";
-            const existing = groups.get(label);
-            const nextOrder = Number.isFinite(project.statusOrder)
-              ? Number(project.statusOrder)
-              : Number.MAX_SAFE_INTEGER;
-            if (!existing) {
-              groups.set(label, {
-                label,
-                order: nextOrder,
-                options: [project],
-              });
-              return groups;
-            }
-            existing.options.push(project);
-            existing.order = Math.min(existing.order, nextOrder);
-            return groups;
-          }, new Map()),
-        )
-          .sort((left, right) => {
-            if (left[1].order !== right[1].order) {
-              return left[1].order - right[1].order;
-            }
-            return left[1].label.localeCompare(right[1].label, "zh-CN");
-          })
-          .map(([, group]) => ({
-            label: group.label,
-            options: group.options
-              .slice()
-              .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"))
-              .map(({ id, name }) => ({
-                label: name,
-                value: id,
-              })),
-          })),
+                label: "内部项目",
+                options: Array.from(internalGroupOptions.values()),
+              },
+            ]
+          : []),
       ];
+
+      const projectList = normalizedProjects
+        .map((project) => ({
+          id: project.id,
+          name: project.name,
+          status: project.status,
+          statusOrder: project.statusOrder,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
 
       setWorkLogProjectOptions(projectList);
       setWorkLogProjectOptionGroups(groupedProjectOptions);
