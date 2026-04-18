@@ -42,7 +42,7 @@ export const formatAmount = (value?: number | null) => {
   if (typeof value !== "number") return "-";
   return value.toLocaleString("zh-CN", {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 4,
   });
 };
 

@@ -21,6 +21,7 @@ import {
   BankOutlined,
   WalletOutlined,
   CalculatorOutlined,
+  CreditCardOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
 import { useEffect, useMemo, useState } from "react";
@@ -35,6 +36,7 @@ const MENU_KEY_BY_PREFIX = [
   "/project-documents",
   "/project-receivable-payable",
   "/project-receivable-delays",
+  "/project-reimbursements",
   "/planned-work-entries",
   "/actual-work-entries",
   "/work-hours-analysis",
@@ -282,6 +284,11 @@ export default function MenuContent({
                   key: "/project-receivable-delays",
                   icon: <CalendarOutlined />,
                   label: "项目收款延期",
+                },
+                {
+                  key: "/project-reimbursements",
+                  icon: <CreditCardOutlined />,
+                  label: "项目报销",
                 },
                 ...(canViewCompanyFinance
                   ? [

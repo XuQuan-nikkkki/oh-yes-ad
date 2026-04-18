@@ -20,6 +20,7 @@ import {
   WalletOutlined,
   ClockCircleOutlined,
   CalculatorOutlined,
+  CreditCardOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
@@ -181,6 +182,11 @@ const HomeSiteMap = ({ isAdmin, onNavigate }: Props) => {
           label: "项目收款延期",
           icon: <CalendarOutlined />,
           path: "/project-receivable-delays",
+        },
+        {
+          label: "项目报销",
+          icon: <CreditCardOutlined />,
+          path: "/project-reimbursements",
         },
         {
           label: "公司主体",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Button, Card, Modal, Space, Steps, Typography } from "antd";
+import { Button, Card, Modal, Popconfirm, Space, Steps, Typography } from "antd";
 import {
   useParams,
   usePathname,
@@ -174,9 +174,6 @@ const ProjectDetailPage = () => {
     "create" | "edit"
   >("create");
   const [receivableNodeModalOpen, setReceivableNodeModalOpen] = useState(false);
-  const [receivableCurrentPlan, setReceivableCurrentPlan] = useState<{
-    id: string;
-  } | null>(null);
   const receivableCardRef = useRef<{
     handleDeletePlan: () => Promise<void>;
   }>(null);
@@ -416,7 +413,8 @@ const ProjectDetailPage = () => {
   }, [executionTopTab, isInternalProject]);
 
   useEffect(() => {
-    if (stepParam !== 3) return;
+    // "项目成本追踪" step
+    if (stepParam !== 4) return;
     void fetchFinancialStructureExists();
   }, [fetchFinancialStructureExists, stepParam]);
 
@@ -991,18 +989,13 @@ const ProjectDetailPage = () => {
                 { title: "项目报价" },
                 { title: "项目立项" },
                 { title: "项目执行" },
-                { title: "项目成本追踪" },
                 { title: "项目收付款" },
+                { title: "项目成本追踪" },
               ]}
             />
           </Card>
 
-          {stepParam === 0 &&
-            (shouldShowDevelopingCommercialSteps ? (
-              <Card style={{ marginTop: 4 }}>
-                <PageAccessResult type="developing" />
-              </Card>
-            ) : (
+          {stepParam === 0 && (
             <ProCard
               style={{ marginTop: 4 }}
               tabs={{
@@ -1078,14 +1071,9 @@ const ProjectDetailPage = () => {
                 ],
               }}
             />
-            ))}
+          )}
 
-          {stepParam === 1 &&
-            (shouldShowDevelopingCommercialSteps ? (
-              <Card style={{ marginTop: 4 }}>
-                <PageAccessResult type="developing" />
-              </Card>
-            ) : (
+          {stepParam === 1 && (
             <ProCard
               style={{ marginTop: 4 }}
               tabs={{
@@ -1179,7 +1167,7 @@ const ProjectDetailPage = () => {
                 ],
               }}
             />
-            ))}
+          )}
 
           {stepParam === 2 && (
             <ProCard
@@ -1559,12 +1547,8 @@ const ProjectDetailPage = () => {
             />
           )}
 
-          {stepParam === 3 &&
-            (shouldShowDevelopingCommercialSteps ? (
-              <Card style={{ marginTop: 4 }}>
-                <PageAccessResult type="developing" />
-              </Card>
-            ) : financialStructureExists === null ? (
+          {stepParam === 4 &&
+            (financialStructureExists === null ? (
               <Card style={{ marginTop: 4 }} loading />
             ) : financialStructureExists ? (
               <ProCard
@@ -1585,16 +1569,16 @@ const ProjectDetailPage = () => {
                       </div>
                     ) : costTrackingTab === "realtime-cost" ? (
                       <div style={{ paddingRight: 16 }}>
-                        <Button
-                          onClick={() => {
-                            realtimeCostDownload?.();
-                          }}
-                          disabled={!realtimeCostDownload}
-                        >
-                          下载表格
-                        </Button>
-                      </div>
-                    ) : null,
+	                        <Button
+	                          onClick={() => {
+	                            realtimeCostDownload?.();
+	                          }}
+	                          disabled={!realtimeCostDownload}
+	                        >
+	                          下载数据
+	                        </Button>
+	                      </div>
+	                    ) : null,
                   onChange: (key) =>
                     setCostTrackingTab(
                       key as "expense-records" | "realtime-cost",
@@ -1642,12 +1626,7 @@ const ProjectDetailPage = () => {
               <Card style={{ marginTop: 4 }}>当前项目暂无财务结构。</Card>
             ))}
 
-          {stepParam === 4 &&
-            (shouldShowDevelopingCommercialSteps ? (
-              <Card style={{ marginTop: 4 }}>
-                <PageAccessResult type="developing" />
-              </Card>
-            ) : (
+          {stepParam === 3 && (
             <ProCard
               style={{ marginTop: 4 }}
               tabs={{
@@ -1687,59 +1666,30 @@ const ProjectDetailPage = () => {
                     key: "receivable",
                     label: "项目收款",
                     children: (
-                      <Card
-                        title={receivableCurrentPlan ? "收款计划-1" : undefined}
-                        extra={
-                          receivableCurrentPlan ? (
-                            <>
-                              <Button
-                                style={{ marginRight: 8 }}
-                                disabled={!canManageProject}
-                                onClick={() => {
-                                  setReceivablePlanModalMode("edit");
-                                  setReceivablePlanModalOpen(true);
-                                }}
-                              >
-                                修改
-                              </Button>
-                              <Button
-                                danger
-                                disabled={!canManageProject}
-                                onClick={async () => {
-                                  await receivableCardRef.current?.handleDeletePlan();
-                                }}
-                              >
-                                删除
-                              </Button>
-                            </>
-                          ) : null
-                        }
-                      >
-                        <ProjectReceivableInfo
-                          ref={receivableCardRef}
-                          projectId={projectId}
-                          project={project}
-                          canManageProject={canManageProject}
-                          planModalOpen={receivablePlanModalOpen}
-                          planModalMode={receivablePlanModalMode}
-                          onPlanModalOpenChange={setReceivablePlanModalOpen}
-                          onPlanModalModeChange={setReceivablePlanModalMode}
-                          onCurrentPlanChange={setReceivableCurrentPlan}
-                          nodeModalOpen={receivableNodeModalOpen}
-                          onNodeModalOpenChange={setReceivableNodeModalOpen}
-                        />
-                      </Card>
+                      <ProjectReceivableInfo
+                        ref={receivableCardRef}
+                        projectId={projectId}
+                        project={project}
+                        canManageProject={canManageProject}
+                        planModalOpen={receivablePlanModalOpen}
+                        planModalMode={receivablePlanModalMode}
+                        onPlanModalOpenChange={setReceivablePlanModalOpen}
+                        onPlanModalModeChange={setReceivablePlanModalMode}
+                        nodeModalOpen={receivableNodeModalOpen}
+                        onNodeModalOpenChange={setReceivableNodeModalOpen}
+                      />
                     ),
                   },
                   {
                     key: "payable",
                     label: "项目付款",
-                    children: (
-                      <Card
-                        title={payableCurrentPlan ? "付款计划-1" : undefined}
-                        extra={
-                          payableCurrentPlan ? (
-                            <>
+	                    children: (
+	                      <Card
+	                        type="inner"
+	                        title={payableCurrentPlan ? "付款计划-1" : undefined}
+	                        extra={
+	                          payableCurrentPlan ? (
+	                            <>
                               <Button
                                 style={{ marginRight: 8 }}
                                 disabled={!canManageProject}
@@ -1750,15 +1700,19 @@ const ProjectDetailPage = () => {
                               >
                                 修改
                               </Button>
-                              <Button
-                                danger
-                                disabled={!canManageProject}
-                                onClick={async () => {
+                              <Popconfirm
+                                title="确定删除当前付款计划吗？删除后节点也会被删除。"
+                                okText="删除"
+                                cancelText="取消"
+                                okButtonProps={{ danger: true }}
+                                onConfirm={async () => {
                                   await payableCardRef.current?.handleDeletePlan();
                                 }}
                               >
-                                删除
-                              </Button>
+                                <Button danger disabled={!canManageProject}>
+                                  删除
+                                </Button>
+                              </Popconfirm>
                             </>
                           ) : null
                         }
@@ -1781,8 +1735,8 @@ const ProjectDetailPage = () => {
                   },
                 ],
               }}
-            />
-            ))}
+              />
+          )}
         </>
       )}
       <ProjectTaskModal

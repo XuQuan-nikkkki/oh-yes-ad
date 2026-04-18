@@ -26,6 +26,12 @@ type PricingTableRow = {
 };
 
 const ProjectPricingStrategyRangeTable = ({ pricingStrategy, projectName }: Props) => {
+  const formatRate = (numerator: number, denominator: number) => {
+    if (!denominator) return "-";
+    const value = (numerator / denominator) * 100;
+    return `${value.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 4 })}%`;
+  };
+
   const agencyFeeRate = pricingStrategy.agencyFeeRate ?? 0;
   const bottomAgencyFeeAmount = useMemo(
     () => (pricingStrategy.bottomLinePrice * agencyFeeRate) / 100,
@@ -64,33 +70,27 @@ const ProjectPricingStrategyRangeTable = ({ pricingStrategy, projectName }: Prop
 
   const laborRateTarget = useMemo(() => {
     if (!pricingStrategy.targetPrice) return "-";
-    return `${Math.round(
-      (pricingStrategy.suggestedLaborCost / pricingStrategy.targetPrice) * 100,
-    )}%`;
+    return formatRate(pricingStrategy.suggestedLaborCost, pricingStrategy.targetPrice);
   }, [pricingStrategy.suggestedLaborCost, pricingStrategy.targetPrice]);
 
   const laborRateBottom = useMemo(() => {
     if (!pricingStrategy.bottomLinePrice) return "-";
-    return `${Math.round(
-      (pricingStrategy.plannedLaborCost / pricingStrategy.bottomLinePrice) * 100,
-    )}%`;
+    return formatRate(pricingStrategy.plannedLaborCost, pricingStrategy.bottomLinePrice);
   }, [pricingStrategy.plannedLaborCost, pricingStrategy.bottomLinePrice]);
 
   const totalCostRateTarget = useMemo(() => {
     if (!pricingStrategy.targetPrice) return "-";
-    return `${Math.round((suggestedBreakEven / pricingStrategy.targetPrice) * 100)}%`;
+    return formatRate(suggestedBreakEven, pricingStrategy.targetPrice);
   }, [pricingStrategy.targetPrice, suggestedBreakEven]);
 
   const totalCostRateBottom = useMemo(() => {
     if (!pricingStrategy.bottomLinePrice) return "-";
-    return `${Math.round((plannedBreakEven / pricingStrategy.bottomLinePrice) * 100)}%`;
+    return formatRate(plannedBreakEven, pricingStrategy.bottomLinePrice);
   }, [plannedBreakEven, pricingStrategy.bottomLinePrice]);
 
   const costBenchmarkRemark = useMemo(() => {
     if (typeof pricingStrategy.targetPrice !== "number") return "成本基准参考：-";
-    return `成本基准参考：${formatAmount(
-      Math.round(pricingStrategy.targetPrice * 0.53),
-    )}`;
+    return `成本基准参考：${formatAmount(pricingStrategy.targetPrice * 0.53)}`;
   }, [pricingStrategy.targetPrice]);
 
   const tableRows = useMemo<PricingTableRow[]>(
@@ -221,6 +221,7 @@ const ProjectPricingStrategyRangeTable = ({ pricingStrategy, projectName }: Prop
         title: "备注",
         dataIndex: "remark",
         key: "remark",
+        width: 300,
         align: "center",
       },
     ],
@@ -230,24 +231,30 @@ const ProjectPricingStrategyRangeTable = ({ pricingStrategy, projectName }: Prop
   const tableTitle = `【${projectName || "未命名项目"}】${pricingStrategy.estimatedDuration}个工作日报价参考`;
 
   return (
-    <Table<PricingTableRow>
-      rowKey="key"
-      pagination={false}
-      bordered
-      columns={columns}
-      dataSource={tableRows}
-      size="small"
-      title={() => (
-        <div
-          style={{
-            textAlign: "center",
-            fontWeight: 700,
-          }}
-        >
-          {tableTitle}
-        </div>
-      )}
-    />
+    <div style={{ overflowX: "auto" }}>
+      <div style={{ width: 900, margin: "0 auto" }}>
+        <Table<PricingTableRow>
+          rowKey="key"
+          pagination={false}
+          bordered
+          columns={columns}
+          dataSource={tableRows}
+          size="small"
+          tableLayout="fixed"
+          style={{ width: 900 }}
+          title={() => (
+            <div
+              style={{
+                textAlign: "center",
+                fontWeight: 700,
+              }}
+            >
+              {tableTitle}
+            </div>
+          )}
+        />
+      </div>
+    </div>
   );
 };
 

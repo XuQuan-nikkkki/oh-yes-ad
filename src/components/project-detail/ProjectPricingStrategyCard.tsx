@@ -26,8 +26,14 @@ const formatAmount = (value?: number | null) => {
   if (typeof value !== "number") return "-";
   return value.toLocaleString("zh-CN", {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 4,
   });
+};
+
+const formatRate = (numerator: number, denominator: number) => {
+  if (!denominator) return "-";
+  const value = (numerator / denominator) * 100;
+  return `${value.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 4 })}%`;
 };
 
 const toMoney = (value: unknown) => {
@@ -184,23 +190,19 @@ const ProjectPricingStrategyCard = ({
           pricingStrategy.rentCost +
           (pricingStrategy.plannedExecutionCost ?? 0);
         const laborRateCustomer = customerBudgetValue
-          ? `${Math.round(
-              (pricingStrategy.plannedLaborCost / customerBudgetValue) * 100,
-            )}%`
+          ? formatRate(pricingStrategy.plannedLaborCost, customerBudgetValue)
           : "-";
         const laborRateSuggested = pricingStrategy.targetPrice
-          ? `${Math.round(
-              (pricingStrategy.plannedLaborCost / pricingStrategy.targetPrice) * 100,
-            )}%`
+          ? formatRate(pricingStrategy.plannedLaborCost, pricingStrategy.targetPrice)
           : "-";
         const totalCostRateCustomer = customerBudgetValue
-          ? `${Math.round((breakEvenCustomer / customerBudgetValue) * 100)}%`
+          ? formatRate(breakEvenCustomer, customerBudgetValue)
           : "-";
         const totalCostRateSuggested = pricingStrategy.targetPrice
-          ? `${Math.round((breakEvenSuggested / pricingStrategy.targetPrice) * 100)}%`
+          ? formatRate(breakEvenSuggested, pricingStrategy.targetPrice)
           : "-";
         const costBenchmarkReference = customerBudgetValue
-          ? Math.round(customerBudgetValue * 0.53)
+          ? formatAmount(customerBudgetValue * 0.53)
           : "-";
 
         worksheet.addRow(["类别", "客户报价(不含税)", "建议报价", "备注"]);
@@ -269,24 +271,20 @@ const ProjectPricingStrategyCard = ({
           pricingStrategy.rentCost +
           (pricingStrategy.plannedExecutionCost ?? 0);
         const laborRateTarget = pricingStrategy.targetPrice
-          ? `${Math.round(
-              (pricingStrategy.suggestedLaborCost / pricingStrategy.targetPrice) * 100,
-            )}%`
+          ? formatRate(pricingStrategy.suggestedLaborCost, pricingStrategy.targetPrice)
           : "-";
         const laborRateBottom = pricingStrategy.bottomLinePrice
-          ? `${Math.round(
-              (pricingStrategy.plannedLaborCost / pricingStrategy.bottomLinePrice) * 100,
-            )}%`
+          ? formatRate(pricingStrategy.plannedLaborCost, pricingStrategy.bottomLinePrice)
           : "-";
         const totalCostRateTarget = pricingStrategy.targetPrice
-          ? `${Math.round((suggestedBreakEven / pricingStrategy.targetPrice) * 100)}%`
+          ? formatRate(suggestedBreakEven, pricingStrategy.targetPrice)
           : "-";
         const totalCostRateBottom = pricingStrategy.bottomLinePrice
-          ? `${Math.round((plannedBreakEven / pricingStrategy.bottomLinePrice) * 100)}%`
+          ? formatRate(plannedBreakEven, pricingStrategy.bottomLinePrice)
           : "-";
         const costBenchmarkReference =
           typeof pricingStrategy.targetPrice === "number"
-            ? Math.round(pricingStrategy.targetPrice * 0.53)
+            ? formatAmount(pricingStrategy.targetPrice * 0.53)
             : "-";
 
         worksheet.addRow(["类别", "理想报价", "最低报价", "备注"]);
@@ -328,18 +326,24 @@ const ProjectPricingStrategyCard = ({
       worksheet.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
       worksheet.getRow(2).font = { bold: true };
       worksheet.getRow(2).alignment = { vertical: "middle", horizontal: "center" };
+      const lastRow = worksheet.rowCount;
+      for (let rowIndex = 1; rowIndex <= lastRow; rowIndex += 1) {
+        for (let columnIndex = 1; columnIndex <= 4; columnIndex += 1) {
+          const cell = worksheet.getCell(rowIndex, columnIndex);
+          cell.border = {
+            top: { style: "thin", color: { argb: "FF000000" } },
+            left: { style: "thin", color: { argb: "FF000000" } },
+            bottom: { style: "thin", color: { argb: "FF000000" } },
+            right: { style: "thin", color: { argb: "FF000000" } },
+          };
+        }
+      }
       worksheet.eachRow((row) => {
         row.eachCell((cell) => {
           cell.alignment = {
             vertical: "top",
             horizontal: row.number <= 2 ? "center" : "center",
             wrapText: true,
-          };
-          cell.border = {
-            top: { style: "thin", color: { argb: "FFD9D9D9" } },
-            left: { style: "thin", color: { argb: "FFD9D9D9" } },
-            bottom: { style: "thin", color: { argb: "FFD9D9D9" } },
-            right: { style: "thin", color: { argb: "FFD9D9D9" } },
           };
         });
       });

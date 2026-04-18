@@ -6,6 +6,7 @@ import type { ColumnsType } from "antd/es/table";
 import type { Project } from "@/types/projectDetail";
 import ProjectFinancialStructureModal from "@/components/project-detail/ProjectFinancialStructureModal";
 import { getProjectOutsourceTotal } from "@/lib/project-outsource";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 
 type Props = {
   projectId: string;
@@ -32,6 +33,7 @@ type ProjectFinancialStructure = {
     type: string;
     amount: number;
   }>;
+  outsourceRemark?: string | null;
   project?: {
     id: string;
     name: string;
@@ -74,6 +76,8 @@ const formatAmountWithUnit = (value?: number | null) => {
   return amount === "-" ? "-" : `${amount} 元`;
 };
 
+const formatAmountPlain = (value?: number | null) => formatAmount(value);
+
 const toMoney = (value: unknown) => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -100,6 +104,10 @@ const ProjectFinancialStructureCard = ({
   const [downloading, setDownloading] = useState(false);
   const [financialStructure, setFinancialStructure] =
     useState<ProjectFinancialStructure | null>(null);
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const roleCodes = getRoleCodesFromUser(currentUser);
+  const canManageFinancialStructureActions =
+    roleCodes.includes("ADMIN") || roleCodes.includes("FINANCE");
 
   const fetchFinancialStructure = useCallback(async () => {
     if (!projectId) {
@@ -188,22 +196,33 @@ const ProjectFinancialStructureCard = ({
               {item.type}：{formatAmountWithUnit(item.amount)}
             </div>
           ))}
+          {financialStructure.outsourceRemark?.trim() ? (
+            <div style={{ whiteSpace: "pre-wrap", marginTop: 6 }}>
+              {financialStructure.outsourceRemark.trim()}
+            </div>
+          ) : null}
         </div>
       ) : (
-        "-"
+        (financialStructure.outsourceRemark?.trim() ? (
+          <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+            {financialStructure.outsourceRemark.trim()}
+          </div>
+        ) : (
+          "-"
+        ))
       );
 
     const rows: FinancialStructureTableRow[] = [
       {
         key: "income",
         name: "收入",
-        amount: formatAmountWithUnit(projectAmount),
+        amount: formatAmount(projectAmount),
         remark: benchmarkRemark,
       },
       {
         key: "agencyFee",
         name: "中介费",
-        amount: formatAmountWithUnit(agencyFeeAmount),
+        amount: formatAmount(agencyFeeAmount),
         remark:
           typeof financialStructure.agencyFeeRate === "number"
             ? `费率：${formatAmount(financialStructure.agencyFeeRate)}%`
@@ -212,37 +231,37 @@ const ProjectFinancialStructureCard = ({
       {
         key: "outsourceCost",
         name: "外包成本",
-        amount: formatAmountWithUnit(outsourceCost),
+        amount: formatAmount(outsourceCost),
         remark: outsourceDetailNode,
       },
       {
         key: "laborCost",
         name: "人力成本",
-        amount: formatAmountWithUnit(financialStructure.laborCost),
+        amount: formatAmount(financialStructure.laborCost),
         remark: laborCostRateRemark,
       },
       {
         key: "rentCost",
         name: "租金成本",
-        amount: formatAmountWithUnit(financialStructure.rentCost),
+        amount: formatAmount(financialStructure.rentCost),
         remark: "-",
       },
       {
         key: "middleOfficeCost",
         name: "中台成本",
-        amount: formatAmountWithUnit(financialStructure.middleOfficeCost),
+        amount: formatAmount(financialStructure.middleOfficeCost),
         remark: "-",
       },
       {
         key: "executionCost",
         name: "执行费用成本",
-        amount: formatAmountWithUnit(financialStructure.executionCost),
+        amount: formatAmount(financialStructure.executionCost),
         remark: executionCostDetailNode,
       },
       {
         key: "totalCost",
         name: "成本合计",
-        amount: formatAmountWithUnit(recomputedTotalCost),
+        amount: formatAmount(recomputedTotalCost),
         remark: totalCostRatioRemark,
       },
     ];
@@ -260,18 +279,19 @@ const ProjectFinancialStructureCard = ({
         title: "名称",
         dataIndex: "name",
         key: "name",
-        width: 220,
+        width: 280,
       },
       {
         title: "金额",
         dataIndex: "amount",
         key: "amount",
-        width: 320,
+        width: 280,
       },
       {
         title: "备注",
         dataIndex: "remark",
         key: "remark",
+        width: 400,
       },
     ],
     [],
@@ -313,32 +333,42 @@ const ProjectFinancialStructureCard = ({
         ? (financialStructure.executionCostItems ?? [])
             .map(
               (item) =>
-                `${item.costTypeOption?.value ?? "未命名费用类型"}：${formatAmountWithUnit(item.budgetAmount)}`,
+                `${item.costTypeOption?.value ?? "未命名费用类型"}：${formatAmountPlain(item.budgetAmount)}`,
             )
             .join("\n")
         : "-";
-    const outsourceRemark =
-      (financialStructure.outsourceItems?.length ?? 0) > 0
-        ? (financialStructure.outsourceItems ?? [])
-            .map((item) => `${item.type}：${formatAmountWithUnit(item.amount)}`)
-            .join("\n")
-        : "-";
+    const outsourceRemarkText = (() => {
+      const lines: string[] = [];
+      if ((financialStructure.outsourceItems?.length ?? 0) > 0) {
+        lines.push(
+          ...(financialStructure.outsourceItems ?? []).map(
+            (item) => `${item.type}：${formatAmountPlain(item.amount)}`,
+          ),
+        );
+      }
+      const remark = financialStructure.outsourceRemark?.trim();
+      if (remark) {
+        if (lines.length > 0) lines.push("");
+        lines.push(remark);
+      }
+      return lines.join("\n") || "-";
+    })();
 
     const exportRows: Array<[string, string, string]> = [
-      ["收入", formatAmountWithUnit(projectAmount), benchmarkRemark],
+      ["收入", formatAmountPlain(projectAmount), benchmarkRemark],
       [
         "中介费",
-        formatAmountWithUnit(agencyFeeAmount),
+        formatAmountPlain(agencyFeeAmount),
         typeof financialStructure.agencyFeeRate === "number"
           ? `费率：${formatAmount(financialStructure.agencyFeeRate)}%`
           : "-",
       ],
-      ["外包成本", formatAmountWithUnit(outsourceCost), outsourceRemark],
-      ["人力成本", formatAmountWithUnit(financialStructure.laborCost), laborCostRateRemark],
-      ["租金成本", formatAmountWithUnit(financialStructure.rentCost), "-"],
-      ["中台成本", formatAmountWithUnit(financialStructure.middleOfficeCost), "-"],
-      ["执行费用成本", formatAmountWithUnit(financialStructure.executionCost), executionCostRemark],
-      ["成本合计", formatAmountWithUnit(recomputedTotalCost), totalCostRatioRemark],
+      ["外包成本", formatAmountPlain(outsourceCost), outsourceRemarkText],
+      ["人力成本", formatAmountPlain(financialStructure.laborCost), laborCostRateRemark],
+      ["租金成本", formatAmountPlain(financialStructure.rentCost), "-"],
+      ["中台成本", formatAmountPlain(financialStructure.middleOfficeCost), "-"],
+      ["执行费用成本", formatAmountPlain(financialStructure.executionCost), executionCostRemark],
+      ["成本合计", formatAmountPlain(recomputedTotalCost), totalCostRatioRemark],
     ];
 
     setDownloading(true);
@@ -373,14 +403,21 @@ const ProjectFinancialStructureCard = ({
             horizontal: rowNumber <= 2 ? "center" : "left",
             wrapText: true,
           };
-          cell.border = {
-            top: { style: "thin", color: { argb: "FFD9D9D9" } },
-            left: { style: "thin", color: { argb: "FFD9D9D9" } },
-            bottom: { style: "thin", color: { argb: "FFD9D9D9" } },
-            right: { style: "thin", color: { argb: "FFD9D9D9" } },
-          };
         });
       });
+
+      const lastRow = worksheet.rowCount;
+      for (let rowIndex = 1; rowIndex <= lastRow; rowIndex += 1) {
+        for (let columnIndex = 1; columnIndex <= 3; columnIndex += 1) {
+          const cell = worksheet.getCell(rowIndex, columnIndex);
+          cell.border = {
+            top: { style: "thin", color: { argb: "FF000000" } },
+            left: { style: "thin", color: { argb: "FF000000" } },
+            bottom: { style: "thin", color: { argb: "FF000000" } },
+            right: { style: "thin", color: { argb: "FF000000" } },
+          };
+        }
+      }
 
       worksheet.columns = [
         { width: 22 },
@@ -422,7 +459,7 @@ const ProjectFinancialStructureCard = ({
     }
   }, [app, financialStructure, latestBaselineCostEstimation, messageApi, projectName]);
 
-  const actionsNode = (
+  const actionsNode = canManageFinancialStructureActions ? (
     <Space>
       <Button
         onClick={() => void downloadFinancialStructureTable()}
@@ -439,28 +476,34 @@ const ProjectFinancialStructureCard = ({
         {financialStructure ? "更新财务结构" : "新增财务结构"}
       </Button>
     </Space>
-  );
+  ) : null;
 
   const contentNode = loading ? (
     <div style={{ width: "100%", padding: "24px 0", textAlign: "center" }}>
       <Spin />
     </div>
   ) : financialStructure ? (
-    <Table<FinancialStructureTableRow>
-      rowKey="key"
-      pagination={false}
-      bordered
-      columns={columns}
-      dataSource={tableRows}
-      size="small"
-      title={() => (
-        <div style={{ textAlign: "center", fontWeight: 700 }}>
-          {`【${projectName || "未命名项目"}】${
-            latestBaselineCostEstimation?.estimatedDuration ?? "-"
-          }个工作日财务结构`}
-        </div>
-      )}
-    />
+    <div style={{ overflowX: "auto" }}>
+      <div style={{ width: 960, margin: "0 auto" }}>
+        <Table<FinancialStructureTableRow>
+          rowKey="key"
+          pagination={false}
+          bordered
+          columns={columns}
+          dataSource={tableRows}
+          size="small"
+          tableLayout="fixed"
+          style={{ width: 960 }}
+          title={() => (
+            <div style={{ textAlign: "center", fontWeight: 700 }}>
+              {`【${projectName || "未命名项目"}】${
+                latestBaselineCostEstimation?.estimatedDuration ?? "-"
+              }个工作日财务结构`}
+            </div>
+          )}
+        />
+      </div>
+    </div>
   ) : (
     <Empty description="暂无项目财务结构数据" />
   );

@@ -682,12 +682,12 @@ const ProjectPricingStrategyModal = ({
                         : undefined
                     }
                   />
-                  <Typography.Text strong>
-                    外包成本总计：{total}元
-                  </Typography.Text>
                   <Form.Item label="外包成本备注" name="outsourceRemark">
                     <Input.TextArea rows={3} placeholder="请输入外包成本备注" />
                   </Form.Item>
+                  <Typography.Text strong>
+                    外包成本总计：{total}元
+                  </Typography.Text>
                 </Space>
               );
             }}

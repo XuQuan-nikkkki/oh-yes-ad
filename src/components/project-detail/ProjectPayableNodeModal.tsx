@@ -149,24 +149,24 @@ const ProjectPayableNodeModal = ({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-              }}
-            >
-              <span>备注</span>
-              <Form.Item
-                noStyle
-                name="remarkNeedsAttention"
-                valuePropName="checked"
-              >
-                <Space size={8}>
-                  <span style={{ fontWeight: 400 }}>标红</span>
-                  <Switch size="small" />
-                </Space>
-              </Form.Item>
-            </div>
-          }
-          name="remark"
-        >
-          <Input.TextArea rows={3} placeholder="请输入备注" />
+	              }}
+	            >
+	              <span>备注</span>
+	              <Space size={8}>
+	                <span style={{ fontWeight: 400 }}>标红</span>
+	                <Form.Item
+	                  noStyle
+	                  name="remarkNeedsAttention"
+	                  valuePropName="checked"
+	                >
+	                  <Switch size="small" />
+	                </Form.Item>
+	              </Space>
+	            </div>
+	          }
+	          name="remark"
+	        >
+	          <Input.TextArea rows={3} placeholder="请输入备注" />
         </Form.Item>
       </Form>
     </Modal>

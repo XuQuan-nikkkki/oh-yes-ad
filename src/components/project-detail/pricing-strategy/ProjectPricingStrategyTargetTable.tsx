@@ -41,6 +41,12 @@ const ProjectPricingStrategyTargetTable = ({
   projectName,
   clientBudget,
 }: Props) => {
+  const formatRate = (numerator: number, denominator: number) => {
+    if (!denominator) return "-";
+    const value = (numerator / denominator) * 100;
+    return `${value.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 4 })}%`;
+  };
+
   const agencyFeeRate = pricingStrategy.agencyFeeRate ?? 0;
   const executionCostRemark = useMemo(
     () => formatExecutionCostRemark(pricingStrategy),
@@ -88,33 +94,27 @@ const ProjectPricingStrategyTargetTable = ({
 
   const laborCostRateByCustomerBudget = useMemo(() => {
     if (!customerBudgetAmount) return "-";
-    return `${Math.round(
-      (pricingStrategy.plannedLaborCost / customerBudgetAmount) * 100,
-    )}%`;
+    return formatRate(pricingStrategy.plannedLaborCost, customerBudgetAmount);
   }, [customerBudgetAmount, pricingStrategy.plannedLaborCost]);
 
   const laborCostRateBySuggestedQuote = useMemo(() => {
     if (!pricingStrategy.targetPrice) return "-";
-    return `${Math.round(
-      (pricingStrategy.plannedLaborCost / pricingStrategy.targetPrice) * 100,
-    )}%`;
+    return formatRate(pricingStrategy.plannedLaborCost, pricingStrategy.targetPrice);
   }, [pricingStrategy.plannedLaborCost, pricingStrategy.targetPrice]);
 
   const totalCostRateByCustomerBudget = useMemo(() => {
     if (!customerBudgetAmount) return "-";
-    return `${Math.round((customerBudgetBreakEven / customerBudgetAmount) * 100)}%`;
+    return formatRate(customerBudgetBreakEven, customerBudgetAmount);
   }, [customerBudgetAmount, customerBudgetBreakEven]);
 
   const totalCostRateBySuggestedQuote = useMemo(() => {
     if (!pricingStrategy.targetPrice) return "-";
-    return `${Math.round((suggestedBreakEven / pricingStrategy.targetPrice) * 100)}%`;
+    return formatRate(suggestedBreakEven, pricingStrategy.targetPrice);
   }, [pricingStrategy.targetPrice, suggestedBreakEven]);
 
   const costBenchmarkRemark = useMemo(() => {
     if (!customerBudgetAmount) return "成本基准参考：-";
-    return `成本基准参考：${formatAmount(
-      Math.round(customerBudgetAmount * 0.53),
-    )}`;
+    return `成本基准参考：${formatAmount(customerBudgetAmount * 0.53)}`;
   }, [customerBudgetAmount]);
 
   const tableRows = useMemo<PricingTableRow[]>(
@@ -215,14 +215,14 @@ const ProjectPricingStrategyTargetTable = ({
         title: "类别",
         dataIndex: "category",
         key: "category",
-        width: 180,
+        width: 160,
         align: "center",
       },
       {
         title: "客户报价(不含税)",
         dataIndex: "customerBudgetValue",
         key: "customerBudgetValue",
-        width: 260,
+        width: 220,
         align: "center",
         onCell: (record) =>
           record.key === "outsource" ||
@@ -238,7 +238,7 @@ const ProjectPricingStrategyTargetTable = ({
         title: "建议报价",
         dataIndex: "suggestedQuoteValue",
         key: "suggestedQuoteValue",
-        width: 260,
+        width: 220,
         align: "center",
         onCell: (record) =>
           record.key === "outsource" ||
@@ -264,24 +264,30 @@ const ProjectPricingStrategyTargetTable = ({
   const tableTitle = `【${projectName || "未命名项目"}】${pricingStrategy.estimatedDuration}个工作日报价参考`;
 
   return (
-    <Table<PricingTableRow>
-      rowKey="key"
-      pagination={false}
-      bordered
-      columns={columns}
-      dataSource={tableRows}
-      size="small"
-      title={() => (
-        <div
-          style={{
-            textAlign: "center",
-            fontWeight: 700,
-          }}
-        >
-          {tableTitle}
-        </div>
-      )}
-    />
+    <div style={{ overflowX: "auto" }}>
+      <div style={{ width: 900, margin: "0 auto" }}>
+        <Table<PricingTableRow>
+          rowKey="key"
+          pagination={false}
+          bordered
+          columns={columns}
+          dataSource={tableRows}
+          size="small"
+          tableLayout="fixed"
+          style={{ width: 900 }}
+          title={() => (
+            <div
+              style={{
+                textAlign: "center",
+                fontWeight: 700,
+              }}
+            >
+              {tableTitle}
+            </div>
+          )}
+        />
+      </div>
+    </div>
   );
 };
 

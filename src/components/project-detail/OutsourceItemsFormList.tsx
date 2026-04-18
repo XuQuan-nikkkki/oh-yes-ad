@@ -10,6 +10,11 @@ type Props = {
   typeLabel?: string;
   amountLabel?: string;
   addButtonText?: string;
+  initialValue?: Array<{
+    id?: string;
+    type?: string;
+    amount?: number;
+  }>;
   extra?: React.ReactNode;
 };
 
@@ -19,9 +24,10 @@ const OutsourceItemsFormList = ({
   typeLabel = "外包类型",
   amountLabel = "费用",
   addButtonText = "新增外包项",
+  initialValue,
   extra,
 }: Props) => (
-  <Form.List name={name}>
+  <Form.List name={name} initialValue={initialValue}>
     {(fields, { add, remove }) => (
       <Form.Item label={label} required extra={extra}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

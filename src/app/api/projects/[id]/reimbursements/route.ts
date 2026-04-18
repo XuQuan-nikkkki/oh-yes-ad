@@ -14,6 +14,18 @@ const toNullableNumber = (value: unknown) => {
     const parsed = Number(value.trim());
     return Number.isFinite(parsed) ? parsed : null;
   }
+  // Prisma Decimal (and similar) values are objects with toNumber/toString.
+  if (typeof value === "object" && value) {
+    const maybeDecimal = value as { toNumber?: () => unknown; toString?: () => string };
+    if (typeof maybeDecimal.toNumber === "function") {
+      const n = maybeDecimal.toNumber();
+      return typeof n === "number" && Number.isFinite(n) ? n : null;
+    }
+    if (typeof maybeDecimal.toString === "function") {
+      const parsed = Number(maybeDecimal.toString().trim());
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+  }
   return null;
 };
 

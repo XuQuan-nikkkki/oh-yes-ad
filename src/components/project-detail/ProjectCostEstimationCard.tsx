@@ -186,7 +186,8 @@ const ProjectCostEstimationCard = ({
     roleCodes.includes("ADMIN") ||
     roleCodes.includes("HR") ||
     roleCodes.includes("FINANCE");
-  const canManageByPmRole = roleCodes.includes("PROJECT_MANAGER");
+  const canManageByPmRole =
+    roleCodes.includes("PROJECT_MANAGER") || roleCodes.includes("ADMIN");
   const hasEstimation = Boolean(latestCostEstimation);
   const syncSummaryEstimation =
     latestCostEstimation ?? syncSummarySourceEstimation ?? null;

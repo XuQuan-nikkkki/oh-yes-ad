@@ -9,7 +9,6 @@ import { Button, Progress, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import BooleanTag from "@/components/BooleanTag";
 import EllipsisPopoverText from "@/components/EllipsisPopoverText";
-import RemarkText from "@/components/RemarkText";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import TableActions from "@/components/TableActions";
 import ProjectReceivableActualNodeModal, {
@@ -51,7 +50,9 @@ type StageOption = {
   color?: string | null;
 };
 
-type ActualNodeRow = NonNullable<ProjectReceivableNodeRow["actualNodes"]>[number];
+type ActualNodeRow = NonNullable<
+  ProjectReceivableNodeRow["actualNodes"]
+>[number];
 
 type Props = {
   title?: string;
@@ -88,7 +89,10 @@ const getCollectionProgressPercent = (row: ProjectReceivableNodeRow) => {
   const expectedAmount = Number(row.expectedAmountTaxIncluded ?? 0);
   const actualAmount = getActualAmountSum(row);
   if (expectedAmount <= 0) return 0;
-  return Math.max(0, Math.min(100, Math.round((actualAmount / expectedAmount) * 100)));
+  return Math.max(
+    0,
+    Math.min(100, Math.round((actualAmount / expectedAmount) * 100)),
+  );
 };
 
 const formatAmount = (value?: number | null) => {
@@ -136,6 +140,7 @@ const ProjectReceivableNodeTable = ({
       {
         title: "",
         dataIndex: "sortOrder",
+        fixed: "left",
         width: 10,
         editable: false,
         render: () => null,
@@ -149,6 +154,8 @@ const ProjectReceivableNodeTable = ({
       {
         title: "收款阶段",
         dataIndex: "stageOptionId",
+        fixed: "left",
+        width: 120,
         valueType: "select",
         valueEnum: stageValueEnum,
         fieldProps: {
@@ -213,7 +220,12 @@ const ProjectReceivableNodeTable = ({
           return (
             <div style={{ minWidth: 140, lineHeight: 1.1 }}>
               <Typography.Text
-                style={{ display: "block", marginBottom: 0, fontSize: 12, lineHeight: 1.1 }}
+                style={{
+                  display: "block",
+                  marginBottom: 0,
+                  fontSize: 12,
+                  lineHeight: 1.1,
+                }}
               >{`${actualAmount.toLocaleString("zh-CN")} / ${expectedAmount.toLocaleString("zh-CN")}`}</Typography.Text>
               <Progress percent={percent} showInfo={false} size="small" />
             </div>
@@ -237,8 +249,7 @@ const ProjectReceivableNodeTable = ({
               lineHeight: 1.2,
             }}
           >
-            <span>有供应商</span>
-            <span>付款</span>
+            有供应商付款
           </span>
         ),
         dataIndex: "hasVendorPayment",
@@ -252,16 +263,28 @@ const ProjectReceivableNodeTable = ({
         dataIndex: "remark",
         valueType: "textarea",
         ellipsis: true,
-        render: (_dom, row) => (
-          <RemarkText
-            remark={row.remark}
-            remarkNeedsAttention={row.remarkNeedsAttention}
-          />
-        ),
+        render: (_dom, row) => {
+          const value = row.remark?.trim() ?? "";
+          if (!value) return <span>-</span>;
+          return (
+            <div
+              style={{
+                color: Boolean(row.remarkNeedsAttention)
+                  ? "#ff4d4f"
+                  : undefined,
+                minWidth: 120,
+              }}
+            >
+              {value}
+            </div>
+          );
+        },
       },
       {
         title: "操作",
         valueType: "option",
+        fixed: "right",
+        width: 160,
         render: (_text, row) => (
           <Space size={4} wrap={false}>
             <Button
@@ -326,12 +349,21 @@ const ProjectReceivableNodeTable = ({
         title: "备注",
         dataIndex: "remark",
         width: 180,
-        render: (_dom, row) => (
-          <RemarkText
-            remark={row.remark}
-            remarkNeedsAttention={Boolean(row.remarkNeedsAttention)}
-          />
-        ),
+        render: (_dom, row) => {
+          const value = row.remark?.trim() ?? "";
+          if (!value) return <span>-</span>;
+          return (
+            <span
+              style={
+                Boolean(row.remarkNeedsAttention)
+                  ? { color: "#ff4d4f" }
+                  : undefined
+              }
+            >
+              {value}
+            </span>
+          );
+        },
       },
       {
         title: "操作",
@@ -360,7 +392,7 @@ const ProjectReceivableNodeTable = ({
   return (
     <>
       <DragSortTable<ProjectReceivableNodeRow>
-        style={{ marginTop: 24 }}
+        style={{ marginTop: 0 }}
         rowKey="id"
         columns={
           title
@@ -407,14 +439,14 @@ const ProjectReceivableNodeTable = ({
         })}
       />
 
-      <div style={{ marginTop: 12, textAlign: "right" }}>
+      <div style={{ marginTop: 8, textAlign: "center" }}>
         <Button
-          type="dashed"
-          block
+          type="text"
           disabled={!canManageProject}
           onClick={onAddNode}
+          style={{ fontWeight: 600, color: "rgba(0,0,0,0.45)" }}
         >
-          新增节点
+          + 新增节点
         </Button>
       </div>
 
@@ -457,12 +489,12 @@ const ProjectReceivableNodeTable = ({
                 ),
               }
             : currentCollectRow
-            ? {
-                actualAmountTaxIncluded:
-                  currentCollectRow.expectedAmountTaxIncluded,
-                actualDate: dayjs(currentCollectRow.expectedDate),
-              }
-            : undefined
+              ? {
+                  actualAmountTaxIncluded:
+                    currentCollectRow.expectedAmountTaxIncluded,
+                  actualDate: dayjs(currentCollectRow.expectedDate),
+                }
+              : undefined
         }
       />
 

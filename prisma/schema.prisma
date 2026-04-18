@@ -742,6 +742,7 @@ model ProjectFinancialStructure {
   totalCost         Float
 
   outsourceItems      ProjectOutsourceItem[]                      @relation("ProjectFinancialStructureOutsourceItems")
+  outsourceRemark     String?
   executionCostItems ProjectFinancialStructureExecutionCostItem[]
 
   createdAt DateTime @default(now())

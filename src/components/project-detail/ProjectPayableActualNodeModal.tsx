@@ -98,12 +98,16 @@ const ProjectPayableActualNodeModal = ({
               }}
             >
               <span>备注</span>
-              <Form.Item noStyle name="remarkNeedsAttention" valuePropName="checked">
-                <Space size={8}>
-                  <span style={{ fontWeight: 400 }}>标红</span>
+              <Space size={8}>
+                <span style={{ fontWeight: 400 }}>标红</span>
+                <Form.Item
+                  noStyle
+                  name="remarkNeedsAttention"
+                  valuePropName="checked"
+                >
                   <Switch size="small" />
-                </Space>
-              </Form.Item>
+                </Form.Item>
+              </Space>
             </div>
           }
           name="remark"

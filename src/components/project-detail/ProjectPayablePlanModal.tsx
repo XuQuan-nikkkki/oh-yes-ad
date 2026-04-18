@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
-import { Form, Input, InputNumber, Modal, Select, Space } from "antd";
-import { StepsForm } from "@ant-design/pro-components";
+import { useEffect, useMemo, useState } from "react";
+import { Button, Form, Input, InputNumber, Modal, Select, Space, Steps, Switch } from "antd";
 
 export type ProjectPayablePlanFormValues = {
   vendorId?: string;
@@ -11,6 +10,7 @@ export type ProjectPayablePlanFormValues = {
   serviceContent?: string;
   ownerEmployeeId?: string;
   remark?: string;
+  remarkNeedsAttention?: boolean;
 };
 
 type Option = {
@@ -54,78 +54,69 @@ const ProjectPayablePlanModal = ({
   ownerOptions,
 }: Props) => {
   const [form] = Form.useForm<ProjectPayablePlanFormValues>();
+  const [currentStep, setCurrentStep] = useState(0);
+  const mergedInitialValues = useMemo(
+    () => ({ remarkNeedsAttention: false, ...initialValues }),
+    [initialValues],
+  );
 
   useEffect(() => {
     if (!open) return;
-    form.setFieldsValue({
-      ...initialValues,
-    });
-  }, [form, initialValues, open]);
+    form.setFieldsValue(mergedInitialValues);
+  }, [form, mergedInitialValues, open]);
 
   return (
     <Modal
       title={mode === "edit" ? "修改付款计划" : "新增付款计划"}
       open={open}
       onCancel={onCancel}
+      afterOpenChange={(nextOpen) => {
+        if (!nextOpen) return;
+        setCurrentStep(0);
+        form.setFieldsValue(mergedInitialValues);
+      }}
       footer={null}
       destroyOnHidden
       width={860}
     >
-      <StepsForm<ProjectPayablePlanFormValues>
-        formProps={{ form, layout: "vertical", initialValues }}
-        stepsProps={{
-          style: {
+      <div
+        style={{
+          width: "100%",
+          maxHeight: MODAL_FORM_MAX_HEIGHT,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <div
+          style={{
             position: "sticky",
             top: 0,
             zIndex: 2,
             background: "#fff",
             paddingBottom: 12,
-          },
-        }}
-        stepsFormRender={(dom, submitter) => (
-          <div
-            style={{
-              width: "100%",
-              maxHeight: MODAL_FORM_MAX_HEIGHT,
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <div
-              style={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: "auto",
-                paddingRight: 12,
-              }}
+          }}
+        >
+          <Steps
+            current={currentStep}
+            items={[{ title: "供应商合同" }, { title: "付款计划" }]}
+          />
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            paddingRight: 12,
+          }}
+        >
+          <div style={{ maxWidth: 720, margin: "0 auto" }}>
+            <Form
+              form={form}
+              layout="vertical"
+              initialValues={mergedInitialValues}
             >
-              {dom}
-            </div>
-            <div
-              style={{
-                marginTop: 12,
-                paddingTop: 12,
-                borderTop: "1px solid #f0f0f0",
-                background: "#fff",
-              }}
-            >
-              {submitter}
-            </div>
-          </div>
-        )}
-        onFinish={async (values) => {
-          await onSubmit(values);
-          return true;
-        }}
-        submitter={{
-          searchConfig: {
-            submitText: "保存",
-          },
-          render: (_props, dom) => <Space size={12}>{dom}</Space>,
-          submitButtonProps: { loading, disabled: loading },
-        }}
-      >
-        <StepsForm.StepForm title="供应商合同">
+              <div style={{ display: currentStep === 0 ? "block" : "none" }}>
           <Form.Item label="所属项目">
             <Select
               disabled
@@ -168,9 +159,9 @@ const ProjectPayablePlanModal = ({
           >
             <InputNumber min={0} precision={0} style={{ width: "100%" }} />
           </Form.Item>
-        </StepsForm.StepForm>
+              </div>
 
-        <StepsForm.StepForm title="付款计划">
+              <div style={{ display: currentStep === 1 ? "block" : "none" }}>
           <Form.Item
             label="服务内容"
             name="serviceContent"
@@ -193,8 +184,71 @@ const ProjectPayablePlanModal = ({
           <Form.Item label="备注" name="remark">
             <Input.TextArea rows={4} placeholder="请输入备注" />
           </Form.Item>
-        </StepsForm.StepForm>
-      </StepsForm>
+          <Form.Item
+            label="备注标红"
+            name="remarkNeedsAttention"
+            valuePropName="checked"
+          >
+            <Switch checkedChildren="是" unCheckedChildren="否" />
+          </Form.Item>
+              </div>
+            </Form>
+          </div>
+        </div>
+
+        <div
+          style={{
+            marginTop: 12,
+            paddingTop: 12,
+            borderTop: "1px solid #f0f0f0",
+            background: "#fff",
+          }}
+        >
+          <Space size={12}>
+            {currentStep === 1 ? (
+              <Button onClick={() => setCurrentStep(0)} disabled={loading}>
+                上一步
+              </Button>
+            ) : null}
+            {currentStep === 0 ? (
+              <Button
+                type="primary"
+                disabled={loading}
+                onClick={async () => {
+                  try {
+                    await form.validateFields([
+                      "vendorId",
+                      "legalEntityId",
+                      "contractAmount",
+                    ]);
+                    setCurrentStep(1);
+                  } catch {
+                    // antd will render field errors; keep the step as-is.
+                  }
+                }}
+              >
+                下一步
+              </Button>
+            ) : (
+              <Button
+                type="primary"
+                loading={loading}
+                disabled={loading}
+                onClick={async () => {
+                  try {
+                    const values = await form.validateFields();
+                    await onSubmit(values);
+                  } catch {
+                    // antd will render field errors.
+                  }
+                }}
+              >
+                保存
+              </Button>
+            )}
+          </Space>
+        </div>
+      </div>
     </Modal>
   );
 };

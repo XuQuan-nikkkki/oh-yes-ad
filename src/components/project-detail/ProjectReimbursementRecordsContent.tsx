@@ -164,6 +164,12 @@ const ProjectReimbursementRecordsContent = ({
         } else {
           void messageApi.success(isEdit ? "更新报销成功" : "新增报销成功");
         }
+        // Notify other tabs (e.g. realtime cost tracking) to refresh.
+        window.dispatchEvent(
+          new CustomEvent("project-reimbursements-updated", {
+            detail: { projectId },
+          }),
+        );
         setEditingRecord(null);
         onCancel();
         await fetchRows();
@@ -199,6 +205,12 @@ const ProjectReimbursementRecordsContent = ({
         } else {
           void messageApi.success("删除报销成功");
         }
+        // Notify other tabs (e.g. realtime cost tracking) to refresh.
+        window.dispatchEvent(
+          new CustomEvent("project-reimbursements-updated", {
+            detail: { projectId },
+          }),
+        );
         await fetchRows();
       } catch {
         if (typeof app?.message?.error === "function") {

@@ -9,7 +9,6 @@ import { Button, Progress, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import BooleanTag from "@/components/BooleanTag";
 import EllipsisPopoverText from "@/components/EllipsisPopoverText";
-import RemarkText from "@/components/RemarkText";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import TableActions from "@/components/TableActions";
 import ProjectPayableActualNodeModal, {
@@ -135,7 +134,8 @@ const ProjectPayableNodeTable = ({
       {
         title: "",
         dataIndex: "sortOrder",
-        width: 10,
+        width: 28,
+        fixed: "left",
         editable: false,
         render: () => null,
         onHeaderCell: () => ({
@@ -148,6 +148,8 @@ const ProjectPayableNodeTable = ({
       {
         title: "付款阶段",
         dataIndex: "stageOptionId",
+        fixed: "left",
+        width: 120,
         valueType: "select",
         valueEnum: stageValueEnum,
         fieldProps: {
@@ -228,18 +230,7 @@ const ProjectPayableNodeTable = ({
         },
       },
       {
-        title: (
-          <span
-            style={{
-              display: "inline-flex",
-              flexDirection: "column",
-              lineHeight: 1.2,
-            }}
-          >
-            <span>有客户</span>
-            <span>收款</span>
-          </span>
-        ),
+        title: "有客户收款",
         dataIndex: "hasCustomerCollection",
         valueType: "switch",
         render: (_dom, row) => (
@@ -250,17 +241,29 @@ const ProjectPayableNodeTable = ({
         title: "备注",
         dataIndex: "remark",
         valueType: "textarea",
+        width: 120,
         ellipsis: true,
-        render: (_dom, row) => (
-          <RemarkText
-            remark={row.remark}
-            remarkNeedsAttention={row.remarkNeedsAttention}
-          />
-        ),
+        render: (_dom, row) => {
+          const value = row.remark?.trim() ?? "";
+          if (!value) return <span>-</span>;
+          return (
+            <span
+              style={
+                Boolean(row.remarkNeedsAttention)
+                  ? { color: "#ff4d4f" }
+                  : undefined
+              }
+            >
+              {value}
+            </span>
+          );
+        },
       },
       {
         title: "操作",
         valueType: "option",
+        fixed: "right",
+        width: 160,
         render: (_text, row) => (
           <Space size={4} wrap={false}>
             <Button
@@ -325,12 +328,21 @@ const ProjectPayableNodeTable = ({
         title: "备注",
         dataIndex: "remark",
         width: 180,
-        render: (_dom, row) => (
-          <RemarkText
-            remark={row.remark}
-            remarkNeedsAttention={Boolean(row.remarkNeedsAttention)}
-          />
-        ),
+        render: (_dom, row) => {
+          const value = row.remark?.trim() ?? "";
+          if (!value) return <span>-</span>;
+          return (
+            <span
+              style={
+                Boolean(row.remarkNeedsAttention)
+                  ? { color: "#ff4d4f" }
+                  : undefined
+              }
+            >
+              {value}
+            </span>
+          );
+        },
       },
       {
         title: "操作",

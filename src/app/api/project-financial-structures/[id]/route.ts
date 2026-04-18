@@ -180,6 +180,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const executionCost = toNullableNumber(body.executionCost);
   const agencyFeeRate = toNullableNumber(body.agencyFeeRate ?? body.agencyFee);
   const totalCost = toNullableNumber(body.totalCost);
+  const outsourceRemark = "outsourceRemark" in body ? toNullableString(body.outsourceRemark) : undefined;
   const hasExecutionCostItems = "executionCostItems" in body;
   const executionCostItems = hasExecutionCostItems
     ? normalizeExecutionCostItems(body.executionCostItems)
@@ -197,6 +198,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     ["agencyFeeRate", agencyFeeRate],
     ["totalCost", totalCost],
   ];
+
+  if ("outsourceRemark" in body && body.outsourceRemark !== null && outsourceRemark === null) {
+    return new Response("Invalid outsourceRemark", { status: 400 });
+  }
 
   for (const [field, value] of requiredFieldPairs) {
     if (field in body && value === null) {
@@ -232,6 +237,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
           ? undefined
           : agencyFeeRate,
       totalCost: totalCost === null || totalCost === undefined ? undefined : totalCost,
+      outsourceRemark: outsourceRemark === undefined ? undefined : outsourceRemark,
       ...(hasExecutionCostItems
         ? {
             executionCostItems: {

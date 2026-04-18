@@ -842,12 +842,12 @@ const ProjectCostEstimationModal = ({
                   style={{ width: "100%" }}
                 >
                   <OutsourceItemsFormList />
-                  <Typography.Text strong>
-                    外包费用总计：{total} 元
-                  </Typography.Text>
                   <Form.Item label="外包备注" name="outsourceRemark">
                     <Input.TextArea rows={3} placeholder="请输入外包备注" />
                   </Form.Item>
+                  <Typography.Text strong>
+                    外包费用总计：{total} 元
+                  </Typography.Text>
                 </Space>
               );
             }}

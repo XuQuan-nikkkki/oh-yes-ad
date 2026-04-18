@@ -141,33 +141,31 @@ const ProjectReceivableNodeModal = ({
         >
           <Switch />
         </Form.Item>
-        <Form.Item
-          label={
-            <div
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <span>备注</span>
+        <div style={{ marginBottom: 24 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 8,
+            }}
+          >
+            <span style={{ color: "rgba(0,0,0,0.88)" }}>备注</span>
+            <Space size={8}>
+              <span style={{ fontWeight: 400 }}>标红</span>
               <Form.Item
-                noStyle
                 name="remarkNeedsAttention"
                 valuePropName="checked"
+                noStyle
               >
-                <Space size={8}>
-                  <span style={{ fontWeight: 400 }}>标红</span>
-                  <Switch size="small" />
-                </Space>
+                <Switch size="small" />
               </Form.Item>
-            </div>
-          }
-          name="remark"
-        >
-          <Input.TextArea rows={3} placeholder="请输入备注" />
-        </Form.Item>
+            </Space>
+          </div>
+          <Form.Item name="remark" style={{ marginBottom: 0 }}>
+            <Input.TextArea rows={3} placeholder="请输入备注" />
+          </Form.Item>
+        </div>
       </Form>
     </Modal>
   );

@@ -162,6 +162,7 @@ export async function POST(req: NextRequest) {
   const totalCost = toRequiredNumber(body.totalCost);
   const executionCostItems = normalizeExecutionCostItems(body.executionCostItems);
   const outsourceItems = normalizeOutsourceItems(body.outsourceItems);
+  const outsourceRemark = toNullableString(body.outsourceRemark);
 
   if (
     laborCost === null ||
@@ -220,6 +221,7 @@ export async function POST(req: NextRequest) {
       executionCost,
       agencyFeeRate: agencyFeeRate ?? 0,
       totalCost,
+      outsourceRemark,
       outsourceItems: {
         create: outsourceItems.map((item) => ({
           type: item.type,
