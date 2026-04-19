@@ -806,7 +806,7 @@ const ProjectPayableInfo = forwardRef<
                       ) : (
                         String(value || "-")
                       ),
-                    valueStyle: { fontSize: 18 },
+                    styles: { content: { fontSize: 18 } },
                   }}
                 />
                 <StatisticCard
@@ -819,7 +819,7 @@ const ProjectPayableInfo = forwardRef<
                       currentContract?.contractAmount ??
                       currentPlan.contractAmount,
                     suffix: "元",
-                    valueStyle: { fontSize: 18 },
+                    styles: { content: { fontSize: 18 } },
                     formatter: (value) =>
                       Number(value ?? 0).toLocaleString("zh-CN"),
                   }}
@@ -832,7 +832,7 @@ const ProjectPayableInfo = forwardRef<
                     title: "预付金额总计",
                     value: payableSummary.expectedAmountTotal,
                     suffix: "元",
-                    valueStyle: { fontSize: 18 },
+                    styles: { content: { fontSize: 18 } },
                     formatter: (value) =>
                       Number(value ?? 0).toLocaleString("zh-CN"),
                   }}
@@ -845,7 +845,7 @@ const ProjectPayableInfo = forwardRef<
                     title: "实付金额总计",
                     value: payableSummary.actualAmountTotal,
                     suffix: "元",
-                    valueStyle: { fontSize: 18 },
+                    styles: { content: { fontSize: 18 } },
                     formatter: (value) =>
                       Number(value ?? 0).toLocaleString("zh-CN"),
                   }}

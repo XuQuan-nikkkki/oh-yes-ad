@@ -867,9 +867,7 @@ const ProjectReceivableInfo = forwardRef<
                         }}
                         statistic={{
                           title: "合同金额（含税）",
-                          valueStyle: {
-                            fontSize: 18,
-                          },
+                          styles: { content: { fontSize: 18 } },
                           value: contractAmount,
                           suffix: "元",
                           formatter: (value) =>
@@ -882,9 +880,7 @@ const ProjectReceivableInfo = forwardRef<
                         }}
                         statistic={{
                           title: "税费",
-                          valueStyle: {
-                            fontSize: 18,
-                          },
+                          styles: { content: { fontSize: 18 } },
                           value:
                             contract?.taxAmount === null ||
                             contract?.taxAmount === undefined
@@ -903,7 +899,7 @@ const ProjectReceivableInfo = forwardRef<
                           title: "预收金额合计",
                           value: summary.expectedAmountTotal,
                           suffix: "元",
-                          valueStyle: { fontSize: 18 },
+                          styles: { content: { fontSize: 18 } },
                           formatter: (value) =>
                             Number(value ?? 0).toLocaleString("zh-CN"),
                         }}
@@ -914,9 +910,7 @@ const ProjectReceivableInfo = forwardRef<
                         }}
                         statistic={{
                           title: "实收金额总计",
-                          valueStyle: {
-                            fontSize: 18,
-                          },
+                          styles: { content: { fontSize: 18 } },
                           value: summary.actualAmountTotal,
                           suffix: "元",
                           formatter: (value) =>

@@ -20,8 +20,6 @@ type Props = {
   projectName: string;
   employees: EmployeeOption[];
   canManageProject?: boolean;
-  open: boolean;
-  onCancel: () => void;
 };
 
 type ReimbursementRow = {
@@ -67,8 +65,6 @@ const ProjectReimbursementRecordsContent = ({
   projectName,
   employees,
   canManageProject = false,
-  open,
-  onCancel,
 }: Props) => {
   const app = App.useApp();
   const [messageApi, contextHolder] = message.useMessage();
@@ -136,15 +132,26 @@ const ProjectReimbursementRecordsContent = ({
     void fetchCategoryOptions();
   }, [fetchCategoryOptions, fetchRows]);
 
-  const handleCreate = useCallback(
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ projectId?: string }>).detail;
+      if (detail?.projectId !== projectId) return;
+      void fetchRows();
+    };
+    window.addEventListener("project-reimbursements-updated", handler as EventListener);
+    return () => {
+      window.removeEventListener("project-reimbursements-updated", handler as EventListener);
+    };
+  }, [fetchRows, projectId]);
+
+  const handleUpdate = useCallback(
     async (values: ProjectReimbursementFormValues) => {
       setSubmitting(true);
       try {
         const isEdit = Boolean(editingRecord?.id);
+        if (!isEdit) return;
         const res = await fetch(
-          isEdit
-            ? `/api/projects/${projectId}/reimbursements/${editingRecord?.id}`
-            : `/api/projects/${projectId}/reimbursements`,
+          `/api/projects/${projectId}/reimbursements/${editingRecord?.id}`,
           {
             method: isEdit ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -160,9 +167,9 @@ const ProjectReimbursementRecordsContent = ({
           return;
         }
         if (typeof app?.message?.success === "function") {
-          app.message.success(isEdit ? "更新报销成功" : "新增报销成功");
+          app.message.success("更新报销成功");
         } else {
-          void messageApi.success(isEdit ? "更新报销成功" : "新增报销成功");
+          void messageApi.success("更新报销成功");
         }
         // Notify other tabs (e.g. realtime cost tracking) to refresh.
         window.dispatchEvent(
@@ -171,19 +178,18 @@ const ProjectReimbursementRecordsContent = ({
           }),
         );
         setEditingRecord(null);
-        onCancel();
         await fetchRows();
       } catch {
         if (typeof app?.message?.error === "function") {
-          app.message.error(editingRecord ? "更新报销失败" : "新增报销失败");
+          app.message.error("更新报销失败");
         } else {
-          void messageApi.error(editingRecord ? "更新报销失败" : "新增报销失败");
+          void messageApi.error("更新报销失败");
         }
       } finally {
         setSubmitting(false);
       }
     },
-    [app, editingRecord, fetchRows, messageApi, onCancel, projectId],
+    [app, editingRecord, fetchRows, messageApi, projectId],
   );
 
   const handleDelete = useCallback(
@@ -298,7 +304,7 @@ const ProjectReimbursementRecordsContent = ({
       />
 
       <ProjectReimbursementFormModal
-        open={open || Boolean(editingRecord)}
+        open={Boolean(editingRecord)}
         projectId={projectId}
         projectName={projectName}
         employees={employees}
@@ -316,9 +322,8 @@ const ProjectReimbursementRecordsContent = ({
         submitting={submitting}
         onCancel={() => {
           setEditingRecord(null);
-          onCancel();
         }}
-        onSubmit={handleCreate}
+        onSubmit={handleUpdate}
       />
     </>
   );

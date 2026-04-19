@@ -63,7 +63,6 @@ const LegalEntityFormModal = ({
       open={open}
       onCancel={onCancel}
       footer={null}
-      destroyOnHidden
       width={840}
     >
       <Form

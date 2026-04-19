@@ -288,7 +288,7 @@ export default function MenuContent({
                 {
                   key: "/project-reimbursements",
                   icon: <CreditCardOutlined />,
-                  label: "项目报销",
+                  label: "执行费用监控",
                 },
                 ...(canViewCompanyFinance
                   ? [

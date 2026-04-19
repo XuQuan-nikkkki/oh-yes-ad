@@ -1441,7 +1441,7 @@ const ProjectRealtimeCostTrackingTable = ({
               statistic={{
                 title: "收入",
                 value: income,
-                valueStyle: { fontSize: 18, color: "#4F88D7", fontWeight: 700 },
+                styles: { content: { fontSize: 18, color: "#4F88D7", fontWeight: 700 } },
                 formatter: (value) => Number(value ?? 0).toLocaleString("zh-CN"),
               }}
             />
@@ -1450,7 +1450,7 @@ const ProjectRealtimeCostTrackingTable = ({
               statistic={{
                 title: "总费用成本",
                 value: totalCost,
-                valueStyle: { fontSize: 18, color: "#8B5A2B", fontWeight: 700 },
+                styles: { content: { fontSize: 18, color: "#8B5A2B", fontWeight: 700 } },
                 description: (
                   <span
                     style={{
@@ -1470,7 +1470,7 @@ const ProjectRealtimeCostTrackingTable = ({
               statistic={{
                 title: "项目利润",
                 value: projectProfit,
-                valueStyle: { fontSize: 18, color: "#6F9838", fontWeight: 700 },
+                styles: { content: { fontSize: 18, color: "#6F9838", fontWeight: 700 } },
                 description: (
                   <span
                     style={{
@@ -1490,7 +1490,7 @@ const ProjectRealtimeCostTrackingTable = ({
               statistic={{
                 title: "最终利润",
                 value: finalProfit,
-                valueStyle: { fontSize: 18, color: "#6F9838", fontWeight: 700 },
+                styles: { content: { fontSize: 18, color: "#6F9838", fontWeight: 700 } },
                 description: (
                   <span
                     style={{

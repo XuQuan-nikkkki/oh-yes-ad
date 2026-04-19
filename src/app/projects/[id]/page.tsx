@@ -33,6 +33,7 @@ import ProjectPricingStrategyCard from "@/components/project-detail/ProjectPrici
 import ProjectFinancialStructureCard from "@/components/project-detail/ProjectFinancialStructureCard";
 import ProjectRealtimeCostTrackingTable from "@/components/project-detail/ProjectRealtimeCostTrackingTable";
 import ProjectReimbursementRecordsContent from "@/components/project-detail/ProjectReimbursementRecordsContent";
+import ProjectReimbursementCreateAction from "@/components/project-detail/ProjectReimbursementCreateAction";
 import ProjectPayableInfo from "@/components/project-detail/ProjectPayableInfo";
 import ProjectReceivableInfo from "@/components/project-detail/ProjectReceivableInfo";
 import {
@@ -164,7 +165,6 @@ const ProjectDetailPage = () => {
   >(null);
   const [financialStructureRefreshKey, setFinancialStructureRefreshKey] =
     useState(0);
-  const [reimbursementModalOpen, setReimbursementModalOpen] = useState(false);
   const [actualWorkView, setActualWorkView] = useState<"records" | "analysis">(
     "records",
   );
@@ -200,6 +200,18 @@ const ProjectDetailPage = () => {
   const stepParam = Number.isFinite(stepParamRaw)
     ? Math.min(4, Math.max(0, Math.trunc(stepParamRaw)))
     : 2;
+  const tabParamRaw = searchParams.get("tab");
+  const stepTabKeys = useMemo(
+    () =>
+      ({
+        0: ["cost-estimation", "pricing-reference"],
+        1: ["project-initiation", "project-financial-structure"],
+        2: ["members", "vendors", "milestones", "progress", "work", "documents"],
+        3: ["receivable", "payable"],
+        4: ["realtime-cost", "expense-records"],
+      }) as const,
+    [],
+  );
   const isInternalProject =
     project?.type === "INTERNAL" ||
     project?.type === "内部项目" ||
@@ -571,20 +583,102 @@ const ProjectDetailPage = () => {
     });
   };
 
-  const handleStepChange = useCallback(
-    (step: number) => {
-      const nextStep = Math.min(4, Math.max(0, Math.trunc(step)));
-      const nextParams = new URLSearchParams(searchParams.toString());
-      nextParams.delete("tab");
-      nextParams.set("step", String(nextStep));
-
+  const replaceSearchParams = useCallback(
+    (nextParams: URLSearchParams) => {
       const nextQuery = nextParams.toString();
       router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
         scroll: false,
       });
     },
-    [pathname, router, searchParams],
+    [pathname, router],
   );
+
+  const handleStepChange = useCallback(
+    (step: number) => {
+      const nextStep = Math.min(4, Math.max(0, Math.trunc(step))) as
+        | 0
+        | 1
+        | 2
+        | 3
+        | 4;
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.set("step", String(nextStep));
+      nextParams.set("tab", stepTabKeys[nextStep][0]);
+      replaceSearchParams(nextParams);
+    },
+    [replaceSearchParams, searchParams, stepTabKeys],
+  );
+
+  const handleStepTabChange = useCallback(
+    (key: string) => {
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.set("step", String(stepParam));
+      nextParams.set("tab", key);
+      replaceSearchParams(nextParams);
+    },
+    [replaceSearchParams, searchParams, stepParam],
+  );
+
+  useEffect(() => {
+    if (isInternalProject) return;
+
+    const stepIndex = stepParam as 0 | 1 | 2 | 3 | 4;
+    const validKeys = stepTabKeys[stepIndex];
+    const normalizedTab =
+      tabParamRaw && validKeys.includes(tabParamRaw)
+        ? tabParamRaw
+        : validKeys[0];
+
+    if (stepParam === 0) {
+      if (pricingTab !== normalizedTab) {
+        setPricingTab(normalizedTab as "cost-estimation" | "pricing-reference");
+      }
+    } else if (stepParam === 1) {
+      if (contractTopTab !== normalizedTab) {
+        setContractTopTab(
+          normalizedTab as "project-initiation" | "project-financial-structure",
+        );
+      }
+    } else if (stepParam === 2) {
+      if (executionTopTab !== normalizedTab) {
+        setExecutionTopTab(
+          normalizedTab as
+            | "members"
+            | "vendors"
+            | "milestones"
+            | "progress"
+            | "work"
+            | "documents",
+        );
+      }
+    } else if (stepParam === 3) {
+      if (financeTopTab !== normalizedTab) {
+        setFinanceTopTab(normalizedTab as "receivable" | "payable");
+      }
+    } else if (stepParam === 4) {
+      if (costTrackingTab !== normalizedTab) {
+        setCostTrackingTab(normalizedTab as "expense-records" | "realtime-cost");
+      }
+    }
+
+    if (tabParamRaw !== normalizedTab) {
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.set("tab", normalizedTab);
+      replaceSearchParams(nextParams);
+    }
+  }, [
+    contractTopTab,
+    costTrackingTab,
+    executionTopTab,
+    financeTopTab,
+    isInternalProject,
+    pricingTab,
+    replaceSearchParams,
+    searchParams,
+    stepParam,
+    stepTabKeys,
+    tabParamRaw,
+  ]);
 
   if (!project) {
     return (
@@ -1001,8 +1095,10 @@ const ProjectDetailPage = () => {
               tabs={{
                 type: "card",
                 activeKey: pricingTab,
-                onChange: (key) =>
-                  setPricingTab(key as "cost-estimation" | "pricing-reference"),
+                onChange: (key) => {
+                  setPricingTab(key as "cost-estimation" | "pricing-reference");
+                  handleStepTabChange(String(key));
+                },
                 tabBarExtraContent:
                   pricingTab === "cost-estimation" ? (
                     <div style={{ paddingRight: 16 }}>
@@ -1079,10 +1175,12 @@ const ProjectDetailPage = () => {
               tabs={{
                 type: "card",
                 activeKey: contractTopTab,
-                onChange: (key) =>
+                onChange: (key) => {
                   setContractTopTab(
                     key as "project-initiation" | "project-financial-structure",
-                  ),
+                  );
+                  handleStepTabChange(String(key));
+                },
                 tabBarExtraContent:
                   contractTopTab === "project-initiation" ? (
                     <div style={{ paddingRight: 16 }}>
@@ -1273,7 +1371,7 @@ const ProjectDetailPage = () => {
                       />
                     </div>
                   ) : null,
-                onChange: (key) =>
+                onChange: (key) => {
                   setExecutionTopTab(
                     key as
                       | "members"
@@ -1282,7 +1380,9 @@ const ProjectDetailPage = () => {
                       | "progress"
                       | "work"
                       | "documents",
-                  ),
+                  );
+                  handleStepTabChange(String(key));
+                },
                 items: [
                   {
                     key: "members",
@@ -1559,13 +1659,15 @@ const ProjectDetailPage = () => {
                   tabBarExtraContent:
                     costTrackingTab === "expense-records" ? (
                       <div style={{ paddingRight: 16 }}>
-                        <Button
-                          type="primary"
-                          onClick={() => setReimbursementModalOpen(true)}
-                          disabled={!canManageProject}
-                        >
-                          新增报销
-                        </Button>
+                        <ProjectReimbursementCreateAction
+                          projectId={projectId}
+                          projectName={project.name ?? ""}
+                          employees={(project.members ?? []).map((item) => ({
+                            id: item.id,
+                            name: item.name,
+                          }))}
+                          canManageProject={canManageProject}
+                        />
                       </div>
                     ) : costTrackingTab === "realtime-cost" ? (
                       <div style={{ paddingRight: 16 }}>
@@ -1579,10 +1681,12 @@ const ProjectDetailPage = () => {
 	                        </Button>
 	                      </div>
 	                    ) : null,
-                  onChange: (key) =>
+                  onChange: (key) => {
                     setCostTrackingTab(
                       key as "expense-records" | "realtime-cost",
-                    ),
+                    );
+                    handleStepTabChange(String(key));
+                  },
                   items: [
                     {
                       key: "realtime-cost",
@@ -1614,8 +1718,6 @@ const ProjectDetailPage = () => {
                             name: item.name,
                           }))}
                           canManageProject={canManageProject}
-                          open={reimbursementModalOpen}
-                          onCancel={() => setReimbursementModalOpen(false)}
                         />
                       ),
                     },
@@ -1632,8 +1734,10 @@ const ProjectDetailPage = () => {
               tabs={{
                 type: "card",
                 activeKey: financeTopTab,
-                onChange: (key) =>
-                  setFinanceTopTab(key as "receivable" | "payable"),
+                onChange: (key) => {
+                  setFinanceTopTab(key as "receivable" | "payable");
+                  handleStepTabChange(String(key));
+                },
                 tabBarExtraContent: (
                   <div style={{ paddingRight: 16 }}>
                     {financeTopTab === "receivable" ? (

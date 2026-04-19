@@ -184,7 +184,7 @@ const HomeSiteMap = ({ isAdmin, onNavigate }: Props) => {
           path: "/project-receivable-delays",
         },
         {
-          label: "项目报销",
+          label: "执行费用监控",
           icon: <CreditCardOutlined />,
           path: "/project-reimbursements",
         },
