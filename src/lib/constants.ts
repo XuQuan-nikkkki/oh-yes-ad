@@ -21,3 +21,15 @@ export const PROJECT_TASK_STATUS_OPTIONS = [
   { value: "已完成", order: 3, color: "#52c41a" },
   { value: "暂停", order: 4, color: "#faad14" },
 ] as const;
+
+export const SIGNING_COMPANY_TAG_COLORS: Record<string, string> = {
+  来福豪斯: "#AEC2F4",
+  "私账-浦发2062": "#E9D791",
+  奥耶士: "#E8C18F",
+  人有文化: "#9BCFE8",
+};
+
+export const getSigningCompanyTagColor = (name?: string | null) => {
+  const displayName = String(name ?? "").trim();
+  return SIGNING_COMPANY_TAG_COLORS[displayName] ?? "#E5E7EB";
+};

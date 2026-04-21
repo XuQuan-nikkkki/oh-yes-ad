@@ -18,7 +18,8 @@ export type ProjectPayableNodeFormValues = {
   paymentCondition: string;
   expectedAmountTaxIncluded: number;
   expectedDate: Dayjs;
-  hasCustomerCollection: boolean;
+  actualAmountTaxIncluded?: number;
+  actualDate?: Dayjs;
   remark?: string;
   remarkNeedsAttention?: boolean;
 };
@@ -30,6 +31,8 @@ type Props = {
   onSubmit: (values: ProjectPayableNodeFormValues) => void | Promise<void>;
   stageOptions: StageOption[];
   stageOptionsLoading?: boolean;
+  actualAmountTaxIncluded?: number | null;
+  actualDate?: Dayjs | null;
   initialValues?: Partial<ProjectPayableNodeFormValues>;
   title?: string;
 };
@@ -41,16 +44,22 @@ const ProjectPayableNodeModal = ({
   onSubmit,
   stageOptions,
   stageOptionsLoading = false,
+  actualAmountTaxIncluded = null,
+  actualDate = null,
   initialValues,
   title = "新增付款节点",
 }: Props) => {
   const [form] = Form.useForm<ProjectPayableNodeFormValues>();
+  const showActualFields =
+    actualAmountTaxIncluded !== null &&
+    actualAmountTaxIncluded !== undefined &&
+    actualDate !== null &&
+    actualDate !== undefined;
 
   useEffect(() => {
     if (!open) return;
     form.resetFields();
     form.setFieldsValue({
-      hasCustomerCollection: false,
       remarkNeedsAttention: false,
       ...initialValues,
     });
@@ -134,40 +143,53 @@ const ProjectPayableNodeModal = ({
             </Form.Item>
           </Col>
         </Row>
-        <Form.Item
-          label="是否有客户收款"
-          name="hasCustomerCollection"
-          valuePropName="checked"
-        >
-          <Switch />
-        </Form.Item>
-        <Form.Item
-          label={
-            <div
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-	              }}
-	            >
-	              <span>备注</span>
-	              <Space size={8}>
-	                <span style={{ fontWeight: 400 }}>标红</span>
-	                <Form.Item
-	                  noStyle
-	                  name="remarkNeedsAttention"
-	                  valuePropName="checked"
-	                >
-	                  <Switch size="small" />
-	                </Form.Item>
-	              </Space>
-	            </div>
-	          }
-	          name="remark"
-	        >
-	          <Input.TextArea rows={3} placeholder="请输入备注" />
-        </Form.Item>
+        {showActualFields ? (
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="实付金额（含税）"
+                name="actualAmountTaxIncluded"
+                rules={[{ required: true, message: "请输入实付金额" }]}
+              >
+                <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="实付日期"
+                name="actualDate"
+                rules={[{ required: true, message: "请选择实付日期" }]}
+              >
+                <DatePicker style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+          </Row>
+        ) : null}
+        <div style={{ marginBottom: 24 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 8,
+            }}
+          >
+            <span style={{ color: "rgba(0,0,0,0.88)" }}>备注</span>
+            <Space size={8}>
+              <span style={{ fontWeight: 400 }}>标红</span>
+              <Form.Item
+                noStyle
+                name="remarkNeedsAttention"
+                valuePropName="checked"
+              >
+                <Switch size="small" />
+              </Form.Item>
+            </Space>
+          </div>
+          <Form.Item name="remark" style={{ marginBottom: 0 }}>
+            <Input.TextArea rows={3} placeholder="请输入备注" />
+          </Form.Item>
+        </div>
       </Form>
     </Modal>
   );

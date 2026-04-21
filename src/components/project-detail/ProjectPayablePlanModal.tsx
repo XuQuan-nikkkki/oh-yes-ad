@@ -9,6 +9,7 @@ export type ProjectPayablePlanFormValues = {
   contractAmount?: number;
   serviceContent?: string;
   ownerEmployeeId?: string;
+  hasCustomerCollection?: boolean;
   remark?: string;
   remarkNeedsAttention?: boolean;
 };
@@ -56,7 +57,7 @@ const ProjectPayablePlanModal = ({
   const [form] = Form.useForm<ProjectPayablePlanFormValues>();
   const [currentStep, setCurrentStep] = useState(0);
   const mergedInitialValues = useMemo(
-    () => ({ remarkNeedsAttention: false, ...initialValues }),
+    () => ({ hasCustomerCollection: false, remarkNeedsAttention: false, ...initialValues }),
     [initialValues],
   );
 
@@ -181,16 +182,38 @@ const ProjectPayablePlanModal = ({
               optionFilterProp="label"
             />
           </Form.Item>
-          <Form.Item label="备注" name="remark">
-            <Input.TextArea rows={4} placeholder="请输入备注" />
-          </Form.Item>
           <Form.Item
-            label="备注标红"
-            name="remarkNeedsAttention"
+            label="有客户收款"
+            name="hasCustomerCollection"
             valuePropName="checked"
           >
             <Switch checkedChildren="是" unCheckedChildren="否" />
           </Form.Item>
+          <div style={{ marginBottom: 24 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 8,
+              }}
+            >
+              <span style={{ color: "rgba(0,0,0,0.88)" }}>备注</span>
+              <Space size={8}>
+                <span style={{ fontWeight: 400 }}>标红</span>
+                <Form.Item
+                  name="remarkNeedsAttention"
+                  valuePropName="checked"
+                  noStyle
+                >
+                  <Switch size="small" />
+                </Form.Item>
+              </Space>
+            </div>
+            <Form.Item name="remark" style={{ marginBottom: 0 }}>
+              <Input.TextArea rows={4} placeholder="请输入备注" />
+            </Form.Item>
+          </div>
               </div>
             </Form>
           </div>

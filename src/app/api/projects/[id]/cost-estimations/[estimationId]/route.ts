@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import { AUTH_SESSION_COOKIE, decodeAuthSession } from "@/lib/auth-session";
+import { toNullableInt } from "@/lib/toNullableInt";
 import {
   getProjectOutsourceTotal,
   normalizeProjectOutsourceItems,
@@ -23,8 +24,6 @@ type RouteContext = {
 };
 
 const EXECUTION_COST_FIELD = "projectCostEstimation.executionCostType";
-const COST_ESTIMATION_TYPES = ["planning", "baseline"] as const;
-type CostEstimationType = (typeof COST_ESTIMATION_TYPES)[number];
 
 const toNullableNumber = (value: unknown) => {
   if (value === null || value === undefined || value === "") return null;
@@ -36,21 +35,11 @@ const toNullableNumber = (value: unknown) => {
   return null;
 };
 
+
 const toNullableString = (value: unknown) => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
-};
-
-const normalizeCostEstimationType = (
-  value: unknown,
-  fallback: CostEstimationType = "planning",
-): CostEstimationType => {
-  if (typeof value !== "string") return fallback;
-  const normalized = value.trim().toLowerCase();
-  return COST_ESTIMATION_TYPES.includes(normalized as CostEstimationType)
-    ? (normalized as CostEstimationType)
-    : fallback;
 };
 
 const normalizeMembers = (value: unknown) => {
@@ -132,7 +121,7 @@ const includeDetail = {
   members: {
     select: {
       id: true,
-      estimationId: true,
+      costEstimationId: true,
       employeeId: true,
       allocationPercent: true,
       laborCostSnapshot: true,
@@ -164,12 +153,15 @@ const serializeEstimation = (
   } & Record<string, unknown>,
 ) => ({
   ...estimation,
+  type: "planning",
   outsourceCost: getProjectOutsourceTotal(
     "outsourceItems" in estimation ? (estimation.outsourceItems as never) : [],
   ),
   members: Array.isArray(estimation.members)
     ? estimation.members.map((member) => ({
         ...member,
+        estimationId:
+          "costEstimationId" in member ? member.costEstimationId : undefined,
         employee: member.employee
           ? {
               ...member.employee,
@@ -202,7 +194,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   const existing = await prisma.projectCostEstimation.findFirst({
     where: { id: estimationId, projectId },
-    select: { id: true, type: true },
+    select: { id: true, pricingStrategy: { select: { id: true } } },
   });
   if (!existing) {
     return new Response("Cost estimation not found", { status: 404 });
@@ -291,53 +283,91 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     Array.isArray(body.outsourceItems) ? body.outsourceItems : [],
   );
 
-  const nextType = normalizeCostEstimationType(body.type, existing.type);
+  const shouldCreateNextVersion = Boolean(existing.pricingStrategy?.id);
   const created = await prisma.$transaction(async (tx) => {
-    const maxVersion = await tx.projectCostEstimation.aggregate({
-      where: { projectId },
-      _max: { version: true },
-    });
-    const nextVersion = (maxVersion._max.version ?? 0) + 1;
+    if (shouldCreateNextVersion) {
+      const maxVersion = await tx.projectCostEstimation.aggregate({
+        where: { projectId },
+        _max: { version: true },
+      });
+      const nextVersion = (maxVersion._max.version ?? 0) + 1;
 
-    if (nextType === "baseline") {
-      await tx.projectCostEstimation.updateMany({
-        where: { projectId, type: "baseline" },
-        data: { type: "planning" },
+      return tx.projectCostEstimation.create({
+        data: {
+          project: {
+            connect: {
+              id: projectId,
+            },
+          },
+          owner: {
+            connect: {
+              id: session.employeeId,
+            },
+          },
+          version: nextVersion,
+          estimatedDuration: normalizedEstimatedDuration,
+          clientBudget: toNullableInt(body.clientBudget),
+          totalLaborCost,
+          agencyFeeRate:
+            toNullableNumber(body.agencyFeeRate ?? body.agencyFee) ?? 0,
+          outsourceRemark: toNullableString(body.outsourceRemark),
+          otherExecutionCostRemark: toNullableString(body.otherExecutionCostRemark),
+          outsourceItems: {
+            create: outsourceItems.map((item) => ({
+              type: item.type,
+              amount: item.amount ?? 0,
+            })),
+          },
+          executionCostTypes: {
+            connect: executionCostTypeOptionIds.map((id) => ({ id })),
+          },
+          members: {
+            create: memberCreateData.map(
+              ({
+                employeeId,
+                allocationPercent,
+                laborCostSnapshot,
+                rentCostSnapshot,
+              }) => ({
+                employeeId,
+                allocationPercent,
+                laborCostSnapshot,
+                rentCostSnapshot,
+              }),
+            ),
+          },
+        } as never,
+        include: includeDetail,
       });
     }
 
-    return tx.projectCostEstimation.create({
+    return tx.projectCostEstimation.update({
+      where: { id: estimationId },
       data: {
-        project: {
-          connect: {
-            id: projectId,
-          },
-        },
         owner: {
           connect: {
             id: session.employeeId,
           },
         },
-        version: nextVersion,
-        type: nextType,
         estimatedDuration: normalizedEstimatedDuration,
-        clientBudget: toNullableString(body.clientBudget),
-        contractAmountSnapshot: toNullableNumber(body.contractAmountSnapshot),
+        clientBudget: toNullableInt(body.clientBudget),
         totalLaborCost,
         agencyFeeRate:
           toNullableNumber(body.agencyFeeRate ?? body.agencyFee) ?? 0,
         outsourceRemark: toNullableString(body.outsourceRemark),
         otherExecutionCostRemark: toNullableString(body.otherExecutionCostRemark),
         outsourceItems: {
+          deleteMany: {},
           create: outsourceItems.map((item) => ({
             type: item.type,
             amount: item.amount ?? 0,
           })),
         },
         executionCostTypes: {
-          connect: executionCostTypeOptionIds.map((id) => ({ id })),
+          set: executionCostTypeOptionIds.map((id) => ({ id })),
         },
         members: {
+          deleteMany: {},
           create: memberCreateData.map(
             ({
               employeeId,

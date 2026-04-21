@@ -14,7 +14,10 @@ import {
 } from "antd";
 import { DragSortTable, type ProColumns } from "@ant-design/pro-components";
 import { DEFAULT_COLOR } from "@/lib/constants";
-import { useSelectOptionsStore, type SelectOption } from "@/stores/selectOptionsStore";
+import {
+  useSelectOptionsStore,
+  type SelectOption,
+} from "@/stores/selectOptionsStore";
 import type { NullableSelectOptionValue } from "@/types/selectOption";
 
 type NoticeState =
@@ -56,9 +59,11 @@ type Props = {
   saveSuccessText?: string;
   optionValueLabel?: string;
   optionSortMode?: OptionSortMode;
-  onSaveSelection?: (
-    option: { id: string; value: string; color: string },
-  ) => Promise<void> | void;
+  onSaveSelection?: (option: {
+    id: string;
+    value: string;
+    color: string;
+  }) => Promise<void> | void;
   onUpdated?: () => Promise<void> | void;
 };
 
@@ -75,7 +80,10 @@ const normalizeHexColor = (raw?: string | null) => {
 const compareOptionValues = (leftValue: string, rightValue: string) =>
   leftValue.localeCompare(rightValue, "zh-CN");
 
-const compareOptionValuesAsNumbers = (leftValue: string, rightValue: string) => {
+const compareOptionValuesAsNumbers = (
+  leftValue: string,
+  rightValue: string,
+) => {
   const leftNumber = Number(leftValue.trim());
   const rightNumber = Number(rightValue.trim());
   const leftIsNumeric = Number.isFinite(leftNumber);
@@ -150,6 +158,91 @@ const hasOptionChanges = (
   });
 };
 
+type InlineColorPickerEditorProps = {
+  appliedColor: string;
+  disabled: boolean;
+  onConfirm: (nextColor: string) => void;
+};
+
+const InlineColorPickerEditor = ({
+  appliedColor,
+  disabled,
+  onConfirm,
+}: InlineColorPickerEditorProps) => {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [draftColor, setDraftColor] = useState(appliedColor);
+
+  useEffect(() => {
+    if (pickerOpen) return;
+    setDraftColor(appliedColor);
+  }, [appliedColor, pickerOpen]);
+
+  return (
+    <Space>
+      <Tag
+        color={draftColor}
+        style={{
+          minWidth: 96,
+          textAlign: "center",
+          marginInlineEnd: 0,
+        }}
+      >
+        {draftColor}
+      </Tag>
+      <ColorPicker
+        value={draftColor}
+        format="hex"
+        disabledAlpha
+        disabled={disabled}
+        open={pickerOpen}
+        onOpenChange={(nextOpen) => {
+          setPickerOpen(nextOpen);
+          if (nextOpen) {
+            setDraftColor(appliedColor);
+          }
+        }}
+        onChange={(color) => {
+          setDraftColor(normalizeHexColor(color.toHexString()));
+        }}
+        panelRender={(panel) => (
+          <div>
+            {panel}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 8,
+                paddingTop: 8,
+              }}
+            >
+              <Button
+                size="small"
+                onClick={() => {
+                  setDraftColor(appliedColor);
+                  setPickerOpen(false);
+                }}
+              >
+                取消
+              </Button>
+              <Button
+                size="small"
+                type="primary"
+                disabled={disabled || draftColor === appliedColor}
+                onClick={() => {
+                  onConfirm(draftColor);
+                  setPickerOpen(false);
+                }}
+              >
+                确认
+              </Button>
+            </div>
+          </div>
+        )}
+      />
+    </Space>
+  );
+};
+
 const SelectOptionQuickEditTag = ({
   field,
   option,
@@ -180,7 +273,9 @@ const SelectOptionQuickEditTag = ({
   const rowsRef = useRef<EditableOptionRow[]>([]);
   const initialRowsRef = useRef<EditableOptionRow[]>([]);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
+  const fetchAllOptions = useSelectOptionsStore(
+    (state) => state.fetchAllOptions,
+  );
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const storeLoading = useSelectOptionsStore((state) => state.loading);
   const selectionEnabled = Boolean(onSaveSelection);
@@ -194,6 +289,30 @@ const SelectOptionQuickEditTag = ({
     () => optionsByField[field] ?? [],
     [field, optionsByField],
   );
+  const normalizedOptionValue =
+    typeof option?.value === "string" ? option.value.trim() : "";
+  const liveOption = useMemo(
+    () => {
+      if (option?.id) {
+        const byId = selectOptions.find((item) => item.id === option.id) ?? null;
+        if (byId) return byId;
+      }
+      if (normalizedOptionValue) {
+        return (
+          selectOptions.find(
+            (item) => (item.value ?? "").trim() === normalizedOptionValue,
+          ) ?? null
+        );
+      }
+      return null;
+    },
+    [normalizedOptionValue, option?.id, selectOptions],
+  );
+  const resolvedTagColor = normalizeHexColor(
+    tagColor ?? liveOption?.color ?? option?.color,
+  );
+  const resolvedTagText =
+    tagText ?? liveOption?.value ?? option?.value ?? fallbackText;
 
   useEffect(() => {
     if (!open) return;
@@ -218,171 +337,192 @@ const SelectOptionQuickEditTag = ({
     setNotice(null);
   }, [messageApi, notice]);
 
-  const updateRowsRef = useCallback((
-    rowId: string,
-    patch: Partial<Pick<EditableOptionRow, "value" | "color">>,
-  ) => {
-    rowsRef.current = rowsRef.current.map((row) =>
-      row.id === rowId
-        ? {
-            ...row,
-            ...patch,
-          }
-        : row,
-    );
-  }, []);
-
-  const handleRowChange = useCallback((
-    rowId: string,
-    patch: Partial<Pick<EditableOptionRow, "value" | "color">>,
-    syncState = false,
-  ) => {
-    setRows((current) =>
-      current.map((row) =>
+  const updateRowsRef = useCallback(
+    (
+      rowId: string,
+      patch: Partial<Pick<EditableOptionRow, "value" | "color">>,
+    ) => {
+      rowsRef.current = rowsRef.current.map((row) =>
         row.id === rowId
           ? {
               ...row,
               ...patch,
             }
           : row,
-      ),
-    );
-    if (!syncState) return;
-    updateRowsRef(rowId, patch);
-  }, [updateRowsRef]);
-
-  const handleDeleteRow = useCallback((rowId: string) => {
-    const targetRow = rowsRef.current.find((row) => row.id === rowId);
-    if (!targetRow) return;
-
-    rowsRef.current = rowsRef.current.filter((row) => row.id !== rowId);
-    setRows((current) => current.filter((row) => row.id !== rowId));
-
-    if (!targetRow.isNew) {
-      setDeletedRowIds((current) =>
-        current.includes(rowId) ? current : [...current, rowId],
       );
-    }
+    },
+    [],
+  );
 
-    setPendingSelectedId((current) => {
-      if (current !== rowId) return current;
-      return option?.id === rowId ? option?.id ?? null : option?.id ?? null;
-    });
-  }, [option?.id]);
+  const handleRowChange = useCallback(
+    (
+      rowId: string,
+      patch: Partial<Pick<EditableOptionRow, "value" | "color">>,
+      syncState = false,
+    ) => {
+      setRows((current) =>
+        current.map((row) =>
+          row.id === rowId
+            ? {
+                ...row,
+                ...patch,
+              }
+            : row,
+        ),
+      );
+      if (!syncState) return;
+      updateRowsRef(rowId, patch);
+    },
+    [updateRowsRef],
+  );
 
-  const persistOptions = useCallback(async (sourceRows?: EditableOptionRow[]) => {
-    const workingRows = sourceRows ?? rowsRef.current;
-    const normalizedRows = workingRows.map((row, index) => ({
-      ...row,
-      value: row.value.trim(),
-      color: normalizeHexColor(row.color),
-      order: index + 1,
-    }));
+  const handleDeleteRow = useCallback(
+    (rowId: string) => {
+      const targetRow = rowsRef.current.find((row) => row.id === rowId);
+      if (!targetRow) return;
 
-    if (normalizedRows.some((row) => !row.value)) {
-      throw new Error("选项文案不能为空");
-    }
+      rowsRef.current = rowsRef.current.filter((row) => row.id !== rowId);
+      setRows((current) => current.filter((row) => row.id !== rowId));
 
-    const duplicatedValue = normalizedRows.find((row, index) =>
-      normalizedRows.findIndex((item) => item.value === row.value) !== index,
-    );
-    if (duplicatedValue) {
-      throw new Error(`选项「${duplicatedValue.value}」重复`);
-    }
-
-    if (!hasOptionChanges(initialRowsRef.current, normalizedRows, deletedRowIds)) {
-      const stableRows = normalizedRows.map((row) => ({
-        id: row.id,
-        sort: row.id,
-        value: row.value,
-        color: row.color,
-        order: row.order,
-        createdAt: row.createdAt,
-        isNew: row.isNew,
-      }));
-      return {
-        rows: stableRows,
-        changed: false,
-      };
-    }
-
-    setSavingOptions(true);
-    try {
-      for (const rowId of deletedRowIds) {
-        const response = await fetch(`/api/select-options/${rowId}`, {
-          method: "DELETE",
-        });
-        if (!response.ok) {
-          throw new Error((await response.text()) || "删除选项失败");
-        }
+      if (!targetRow.isNew) {
+        setDeletedRowIds((current) =>
+          current.includes(rowId) ? current : [...current, rowId],
+        );
       }
 
-      const persistedRows: EditableOptionRow[] = [];
+      setPendingSelectedId((current) => {
+        if (current !== rowId) return current;
+        return option?.id === rowId
+          ? (option?.id ?? null)
+          : (option?.id ?? null);
+      });
+    },
+    [option?.id],
+  );
 
-      for (const row of normalizedRows) {
-        const payload = {
-          field,
+  const persistOptions = useCallback(
+    async (sourceRows?: EditableOptionRow[]) => {
+      const workingRows = sourceRows ?? rowsRef.current;
+      const normalizedRows = workingRows.map((row, index) => ({
+        ...row,
+        value: row.value.trim(),
+        color: normalizeHexColor(row.color),
+        order: index + 1,
+      }));
+
+      if (normalizedRows.some((row) => !row.value)) {
+        throw new Error("选项文案不能为空");
+      }
+
+      const duplicatedValue = normalizedRows.find(
+        (row, index) =>
+          normalizedRows.findIndex((item) => item.value === row.value) !==
+          index,
+      );
+      if (duplicatedValue) {
+        throw new Error(`选项「${duplicatedValue.value}」重复`);
+      }
+
+      if (
+        !hasOptionChanges(initialRowsRef.current, normalizedRows, deletedRowIds)
+      ) {
+        const stableRows = normalizedRows.map((row) => ({
+          id: row.id,
+          sort: row.id,
           value: row.value,
           color: row.color,
           order: row.order,
+          createdAt: row.createdAt,
+          isNew: row.isNew,
+        }));
+        return {
+          rows: stableRows,
+          changed: false,
         };
-
-        const response = row.isNew
-          ? await fetch("/api/select-options", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(payload),
-            })
-          : await fetch(`/api/select-options/${row.id}`, {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(payload),
-            });
-
-        if (!response.ok) {
-          throw new Error((await response.text()) || "保存选项失败");
-        }
-
-        const saved = (await response.json()) as SelectOption;
-        persistedRows.push({
-          id: saved.id,
-          sort: saved.id,
-          value: saved.value,
-          color: normalizeHexColor(saved.color),
-          order: saved.order ?? row.order,
-          createdAt: saved.createdAt,
-        });
       }
 
-      const nextRows = toEditableRows(persistedRows, optionSortMode);
-      setRows(nextRows);
-      initialRowsRef.current = nextRows;
-      setDeletedRowIds([]);
-      await fetchAllOptions(true);
-      return {
-        rows: persistedRows,
-        changed: true,
-      };
-    } finally {
-      setSavingOptions(false);
-    }
-  }, [deletedRowIds, fetchAllOptions, field, optionSortMode]);
+      setSavingOptions(true);
+      try {
+        for (const rowId of deletedRowIds) {
+          const response = await fetch(`/api/select-options/${rowId}`, {
+            method: "DELETE",
+          });
+          if (!response.ok) {
+            throw new Error((await response.text()) || "删除选项失败");
+          }
+        }
+
+        const persistedRows: EditableOptionRow[] = [];
+
+        for (const row of normalizedRows) {
+          const payload = {
+            field,
+            value: row.value,
+            color: row.color,
+            order: row.order,
+          };
+
+          const response = row.isNew
+            ? await fetch("/api/select-options", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+              })
+            : await fetch(`/api/select-options/${row.id}`, {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+              });
+
+          if (!response.ok) {
+            throw new Error((await response.text()) || "保存选项失败");
+          }
+
+          const saved = (await response.json()) as SelectOption;
+          persistedRows.push({
+            id: saved.id,
+            sort: saved.id,
+            value: saved.value,
+            color: normalizeHexColor(saved.color),
+            order: saved.order ?? row.order,
+            createdAt: saved.createdAt,
+          });
+        }
+
+        const nextRows = toEditableRows(persistedRows, optionSortMode);
+        setRows(nextRows);
+        initialRowsRef.current = nextRows;
+        setDeletedRowIds([]);
+        await fetchAllOptions(true);
+        return {
+          rows: persistedRows,
+          changed: true,
+        };
+      } finally {
+        setSavingOptions(false);
+      }
+    },
+    [deletedRowIds, fetchAllOptions, field, optionSortMode],
+  );
 
   const handleSave = async () => {
     try {
       const currentRows = rowsRef.current;
-      const { rows: persistedRows, changed: optionsChanged } = await persistOptions(currentRows);
+      const { rows: persistedRows, changed: optionsChanged } =
+        await persistOptions(currentRows);
       const selectedRow =
         (pendingSelectedId
           ? persistedRows.find((row) => row.id === pendingSelectedId)
           : null) ??
         (pendingSelectedId
           ? persistedRows.find((row) => {
-              const draftRow = currentRows.find((item) => item.id === pendingSelectedId);
+              const draftRow = currentRows.find(
+                (item) => item.id === pendingSelectedId,
+              );
               return draftRow ? row.value === draftRow.value.trim() : false;
             })
           : null);
@@ -398,7 +538,10 @@ const SelectOptionQuickEditTag = ({
 
       setNotice({ type: "success", content: saveSuccessText });
       setOpen(false);
-      if (optionsChanged || (selectionEnabled && selectedRow && selectedRow.id !== option?.id)) {
+      if (
+        optionsChanged ||
+        (selectionEnabled && selectedRow && selectedRow.id !== option?.id)
+      ) {
         await onUpdated?.();
       }
     } catch (error) {
@@ -420,26 +563,28 @@ const SelectOptionQuickEditTag = ({
         className: "drag-visible",
       },
       ...(selectionEnabled
-        ? [{
-            title: "当前",
-            dataIndex: "checked",
-            width: 56,
-            render: (_value: unknown, record: EditableOptionRow) => (
-              <Checkbox
-                checked={record.id === pendingSelectedId}
-                disabled={
-                  disabled ||
-                  savingOptions ||
-                  updatingSelection ||
-                  !record.value.trim()
-                }
-                onChange={(event) => {
-                  if (!event.target.checked) return;
-                  setPendingSelectedId(record.id);
-                }}
-              />
-            ),
-          } satisfies ProColumns<EditableOptionRow>]
+        ? [
+            {
+              title: "当前",
+              dataIndex: "checked",
+              width: 56,
+              render: (_value: unknown, record: EditableOptionRow) => (
+                <Checkbox
+                  checked={record.id === pendingSelectedId}
+                  disabled={
+                    disabled ||
+                    savingOptions ||
+                    updatingSelection ||
+                    !record.value.trim()
+                  }
+                  onChange={(event) => {
+                    if (!event.target.checked) return;
+                    setPendingSelectedId(record.id);
+                  }}
+                />
+              ),
+            } satisfies ProColumns<EditableOptionRow>,
+          ]
         : []),
       {
         title: optionValueLabel,
@@ -453,11 +598,7 @@ const SelectOptionQuickEditTag = ({
               updateRowsRef(record.id, { value: event.target.value });
             }}
             onBlur={(event) => {
-              handleRowChange(
-                record.id,
-                { value: event.target.value },
-                true,
-              );
+              handleRowChange(record.id, { value: event.target.value }, true);
             }}
           />
         ),
@@ -466,27 +607,18 @@ const SelectOptionQuickEditTag = ({
         title: "颜色",
         dataIndex: "color",
         width: 220,
-        render: (_value, record) => (
-          <Space>
-            <Tag
-              color={normalizeHexColor(record.color)}
-              style={{ minWidth: 96, textAlign: "center", marginInlineEnd: 0 }}
-            >
-              {normalizeHexColor(record.color)}
-            </Tag>
-            <ColorPicker
-              value={normalizeHexColor(record.color)}
-              format="hex"
-              disabledAlpha
+        render: (_value, record) => {
+          const appliedColor = normalizeHexColor(record.color);
+          return (
+            <InlineColorPickerEditor
+              appliedColor={appliedColor}
               disabled={savingOptions || updatingSelection}
-              onChangeComplete={(color) => {
-                handleRowChange(record.id, {
-                  color: normalizeHexColor(color.toHexString()),
-                }, true);
+              onConfirm={(nextColor) => {
+                handleRowChange(record.id, { color: nextColor }, true);
               }}
             />
-          </Space>
-        ),
+          );
+        },
       },
       {
         title: "操作",
@@ -534,7 +666,7 @@ const SelectOptionQuickEditTag = ({
         }}
       >
         <Tag
-          color={normalizeHexColor(tagColor ?? option?.color)}
+          color={resolvedTagColor}
           style={{
             borderRadius: 6,
             padding: "2px 10px",
@@ -543,7 +675,7 @@ const SelectOptionQuickEditTag = ({
             marginInlineEnd: 0,
           }}
         >
-          {tagText ?? option?.value ?? fallbackText}
+          {resolvedTagText}
         </Tag>
       </span>
 

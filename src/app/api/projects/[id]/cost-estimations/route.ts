@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import { AUTH_SESSION_COOKIE, decodeAuthSession } from "@/lib/auth-session";
+import { toNullableInt } from "@/lib/toNullableInt";
 import {
   getProjectOutsourceTotal,
   normalizeProjectOutsourceItems,
@@ -23,8 +24,6 @@ type RouteContext = {
 };
 
 const EXECUTION_COST_FIELD = "projectCostEstimation.executionCostType";
-const COST_ESTIMATION_TYPES = ["planning", "baseline"] as const;
-type CostEstimationType = (typeof COST_ESTIMATION_TYPES)[number];
 
 const toNullableNumber = (value: unknown) => {
   if (value === null || value === undefined || value === "") return null;
@@ -36,21 +35,11 @@ const toNullableNumber = (value: unknown) => {
   return null;
 };
 
+
 const toNullableString = (value: unknown) => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
-};
-
-const normalizeCostEstimationType = (
-  value: unknown,
-  fallback: CostEstimationType = "planning",
-): CostEstimationType => {
-  if (typeof value !== "string") return fallback;
-  const normalized = value.trim().toLowerCase();
-  return COST_ESTIMATION_TYPES.includes(normalized as CostEstimationType)
-    ? (normalized as CostEstimationType)
-    : fallback;
 };
 
 const upsertExecutionCostTypeOptions = async (values: string[]) => {
@@ -132,7 +121,7 @@ const includeDetail = {
   members: {
     select: {
       id: true,
-      estimationId: true,
+      costEstimationId: true,
       employeeId: true,
       allocationPercent: true,
       laborCostSnapshot: true,
@@ -164,12 +153,15 @@ const serializeEstimation = (
   } & Record<string, unknown>,
 ) => ({
   ...estimation,
+  type: "planning",
   outsourceCost: getProjectOutsourceTotal(
     "outsourceItems" in estimation ? (estimation.outsourceItems as never) : [],
   ),
   members: Array.isArray(estimation.members)
     ? estimation.members.map((member) => ({
         ...member,
+        estimationId:
+          "costEstimationId" in member ? member.costEstimationId : undefined,
         employee: member.employee
           ? {
               ...member.employee,
@@ -296,7 +288,6 @@ export async function POST(req: NextRequest, context: RouteContext) {
     _max: { version: true },
   });
   const nextVersion = (maxVersion._max.version ?? 0) + 1;
-  const type = normalizeCostEstimationType(body.type);
 
   const created = await prisma.projectCostEstimation.create({
     data: {
@@ -311,10 +302,8 @@ export async function POST(req: NextRequest, context: RouteContext) {
         },
       },
       version: nextVersion,
-      type,
       estimatedDuration: normalizedEstimatedDuration,
-      clientBudget: toNullableString(body.clientBudget),
-      contractAmountSnapshot: toNullableNumber(body.contractAmountSnapshot),
+      clientBudget: toNullableInt(body.clientBudget),
       totalLaborCost,
       agencyFeeRate:
         toNullableNumber(body.agencyFeeRate ?? body.agencyFee) ?? 0,

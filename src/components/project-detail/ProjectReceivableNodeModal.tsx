@@ -1,7 +1,7 @@
 "use client";
 
 import type { Dayjs } from "dayjs";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Col, DatePicker, Form, Input, InputNumber, Modal, Row, Space, Switch } from "antd";
 import SelectOptionSelector, {
   type SelectOptionSelectorValue,
@@ -18,7 +18,8 @@ export type ProjectReceivableNodeFormValues = {
   keyDeliverable: string;
   expectedAmountTaxIncluded: number;
   expectedDate: Dayjs;
-  hasVendorPayment: boolean;
+  actualAmountTaxIncluded?: number;
+  actualDate?: Dayjs;
   remark?: string;
   remarkNeedsAttention?: boolean;
 };
@@ -31,6 +32,8 @@ type Props = {
   stageOptions: StageOption[];
   stageOptionsLoading?: boolean;
   initialValues?: Partial<ProjectReceivableNodeFormValues>;
+  actualAmountTaxIncluded?: number | null;
+  actualDate?: Dayjs | null;
   title?: string;
 };
 
@@ -42,19 +45,29 @@ const ProjectReceivableNodeModal = ({
   stageOptions,
   stageOptionsLoading = false,
   initialValues,
+  actualAmountTaxIncluded = null,
+  actualDate = null,
   title = "新增收款节点",
 }: Props) => {
   const [form] = Form.useForm<ProjectReceivableNodeFormValues>();
+  const mergedInitialValues = useMemo<Partial<ProjectReceivableNodeFormValues>>(
+    () => ({
+      remarkNeedsAttention: false,
+      actualAmountTaxIncluded: actualAmountTaxIncluded ?? undefined,
+      actualDate: actualDate ?? undefined,
+      ...initialValues,
+    }),
+    [actualAmountTaxIncluded, actualDate, initialValues],
+  );
+  const shouldShowActualFields =
+    mergedInitialValues.actualAmountTaxIncluded !== undefined ||
+    mergedInitialValues.actualDate !== undefined;
 
   useEffect(() => {
     if (!open) return;
     form.resetFields();
-    form.setFieldsValue({
-      hasVendorPayment: false,
-      remarkNeedsAttention: false,
-      ...initialValues,
-    });
-  }, [form, initialValues, open]);
+    form.setFieldsValue(mergedInitialValues);
+  }, [form, mergedInitialValues, open]);
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
@@ -134,13 +147,20 @@ const ProjectReceivableNodeModal = ({
             </Form.Item>
           </Col>
         </Row>
-        <Form.Item
-          label="是否有供应商付款"
-          name="hasVendorPayment"
-          valuePropName="checked"
-        >
-          <Switch />
-        </Form.Item>
+        {shouldShowActualFields ? (
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item label="实收金额（含税）" name="actualAmountTaxIncluded">
+                <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="实收日期" name="actualDate">
+                <DatePicker style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+          </Row>
+        ) : null}
         <div style={{ marginBottom: 24 }}>
           <div
             style={{

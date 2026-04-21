@@ -8,9 +8,10 @@ import {
   useImperativeHandle,
   forwardRef,
 } from "react";
-import { Empty, message, Progress } from "antd";
+import { Button, Card, Empty, message, Popconfirm, Progress, Space } from "antd";
 import { ProCard, StatisticCard } from "@ant-design/pro-components";
 import AppLink from "@/components/AppLink";
+import BooleanTag from "@/components/BooleanTag";
 import ProjectPayableNodeTable, {
   type ProjectPayableNodeRow,
 } from "@/components/project-detail/ProjectPayableNodeTable";
@@ -79,7 +80,6 @@ type PayableNode = {
   paymentCondition: string;
   expectedAmountTaxIncluded: number;
   expectedDate: string;
-  hasCustomerCollection: boolean;
   remark?: string | null;
   remarkNeedsAttention: boolean;
   actualNodes?: Array<{
@@ -97,6 +97,7 @@ type PayablePlan = {
   ownerEmployeeId: string;
   vendorContractId?: string | null;
   contractAmount: number;
+  hasCustomerCollection: boolean;
   remark?: string | null;
   remarkNeedsAttention: boolean;
   project?: {
@@ -140,6 +141,10 @@ const ProjectPayableInfo = forwardRef<
       "create" | "edit"
     >("create");
     const [internalNodeModalOpen, setInternalNodeModalOpen] = useState(false);
+    const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+    const [nodeTargetPlanId, setNodeTargetPlanId] = useState<string | null>(
+      null,
+    );
     const [creatingPlan, setCreatingPlan] = useState(false);
     const [creatingNode, setCreatingNode] = useState(false);
     const [stageOptions, setStageOptions] = useState<StageOption[]>([]);
@@ -174,6 +179,13 @@ const ProjectPayableInfo = forwardRef<
 
     const projectName = project.name ?? "未命名项目";
     const currentPlan = plans[0] ?? null;
+    const editingPlan = useMemo(
+      () =>
+        editingPlanId
+          ? (plans.find((item) => item.id === editingPlanId) ?? null)
+          : null,
+      [editingPlanId, plans],
+    );
     const currentContract = useMemo(
       () =>
         (currentPlan?.vendorContractId
@@ -182,13 +194,33 @@ const ProjectPayableInfo = forwardRef<
             ) ?? null)
           : null) ??
         currentPlan?.vendorContract ??
-        vendorContracts[0] ??
         null,
       [
         currentPlan?.vendorContract,
         currentPlan?.vendorContractId,
-        vendorContracts,
+        vendorContracts
       ],
+    );
+    const getContractForPlan = useCallback(
+      (plan: PayablePlan) =>
+        (plan.vendorContractId
+          ? (vendorContracts.find((item) => item.id === plan.vendorContractId) ??
+            null)
+          : null) ??
+        plan.vendorContract ??
+        null,
+      [vendorContracts],
+    );
+    const shouldDeleteVendorContract = useCallback(
+      (planId: string, vendorContractId?: string | null) => {
+        if (!vendorContractId) return false;
+        const count = plans.filter(
+          (item) => item.vendorContractId === vendorContractId,
+        ).length;
+        // Only remove contract when it belongs to this single plan.
+        return count <= 1 && Boolean(plans.find((item) => item.id === planId));
+      },
+      [plans],
     );
 
     const activeProjectMemberOptions = useMemo(() => {
@@ -212,8 +244,8 @@ const ProjectPayableInfo = forwardRef<
       [vendors],
     );
 
-    const payableSummary = useMemo(() => {
-      const nodes = currentPlan?.nodes ?? [];
+    const getPayableSummary = useCallback((plan: PayablePlan) => {
+      const nodes = plan.nodes ?? [];
       const expectedAmountTotal = nodes.reduce(
         (sum, node) => sum + Number(node.expectedAmountTaxIncluded ?? 0),
         0,
@@ -242,15 +274,7 @@ const ProjectPayableInfo = forwardRef<
         actualAmountTotal,
         percent,
       };
-    }, [currentPlan?.nodes]);
-
-    const defaultOwnerFromProject = useMemo(() => {
-      const ownerId = project.owner?.id ?? "";
-      if (!ownerId) return undefined;
-      return activeProjectMemberOptions.some((item) => item.value === ownerId)
-        ? ownerId
-        : undefined;
-    }, [activeProjectMemberOptions, project.owner?.id]);
+    }, []);
 
     const fetchPlans = useCallback(async () => {
       if (!projectId) return;
@@ -389,6 +413,10 @@ const ProjectPayableInfo = forwardRef<
       () => ({
         handleDeletePlan: async () => {
           if (!currentPlan) return;
+          const needDeleteContract = shouldDeleteVendorContract(
+            currentPlan.id,
+            currentPlan.vendorContractId ?? currentContract?.id ?? null,
+          );
           const planRes = await fetch(
             `/api/project-payable-plans/${currentPlan.id}`,
             {
@@ -400,7 +428,7 @@ const ProjectPayableInfo = forwardRef<
             return;
           }
 
-          if (currentContract?.id) {
+          if (needDeleteContract && currentContract?.id) {
             const contractRes = await fetch(
               `/api/vendor-contracts/${currentContract.id}`,
               {
@@ -422,6 +450,7 @@ const ProjectPayableInfo = forwardRef<
         fetchPlans,
         fetchVendorContracts,
         messageApi,
+        shouldDeleteVendorContract,
       ],
     );
 
@@ -430,6 +459,13 @@ const ProjectPayableInfo = forwardRef<
         onCurrentPlanChange(plans[0] ? { id: plans[0].id } : null);
       }
     }, [plans, onCurrentPlanChange]);
+
+    useEffect(() => {
+      if (!planModalOpen || planModalMode !== "edit") return;
+      if (!currentPlan?.id) return;
+      if (editingPlanId === currentPlan.id) return;
+      setEditingPlanId(currentPlan.id);
+    }, [currentPlan?.id, editingPlanId, planModalMode, planModalOpen]);
 
     useEffect(() => {
       void fetchPlans();
@@ -452,44 +488,42 @@ const ProjectPayableInfo = forwardRef<
       Partial<ProjectPayablePlanFormValues>
     >(
       () =>
-        planModalMode === "edit" && currentPlan
+        planModalMode === "edit" && editingPlan
           ? {
-              vendorId: currentPlan.vendorContract?.vendor?.id ?? undefined,
+              vendorId: editingPlan.vendorContract?.vendor?.id ?? undefined,
               legalEntityId:
-                currentPlan.vendorContract?.legalEntity?.id ?? undefined,
+                editingPlan.vendorContract?.legalEntity?.id ?? undefined,
               serviceContent:
-                currentPlan.vendorContract?.serviceContent ?? undefined,
-              ownerEmployeeId: currentPlan.ownerEmployeeId,
-              contractAmount: currentPlan.contractAmount,
-              remark: currentPlan.remark ?? undefined,
-              remarkNeedsAttention: currentPlan.remarkNeedsAttention,
+                editingPlan.vendorContract?.serviceContent ?? undefined,
+              ownerEmployeeId: editingPlan.ownerEmployeeId,
+              contractAmount: editingPlan.contractAmount,
+              hasCustomerCollection: editingPlan.hasCustomerCollection,
+              remark: editingPlan.remark ?? undefined,
+              remarkNeedsAttention: editingPlan.remarkNeedsAttention,
             }
           : {
-              vendorId: vendorContracts[0]?.vendorId ?? undefined,
-              legalEntityId: vendorContracts[0]?.legalEntityId ?? undefined,
-              serviceContent: vendorContracts[0]?.serviceContent ?? undefined,
-              ownerEmployeeId: defaultOwnerFromProject,
-              contractAmount:
-                typeof vendorContracts[0]?.contractAmount === "number"
-                  ? vendorContracts[0].contractAmount
-                  : 0,
+              ownerEmployeeId: undefined,
+              contractAmount: undefined,
+              hasCustomerCollection: false,
+              remark: undefined,
               remarkNeedsAttention: false,
             },
-      [currentPlan, defaultOwnerFromProject, planModalMode, vendorContracts],
+      [editingPlan, planModalMode],
     );
 
     const handleSubmitPlan = async (values: ProjectPayablePlanFormValues) => {
       try {
         setCreatingPlan(true);
-        const isEdit = planModalMode === "edit" && Boolean(currentPlan?.id);
+        const targetPlan = planModalMode === "edit" ? editingPlan : null;
+        const isEdit = planModalMode === "edit" && Boolean(targetPlan?.id);
 
         const currentContract =
-          (currentPlan?.vendorContractId
+          (targetPlan?.vendorContractId
             ? vendorContracts.find(
-                (item) => item.id === currentPlan.vendorContractId,
+                (item) => item.id === targetPlan.vendorContractId,
               )
             : null) ??
-          vendorContracts[0] ??
+          targetPlan?.vendorContract ??
           null;
 
         const contractPayload = {
@@ -532,7 +566,7 @@ const ProjectPayableInfo = forwardRef<
         const savedContract = (await contractRes.json()) as VendorContract;
         const planRes = await fetch(
           isEdit
-            ? `/api/project-payable-plans/${currentPlan?.id}`
+            ? `/api/project-payable-plans/${targetPlan?.id}`
             : "/api/project-payable-plans",
           {
             method: isEdit ? "PATCH" : "POST",
@@ -544,6 +578,7 @@ const ProjectPayableInfo = forwardRef<
               vendorContractId: savedContract.id,
               ownerEmployeeId: values.ownerEmployeeId,
               contractAmount: contractPayload.contractAmount,
+              hasCustomerCollection: Boolean(values.hasCustomerCollection),
               remark: values.remark ?? null,
               remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
             }),
@@ -559,6 +594,7 @@ const ProjectPayableInfo = forwardRef<
         setCreatingPlan(false);
         setPlanModalMode("create");
         setPlanModalOpen(false);
+        setEditingPlanId(null);
         await Promise.all([fetchVendorContracts(), fetchPlans()]);
       } catch {
         setCreatingPlan(false);
@@ -566,7 +602,8 @@ const ProjectPayableInfo = forwardRef<
     };
 
     const handleCreateNode = async (values: ProjectPayableNodeFormValues) => {
-      if (!currentPlan) return;
+      const planId = nodeTargetPlanId ?? currentPlan?.id ?? "";
+      if (!planId) return;
       try {
         setCreatingNode(true);
         const stageOptionId = await resolveStageOptionId(values.stage);
@@ -582,12 +619,11 @@ const ProjectPayableInfo = forwardRef<
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            planId: currentPlan.id,
+            planId,
             stageOptionId,
             paymentCondition: values.paymentCondition,
             expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
             expectedDate: values.expectedDate?.toISOString(),
-            hasCustomerCollection: values.hasCustomerCollection,
             remark: values.remark ?? null,
             remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
           }),
@@ -600,6 +636,7 @@ const ProjectPayableInfo = forwardRef<
         messageApi.success("新增付款节点成功");
         setCreatingNode(false);
         setNodeModalOpen(false);
+        setNodeTargetPlanId(null);
         await fetchPlans();
       } catch {
         setCreatingNode(false);
@@ -619,7 +656,6 @@ const ProjectPayableInfo = forwardRef<
           paymentCondition: values.paymentCondition,
           expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
           expectedDate: values.expectedDate?.toISOString(),
-          hasCustomerCollection: Boolean(values.hasCustomerCollection),
           remark: values.remark?.trim() ? values.remark.trim() : null,
           remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
         };
@@ -782,116 +818,181 @@ const ProjectPayableInfo = forwardRef<
     return (
       <>
         {contextHolder}
-        {currentPlan === null ? (
+        {plans.length === 0 ? (
           <Empty description="暂无付款计划" />
         ) : (
           <div>
-            <ProCard split="horizontal" bordered>
-              <ProCard split="vertical">
-                <StatisticCard
-                  style={{
-                    background: "var(--ant-colorFillAlter, #fafafa)",
-                  }}
-                  statistic={{
-                    title: "供应商",
-                    value:
-                      currentContract?.vendor?.fullName ||
-                      currentContract?.vendor?.name ||
-                      "-",
-                    formatter: (value) =>
-                      currentContract?.vendor?.id ? (
-                        <AppLink href={`/vendors/${currentContract.vendor.id}`}>
-                          {String(value || "-")}
-                        </AppLink>
-                      ) : (
-                        String(value || "-")
-                      ),
-                    styles: { content: { fontSize: 18 } },
-                  }}
-                />
-                <StatisticCard
-                  style={{
-                    background: "var(--ant-colorFillAlter, #fafafa)",
-                  }}
-                  statistic={{
-                    title: "合同金额（含税）",
-                    value:
-                      currentContract?.contractAmount ??
-                      currentPlan.contractAmount,
-                    suffix: "元",
-                    styles: { content: { fontSize: 18 } },
-                    formatter: (value) =>
-                      Number(value ?? 0).toLocaleString("zh-CN"),
-                  }}
-                />
-                <StatisticCard
-                  style={{
-                    background: "var(--ant-colorFillAlter, #fafafa)",
-                  }}
-                  statistic={{
-                    title: "预付金额总计",
-                    value: payableSummary.expectedAmountTotal,
-                    suffix: "元",
-                    styles: { content: { fontSize: 18 } },
-                    formatter: (value) =>
-                      Number(value ?? 0).toLocaleString("zh-CN"),
-                  }}
-                />
-                <StatisticCard
-                  style={{
-                    background: "var(--ant-colorFillAlter, #fafafa)",
-                  }}
-                  statistic={{
-                    title: "实付金额总计",
-                    value: payableSummary.actualAmountTotal,
-                    suffix: "元",
-                    styles: { content: { fontSize: 18 } },
-                    formatter: (value) =>
-                      Number(value ?? 0).toLocaleString("zh-CN"),
-                  }}
-                />
-              </ProCard>
-              <ProCard>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    fontSize: 12,
-                    color: "rgba(0,0,0,0.65)",
-                    fontWeight: 600,
-                  }}
+            {plans.map((plan, index) => {
+              const contract = getContractForPlan(plan);
+              const payableSummary = getPayableSummary(plan);
+              return (
+                <Card
+                  key={plan.id}
+                  style={{ marginBottom: index === plans.length - 1 ? 0 : 24 }}
+                  type="inner"
+                  title={`付款计划-${index + 1}`}
+                  extra={
+                    <Space size={12}>
+                      <Button
+                        disabled={!canManageProject}
+                        onClick={() => {
+                          setEditingPlanId(plan.id);
+                          setPlanModalMode("edit");
+                          setPlanModalOpen(true);
+                        }}
+                      >
+                        修改
+                      </Button>
+                      <Popconfirm
+                        title="确定删除当前付款计划吗？删除后节点也会被删除。"
+                        okText="删除"
+                        cancelText="取消"
+                        okButtonProps={{ danger: true }}
+                        onConfirm={async () => {
+                          const needDeleteContract = shouldDeleteVendorContract(
+                            plan.id,
+                            plan.vendorContractId ?? contract?.id ?? null,
+                          );
+                          const planRes = await fetch(
+                            `/api/project-payable-plans/${plan.id}`,
+                            {
+                              method: "DELETE",
+                            },
+                          );
+                          if (!planRes.ok) {
+                            messageApi.error("删除付款计划失败");
+                            return;
+                          }
+
+                          if (needDeleteContract && contract?.id) {
+                            const contractRes = await fetch(
+                              `/api/vendor-contracts/${contract.id}`,
+                              {
+                                method: "DELETE",
+                              },
+                            );
+                            if (!contractRes.ok) {
+                              messageApi.error("删除供应商合同失败");
+                              return;
+                            }
+                          }
+                          messageApi.success("删除付款计划成功");
+                          await Promise.all([fetchPlans(), fetchVendorContracts()]);
+                        }}
+                      >
+                        <Button danger disabled={!canManageProject}>
+                          删除
+                        </Button>
+                      </Popconfirm>
+                    </Space>
+                  }
                 >
-                  <span style={{ minWidth: 30 }}>
-                    {(payableSummary.percent ?? 0).toFixed(0)}%
-                  </span>
-                  <Progress
-                    percent={payableSummary.percent ?? 0}
-                    showInfo={false}
-                    strokeColor="#1677ff"
-                    style={{ flex: 1, marginBottom: 0 }}
-                  />
-                  <span
-                    style={{
-                      color: "rgba(0,0,0,0.45)",
-                      fontWeight: 500,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    实付{" "}
-                    {Number(
-                      payableSummary.actualAmountTotal ?? 0,
-                    ).toLocaleString("zh-CN")}{" "}
-                    / 预付{" "}
-                    {Number(
-                      payableSummary.expectedAmountTotal ?? 0,
-                    ).toLocaleString("zh-CN")}{" "}
-                    元
-                  </span>
-                </div>
-              </ProCard>
-              <ProCard split="vertical" bordered>
-                <ProCard colSpan={10}>
+                  <ProCard split="horizontal" bordered>
+                    <ProCard split="vertical">
+                      <StatisticCard
+                        style={{
+                          background: "var(--ant-colorFillAlter, #fafafa)",
+                        }}
+                        statistic={{
+                          title: "供应商",
+                          value:
+                            contract?.vendor?.fullName ||
+                            contract?.vendor?.name ||
+                            "-",
+                          formatter: (value) =>
+                            contract?.vendor?.id ? (
+                              <AppLink href={`/vendors/${contract.vendor.id}`}>
+                                {String(value || "-")}
+                              </AppLink>
+                            ) : (
+                              String(value || "-")
+                            ),
+                          styles: { content: { fontSize: 18 } },
+                        }}
+                      />
+                      <StatisticCard
+                        style={{
+                          background: "var(--ant-colorFillAlter, #fafafa)",
+                        }}
+                        statistic={{
+                          title: "合同金额（含税）",
+                          value:
+                            contract?.contractAmount ??
+                            plan.contractAmount,
+                          suffix: "元",
+                          styles: { content: { fontSize: 18 } },
+                          formatter: (value) =>
+                            Number(value ?? 0).toLocaleString("zh-CN"),
+                        }}
+                      />
+                      <StatisticCard
+                        style={{
+                          background: "var(--ant-colorFillAlter, #fafafa)",
+                        }}
+                        statistic={{
+                          title: "预付金额总计",
+                          value: payableSummary.expectedAmountTotal,
+                          suffix: "元",
+                          styles: { content: { fontSize: 18 } },
+                          formatter: (value) =>
+                            Number(value ?? 0).toLocaleString("zh-CN"),
+                        }}
+                      />
+                      <StatisticCard
+                        style={{
+                          background: "var(--ant-colorFillAlter, #fafafa)",
+                        }}
+                        statistic={{
+                          title: "实付金额总计",
+                          value: payableSummary.actualAmountTotal,
+                          suffix: "元",
+                          styles: { content: { fontSize: 18 } },
+                          formatter: (value) =>
+                            Number(value ?? 0).toLocaleString("zh-CN"),
+                        }}
+                      />
+                    </ProCard>
+                    <ProCard>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          fontSize: 12,
+                          color: "rgba(0,0,0,0.65)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        <span style={{ minWidth: 30 }}>
+                          {(payableSummary.percent ?? 0).toFixed(0)}%
+                        </span>
+                        <Progress
+                          percent={payableSummary.percent ?? 0}
+                          showInfo={false}
+                          strokeColor="#1677ff"
+                          style={{ flex: 1, marginBottom: 0 }}
+                        />
+                        <span
+                          style={{
+                            color: "rgba(0,0,0,0.45)",
+                            fontWeight: 500,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          实付{" "}
+                          {Number(
+                            payableSummary.actualAmountTotal ?? 0,
+                          ).toLocaleString("zh-CN")}{" "}
+                          / 预付{" "}
+                          {Number(
+                            payableSummary.expectedAmountTotal ?? 0,
+                          ).toLocaleString("zh-CN")}{" "}
+                          元
+                        </span>
+                      </div>
+                    </ProCard>
+                    <ProCard split="vertical" bordered>
+                      <ProCard>
                   <div
                     style={{
                       color: "rgba(0,0,0,0.45)",
@@ -903,21 +1004,10 @@ const ProjectPayableInfo = forwardRef<
                     签约主体
                   </div>
                   <div style={{ wordBreak: "break-word" }}>
-                    {currentContract?.legalEntity?.id ? (
-                      <AppLink
-                        href={`/legal-entities/${currentContract.legalEntity.id}`}
-                      >
-                        {currentContract.legalEntity.fullName ||
-                          currentContract.legalEntity.name ||
-                          "-"}
-                      </AppLink>
-                    ) : (
-                      "-"
-                    )}
+                    <span>{contract?.legalEntity?.name || "-"}</span>
                   </div>
                 </ProCard>
-
-                <ProCard colSpan={6}>
+                <ProCard>
                   <div
                     style={{
                       color: "rgba(0,0,0,0.45)",
@@ -929,8 +1019,8 @@ const ProjectPayableInfo = forwardRef<
                     服务内容
                   </div>
                   <div style={{ wordBreak: "break-word" }}>
-                    {currentContract?.serviceContent?.trim()
-                      ? currentContract.serviceContent
+                    {contract?.serviceContent?.trim()
+                      ? contract.serviceContent
                       : "-"}
                   </div>
                 </ProCard>
@@ -947,15 +1037,32 @@ const ProjectPayableInfo = forwardRef<
                     跟进人
                   </div>
                   <div style={{ wordBreak: "break-word" }}>
-                    {currentPlan.ownerEmployee?.id ? (
+                    {plan.ownerEmployee?.id ? (
                       <AppLink
-                        href={`/employees/${currentPlan.ownerEmployee.id}`}
+                        href={`/employees/${plan.ownerEmployee.id}`}
                       >
-                        {currentPlan.ownerEmployee.name || "-"}
+                        {plan.ownerEmployee.name || "-"}
                       </AppLink>
                     ) : (
                       "-"
                     )}
+                  </div>
+                </ProCard>
+                <ProCard colSpan={4}>
+                  <div
+                    style={{
+                      color: "rgba(0,0,0,0.45)",
+                      fontSize: 12,
+                      marginBottom: 8,
+                      fontWeight: 600,
+                    }}
+                  >
+                    有客户收款
+                  </div>
+                  <div style={{ wordBreak: "break-word" }}>
+                    <BooleanTag
+                      value={Boolean(plan.hasCustomerCollection)}
+                    />
                   </div>
                 </ProCard>
 
@@ -972,49 +1079,53 @@ const ProjectPayableInfo = forwardRef<
                   </div>
                   <div style={{ fontSize: 14, lineHeight: 1.5 }}>
                     <RemarkText
-                      remark={currentPlan.remark}
-                      remarkNeedsAttention={currentPlan.remarkNeedsAttention}
+                      remark={plan.remark}
+                      remarkNeedsAttention={plan.remarkNeedsAttention}
                     />
                   </div>
                 </ProCard>
-              </ProCard>
-            </ProCard>
-            <ProjectPayableNodeTable
-              title={`【${projectName}-${
-                currentPlan.vendorContract?.vendor?.fullName ||
-                currentPlan.vendorContract?.vendor?.name ||
-                "-"
-              }】付款节点`}
-              rows={
-                (currentPlan.nodes ?? []).map((node) => ({
-                  ...node,
-                  expectedDate: node.expectedDate,
-                })) as ProjectPayableNodeRow[]
-              }
-              stageOptions={stageOptions.map((item) => ({
-                id: item.id,
-                value: item.value,
-              }))}
-              canManageProject={canManageProject}
-              onAddNode={() => {
-                setNodeModalOpen(true);
-              }}
-              onDeleteNode={handleDeleteNode}
-              onEditNode={async (row, values) => {
-                await handleEditNode(row as PayableNode, values);
-              }}
-              onDragSortNodes={async (nextRows) => {
-                await handleDragSortNodes(
-                  currentPlan.id,
-                  nextRows as PayableNode[],
-                );
-              }}
-              onPayNode={async (row, values) => {
-                await handlePayNode(row as PayableNode, values);
-              }}
-              onEditActualNode={handleEditActualNode}
-              onDeleteActualNode={handleDeleteActualNode}
-            />
+                    </ProCard>
+                  </ProCard>
+                  <ProjectPayableNodeTable
+                    title={`【${projectName}-${
+                      plan.vendorContract?.vendor?.fullName ||
+                      plan.vendorContract?.vendor?.name ||
+                      "-"
+                    }】付款节点`}
+                    rows={
+                      (plan.nodes ?? []).map((node) => ({
+                        ...node,
+                        expectedDate: node.expectedDate,
+                      })) as ProjectPayableNodeRow[]
+                    }
+                    stageOptions={stageOptions.map((item) => ({
+                      id: item.id,
+                      value: item.value,
+                    }))}
+                    canManageProject={canManageProject}
+                    onAddNode={() => {
+                      setNodeTargetPlanId(plan.id);
+                      setNodeModalOpen(true);
+                    }}
+                    onDeleteNode={handleDeleteNode}
+                    onEditNode={async (row, values) => {
+                      await handleEditNode(row as PayableNode, values);
+                    }}
+                    onDragSortNodes={async (nextRows) => {
+                      await handleDragSortNodes(
+                        plan.id,
+                        nextRows as PayableNode[],
+                      );
+                    }}
+                    onPayNode={async (row, values) => {
+                      await handlePayNode(row as PayableNode, values);
+                    }}
+                    onEditActualNode={handleEditActualNode}
+                    onDeleteActualNode={handleDeleteActualNode}
+                  />
+                </Card>
+              );
+            })}
           </div>
         )}
 
@@ -1025,6 +1136,7 @@ const ProjectPayableInfo = forwardRef<
           onCancel={() => {
             setPlanModalMode("create");
             setPlanModalOpen(false);
+            setEditingPlanId(null);
           }}
           onSubmit={handleSubmitPlan}
           initialValues={planModalInitialValues}
@@ -1040,7 +1152,10 @@ const ProjectPayableInfo = forwardRef<
         <ProjectPayableNodeModal
           open={nodeModalOpen}
           loading={creatingNode}
-          onCancel={() => setNodeModalOpen(false)}
+          onCancel={() => {
+            setNodeModalOpen(false);
+            setNodeTargetPlanId(null);
+          }}
           onSubmit={handleCreateNode}
           stageOptions={stageOptions.map((item) => ({
             id: item.id,
@@ -1049,7 +1164,6 @@ const ProjectPayableInfo = forwardRef<
           }))}
           stageOptionsLoading={loadingStageOptions}
           initialValues={{
-            hasCustomerCollection: false,
             remarkNeedsAttention: false,
           }}
         />

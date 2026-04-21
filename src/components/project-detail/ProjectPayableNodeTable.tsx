@@ -7,7 +7,6 @@ import type { ProColumns } from "@ant-design/pro-components";
 import { PayCircleOutlined } from "@ant-design/icons";
 import { Button, Progress, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import BooleanTag from "@/components/BooleanTag";
 import EllipsisPopoverText from "@/components/EllipsisPopoverText";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import TableActions from "@/components/TableActions";
@@ -31,7 +30,6 @@ export type ProjectPayableNodeRow = {
   paymentCondition: string;
   expectedAmountTaxIncluded: number;
   expectedDate: string;
-  hasCustomerCollection: boolean;
   remark?: string | null;
   remarkNeedsAttention: boolean;
   actualNodes?: Array<{
@@ -230,14 +228,6 @@ const ProjectPayableNodeTable = ({
         },
       },
       {
-        title: "有客户收款",
-        dataIndex: "hasCustomerCollection",
-        valueType: "switch",
-        render: (_dom, row) => (
-          <BooleanTag value={Boolean(row.hasCustomerCollection)} />
-        ),
-      },
-      {
         title: "备注",
         dataIndex: "remark",
         valueType: "textarea",
@@ -322,7 +312,7 @@ const ProjectPayableNodeTable = ({
         dataIndex: "actualDate",
         width: 140,
         render: (_dom, row) =>
-          row.actualDate ? String(row.actualDate).slice(0, 10) : "-",
+          row.actualDate ? dayjs(row.actualDate).format("YYYY-MM-DD") : "-",
       },
       {
         title: "备注",
@@ -399,15 +389,27 @@ const ProjectPayableNodeTable = ({
         scroll={{ x: "max-content" }}
         expandable={{
           columnWidth: 28,
+          expandRowByClick: false,
           rowExpandable: (record) => (record.actualNodes?.length ?? 0) > 0,
           expandedRowRender: (record) => (
-            <Table
-              rowKey="id"
-              size="small"
-              pagination={false}
-              columns={actualColumns}
-              dataSource={record.actualNodes ?? []}
-            />
+            <div
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+            >
+              <Table
+                rowKey="id"
+                size="small"
+                pagination={false}
+                columns={actualColumns}
+                dataSource={record.actualNodes ?? []}
+                onRow={() => ({
+                  onClick: (event) => {
+                    event.stopPropagation();
+                  },
+                })}
+              />
+            </div>
           ),
         }}
         onRow={(record) => ({
@@ -513,7 +515,6 @@ const ProjectPayableNodeTable = ({
                 paymentCondition: editingRow.paymentCondition,
                 expectedAmountTaxIncluded: editingRow.expectedAmountTaxIncluded,
                 expectedDate: dayjs(editingRow.expectedDate),
-                hasCustomerCollection: editingRow.hasCustomerCollection,
                 remark: editingRow.remark ?? undefined,
                 remarkNeedsAttention: editingRow.remarkNeedsAttention,
               }

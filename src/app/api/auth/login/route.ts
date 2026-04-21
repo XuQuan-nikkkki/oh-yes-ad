@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
-import { AUTH_SESSION_COOKIE, encodeAuthSession } from "@/lib/auth-session";
+import {
+  AUTH_SESSION_COOKIE,
+  encodeAuthSession,
+  shouldUseSecureCookie,
+} from "@/lib/auth-session";
 import { prisma } from "@/lib/prisma";
 import { logApiCall } from "@/lib/api-call-log";
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
   let body: unknown;
-  const requestUrl = new URL(req.url);
-  const forwardedProto = req.headers.get("x-forwarded-proto");
-  const isSecureRequest =
-    forwardedProto === "https" || requestUrl.protocol === "https:";
+  const isSecureCookie = shouldUseSecureCookie(req);
 
   try {
     body = await req.json();
@@ -118,7 +119,7 @@ export async function POST(req: Request) {
     path: "/",
     httpOnly: true,
     sameSite: "lax",
-    secure: isSecureRequest,
+    secure: isSecureCookie,
     maxAge: 60 * 60 * 24 * 7,
   });
 

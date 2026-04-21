@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Button,
   Form,
   Input,
+  InputNumber,
   Modal,
   Select,
   Tag,
@@ -22,11 +24,14 @@ import {
 } from "@/stores/systemSettingsStore";
 
 type SystemSettingFormValues = {
+  key: string;
   name: string;
+  group: string;
   value: string;
   valueType: SystemSettingValueType;
   unit?: string;
   description?: string;
+  order?: number;
 };
 
 const VALUE_TYPE_LABELS: Record<SystemSettingValueType, string> = {
@@ -90,16 +95,20 @@ const SystemSettingsPage = () => {
     if (!modalOpen) return;
     if (editingRecord) {
       form.setFieldsValue({
+        key: editingRecord.key,
         name: editingRecord.name,
+        group: editingRecord.group,
         value: editingRecord.value,
         valueType: editingRecord.valueType,
         unit: editingRecord.unit ?? "",
         description: editingRecord.description ?? "",
+        order: editingRecord.order ?? undefined,
       });
       return;
     }
     form.resetFields();
     form.setFieldsValue({
+      group: "pricing",
       valueType: "number",
     });
   }, [editingRecord, form, modalOpen]);
@@ -121,11 +130,17 @@ const SystemSettingsPage = () => {
       setSubmitting(true);
 
       const payload = {
+        key: values.key.trim(),
         name: values.name.trim(),
+        group: values.group.trim(),
         value: values.value.trim(),
         valueType: values.valueType,
         unit: values.unit?.trim() || null,
         description: values.description?.trim() || null,
+        order:
+          typeof values.order === "number" && Number.isFinite(values.order)
+            ? Math.round(values.order)
+            : null,
       };
 
       const endpoint = isEditMode
@@ -244,6 +259,18 @@ const SystemSettingsPage = () => {
         columns={columns}
         pagination={{ pageSize: 20 }}
         scroll={{ x: "max-content" }}
+        toolBarRender={() => [
+          <Button
+            key="add-setting"
+            type="primary"
+            onClick={() => {
+              setEditingRecord(null);
+              setModalOpen(true);
+            }}
+          >
+            添加参数
+          </Button>,
+        ]}
       />
 
       <Modal
@@ -259,19 +286,40 @@ const SystemSettingsPage = () => {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
               gap: 16,
             }}
           >
             <Form.Item
-              label="参数名称"
+              label="key"
+              name="key"
+              rules={[{ required: true, message: "请输入 key" }]}
+            >
+              <Input placeholder="例如 pricing.projectFundAmount" />
+            </Form.Item>
+            <Form.Item
+              label="name"
               name="name"
               rules={[{ required: true, message: "请输入参数名称" }]}
             >
               <Input placeholder="例如 成本基准线" />
             </Form.Item>
             <Form.Item
-              label="值类型"
+              label="group"
+              name="group"
+              rules={[{ required: true, message: "请输入分组" }]}
+            >
+              <Input placeholder="例如 pricing" />
+            </Form.Item>
+            <Form.Item
+              label="value"
+              name="value"
+              rules={[{ required: true, message: "请输入值" }]}
+            >
+              <Input placeholder="例如 53" />
+            </Form.Item>
+            <Form.Item
+              label="type"
               name="valueType"
               rules={[{ required: true, message: "请选择值类型" }]}
             >
@@ -282,23 +330,19 @@ const SystemSettingsPage = () => {
                 }))}
               />
             </Form.Item>
-            <Form.Item
-              label="值"
-              name="value"
-              rules={[{ required: true, message: "请输入值" }]}
-            >
-              <Input placeholder="例如 53" />
-            </Form.Item>
-            <Form.Item label="单位" name="unit">
+            <Form.Item label="unit" name="unit">
               <Input placeholder="例如 % / 元 / 天" />
             </Form.Item>
+            <Form.Item label="description" name="description" style={{ gridColumn: "span 2" }}>
+              <Input.TextArea
+                rows={3}
+                placeholder="例如 报价策略中用于判断成本是否超过基准线"
+              />
+            </Form.Item>
+            <Form.Item label="order" name="order">
+              <InputNumber style={{ width: "100%" }} placeholder="例如 50" />
+            </Form.Item>
           </div>
-          <Form.Item label="说明" name="description">
-            <Input.TextArea
-              rows={3}
-              placeholder="例如 报价策略中用于判断成本是否超过基准线"
-            />
-          </Form.Item>
         </Form>
       </Modal>
     </ListPageContainer>

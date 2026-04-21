@@ -10,6 +10,7 @@ import AppLink from "@/components/AppLink";
 import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import TableActions from "@/components/TableActions";
 import SelectOptionTag from "@/components/SelectOptionTag";
+import { copyTextToClipboard } from "@/lib/copyToClipboard";
 import type { NullableSelectOptionValue } from "@/types/selectOption";
 
 export type ProjectDocumentRow = {
@@ -173,7 +174,7 @@ const ProjectDocumentsTable = ({
 
   const copyLink = async (link: string) => {
     try {
-      await navigator.clipboard.writeText(link);
+      await copyTextToClipboard(link);
       messageApi.success("链接已复制");
     } catch {
       messageApi.error("复制失败");

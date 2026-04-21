@@ -116,7 +116,6 @@ const ProjectReimbursementFormModal = ({
         void form.submit();
       }}
       confirmLoading={isSubmitting}
-      destroyOnHidden
       width={840}
     >
       <Form

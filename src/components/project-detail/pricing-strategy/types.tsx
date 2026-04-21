@@ -20,13 +20,13 @@ export type ProjectPricingStrategy = {
   suggestedLaborCost: number;
   plannedMiddleOfficeCost: number;
   suggestedMiddleOfficeCost: number;
-  plannedExecutionCost?: number | null;
+  executionCost?: number | null;
   agencyFeeRate?: number | null;
   bottomLinePrice: number;
   bottomLineProfit: number;
   targetPrice: number;
   targetProfit: number;
-  costItems?: Array<{
+  executionCostItems?: Array<{
     id: string;
     costTypeOptionId: string;
     budgetAmount?: number | null;
@@ -34,6 +34,42 @@ export type ProjectPricingStrategy = {
       value?: string | null;
     } | null;
   }>;
+  plannedBreakEvenAtBottomLine?: number | null;
+  plannedBreakEvenAtTarget?: number | null;
+  suggestedBreakEvenAtTarget?: number | null;
+  plannedBreakEvenAtCustomerBudget?: number | null;
+  plannedSummaryAtBottomLine?: {
+    quote: number;
+    totalCost: number;
+    costRate: number | null;
+    profit: number;
+    profitRate: number | null;
+    laborCostRate: number | null;
+  } | null;
+  plannedSummaryAtTarget?: {
+    quote: number;
+    totalCost: number;
+    costRate: number | null;
+    profit: number;
+    profitRate: number | null;
+    laborCostRate: number | null;
+  } | null;
+  suggestedSummaryAtTarget?: {
+    quote: number;
+    totalCost: number;
+    costRate: number | null;
+    profit: number;
+    profitRate: number | null;
+    laborCostRate: number | null;
+  } | null;
+  plannedSummaryAtCustomerBudget?: {
+    quote: number;
+    totalCost: number;
+    costRate: number | null;
+    profit: number;
+    profitRate: number | null;
+    laborCostRate: number | null;
+  } | null;
 };
 
 export const QUOTE_SECTION_HEADER_KEY = "__quote_section_header__";
@@ -54,7 +90,7 @@ export const formatAmountWithUnit = (value?: number | null) => {
 export const formatExecutionCostRemark = (
   strategy?: ProjectPricingStrategy | null,
 ): ReactNode => {
-  const validItems = (strategy?.costItems ?? []).filter(
+  const validItems = (strategy?.executionCostItems ?? []).filter(
     (item) => typeof item.budgetAmount === "number" && item.costTypeOption?.value,
   );
 

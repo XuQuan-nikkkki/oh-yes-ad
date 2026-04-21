@@ -1,12 +1,7 @@
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
-
-const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
-});
+import { prisma } from "@/lib/prisma";
 
 type CostItemInput = {
   costTypeOptionId: string;
@@ -32,14 +27,15 @@ const includeDetail = {
       name: true,
     },
   },
-  estimation: {
+  costEstimation: {
     select: {
       id: true,
       projectId: true,
       version: true,
+      clientBudget: true,
     },
   },
-  costItems: {
+  executionCostItems: {
     select: {
       id: true,
       costTypeOptionId: true,
@@ -137,18 +133,27 @@ const validateOptionIds = async (optionIds: string[]) => {
 
 export async function GET(req: NextRequest) {
   const projectId = req.nextUrl.searchParams.get("projectId")?.trim() ?? "";
-  const estimationId = req.nextUrl.searchParams.get("estimationId")?.trim() ?? "";
+  const costEstimationId =
+    req.nextUrl.searchParams.get("costEstimationId")?.trim() ??
+    req.nextUrl.searchParams.get("estimationId")?.trim() ??
+    "";
 
   const rows = await prisma.projectPricingStrategy.findMany({
     where: {
       ...(projectId ? { projectId } : {}),
-      ...(estimationId ? { estimationId } : {}),
+      ...(costEstimationId ? { costEstimationId } : {}),
     },
     include: includeDetail,
     orderBy: [{ updatedAt: "desc" }],
   });
 
-  return Response.json(rows);
+  return Response.json(
+    rows.map((item) => ({
+      ...item,
+      estimationId: item.costEstimationId,
+      estimation: item.costEstimation,
+    })),
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -158,9 +163,13 @@ export async function POST(req: NextRequest) {
   const body = await sanitizeRequestBody(req);
 
   const projectId = String(body.projectId ?? "").trim();
-  const estimationId = String(body.estimationId ?? "").trim();
-  if (!projectId || !estimationId) {
-    return new Response("projectId and estimationId are required", { status: 400 });
+  const costEstimationId = String(
+    body.costEstimationId ?? body.estimationId ?? "",
+  ).trim();
+  if (!projectId || !costEstimationId) {
+    return new Response("projectId and costEstimationId are required", {
+      status: 400,
+    });
   }
 
   const [
@@ -170,7 +179,7 @@ export async function POST(req: NextRequest) {
     suggestedLaborCost,
     plannedMiddleOfficeCost,
     suggestedMiddleOfficeCost,
-    plannedExecutionCost,
+    executionCost,
     agencyFeeRate,
     bottomLinePrice,
     bottomLineProfit,
@@ -183,7 +192,7 @@ export async function POST(req: NextRequest) {
     toRequiredNumber(body.suggestedLaborCost),
     toRequiredNumber(body.plannedMiddleOfficeCost),
     toRequiredNumber(body.suggestedMiddleOfficeCost),
-    toRequiredNumber(body.plannedExecutionCost),
+    toRequiredNumber(body.executionCost),
     toRequiredNumber(body.agencyFeeRate ?? body.agencyFee),
     toRequiredNumber(body.bottomLinePrice),
     toRequiredNumber(body.bottomLineProfit),
@@ -198,7 +207,7 @@ export async function POST(req: NextRequest) {
     suggestedLaborCost,
     plannedMiddleOfficeCost,
     suggestedMiddleOfficeCost,
-    plannedExecutionCost,
+    executionCost,
     bottomLinePrice,
     bottomLineProfit,
     targetPrice,
@@ -211,18 +220,20 @@ export async function POST(req: NextRequest) {
   const [project, estimation, existingByEstimation] = await Promise.all([
     prisma.project.findUnique({ where: { id: projectId }, select: { id: true } }),
     prisma.projectCostEstimation.findUnique({
-      where: { id: estimationId },
+      where: { id: costEstimationId },
       select: { id: true, projectId: true },
     }),
     prisma.projectPricingStrategy.findUnique({
-      where: { estimationId },
+      where: { costEstimationId },
       select: { id: true },
     }),
   ]);
   if (!project) return new Response("Project not found", { status: 404 });
   if (!estimation) return new Response("Estimation not found", { status: 404 });
   if (estimation.projectId !== projectId) {
-    return new Response("estimationId does not belong to projectId", { status: 400 });
+    return new Response("costEstimationId does not belong to projectId", {
+      status: 400,
+    });
   }
   if (existingByEstimation) {
     return new Response("Pricing strategy already exists for this estimation", {
@@ -230,18 +241,18 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const costItems = normalizeCostItems(body.costItems);
+  const executionCostItems = normalizeCostItems(body.executionCostItems);
   const outsourceItems = normalizeOutsourceItems(body.outsourceItems);
-  const optionIds = costItems.map((item) => item.costTypeOptionId);
+  const optionIds = executionCostItems.map((item) => item.costTypeOptionId);
   const validOptionIds = await validateOptionIds(optionIds);
   if (!validOptionIds) {
-    return new Response("Invalid costTypeOptionId in costItems", { status: 400 });
+    return new Response("Invalid costTypeOptionId in executionCostItems", { status: 400 });
   }
 
   const created = await prisma.projectPricingStrategy.create({
     data: {
       projectId,
-      estimationId,
+      costEstimationId,
       estimatedDuration: Math.round(estimatedDuration ?? 0),
       mode: normalizeMode(body.mode),
       rentCost: rentCost ?? 0,
@@ -249,15 +260,15 @@ export async function POST(req: NextRequest) {
       suggestedLaborCost: suggestedLaborCost ?? 0,
       plannedMiddleOfficeCost: plannedMiddleOfficeCost ?? 0,
       suggestedMiddleOfficeCost: suggestedMiddleOfficeCost ?? 0,
-      plannedExecutionCost: plannedExecutionCost ?? 0,
+      executionCost: executionCost ?? 0,
       agencyFeeRate: agencyFeeRate ?? 0,
       outsourceRemark: toNullableString(body.outsourceRemark),
       bottomLinePrice: bottomLinePrice ?? 0,
       bottomLineProfit: bottomLineProfit ?? 0,
       targetPrice: targetPrice ?? 0,
       targetProfit: targetProfit ?? 0,
-      costItems: {
-        create: costItems.map((item) => ({
+      executionCostItems: {
+        create: executionCostItems.map((item) => ({
           costTypeOptionId: item.costTypeOptionId,
           budgetAmount: item.budgetAmount ?? null,
           remark: item.remark ?? null,
@@ -273,5 +284,9 @@ export async function POST(req: NextRequest) {
     include: includeDetail,
   });
 
-  return Response.json(created);
+  return Response.json({
+    ...created,
+    estimationId: created.costEstimationId,
+    estimation: created.costEstimation,
+  });
 }

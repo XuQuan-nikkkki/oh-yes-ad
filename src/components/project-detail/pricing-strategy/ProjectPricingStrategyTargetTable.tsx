@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
 import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -11,11 +11,16 @@ import {
   getOutsourceAmount,
   type ProjectPricingStrategy,
 } from "@/components/project-detail/pricing-strategy/types";
+import {
+  getSystemSettingNumberFromRecords,
+  SYSTEM_SETTING_KEYS,
+} from "@/lib/system-settings";
+import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
 
 type Props = {
   pricingStrategy: ProjectPricingStrategy;
   projectName: string;
-  clientBudget?: string | null;
+  clientBudget?: number | null;
 };
 
 type PricingTableRow = {
@@ -41,6 +46,22 @@ const ProjectPricingStrategyTargetTable = ({
   projectName,
   clientBudget,
 }: Props) => {
+  const systemSettings = useSystemSettingsStore((state) => state.records);
+  const fetchSystemSettings = useSystemSettingsStore(
+    (state) => state.fetchSystemSettings,
+  );
+  useEffect(() => {
+    void fetchSystemSettings();
+  }, [fetchSystemSettings]);
+
+  const projectCostBaselineRatio = useMemo(
+    () =>
+      getSystemSettingNumberFromRecords(
+        systemSettings,
+        SYSTEM_SETTING_KEYS.pricingProjectCostBaselineRatio,
+      ),
+    [systemSettings],
+  );
   const formatRate = (numerator: number, denominator: number) => {
     if (!denominator) return "-";
     const value = (numerator / denominator) * 100;
@@ -77,7 +98,7 @@ const ProjectPricingStrategyTargetTable = ({
       pricingStrategy.plannedMiddleOfficeCost +
       customerBudgetAgencyFeeAmount +
       pricingStrategy.rentCost +
-      (pricingStrategy.plannedExecutionCost ?? 0),
+      (pricingStrategy.executionCost ?? 0),
     [customerBudgetAgencyFeeAmount, pricingStrategy],
   );
 
@@ -88,7 +109,7 @@ const ProjectPricingStrategyTargetTable = ({
       pricingStrategy.plannedMiddleOfficeCost +
       suggestedAgencyFeeAmount +
       pricingStrategy.rentCost +
-      (pricingStrategy.plannedExecutionCost ?? 0),
+      (pricingStrategy.executionCost ?? 0),
     [pricingStrategy, suggestedAgencyFeeAmount],
   );
 
@@ -114,8 +135,10 @@ const ProjectPricingStrategyTargetTable = ({
 
   const costBenchmarkRemark = useMemo(() => {
     if (!customerBudgetAmount) return "成本基准参考：-";
-    return `成本基准参考：${formatAmount(customerBudgetAmount * 0.53)}`;
-  }, [customerBudgetAmount]);
+    return `成本基准参考：${formatAmount(
+      customerBudgetAmount * (projectCostBaselineRatio / 100),
+    )}`;
+  }, [customerBudgetAmount, projectCostBaselineRatio]);
 
   const tableRows = useMemo<PricingTableRow[]>(
     () => [
@@ -166,8 +189,8 @@ const ProjectPricingStrategyTargetTable = ({
       {
         key: "execution",
         category: "执行费用成本",
-        customerBudgetValue: formatAmount(pricingStrategy.plannedExecutionCost),
-        suggestedQuoteValue: formatAmount(pricingStrategy.plannedExecutionCost),
+        customerBudgetValue: formatAmount(pricingStrategy.executionCost),
+        suggestedQuoteValue: formatAmount(pricingStrategy.executionCost),
         remark: executionCostRemark,
       },
       {

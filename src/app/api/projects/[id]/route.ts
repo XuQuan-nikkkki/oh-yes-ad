@@ -1,15 +1,9 @@
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { prisma } from "@/lib/prisma";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import { getProjectOutsourceTotal } from "@/lib/project-outsource";
+import { computeInitiationEstimatedAgencyFee } from "@/lib/prisma/project-initiation";
 import type { NullableSelectOptionValue } from "@/types/selectOption";
-
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL,
-});
-
-const prisma = new PrismaClient({ adapter });
 
 const ownerPublicSelect = {
   id: true,
@@ -130,10 +124,10 @@ type ProjectCostEstimationPayload = {
   projectId: string;
   owner?: EmployeePayload | null;
   version: number;
-  type: "planning" | "baseline";
+  type?: "planning" | "baseline";
   estimatedDuration: number;
   clientBudget?: string | null;
-  contractAmountSnapshot?: number | null;
+  contractAmount?: number | null;
   totalLaborCost: number;
   outsourceItems?: Array<{
     id: string;
@@ -154,8 +148,7 @@ type ProjectPayload = {
   segments?: ProjectSegmentPayload[];
   documents?: ProjectDocumentPayload[];
   costEstimations?: ProjectCostEstimationPayload[];
-  baselineCostEstimations?: ProjectCostEstimationPayload[];
-  planningCostEstimations?: ProjectCostEstimationPayload[];
+  initiations?: ProjectCostEstimationPayload[];
 } & Record<string, unknown>;
 
 const projectCostEstimationSelect = {
@@ -165,10 +158,8 @@ const projectCostEstimationSelect = {
     select: ownerPublicSelect,
   },
   version: true,
-  type: true,
   estimatedDuration: true,
   clientBudget: true,
-  contractAmountSnapshot: true,
   totalLaborCost: true,
   agencyFeeRate: true,
   outsourceRemark: true,
@@ -193,7 +184,55 @@ const projectCostEstimationSelect = {
   members: {
     select: {
       id: true,
-      estimationId: true,
+      costEstimationId: true,
+      employeeId: true,
+      allocationPercent: true,
+      laborCostSnapshot: true,
+      rentCostSnapshot: true,
+      createdAt: true,
+      updatedAt: true,
+      employee: {
+        select: ownerPublicSelect,
+      },
+    },
+    orderBy: { createdAt: "asc" as const },
+  },
+} as const;
+
+const projectInitiationSelect = {
+  id: true,
+  projectId: true,
+  owner: {
+    select: ownerPublicSelect,
+  },
+  version: true,
+  estimatedDuration: true,
+  contractAmount: true,
+  totalLaborCost: true,
+  agencyFeeRate: true,
+  outsourceRemark: true,
+  outsourceItems: {
+    select: {
+      id: true,
+      type: true,
+      amount: true,
+    },
+    orderBy: { createdAt: "asc" as const },
+  },
+  otherExecutionCostRemark: true,
+  createdAt: true,
+  updatedAt: true,
+  executionCostTypes: {
+    select: {
+      id: true,
+      value: true,
+      color: true,
+    },
+  },
+  members: {
+    select: {
+      id: true,
+      initiationId: true,
       employeeId: true,
       allocationPercent: true,
       laborCostSnapshot: true,
@@ -214,139 +253,139 @@ const serializeEmployee = (employee: EmployeePayload) => ({
   employmentStatus: employee.employmentStatusOption?.value ?? null,
 });
 
-const serializeProject = (project: ProjectPayload) => ({
-  ...project,
-  type: toProjectTypeCode(project.typeOption?.value),
-  status: project.statusOption?.value ?? null,
-  stage: project.stageOption?.value ?? null,
-  owner: project.owner ? serializeEmployee(project.owner) : null,
-  members: Array.isArray(project.members)
-    ? project.members.map((member) => serializeEmployee(member))
+const parseBudgetToNumber = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.replace(/,/g, "");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const computeEstimatedAgencyFee = (estimation?: {
+  agencyFeeRate?: unknown;
+  clientBudget?: unknown;
+} | null) => {
+  if (!estimation) return null;
+  const rate = Number(estimation.agencyFeeRate ?? 0);
+  const budget = parseBudgetToNumber(estimation.clientBudget);
+  if (!Number.isFinite(rate) || budget === null) return null;
+  if (rate <= 0 || budget <= 0) return null;
+  return (rate / 100) * budget;
+};
+
+const serializePlanningCostEstimation = (
+  estimation: ProjectCostEstimationPayload,
+) => ({
+  ...estimation,
+  type: "planning" as const,
+  estimatedAgencyFee: computeEstimatedAgencyFee(estimation),
+  outsourceCost: getProjectOutsourceTotal(estimation.outsourceItems),
+  owner: estimation.owner ? serializeEmployee(estimation.owner) : null,
+  executionCostTypes: Array.isArray(estimation.executionCostTypes)
+    ? estimation.executionCostTypes
     : [],
-  milestones: Array.isArray(project.milestones)
-    ? project.milestones.map((milestone) => ({
-        ...milestone,
-        date: milestone.startAt ?? null,
-        type: milestone.typeOption?.value ?? null,
-        method: milestone.methodOption?.value ?? null,
-        internalParticipants: Array.isArray(milestone.internalParticipants)
-          ? milestone.internalParticipants.map((participant) =>
-              serializeEmployee(participant),
-            )
-          : [],
+  members: Array.isArray(estimation.members)
+    ? estimation.members.map((member) => ({
+        ...member,
+        estimationId:
+          "costEstimationId" in member ? member.costEstimationId : undefined,
+        employee: member.employee ? serializeEmployee(member.employee) : null,
       }))
     : [],
-      segments: Array.isArray(project.segments)
-        ? project.segments.map((segment) => ({
-            ...segment,
-            status: segment.statusOption?.value ?? null,
-            dueDate: segment.endDate ?? null,
-            projectTasks: Array.isArray(segment.projectTasks)
-              ? segment.projectTasks.map((task) => ({
-              ...task,
-              status: task.statusOption?.value ?? null,
-              owner: task.owner ? serializeEmployee(task.owner) : null,
-              plannedWorkEntries: Array.isArray(task.plannedWorkEntries)
-                ? task.plannedWorkEntries.map((entry) => {
-                    const year = Number(entry.yearOption?.value);
-                    const weekNumber = Number(entry.weekNumberOption?.value);
-                    return {
-                      ...entry,
-                      year: Number.isFinite(year) ? year : null,
-                      weekNumber: Number.isFinite(weekNumber)
-                        ? weekNumber
-                        : null,
-                    };
-                  })
-                : [],
-            }))
-          : [],
-      }))
-    : [],
-  documents: Array.isArray(project.documents)
-    ? project.documents.map((document) => ({
-        ...document,
-      }))
-    : [],
-  latestCostEstimation: Array.isArray(project.costEstimations)
-    ? (project.costEstimations[0]
-      ? {
-          ...project.costEstimations[0],
-          outsourceCost: getProjectOutsourceTotal(
-            project.costEstimations[0].outsourceItems,
-          ),
-          owner: project.costEstimations[0].owner
-            ? serializeEmployee(project.costEstimations[0].owner)
-            : null,
-          executionCostTypes: Array.isArray(
-            project.costEstimations[0].executionCostTypes,
-          )
-            ? project.costEstimations[0].executionCostTypes
-            : [],
-          members: Array.isArray(project.costEstimations[0].members)
-            ? project.costEstimations[0].members.map((member) => ({
-                ...member,
-                employee: member.employee
-                  ? serializeEmployee(member.employee)
-                  : null,
-              }))
-            : [],
-        }
-      : null)
-    : null,
-  latestBaselineCostEstimation: Array.isArray(project.baselineCostEstimations)
-    ? (project.baselineCostEstimations[0]
-      ? {
-          ...project.baselineCostEstimations[0],
-          outsourceCost: getProjectOutsourceTotal(
-            project.baselineCostEstimations[0].outsourceItems,
-          ),
-          owner: project.baselineCostEstimations[0].owner
-            ? serializeEmployee(project.baselineCostEstimations[0].owner)
-            : null,
-          executionCostTypes: Array.isArray(
-            project.baselineCostEstimations[0].executionCostTypes,
-          )
-            ? project.baselineCostEstimations[0].executionCostTypes
-            : [],
-          members: Array.isArray(project.baselineCostEstimations[0].members)
-            ? project.baselineCostEstimations[0].members.map((member) => ({
-                ...member,
-                employee: member.employee
-                  ? serializeEmployee(member.employee)
-                  : null,
-              }))
-            : [],
-        }
-      : null)
-    : null,
-  latestPlanningCostEstimation: Array.isArray(project.planningCostEstimations)
-    ? (project.planningCostEstimations[0]
-      ? {
-          ...project.planningCostEstimations[0],
-          outsourceCost: getProjectOutsourceTotal(
-            project.planningCostEstimations[0].outsourceItems,
-          ),
-          owner: project.planningCostEstimations[0].owner
-            ? serializeEmployee(project.planningCostEstimations[0].owner)
-            : null,
-          executionCostTypes: Array.isArray(
-            project.planningCostEstimations[0].executionCostTypes,
-          )
-            ? project.planningCostEstimations[0].executionCostTypes
-            : [],
-          members: Array.isArray(project.planningCostEstimations[0].members)
-            ? project.planningCostEstimations[0].members.map((member) => ({
-                ...member,
-                employee: member.employee
-                  ? serializeEmployee(member.employee)
-                  : null,
-              }))
-            : [],
-        }
-      : null)
-    : null,
 });
+
+const serializeInitiation = (initiation: ProjectCostEstimationPayload) => ({
+  ...initiation,
+  type: "baseline" as const,
+  estimatedAgencyFee: computeInitiationEstimatedAgencyFee(initiation),
+  outsourceCost: getProjectOutsourceTotal(initiation.outsourceItems),
+  owner: initiation.owner ? serializeEmployee(initiation.owner) : null,
+  executionCostTypes: Array.isArray(initiation.executionCostTypes)
+    ? initiation.executionCostTypes
+    : [],
+  members: Array.isArray(initiation.members)
+    ? initiation.members.map((member) => ({
+        ...member,
+        estimationId: "initiationId" in member ? member.initiationId : undefined,
+        employee: member.employee ? serializeEmployee(member.employee) : null,
+      }))
+    : [],
+});
+
+const serializeProject = (project: ProjectPayload) => {
+  const { costEstimations, initiations, ...baseProject } = project;
+
+  return {
+    ...baseProject,
+    type: toProjectTypeCode(baseProject.typeOption?.value),
+    status: baseProject.statusOption?.value ?? null,
+    stage: baseProject.stageOption?.value ?? null,
+    owner: baseProject.owner ? serializeEmployee(baseProject.owner) : null,
+    members: Array.isArray(baseProject.members)
+      ? baseProject.members.map((member) => serializeEmployee(member))
+      : [],
+    milestones: Array.isArray(baseProject.milestones)
+      ? baseProject.milestones.map((milestone) => ({
+          ...milestone,
+          date: milestone.startAt ?? null,
+          type: milestone.typeOption?.value ?? null,
+          method: milestone.methodOption?.value ?? null,
+          internalParticipants: Array.isArray(milestone.internalParticipants)
+            ? milestone.internalParticipants.map((participant) =>
+                serializeEmployee(participant),
+              )
+            : [],
+        }))
+      : [],
+    segments: Array.isArray(baseProject.segments)
+      ? baseProject.segments.map((segment) => ({
+          ...segment,
+          status: segment.statusOption?.value ?? null,
+          dueDate: segment.endDate ?? null,
+          projectTasks: Array.isArray(segment.projectTasks)
+            ? segment.projectTasks.map((task) => ({
+                ...task,
+                status: task.statusOption?.value ?? null,
+                owner: task.owner ? serializeEmployee(task.owner) : null,
+                plannedWorkEntries: Array.isArray(task.plannedWorkEntries)
+                  ? task.plannedWorkEntries.map((entry) => {
+                      const year = Number(entry.yearOption?.value);
+                      const weekNumber = Number(entry.weekNumberOption?.value);
+                      return {
+                        ...entry,
+                        year: Number.isFinite(year) ? year : null,
+                        weekNumber: Number.isFinite(weekNumber)
+                          ? weekNumber
+                          : null,
+                      };
+                    })
+                  : [],
+              }))
+            : [],
+        }))
+      : [],
+    documents: Array.isArray(baseProject.documents)
+      ? baseProject.documents.map((document) => ({
+          ...document,
+        }))
+      : [],
+    latestCostEstimation: Array.isArray(costEstimations)
+      ? costEstimations[0]
+        ? serializePlanningCostEstimation(costEstimations[0])
+        : null
+      : null,
+    latestInitiation: Array.isArray(initiations)
+      ? initiations[0]
+        ? serializeInitiation(initiations[0])
+        : null
+      : null,
+    initiations: Array.isArray(initiations)
+      ? initiations.map((item) => serializeInitiation(item))
+      : [],
+  };
+};
 
 export async function GET(req: Request) {
   const { pathname } = new URL(req.url);
@@ -569,6 +608,10 @@ export async function GET(req: Request) {
         orderBy: { version: "desc" },
         take: 1,
       },
+      initiations: {
+        select: projectInitiationSelect,
+        orderBy: { version: "desc" },
+      },
     },
   });
 
@@ -576,28 +619,7 @@ export async function GET(req: Request) {
     return new Response("Not Found", { status: 404 });
   }
 
-  const [baselineCostEstimations, planningCostEstimations] = await Promise.all([
-    prisma.projectCostEstimation.findMany({
-      where: { projectId: id, type: "baseline" },
-      select: projectCostEstimationSelect,
-      orderBy: { version: "desc" },
-      take: 1,
-    }),
-    prisma.projectCostEstimation.findMany({
-      where: { projectId: id, type: "planning" },
-      select: projectCostEstimationSelect,
-      orderBy: { version: "desc" },
-      take: 1,
-    }),
-  ]);
-
-  return Response.json(
-    serializeProject({
-      ...(project as Record<string, unknown>),
-      baselineCostEstimations,
-      planningCostEstimations,
-    } as ProjectPayload),
-  );
+  return Response.json(serializeProject(project as ProjectPayload));
 }
 
 export async function PATCH(req: Request) {

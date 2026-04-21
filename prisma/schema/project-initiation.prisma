@@ -1,0 +1,55 @@
+model ProjectInitiation {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  ownerId String?
+  owner   Employee? @relation("ProjectInitiationOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  version Int
+
+  estimatedDuration      Int
+  contractAmount Int?
+
+  agencyFeeRate            Float? @default(0)
+
+  members            ProjectInitiationMember[]
+  totalLaborCost           Float  @default(0)
+
+  outsourceItems     ProjectOutsourceItem[]         @relation("ProjectInitiationOutsourceItems")
+  outsourceRemark          String?
+
+  executionCostTypes SelectOption[]                 @relation("ProjectInitiationExecutionCostTypes")
+  otherExecutionCostRemark String?
+
+  financialStructure ProjectFinancialStructure?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, version])
+  @@index([projectId])
+  @@index([ownerId])
+}
+
+model ProjectInitiationMember {
+  id String @id @default(uuid())
+
+  initiationId String
+  initiation   ProjectInitiation @relation(fields: [initiationId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  allocationPercent Int // 人员配置占比
+  laborCostSnapshot Float
+  rentCostSnapshot  Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([initiationId, employeeId])
+  @@index([initiationId])
+  @@index([employeeId])
+}

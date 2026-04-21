@@ -47,6 +47,7 @@ type TableRow = {
   statusLabel: "正常" | "预警" | "超支";
   statusColor: string;
   statusTextColor: string;
+  isTotal?: boolean;
 };
 
 const toMoneyNumber = (value: unknown) => {
@@ -210,19 +211,31 @@ const ProjectExecutionCostMonitoringCard = ({
         key: "costTypeOption",
         onHeaderCell: () => ({ style: { paddingLeft: FIRST_COL_PADDING } }),
         onCell: () => ({ style: { paddingLeft: FIRST_COL_PADDING } }),
-        render: (value: TableRow["costTypeOption"]) => value?.value || "-",
+        render: (value: TableRow["costTypeOption"], record) => (
+          <span style={{ fontWeight: record.isTotal ? 700 : undefined }}>
+            {record.isTotal ? "总计" : value?.value || "-"}
+          </span>
+        ),
       },
       {
         title: "预算金额",
         dataIndex: "budgetAmount",
         key: "budgetAmount",
-        render: (value: number) => `¥${formatMoney(value)}`,
+        render: (value: number, record) => (
+          <span style={{ fontWeight: record.isTotal ? 700 : undefined }}>
+            ¥{formatMoney(value)}
+          </span>
+        ),
       },
       {
         title: "已报销",
         dataIndex: "usedAmount",
         key: "usedAmount",
-        render: (value: number) => `¥${formatMoney(value)}`,
+        render: (value: number, record) => (
+          <span style={{ fontWeight: record.isTotal ? 700 : undefined }}>
+            ¥{formatMoney(value)}
+          </span>
+        ),
       },
       {
         title: "剩余额度",
@@ -232,7 +245,8 @@ const ProjectExecutionCostMonitoringCard = ({
           <span
             style={{
               color: record.statusTextColor,
-              fontWeight: record.statusLabel === "超支" ? 700 : undefined,
+              fontWeight:
+                record.isTotal || record.statusLabel === "超支" ? 700 : undefined,
             }}
           >
             ¥{formatMoney(value)}
@@ -250,7 +264,13 @@ const ProjectExecutionCostMonitoringCard = ({
             strokeColor={record.statusColor}
             size="small"
             showInfo
-            format={() => `${value}%`}
+            format={() =>
+              record.isTotal ? (
+                <span style={{ fontWeight: 700 }}>{`${value}%`}</span>
+              ) : (
+                `${value}%`
+              )
+            }
           />
         ),
       },
@@ -271,6 +291,48 @@ const ProjectExecutionCostMonitoringCard = ({
       },
     ],
     [],
+  );
+
+  const totals = useMemo(() => {
+    return rows.reduce(
+      (acc, row) => ({
+        budgetAmount: acc.budgetAmount + row.budgetAmount,
+        usedAmount: acc.usedAmount + row.usedAmount,
+        remainingAmount: acc.remainingAmount + row.remainingAmount,
+      }),
+      {
+        budgetAmount: 0,
+        usedAmount: 0,
+        remainingAmount: 0,
+      },
+    );
+  }, [rows]);
+  const totalUsage = useMemo(() => {
+    const usage = resolveUsageStatus(totals.budgetAmount, totals.usedAmount);
+    return {
+      usagePercent: Math.round(usage.usagePercent),
+      statusLabel: usage.statusLabel,
+      statusColor: usage.statusColor,
+      statusTextColor: usage.statusTextColor,
+    };
+  }, [totals.budgetAmount, totals.usedAmount]);
+  const tableData = useMemo<TableRow[]>(
+    () => [
+      ...rows,
+      {
+        key: "__total__",
+        costTypeOptionId: "__total__",
+        budgetAmount: totals.budgetAmount,
+        usedAmount: totals.usedAmount,
+        remainingAmount: totals.remainingAmount,
+        usagePercent: totalUsage.usagePercent,
+        statusLabel: totalUsage.statusLabel,
+        statusColor: totalUsage.statusColor,
+        statusTextColor: totalUsage.statusTextColor,
+        isTotal: true,
+      },
+    ],
+    [rows, totalUsage, totals.budgetAmount, totals.remainingAmount, totals.usedAmount],
   );
 
   return (
@@ -308,7 +370,7 @@ const ProjectExecutionCostMonitoringCard = ({
       {rows.length > 0 ? (
         <>
           <style jsx global>{`
-            .execution-cost-table .ant-table-tbody > tr.execution-cost-last-row > td {
+            .execution-cost-table .ant-table-tbody > tr.execution-cost-total-row > td {
               border-bottom: none !important;
             }
           `}</style>
@@ -317,9 +379,9 @@ const ProjectExecutionCostMonitoringCard = ({
             size="small"
             rowKey="key"
             columns={columns}
-            dataSource={rows}
-            rowClassName={(_record, index) =>
-              index === rows.length - 1 ? "execution-cost-last-row" : ""
+            dataSource={tableData}
+            rowClassName={(record) =>
+              record.isTotal ? "execution-cost-total-row" : ""
             }
             pagination={false}
           />

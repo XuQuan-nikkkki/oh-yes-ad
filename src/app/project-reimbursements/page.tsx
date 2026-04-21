@@ -1,11 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Select, Space, Spin } from "antd";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useAuthStore } from "@/stores/authStore";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useProjectsStore } from "@/stores/projectsStore";
-import { useProjectPermission } from "@/hooks/useProjectPermission";
 import ProjectExecutionCostMonitoringCard from "@/components/execution-cost-monitoring/ProjectExecutionCostMonitoringCard";
 import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
 import { PageContainer } from "@ant-design/pro-components";
@@ -81,13 +80,13 @@ const compareProjectByArchiveAndName = (
   return compareProjectName(left.name, right.name);
 };
 
-export default function ProjectReimbursementsPage() {
+function ProjectReimbursementsPageContent() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const currentUser = useAuthStore((state) => state.currentUser);
   const authLoaded = useAuthStore((state) => state.loaded);
   const fetchMe = useAuthStore((state) => state.fetchMe);
-  const { canManageProject } = useProjectPermission();
   const projectsById = useProjectsStore((state) => state.byId);
   const projectIds = useProjectsStore(
     (state) => state.queryState[ALL_PROJECTS_QUERY_KEY]?.ids,
@@ -109,6 +108,11 @@ export default function ProjectReimbursementsPage() {
   const selectedProjectId = searchParams.get("projectId");
   const [projectIdsWithExecutionCosts, setProjectIdsWithExecutionCosts] =
     useState<Set<string>>(new Set());
+  const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
+  const canCreateReimbursement = useMemo(
+    () => roleCodes.includes("ADMIN") || roleCodes.includes("FINANCE"),
+    [roleCodes],
+  );
 
   const fetchProjects = useCallback(
     async (force = false) => {
@@ -279,7 +283,7 @@ export default function ProjectReimbursementsPage() {
       header={{
         style: { background: "#fff", paddingInline: 24, borderRadius: 8 },
       }}
-      contentStyle={{ padding: 0, backgroundColor: "#F5F5F5" }}
+      style={{ backgroundColor: "#F5F5F5" }}
       childrenContentStyle={{ padding: 0 }}
     >
       <Spin spinning={!loaded && loading}>
@@ -292,11 +296,19 @@ export default function ProjectReimbursementsPage() {
               startDate={project.startDate}
               endDate={project.endDate}
               adjustments={workdayAdjustments}
-              canManageProject={canManageProject}
+              canManageProject={canCreateReimbursement}
             />
           ))}
         </Space>
       </Spin>
     </PageContainer>
+  );
+}
+
+export default function ProjectReimbursementsPage() {
+  return (
+    <Suspense fallback={<Spin />}>
+      <ProjectReimbursementsPageContent />
+    </Suspense>
   );
 }

@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
 import { AUTH_SESSION_COOKIE, decodeAuthSession } from "@/lib/auth-session";
+import { toNullableInt } from "@/lib/toNullableInt";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -28,15 +29,6 @@ const includeDetail = {
   },
 };
 
-const toNullableInt = (value: unknown) => {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
-  if (typeof value === "string") {
-    const parsed = Number(value.trim());
-    return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
-  }
-  return null;
-};
 
 const toNullableDate = (value: unknown) => {
   if (value === null || value === undefined || value === "") return null;
@@ -120,14 +112,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
   if ("expectedDate" in body) {
     patchData.expectedDate = nextExpectedDate;
-  }
-
-  if ("hasVendorPayment" in body) {
-    const hasVendorPayment = toNullableBool(body.hasVendorPayment);
-    if (hasVendorPayment === null) {
-      return new Response("hasVendorPayment must be boolean", { status: 400 });
-    }
-    patchData.hasVendorPayment = hasVendorPayment;
   }
 
   if ("remark" in body) {

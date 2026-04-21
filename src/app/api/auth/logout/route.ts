@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
-import { AUTH_SESSION_COOKIE } from "@/lib/auth-session";
+import { AUTH_SESSION_COOKIE, shouldUseSecureCookie } from "@/lib/auth-session";
 
 export async function POST(req: Request) {
-  const requestUrl = new URL(req.url);
-  const forwardedProto = req.headers.get("x-forwarded-proto");
-  const isSecureRequest =
-    forwardedProto === "https" || requestUrl.protocol === "https:";
+  const isSecureCookie = shouldUseSecureCookie(req);
 
   const response = NextResponse.json({ success: true });
   response.cookies.set({
@@ -14,7 +11,7 @@ export async function POST(req: Request) {
     path: "/",
     httpOnly: true,
     sameSite: "lax",
-    secure: isSecureRequest,
+    secure: isSecureCookie,
     maxAge: 0,
   });
   return response;

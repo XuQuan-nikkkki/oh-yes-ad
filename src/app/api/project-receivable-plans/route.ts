@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
+import { toNullableInt } from "@/lib/toNullableInt";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -13,6 +14,13 @@ const includeDetail = {
     select: {
       id: true,
       name: true,
+      statusOption: {
+        select: {
+          id: true,
+          value: true,
+          color: true,
+        },
+      },
     },
   },
   client: {
@@ -57,6 +65,9 @@ const includeDetail = {
           color: true,
         },
       },
+      expectedDateHistories: {
+        orderBy: [{ changedAt: "desc" as const }],
+      },
       actualNodes: {
         orderBy: [{ actualDate: "asc" as const }, { createdAt: "asc" as const }],
       },
@@ -65,15 +76,6 @@ const includeDetail = {
   },
 };
 
-const toNullableInt = (value: unknown) => {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
-  if (typeof value === "string") {
-    const parsed = Number(value.trim());
-    return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
-  }
-  return null;
-};
 
 const toNullableBool = (value: unknown) => {
   if (typeof value === "boolean") return value;
@@ -117,12 +119,17 @@ export async function POST(req: NextRequest) {
   }
 
   const contractAmount = toNullableInt(body.contractAmount);
+  const hasVendorPaymentRaw = toNullableBool(body.hasVendorPayment);
   const remarkNeedsAttentionRaw = toNullableBool(body.remarkNeedsAttention);
   if (contractAmount === null || contractAmount < 0) {
     return new Response("contractAmount must be a non-negative integer", {
       status: 400,
     });
   }
+  if ("hasVendorPayment" in body && hasVendorPaymentRaw === null) {
+    return new Response("hasVendorPayment must be boolean", { status: 400 });
+  }
+  const hasVendorPayment = hasVendorPaymentRaw ?? false;
   const remarkNeedsAttention = remarkNeedsAttentionRaw ?? false;
 
   const [project, client, legalEntity, owner] = await Promise.all([
@@ -175,6 +182,7 @@ export async function POST(req: NextRequest) {
       ownerEmployeeId,
       clientContractId: resolvedClientContractId,
       contractAmount,
+      hasVendorPayment,
       serviceContent:
         typeof body.serviceContent === "string" && body.serviceContent.trim().length > 0
           ? body.serviceContent.trim()

@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
+import { toNullableInt } from "@/lib/toNullableInt";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -22,15 +23,6 @@ const includeDetail = {
   },
 };
 
-const toNullableInt = (value: unknown) => {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
-  if (typeof value === "string") {
-    const parsed = Number(value.trim());
-    return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
-  }
-  return null;
-};
 
 const toNullableDate = (value: unknown) => {
   if (value === null || value === undefined || value === "") return null;
@@ -79,7 +71,8 @@ export async function POST(req: NextRequest) {
 
   const expectedAmountTaxIncluded = toNullableInt(body.expectedAmountTaxIncluded);
   const expectedDate = toNullableDate(body.expectedDate);
-  const hasVendorPayment = toNullableBool(body.hasVendorPayment);
+  const actualAmountTaxIncluded = toNullableInt(body.actualAmountTaxIncluded);
+  const actualDate = toNullableDate(body.actualDate);
   const remarkNeedsAttentionRaw = toNullableBool(body.remarkNeedsAttention);
 
   if (
@@ -91,10 +84,18 @@ export async function POST(req: NextRequest) {
       status: 400,
     });
   }
-
-  if (hasVendorPayment === null) {
-    return new Response("hasVendorPayment must be boolean", { status: 400 });
+  const hasActualAmount = actualAmountTaxIncluded !== null;
+  const hasActualDate = actualDate !== null;
+  if (hasActualAmount !== hasActualDate) {
+    return new Response(
+      "actualAmountTaxIncluded and actualDate must be both provided or both empty",
+      { status: 400 },
+    );
   }
+  if (actualAmountTaxIncluded !== null && actualAmountTaxIncluded < 0) {
+    return new Response("actualAmountTaxIncluded is invalid", { status: 400 });
+  }
+
   const remarkNeedsAttention = remarkNeedsAttentionRaw ?? false;
 
   const [plan, stageOption] = await Promise.all([
@@ -113,22 +114,38 @@ export async function POST(req: NextRequest) {
           _max: { sortOrder: true },
         }))._max.sortOrder ?? 0) + 1;
 
-  const created = await prisma.projectReceivableNode.create({
-    data: {
-      planId,
-      stageOptionId,
-      sortOrder,
-      keyDeliverable,
-      expectedAmountTaxIncluded,
-      expectedDate,
-      hasVendorPayment,
-      remarkNeedsAttention,
-      remark:
-        typeof body.remark === "string" && body.remark.trim().length > 0
-          ? body.remark.trim()
-          : null,
-    },
-    include: includeDetail,
+  const created = await prisma.$transaction(async (tx) => {
+    const node = await tx.projectReceivableNode.create({
+      data: {
+        planId,
+        stageOptionId,
+        sortOrder,
+        keyDeliverable,
+        expectedAmountTaxIncluded,
+        expectedDate,
+        remarkNeedsAttention,
+        remark:
+          typeof body.remark === "string" && body.remark.trim().length > 0
+            ? body.remark.trim()
+            : null,
+      },
+      include: includeDetail,
+    });
+
+    if (actualAmountTaxIncluded !== null && actualDate !== null) {
+      await tx.projectReceivableActualNode.create({
+        data: {
+          receivableNodeId: node.id,
+          actualAmountTaxIncluded,
+          actualDate,
+        },
+      });
+    }
+
+    return tx.projectReceivableNode.findUniqueOrThrow({
+      where: { id: node.id },
+      include: includeDetail,
+    });
   });
 
   return Response.json(created);

@@ -26,3 +26,21 @@ export function decodeAuthSession(value: string): AuthSession | null {
     return null;
   }
 }
+
+export function shouldUseSecureCookie(req: Request): boolean {
+  const forwardedProto = req.headers
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    ?.trim()
+    .toLowerCase();
+
+  if (forwardedProto) {
+    return forwardedProto === "https";
+  }
+
+  try {
+    return new URL(req.url).protocol === "https:";
+  } catch {
+    return false;
+  }
+}

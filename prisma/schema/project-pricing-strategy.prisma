@@ -1,0 +1,67 @@
+enum ProjectPricingStrategyMode {
+  range
+  target
+}
+
+model ProjectPricingStrategy {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  costEstimationId String                @unique
+  costEstimation   ProjectCostEstimation @relation(fields: [costEstimationId], references: [id], onDelete: Cascade)
+
+  estimatedDuration Int
+  // 有客户预算时，使用 range 模式，提供理想报价和最低报价；
+  // 没有客户预算时，使用 target 模式，提供目标报价
+  mode              ProjectPricingStrategyMode @default(range)
+
+  outsourceItems  ProjectOutsourceItem[] @relation("ProjectPricingStrategyOutsourceItems")
+  outsourceRemark String?
+
+  plannedLaborCost   Float
+  suggestedLaborCost Float
+
+  agencyFeeRate Float?
+
+  // 计算方式：按系统参数中的(月工位费 + 月水电费) / 员工月基准工作日 * 项目预估时长计算
+  rentCost Float
+
+  executionCost Float
+
+  plannedMiddleOfficeCost   Float
+  suggestedMiddleOfficeCost Float
+
+  bottomLinePrice  Float
+  bottomLineProfit Float
+  targetPrice      Float
+  targetProfit     Float
+
+  executionCostItems ProjectPricingStrategyExecutionCostItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model ProjectPricingStrategyExecutionCostItem {
+  id String @id @default(uuid())
+
+  strategyId String
+  strategy   ProjectPricingStrategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+
+  costTypeOptionId String
+  costTypeOption   SelectOption @relation("ProjectPricingStrategyExecutionCostType", fields: [costTypeOptionId], references: [id])
+
+  budgetAmount Float?
+  remark       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([strategyId, costTypeOptionId])
+  @@index([strategyId])
+  @@index([costTypeOptionId])
+}

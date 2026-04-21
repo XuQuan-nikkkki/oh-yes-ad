@@ -1,83 +1,40 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  App,
-  Button,
-  Card,
-  Descriptions,
-  Empty,
-  Modal,
-  Space,
-  Table,
-  Typography,
-} from "antd";
-import type { ColumnsType } from "antd/es/table";
-import AppLink from "@/components/AppLink";
-import RemarkText from "@/components/RemarkText";
-import SelectOptionTag from "@/components/SelectOptionTag";
+import { Button, Card, Empty, Modal, Space, Typography } from "antd";
+import MultipleSelectOptions from "@/components/MultipleSelectOptions";
+import InfoGrid from "@/components/project-detail/InfoGrid";
 import ProjectCostEstimationModal from "@/components/project-detail/ProjectCostEstimationModal";
+import StyledStatisticCard from "@/components/project-detail/StyledStatisticCard";
 import {
   formatProjectOutsourceItemsText,
   getProjectOutsourceTotal,
 } from "@/lib/project-outsource";
 import type { Employee, Project } from "@/types/projectDetail";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
+import { useProjectPermission } from "@/hooks/useProjectPermission";
+import ProjectCostBasisMembersTable from "./ProjectCostBasisMembersTable";
+import CopyTextButton from "../actions/CopyTextButton";
 
 type Props = {
   projectId: string;
   projectName: string;
-  canManageProject: boolean;
-  latestCostEstimation?: Project["latestCostEstimation"];
-  modalPrefillEstimation?: Project["latestCostEstimation"];
-  syncSummarySourceEstimation?: Project["latestCostEstimation"];
-  estimationType?: "planning" | "baseline";
+  latestCostEstimation?: Project["latestPlanningCostEstimation"];
+  modalPrefillEstimation?: Project["latestPlanningCostEstimation"];
+  syncSummarySourceEstimation?: Project["latestPlanningCostEstimation"];
   employees: Employee[];
   showProjectInBasicInfo?: boolean;
   showContractAmountInBasicInfo?: boolean;
   includeQuoteAmountInSyncSummary?: boolean;
   mode?: "full" | "actions" | "content";
   onSaved?: (
-    latestCostEstimation: Project["latestCostEstimation"],
+    latestCostEstimation: Project["latestPlanningCostEstimation"],
   ) => Promise<void> | void;
 };
 
-type CostEstimationMemberRow = {
-  id: string;
-  employeeId?: string;
-  employeeName?: string;
-  functionOption?: {
-    id?: string;
-    value?: string | null;
-    color?: string | null;
-  } | null;
-  allocationPercent?: number;
-  laborCostSnapshot?: number;
-  rentCostSnapshot?: number;
-};
-
 const sectionTitleStyle = { marginBottom: 12 } as const;
-
-const mapEstimationMembers = (
-  estimation?: Project["latestCostEstimation"],
-): CostEstimationMemberRow[] =>
-  (estimation?.members ?? []).map((member) => ({
-    id: member.id,
-    employeeId: member.employee?.id ?? member.employeeId,
-    employeeName: member.employee?.name,
-    functionOption:
-      member.employee?.functionOption ??
-      (member.employee?.function
-        ? {
-            id: "",
-            value: member.employee.function,
-            color: null,
-          }
-        : null),
-    allocationPercent: member.allocationPercent,
-    laborCostSnapshot: member.laborCostSnapshot,
-    rentCostSnapshot: member.rentCostSnapshot,
-  }));
+const statisticDescriptionStyle = { color: "rgba(0,0,0,0.45)" } as const;
+const executionCostField = "projectCostEstimation.executionCostType";
 
 const formatAmount = (value?: number | null) => {
   if (typeof value !== "number") return "-";
@@ -92,10 +49,20 @@ const toTrimmedString = (value?: string | null) => {
   return value.trim();
 };
 
+const parseBudgetValue = (value?: number | string | null) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    if (!normalized) return null;
+    const parsed = Number(normalized.replace(/,/g, ""));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
 const buildSyncSummary = (
   projectName: string,
   estimation?: Project["latestCostEstimation"],
-  estimationType: "planning" | "baseline" = "planning",
   includeQuoteAmount = false,
   detailLink?: string,
 ) => {
@@ -103,23 +70,18 @@ const buildSyncSummary = (
 
   const lines: string[] = [];
   const normalizedProjectName = toTrimmedString(projectName) || "未命名项目";
-  lines.push(estimationType === "baseline" ? "#立项申请" : "#成本测算");
+  lines.push("#成本测算");
   lines.push("");
   lines.push(normalizedProjectName);
   lines.push("");
 
-  if (
-    includeQuoteAmount &&
-    typeof estimation.contractAmountSnapshot === "number"
-  ) {
-    lines.push(
-      `报价金额：${formatAmount(estimation.contractAmountSnapshot)}元`,
-    );
+  if (includeQuoteAmount && typeof estimation.contractAmount === "number") {
+    lines.push(`报价金额：${formatAmount(estimation.contractAmount)}元`);
   }
   lines.push(`预计时长：${estimation.estimatedDuration}个工作日`);
-  const clientBudget = toTrimmedString(estimation.clientBudget);
-  if (clientBudget) {
-    lines.push(`客户报价(不含税)：${clientBudget}`);
+  const clientBudget = parseBudgetValue(estimation.clientBudget);
+  if (typeof clientBudget === "number") {
+    lines.push(`客户报价(不含税)：${formatAmount(clientBudget)}`);
   }
   lines.push("");
 
@@ -154,9 +116,7 @@ const buildSyncSummary = (
 
   if (detailLink) {
     lines.push("");
-    lines.push(
-      `${estimationType === "baseline" ? "申请" : "测算"}链接：${detailLink}`,
-    );
+    lines.push(`测算链接：${detailLink}`);
   }
 
   return lines.join("\n");
@@ -165,27 +125,19 @@ const buildSyncSummary = (
 const ProjectCostEstimationCard = ({
   projectId,
   projectName,
-  canManageProject,
   latestCostEstimation,
   modalPrefillEstimation,
   syncSummarySourceEstimation,
-  estimationType = "planning",
   employees,
-  showProjectInBasicInfo = false,
-  showContractAmountInBasicInfo = false,
   includeQuoteAmountInSyncSummary = false,
   mode = "full",
   onSaved,
 }: Props) => {
-  const { message } = App.useApp();
+  const { canManageProject } = useProjectPermission();
   const [modalOpen, setModalOpen] = useState(false);
   const [syncInfoModalOpen, setSyncInfoModalOpen] = useState(false);
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
-  const canViewLaborCost =
-    roleCodes.includes("ADMIN") ||
-    roleCodes.includes("HR") ||
-    roleCodes.includes("FINANCE");
   const canManageByPmRole =
     roleCodes.includes("PROJECT_MANAGER") || roleCodes.includes("ADMIN");
   const hasEstimation = Boolean(latestCostEstimation);
@@ -199,82 +151,46 @@ const ProjectCostEstimationCard = ({
       buildSyncSummary(
         projectName,
         syncSummaryEstimation,
-        estimationType,
         includeQuoteAmountInSyncSummary,
         currentPageLink,
       ),
     [
       currentPageLink,
-      estimationType,
       includeQuoteAmountInSyncSummary,
       projectName,
       syncSummaryEstimation,
     ],
   );
 
-  const memberViewColumns = useMemo<ColumnsType<CostEstimationMemberRow>>(
-    () => [
-      {
-        title: "姓名",
-        dataIndex: "employeeName",
-        width: 220,
-        render: (_value: string | undefined, row) =>
-          row.employeeId && row.employeeName ? (
-            <AppLink href={`/employees/${row.employeeId}`}>
-              {row.employeeName}
-            </AppLink>
-          ) : (
-            (row.employeeName ?? "-")
-          ),
-      },
-      {
-        title: "职能",
-        dataIndex: "functionOption",
-        width: 180,
-        render: (value) =>
-          value?.value ? <SelectOptionTag option={value} /> : "-",
-      },
-      {
-        title: "占比",
-        dataIndex: "allocationPercent",
-        width: 150,
-        render: (value: number | undefined) =>
-          typeof value === "number" ? `${value}%` : "-",
-      },
-      ...(canViewLaborCost
-        ? [
-            {
-              title: "人力成本",
-              dataIndex: "laborCostSnapshot",
-              width: 180,
-              render: (value: number | undefined) =>
-                typeof value === "number" ? `${formatAmount(value)} 元` : "-",
-            },
-          ]
-        : []),
-    ],
-    [canViewLaborCost],
-  );
-
-  const memberRows = useMemo(
-    () => mapEstimationMembers(latestCostEstimation),
-    [latestCostEstimation],
-  );
-  const totalLaborCost = useMemo(
-    () =>
-      memberRows.reduce(
-        (sum, row) =>
-          sum +
-          (typeof row.laborCostSnapshot === "number"
-            ? row.laborCostSnapshot
-            : 0),
-        0,
-      ),
-    [memberRows],
-  );
   const hasAgencyFeeRate =
     typeof latestCostEstimation?.agencyFeeRate === "number" &&
     latestCostEstimation.agencyFeeRate > 0;
+  const hasOtherExecutionCostType = useMemo(() => {
+    if (typeof latestCostEstimation?.hasOtherExecutionCostType === "boolean") {
+      return latestCostEstimation.hasOtherExecutionCostType;
+    }
+    return (latestCostEstimation?.executionCostTypes ?? []).some(
+      (item) =>
+        typeof item?.value === "string" && item.value.trim() === "其他",
+    );
+  }, [
+    latestCostEstimation?.executionCostTypes,
+    latestCostEstimation?.hasOtherExecutionCostType,
+  ]);
+  const estimatedAgencyFee = useMemo(() => {
+    if (typeof latestCostEstimation?.estimatedAgencyFee === "number") {
+      return latestCostEstimation.estimatedAgencyFee;
+    }
+    if (!hasAgencyFeeRate) return null;
+    const budget = parseBudgetValue(latestCostEstimation?.clientBudget);
+    if (budget === null) return null;
+    return ((latestCostEstimation?.agencyFeeRate ?? 0) / 100) * budget;
+  }, [
+    hasAgencyFeeRate,
+    latestCostEstimation?.agencyFeeRate,
+    latestCostEstimation?.clientBudget,
+    latestCostEstimation?.estimatedAgencyFee,
+  ]);
 
   const actionsNode = canManageByPmRole ? (
     hasEstimation ? (
@@ -285,7 +201,7 @@ const ProjectCostEstimationCard = ({
           onClick={() => setModalOpen(true)}
           disabled={!canManageProject}
         >
-          {estimationType === "baseline" ? "更新立项申请" : "更新成本测算"}
+          更新成本测算
         </Button>
       </>
     ) : (
@@ -295,7 +211,7 @@ const ProjectCostEstimationCard = ({
           onClick={() => setModalOpen(true)}
           disabled={!canManageProject}
         >
-          {estimationType === "baseline" ? "创建立项申请" : "开始成本测算"}
+          开始成本测算
         </Button>
       </>
     )
@@ -307,240 +223,150 @@ const ProjectCostEstimationCard = ({
         <Typography.Title level={5} style={sectionTitleStyle}>
           基础信息
         </Typography.Title>
-        <Descriptions
-          size="small"
-          column={2}
-          styles={{
-            label: { paddingBottom: 12 },
-            content: { paddingBottom: 12 },
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: 12,
+            marginBottom: 12,
           }}
-          items={[
-            ...(showProjectInBasicInfo
-              ? [
-                  {
-                    key: "project",
-                    label: "所属项目",
-                    children: (
-                      <AppLink href={`/projects/${projectId}`}>
-                        {projectName || "未命名项目"}
-                      </AppLink>
-                    ),
-                  },
-                ]
-              : []),
-            {
-              key: "estimatedDuration",
-              label: "预估时长(工作日)",
-              children: latestCostEstimation?.estimatedDuration ?? "-",
-            },
-            ...(estimationType !== "baseline"
-              ? [
-                  {
-                    key: "clientBudget",
-                    label: "客户报价(不含税)",
-                    children: latestCostEstimation?.clientBudget || "无",
-                  },
-                ]
-              : []),
-            {
-              key: "owner",
-              label: "创建人",
-              children:
+        >
+          <StyledStatisticCard
+            statistic={{
+              title: "客户报价(不含税)",
+              value:
+                parseBudgetValue(latestCostEstimation?.clientBudget) ?? "-",
+              suffix:
+                typeof parseBudgetValue(latestCostEstimation?.clientBudget) ===
+                "number"
+                  ? "元"
+                  : undefined,
+              description:
                 latestCostEstimation?.owner?.id &&
                 latestCostEstimation?.owner?.name ? (
-                  <AppLink href={`/employees/${latestCostEstimation.owner.id}`}>
+                  <span style={statisticDescriptionStyle}>
+                    创建人：
                     {latestCostEstimation.owner.name}
-                  </AppLink>
+                  </span>
                 ) : (
-                  "-"
+                  <span style={statisticDescriptionStyle}>创建人：-</span>
                 ),
-            },
-            ...(showContractAmountInBasicInfo
-              ? [
-                  {
-                    key: "contractAmountSnapshot",
-                    label: "合同金额(含税)",
-                    children:
-                      typeof latestCostEstimation?.contractAmountSnapshot ===
-                      "number"
-                        ? `${formatAmount(latestCostEstimation.contractAmountSnapshot)} 元`
-                        : "-",
-                  },
-                ]
-              : []),
-          ]}
-        />
+            }}
+          />
+          <StyledStatisticCard
+            statistic={{
+              title: "预估时长",
+              value: latestCostEstimation?.estimatedDuration ?? undefined,
+              formatter: (value) =>
+                value === null || value === undefined
+                  ? "-"
+                  : Number(value).toLocaleString("zh-CN"),
+              description: (
+                <span style={statisticDescriptionStyle}>个工作日</span>
+              ),
+            }}
+          />
+        </div>
       </div>
 
       <div>
         <Typography.Title level={5} style={sectionTitleStyle}>
           人员配置
         </Typography.Title>
-        <Table
-          rowKey="id"
-          columns={memberViewColumns}
-          dataSource={memberRows}
-          pagination={false}
-          locale={{ emptyText: "暂无成员配置" }}
-          size="small"
-          style={{ width: "100%" }}
-          tableLayout="fixed"
-          summary={
-            canViewLaborCost
-              ? () => (
-                  <Table.Summary.Row style={{ fontWeight: 600 }}>
-                    <Table.Summary.Cell index={0} colSpan={3}>
-                      人力成本总计
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={1}>
-                      {`${formatAmount(totalLaborCost)} 元`}
-                    </Table.Summary.Cell>
-                  </Table.Summary.Row>
-                )
-              : undefined
-          }
-        />
+        <ProjectCostBasisMembersTable members={latestCostEstimation?.members} />
       </div>
 
       <div>
         <Typography.Title level={5} style={sectionTitleStyle}>
           费用信息
         </Typography.Title>
-        <Descriptions
-          title={<h5>中介费</h5>}
-          size="small"
-          column={3}
-          styles={{
-            label: { paddingBottom: 12 },
-            header: { marginBottom: 8 },
-            content: { paddingBottom: 12, marginBottom: 8 },
-          }}
-          items={[
+        <InfoGrid
+          style={{ marginBottom: 12 }}
+          rows={[
             {
-              key: "agencyFeeRate",
-              label: "中介费率",
-              children:
-                hasAgencyFeeRate
-                  ? `${formatAmount(latestCostEstimation.agencyFeeRate ?? 0)}%`
-                  : "-",
+              columns: 2,
+              title: "中介费用",
+              items: [
+                {
+                  title: "中介费率",
+                  value: hasAgencyFeeRate
+                    ? `${formatAmount(latestCostEstimation.agencyFeeRate ?? 0)}%`
+                    : "-",
+                },
+                {
+                  title: "预估中介费",
+                  value:
+                    typeof estimatedAgencyFee === "number"
+                      ? `${formatAmount(estimatedAgencyFee)} 元`
+                      : "-",
+                },
+              ],
             },
             {
-              key: "agencyFee",
-              label: "中介费金额",
-              children:
-                hasAgencyFeeRate &&
-                typeof latestCostEstimation?.contractAmountSnapshot === "number"
-                  ? `${formatAmount(
-                      ((latestCostEstimation.agencyFeeRate ?? 0) / 100) *
-                        latestCostEstimation.contractAmountSnapshot,
-                    )} 元`
-                  : "-",
-            },
-          ]}
-        />
-        <Descriptions
-          title={<h5>外包费用</h5>}
-          size="small"
-          column={3}
-          styles={{
-            label: { paddingBottom: 12 },
-            header: { marginBottom: 8 },
-            content: { paddingBottom: 12, marginBottom: 8 },
-          }}
-          items={[
-            {
-              key: "outsourceCost",
-              label: "外包费用",
-              children:
-                (latestCostEstimation?.outsourceItems?.length ?? 0) > 0
-                  ? `${getProjectOutsourceTotal(latestCostEstimation?.outsourceItems)} 元`
-                  : "-",
+              columns: 3,
+              title: "外包费用",
+              items: [
+                {
+                  title: "外包费用",
+                  value:
+                    (latestCostEstimation?.outsourceItems?.length ?? 0) > 0
+                      ? `${getProjectOutsourceTotal(latestCostEstimation?.outsourceItems)} 元`
+                      : "-",
+                },
+                {
+                  title: "外包费用明细",
+                  value: latestCostEstimation?.outsourceInfo?.trim()
+                    ? latestCostEstimation.outsourceInfo
+                    : (latestCostEstimation?.outsourceItems?.length ?? 0) > 0
+                      ? formatProjectOutsourceItemsText(
+                          latestCostEstimation?.outsourceItems,
+                        )
+                      : "-",
+                },
+                {
+                  title: "外包费用备注",
+                  value: latestCostEstimation?.outsourceRemark?.trim() || "-",
+                },
+              ],
             },
             {
-              key: "outsourceItems",
-              label: "外包费用明细",
-              children:
-                (latestCostEstimation?.outsourceItems?.length ?? 0) > 0 ? (
-                  <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
-                    {formatProjectOutsourceItemsText(
-                      latestCostEstimation?.outsourceItems,
-                    )}
-                  </div>
-                ) : (
-                  "-"
-                ),
-            },
-            {
-              key: "outsourceRemark",
-              label: "外包费用备注",
-              children: (
-                <RemarkText remark={latestCostEstimation?.outsourceRemark} />
-              ),
-            },
-          ]}
-        />
-        <Descriptions
-          title={<h5>执行费用</h5>}
-          size="small"
-          column={
-            latestCostEstimation?.otherExecutionCostRemark?.trim() ? 2 : 1
-          }
-          styles={{
-            label: { paddingBottom: 12 },
-            header: { marginBottom: 8 },
-            content: { paddingBottom: 12, marginBottom: 8 },
-          }}
-          items={[
-            {
-              key: "executionCostTypes",
-              label: "执行费用类别",
-              children:
-                (latestCostEstimation?.executionCostTypes?.length ?? 0) > 0 &&
-                (latestCostEstimation?.executionCostTypes ?? []).some(
-                  (item) => item?.value,
-                ) ? (
-                  <Space size={[8, 8]} wrap>
-                    {(latestCostEstimation?.executionCostTypes ?? [])
-                      .filter((item): item is NonNullable<typeof item> =>
-                        Boolean(item),
-                      )
-                      .filter((item) => Boolean(item.value))
-                      .map((item, index) => (
-                        <SelectOptionTag
-                          key={
-                            item.id ?? `${item.value ?? "execution"}-${index}`
-                          }
-                          option={item}
-                        />
-                      ))}
-                  </Space>
-                ) : (
-                  "-"
-                ),
-            },
-            ...(latestCostEstimation?.otherExecutionCostRemark?.trim()
-              ? [
-                  {
-                    key: "otherExecutionCostRemark",
-                    label: "其他费用备注",
-                    children: (
-                      <RemarkText
-                        remark={latestCostEstimation.otherExecutionCostRemark}
+              columns: hasOtherExecutionCostType ? 2 : 1,
+              title: "执行费用",
+              items: [
+                {
+                  title: "执行费用类别",
+                  value:
+                    (latestCostEstimation?.executionCostTypes?.length ?? 0) >
+                      0 &&
+                    (latestCostEstimation?.executionCostTypes ?? []).some(
+                      (item) => item?.value,
+                    ) ? (
+                      <MultipleSelectOptions
+                        field={executionCostField}
+                        options={latestCostEstimation?.executionCostTypes}
                       />
+                    ) : (
+                      "-"
                     ),
-                  },
-                ]
-              : []),
+                },
+                ...(hasOtherExecutionCostType
+                  ? [
+                      {
+                        title: "其他执行费用备注",
+                        value:
+                          latestCostEstimation?.otherExecutionCostRemark?.trim() ||
+                          "-",
+                      },
+                    ]
+                  : []),
+              ],
+            },
           ]}
         />
       </div>
     </Space>
   ) : (
-    <Empty
-      description={
-        estimationType === "baseline" ? "暂无立项申请数据" : "暂无成本测算数据"
-      }
-    />
+    <Empty description="暂无成本测算数据" />
   );
 
   return (
@@ -561,7 +387,6 @@ const ProjectCostEstimationCard = ({
             projectId={projectId}
             latestCostEstimation={latestCostEstimation}
             prefillEstimation={modalPrefillEstimation}
-            estimationType={estimationType}
             employees={employees}
             onSaved={onSaved}
           />
@@ -575,29 +400,7 @@ const ProjectCostEstimationCard = ({
               <Button key="cancel" onClick={() => setSyncInfoModalOpen(false)}>
                 关闭
               </Button>,
-              <Button
-                key="copy"
-                type="primary"
-                onClick={async () => {
-                  try {
-                    if (navigator?.clipboard?.writeText) {
-                      await navigator.clipboard.writeText(syncSummaryText);
-                    } else {
-                      const textarea = document.createElement("textarea");
-                      textarea.value = syncSummaryText;
-                      document.body.appendChild(textarea);
-                      textarea.select();
-                      document.execCommand("copy");
-                      document.body.removeChild(textarea);
-                    }
-                    message.success("已复制");
-                  } catch {
-                    message.error("复制失败，请手动复制");
-                  }
-                }}
-              >
-                复制
-              </Button>,
+              <CopyTextButton key="copy" text={syncSummaryText} />,
             ]}
           >
             <div

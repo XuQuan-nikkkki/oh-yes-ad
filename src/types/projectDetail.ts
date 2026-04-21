@@ -33,11 +33,13 @@ export type ProjectCostEstimationSummary = {
   version: number;
   type: "planning" | "baseline";
   estimatedDuration: number;
-  clientBudget?: string | null;
-  contractAmountSnapshot?: number | null;
+  clientBudget?: number | string | null;
+  contractAmount?: number | null;
+  estimatedAgencyFee?: number | null;
   totalLaborCost: number;
   agencyFeeRate?: number | null;
   outsourceCost?: number | null;
+  outsourceInfo?: string | null;
   outsourceRemark?: string | null;
   outsourceItems?: {
     id: string;
@@ -50,6 +52,7 @@ export type ProjectCostEstimationSummary = {
     value?: string | null;
     color?: string | null;
   }[];
+  hasOtherExecutionCostType?: boolean;
   members?: {
     id: string;
     estimationId: string;
@@ -228,6 +231,8 @@ export type Project = {
     milestone?: { id: string; name: string } | null;
   }[];
   latestCostEstimation?: ProjectCostEstimationSummary | null;
+  latestInitiation?: ProjectCostEstimationSummary | null;
+  initiations?: ProjectCostEstimationSummary[];
   latestBaselineCostEstimation?: ProjectCostEstimationSummary | null;
   latestPlanningCostEstimation?: ProjectCostEstimationSummary | null;
   periodInfo?: PeriodInfo;

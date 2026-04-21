@@ -1,10 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { App, Card, Spin, Table, Tooltip, message } from "antd";
+import { App, Button, Card, Modal, Progress, Spin, Table, Tag, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { InfoCircleOutlined } from "@ant-design/icons";
-import { StatisticCard } from "@ant-design/pro-components";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import {
   getSystemSettingNumberFromRecords,
@@ -13,6 +11,11 @@ import {
 import { calculateWorkdays } from "@/lib/workday";
 import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
 import type { Project, WorkdayAdjustment } from "@/types/projectDetail";
+import ProjectDetailTableContainer from "@/components/project-detail/ProjectDetailTableContainer";
+import {
+  FINANCIAL_METRIC_BAR_COLORS,
+  FINANCIAL_METRIC_COLORS,
+} from "@/lib/financial-metric-colors";
 
 type Props = {
   projectId: string;
@@ -34,6 +37,7 @@ type ClientContract = {
 type FinancialStructure = {
   id: string;
   agencyFeeRate?: number | null;
+  executionCost?: number | null;
   outsourceItems?: Array<{
     id: string;
     type: string;
@@ -94,12 +98,11 @@ type BreakdownRow = {
   tone?: BreakdownRowTone;
   bold?: boolean;
   barColor?: string;
-  showTooltip?: boolean;
   remark?: string;
   note?: string; // when present, render as a full-width note row
+  isSection?: boolean;
+  isCostDetail?: boolean;
 };
-
-const FUND_AMOUNT = 10000;
 
 const toNumber = (value: unknown) => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -123,12 +126,12 @@ const formatYuanText = (value: number) => {
   return rounded.toLocaleString("zh-CN", { maximumFractionDigits: 4 });
 };
 
-const buildTooltipContent = (lines: string[]) => (
-  <div style={{ whiteSpace: "pre-line" }}>{lines.join("\n")}</div>
-);
-
 const formatRatio = (value: number | null) =>
   value === null ? "-" : `${(value * 100).toFixed(2)}%`;
+const formatRatioPercentText = (value: number | null) =>
+  value === null || !Number.isFinite(value)
+    ? "-"
+    : `${(value * 100).toFixed(1)}%`;
 
 const formatSignedPercentText = (ratioValue?: number | null) => {
   if (ratioValue === null || ratioValue === undefined) return "-";
@@ -143,11 +146,15 @@ const formatSignedPercentText = (ratioValue?: number | null) => {
   return `${percent.toFixed(1)}%`;
 };
 
+const normalizeNegativeZero = (value: number) =>
+  Object.is(value, -0) ? 0 : value;
+
 const formatSignedAmountText = (value?: number | null) => {
   if (value === null || value === undefined) return "-";
   if (!Number.isFinite(value)) return "-";
-  const rounded = Math.round(value);
-  return rounded.toLocaleString("zh-CN");
+  const rounded = normalizeNegativeZero(Math.round(value));
+  const normalized = Object.is(rounded, -0) ? 0 : rounded;
+  return normalized.toLocaleString("zh-CN");
 };
 
 const getEntryHours = (start: string, end: string) =>
@@ -185,12 +192,12 @@ const ProjectRealtimeCostTrackingTable = ({
   const app = App.useApp();
   const [messageApi, contextHolder] = message.useMessage();
   const downloadTableRef = useRef<(() => Promise<void>) | null>(null);
+  const [laborDetailOpen, setLaborDetailOpen] = useState(false);
   const currentUser = useAuthStore((state) => state.currentUser);
-  const roleCodes = getRoleCodesFromUser(currentUser);
-  const canViewLaborCost =
-    roleCodes.includes("ADMIN") ||
-    roleCodes.includes("HR") ||
-    roleCodes.includes("FINANCE");
+  const canViewLaborDetail = useMemo(() => {
+    const roleCodes = getRoleCodesFromUser(currentUser);
+    return roleCodes.includes("ADMIN") || roleCodes.includes("FINANCE");
+  }, [currentUser]);
   const [loading, setLoading] = useState(true);
   const [clientContract, setClientContract] = useState<ClientContract | null>(
     null,
@@ -281,7 +288,9 @@ const ProjectRealtimeCostTrackingTable = ({
       );
       setReimbursementRows(Array.isArray(reimbursements) ? reimbursements : []);
       setReceivablePlans(
-        Array.isArray(receivableRows) ? (receivableRows as ReceivablePlan[]) : [],
+        Array.isArray(receivableRows)
+          ? (receivableRows as ReceivablePlan[])
+          : [],
       );
       setPayablePlans(
         Array.isArray(payableRows) ? (payableRows as PayablePlan[]) : [],
@@ -364,6 +373,14 @@ const ProjectRealtimeCostTrackingTable = ({
       ),
     [systemSettings],
   );
+  const projectFundAmount = useMemo(
+    () =>
+      getSystemSettingNumberFromRecords(
+        systemSettings,
+        SYSTEM_SETTING_KEYS.pricingProjectFundAmount,
+      ),
+    [systemSettings],
+  );
   const middleOfficeDailyCost = useMemo(() => {
     if (middleOfficeBaseDays <= 0) return 0;
     return middleOfficeMonthlyCost / middleOfficeBaseDays;
@@ -430,6 +447,26 @@ const ProjectRealtimeCostTrackingTable = ({
     () => laborBreakdown.reduce((sum, item) => sum + toNumber(item.cost), 0),
     [laborBreakdown],
   );
+  const laborDetailData = useMemo(() => {
+    const totalWorkdays = laborBreakdown.reduce(
+      (sum, item) => sum + toNumber(item.workdays),
+      0,
+    );
+    const memberCount = laborBreakdown.filter(
+      (item) => toNumber(item.workdays) > 0,
+    ).length;
+    return {
+      memberCount,
+      totalWorkdays,
+      items: laborBreakdown.map((item) => ({
+        key: item.employeeId,
+        text: `${item.name}：登记工时 ${formatAmount(
+          toNumber(item.workdays),
+        )}d，折合 ${formatYuanText(toNumber(item.cost))} 元`,
+      })),
+      totalCostText: `共计 ${formatYuanText(actualLaborCost)} 元`,
+    };
+  }, [actualLaborCost, laborBreakdown]);
 
   const rentCost = useMemo(
     () =>
@@ -509,6 +546,10 @@ const ProjectRealtimeCostTrackingTable = ({
       reimbursementRows.reduce((sum, item) => sum + toNumber(item.amount), 0),
     [reimbursementRows],
   );
+  const executionCostBudget = useMemo(
+    () => toNumber(financialStructure?.executionCost),
+    [financialStructure?.executionCost],
+  );
   const middleOfficeCost = middleOfficeDailyCost * elapsedWorkdays;
   const totalCost =
     agencyFee +
@@ -522,73 +563,7 @@ const ProjectRealtimeCostTrackingTable = ({
   const projectLevel = getProjectLevel(totalCostRatio ?? 1);
   const bonusRatio = getBonusRatio(projectLevel);
   const projectBonus = projectProfit * bonusRatio;
-  const finalProfit = projectProfit - projectBonus - FUND_AMOUNT;
-
-  const incomeTooltipLines = useMemo(() => {
-    const plans = receivablePlans ?? [];
-    const lines: string[] = [];
-    lines.push(`项目包含 ${plans.length} 个收款计划：`);
-    plans.forEach((plan) => {
-      const content = plan.serviceContent?.trim() || "未填写服务内容";
-      const amount = toNumber(plan.contractAmount);
-      lines.push(`${content}： ${formatYuanText(amount)} 元`);
-    });
-    lines.push(`共计 ${formatYuanText(income)} 元`);
-    return lines;
-  }, [income, receivablePlans]);
-
-  const taxTooltipLines = useMemo(() => {
-    const plans = receivablePlans ?? [];
-    const lines: string[] = [];
-    lines.push(`项目包含 ${plans.length} 个收款计划，税费分别是：`);
-    taxBreakdown.forEach((item) => {
-      const content = item.serviceContent?.trim() || "未填写服务内容";
-      lines.push(`${content}： ${formatYuanText(toNumber(item.tax))} 元`);
-    });
-    lines.push(`共计 ${formatYuanText(tax)} 元`);
-    return lines;
-  }, [receivablePlans, tax, taxBreakdown]);
-
-  const outsourceTooltipLines = useMemo(() => {
-    const plans = payablePlans ?? [];
-    const lines: string[] = [];
-    lines.push(`项目包含 ${plans.length} 个付款计划：`);
-    plans.forEach((plan) => {
-      const vendorName =
-        plan.vendorContract?.vendor?.fullName?.trim() ||
-        plan.vendorContract?.vendor?.name?.trim() ||
-        "未选择供应商";
-      const content =
-        plan.vendorContract?.serviceContent?.trim() || "未填写服务内容";
-      const amount = toNumber(plan.contractAmount);
-      lines.push(`${vendorName}-${content}： ${formatYuanText(amount)} 元`);
-    });
-    lines.push(`共计 ${formatYuanText(outsourceCost)} 元`);
-    return lines;
-  }, [outsourceCost, payablePlans]);
-
-  const laborTooltipLines = useMemo(() => {
-    const totalWorkdays = laborBreakdown.reduce(
-      (sum, item) => sum + toNumber(item.workdays),
-      0,
-    );
-    const memberCount = laborBreakdown.filter(
-      (item) => toNumber(item.workdays) > 0,
-    ).length;
-    const lines: string[] = [];
-    lines.push(
-      `项目共有 ${memberCount} 个成员投入 ${formatYuanText(totalWorkdays)} 个工作日：`,
-    );
-    laborBreakdown.forEach((item) => {
-      lines.push(
-        `${item.name}：已登记工时 ${formatYuanText(
-          toNumber(item.workdays),
-        )}d，折合 ${formatYuanText(toNumber(item.cost))} 元`,
-      );
-    });
-    lines.push(`共计 ${formatYuanText(actualLaborCost)} 元`);
-    return lines;
-  }, [actualLaborCost, laborBreakdown]);
+  const finalProfit = projectProfit - projectBonus - projectFundAmount;
 
   const incomeRemarkText = useMemo(() => {
     const plans = receivablePlans ?? [];
@@ -771,8 +746,8 @@ const ProjectRealtimeCostTrackingTable = ({
       {
         key: "fund",
         category: "基金",
-        amount: formatAmount(FUND_AMOUNT),
-        ratio: formatRatio(income > 0 ? FUND_AMOUNT / income : null),
+        amount: formatAmount(projectFundAmount),
+        ratio: formatRatio(income > 0 ? projectFundAmount / income : null),
         remark: "-",
       },
       {
@@ -802,78 +777,7 @@ const ProjectRealtimeCostTrackingTable = ({
       tax,
       totalCost,
       totalCostRatio,
-    ],
-  );
-
-  const columns = useMemo<ColumnsType<CostRow>>(
-    () => [
-      {
-        title: "类别",
-        dataIndex: "category",
-        key: "category",
-        width: 160,
-        onHeaderCell: () => ({ style: { paddingLeft: 24 } }),
-        onCell: () => ({ style: { paddingLeft: 24 } }),
-        render: (value, row) => {
-          const label = String(value ?? "");
-          const tooltip =
-            row.key === "laborCost"
-              ? buildTooltipContent(laborTooltipLines)
-              : null;
-
-          const content = (
-            <span
-              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-            >
-              <span>{label}</span>
-              {tooltip ? (
-                <Tooltip title={tooltip} placement="top">
-                  <InfoCircleOutlined style={{ color: "rgba(0,0,0,0.45)" }} />
-                </Tooltip>
-              ) : null}
-            </span>
-          );
-          return row.bold ? <strong>{content}</strong> : content;
-        },
-      },
-      {
-        title: "金额",
-        dataIndex: "amount",
-        key: "amount",
-        width: 220,
-        render: (value, row) => (row.bold ? <strong>{value}</strong> : value),
-      },
-      {
-        title: "占比",
-        dataIndex: "ratio",
-        key: "ratio",
-        width: 220,
-        render: (value, row) => (row.bold ? <strong>{value}</strong> : value),
-      },
-      {
-        title: "备注",
-        dataIndex: "remark",
-        key: "remark",
-        width: 300,
-        onHeaderCell: () => ({ style: { paddingRight: 24 } }),
-        onCell: () => ({ style: { paddingRight: 24 } }),
-        render: (value, row) =>
-          row.bold ? (
-            <strong style={{ whiteSpace: "pre-line" }}>{value}</strong>
-          ) : (
-            <span style={{ whiteSpace: "pre-line" }}>{value}</span>
-          ),
-      },
-    ],
-    [
-      agencyFeeRemarkText,
-      incomeTooltipLines,
-      incomeRemarkText,
-      laborTooltipLines,
-      outsourceTooltipLines,
-      outsourceRemarkText,
-      taxRemarkText,
-      taxTooltipLines,
+      projectFundAmount,
     ],
   );
 
@@ -884,7 +788,7 @@ const ProjectRealtimeCostTrackingTable = ({
     const taxRemark = taxRemarkText;
     const outsourceRemark = outsourceRemarkText;
     const agencyFeeRemark = `中介费率 ${financialStructure?.agencyFeeRate ?? 0}%`;
-    const bonusRemark = `项目级别：${projectLevel}，奖金比例：${Math.round(
+    const bonusRemark = `级别：${projectLevel} · 奖金比例：${Math.round(
       bonusRatio * 100,
     )}%`;
 
@@ -893,14 +797,20 @@ const ProjectRealtimeCostTrackingTable = ({
 
     const rows: BreakdownRow[] = [
       {
+        key: "income-detail-section",
+        label: "收入明细",
+        note: "收入明细",
+        isSection: true,
+      },
+      {
         key: "income",
         label: "收入",
+        indent: 1,
         amountValue: incomeBase,
         ratioValue: incomeBase > 0 ? 1 : 0,
-        tone: "beige",
+        tone: "neutral",
         bold: true,
         barColor: "#4F88D7",
-        showTooltip: false,
         remark: incomeRemark,
       },
       {
@@ -912,59 +822,66 @@ const ProjectRealtimeCostTrackingTable = ({
         tone: "neutral",
         bold: true,
         barColor: "#D15651",
-        showTooltip: false,
         remark: taxRemark,
       },
       {
         key: "netIncome",
         label: "净收入",
+        indent: 1,
         amountValue: netIncome,
         ratioValue: buildRatio(netIncome),
-        tone: "beige",
+        tone: "neutral",
         bold: true,
         barColor: "#4F88D7",
         remark: "-",
       },
       {
+        key: "cost-detail-section",
+        label: "成本明细",
+        note: "成本明细",
+        isSection: true,
+      },
+      {
         key: "agencyFee",
         label: "中介费",
         indent: 1,
+        isCostDetail: true,
         amountValue: -agencyFee,
         ratioValue: buildRatio(-agencyFee),
         tone: "neutral",
         bold: true,
         barColor: "#D15651",
-        showTooltip: false,
         remark: agencyFeeRemark,
       },
       {
         key: "outsourceCost",
         label: "外包成本",
         indent: 1,
+        isCostDetail: true,
         amountValue: -outsourceCost,
         ratioValue: buildRatio(-outsourceCost),
         tone: "neutral",
         bold: true,
         barColor: "#D15651",
-        showTooltip: false,
         remark: outsourceRemark,
       },
       {
         key: "laborCost",
         label: "人力成本",
         indent: 1,
+        isCostDetail: true,
         amountValue: -actualLaborCost,
         ratioValue: buildRatio(-actualLaborCost),
         tone: "neutral",
         bold: true,
         barColor: "#D15651",
-        showTooltip: true,
         remark: "-",
       },
       {
         key: "rentCost",
         label: "租金成本",
         indent: 1,
+        isCostDetail: true,
         amountValue: -rentCost,
         ratioValue: buildRatio(-rentCost),
         tone: "neutral",
@@ -973,26 +890,28 @@ const ProjectRealtimeCostTrackingTable = ({
         remark: rentRemarkText,
       },
       {
-        key: "executionCost",
-        label: "执行费用成本",
-        indent: 1,
-        amountValue: -executionCost,
-        ratioValue: buildRatio(-executionCost),
-        tone: "neutral",
-        bold: true,
-        barColor: "#D15651",
-        remark: executionRemark?.trim() ? executionRemark : "-",
-      },
-      {
         key: "middleOfficeCost",
         label: "中台成本",
         indent: 1,
+        isCostDetail: true,
         amountValue: -middleOfficeCost,
         ratioValue: buildRatio(-middleOfficeCost),
         tone: "neutral",
         bold: true,
         barColor: "#D15651",
         remark: middleOfficeRemarkText,
+      },
+      {
+        key: "executionCost",
+        label: "执行费用成本",
+        indent: 1,
+        isCostDetail: true,
+        amountValue: -executionCost,
+        ratioValue: buildRatio(-executionCost),
+        tone: "neutral",
+        bold: true,
+        barColor: "#D15651",
+        remark: executionRemark?.trim() ? executionRemark : "-",
       },
       {
         key: "totalCost",
@@ -1003,6 +922,12 @@ const ProjectRealtimeCostTrackingTable = ({
         bold: true,
         barColor: "#D15651",
         remark: "-",
+      },
+      {
+        key: "profit-allocation-section",
+        label: "利润分配",
+        note: "利润分配",
+        isSection: true,
       },
       {
         key: "projectProfit",
@@ -1029,8 +954,8 @@ const ProjectRealtimeCostTrackingTable = ({
         key: "fund",
         label: "基金",
         indent: 1,
-        amountValue: -FUND_AMOUNT,
-        ratioValue: buildRatio(-FUND_AMOUNT),
+        amountValue: -projectFundAmount,
+        ratioValue: buildRatio(-projectFundAmount),
         tone: "neutral",
         bold: true,
         barColor: "#E4A344",
@@ -1065,10 +990,7 @@ const ProjectRealtimeCostTrackingTable = ({
     rentCost,
     tax,
     totalCost,
-    laborTooltipLines,
-    outsourceTooltipLines,
-    incomeTooltipLines,
-    taxTooltipLines,
+    projectFundAmount,
     rentRemarkText,
     middleOfficeRemarkText,
     financialStructure?.agencyFeeRate,
@@ -1076,122 +998,74 @@ const ProjectRealtimeCostTrackingTable = ({
 
   const breakdownColumns = useMemo<ColumnsType<BreakdownRow>>(() => {
     const incomeBase = income > 0 ? income : 0;
-
-    const getTooltipForKey = (row: BreakdownRow) => {
-      if (!row.showTooltip) return null;
-      return row.key === "laborCost"
-        ? canViewLaborCost
-          ? buildTooltipContent(laborTooltipLines)
-          : null
-        : null;
-    };
-
-    const renderNoteCell = (row: BreakdownRow) => {
-      return {
-        children: <span style={{ color: "rgba(0,0,0,0.45)" }}>{row.note}</span>,
-        props: { colSpan: 5 as const },
-      };
-    };
-
-    const renderHiddenCell = () => ({
-      children: null,
-      props: { colSpan: 0 as const },
-    });
+    const hiddenBarRowKeys = new Set([
+      "income",
+      "tax",
+      "netIncome",
+      "agencyFee",
+      "outsourceCost",
+      "laborCost",
+      "rentCost",
+      "middleOfficeCost",
+      "executionCost",
+      "projectBonus",
+      "fund",
+    ]);
+    const hiddenRatioRowKeys = new Set(["income", "tax", "netIncome"]);
 
     return [
       {
         title: "类别",
         dataIndex: "label",
         key: "label",
-        width: 180,
+        width: 160,
         onHeaderCell: () => ({ style: { paddingLeft: 24 } }),
-        onCell: () => ({ style: { paddingLeft: 24 } }),
+        onCell: (row) => {
+          if (row.note) {
+            return {
+              colSpan: 5,
+              style: row.isSection
+                ? { background: "#fafafa", paddingLeft: 24 }
+                : { paddingLeft: 24 },
+            };
+          }
+          return { style: { paddingLeft: 24 } };
+        },
         render: (_value, row) => {
-          if (row.note) return renderNoteCell(row);
-          const tooltip = getTooltipForKey(row);
-          const indent = row.indent ? 24 : 0;
+          if (row.note) {
+            if (row.isSection) {
+              return (
+                <span
+                  style={{
+                    color: "rgba(0,0,0,0.45)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  {row.note}
+                </span>
+              );
+            }
+            return (
+              <span style={{ color: "rgba(0,0,0,0.45)" }}>{row.note}</span>
+            );
+          }
           const isSubItem = Boolean(row.indent);
-          const subItemColor = "#4F504D";
           const text = (
             <span
               style={{
-                paddingLeft: indent,
                 display: "inline-flex",
                 gap: 6,
-                color: isSubItem ? subItemColor : undefined,
+                color: isSubItem ? "rgba(0,0,0,0.65)" : undefined,
               }}
             >
               {isSubItem ? (
-                <span style={{ color: subItemColor }}>-</span>
+                <span style={{ marginRight: 2, color: "#bfbfbf" }}>•</span>
               ) : null}
               <span>{row.label}</span>
-              {tooltip ? (
-                <Tooltip title={tooltip} placement="top">
-                  <InfoCircleOutlined style={{ color: "rgba(0,0,0,0.45)" }} />
-                </Tooltip>
-              ) : null}
             </span>
           );
           return row.bold ? <strong>{text}</strong> : text;
-        },
-      },
-      {
-        title: `金额占比（相对收入${formatYuanText(incomeBase)}）`,
-        dataIndex: "bar",
-        key: "bar",
-        width: 360,
-        render: (_value, row) => {
-          if (row.note) return renderHiddenCell();
-          const amount = Number(row.amountValue ?? 0);
-          const ratio =
-            incomeBase > 0 ? Math.min(1, Math.abs(amount) / incomeBase) : 0;
-          const widthPercent = `${Math.max(0, Math.min(100, ratio * 100))}%`;
-          const barColor = row.barColor || "rgba(0,0,0,0.25)";
-          return (
-            <div
-              style={{
-                height: 10,
-                background: "#f3f1e6",
-                borderRadius: 999,
-                overflow: "hidden",
-                position: "relative",
-              }}
-            >
-              {ratio > 0 ? (
-                <div
-                  style={{
-                    height: "100%",
-                    width: widthPercent,
-                    background: barColor,
-                    borderRadius: 999,
-                  }}
-                />
-              ) : null}
-            </div>
-          );
-        },
-      },
-      {
-        title: "占比",
-        dataIndex: "ratioValue",
-        key: "ratioValue",
-        width: 80,
-        align: "right",
-        render: (_value, row) => {
-          if (row.note) return renderHiddenCell();
-          const text = formatSignedPercentText(row.ratioValue);
-          const isNegative = (row.ratioValue ?? 0) < 0;
-          const isProfit = row.tone === "green";
-          const color = isProfit
-            ? "#6F9838"
-            : isNegative
-              ? "#9A3F3B"
-              : "rgba(0,0,0,0.65)";
-          return (
-            <span style={{ color, fontWeight: row.bold ? 700 : 600 }}>
-              {text}
-            </span>
-          );
         },
       },
       {
@@ -1201,17 +1075,22 @@ const ProjectRealtimeCostTrackingTable = ({
         width: 120,
         align: "right",
         onHeaderCell: () => ({ style: { paddingRight: 24 } }),
-        onCell: () => ({ style: { paddingRight: 24 } }),
+        onCell: (row) =>
+          row.note ? { colSpan: 0 } : { style: { paddingRight: 24 } },
         render: (_value, row) => {
-          if (row.note) return renderHiddenCell();
-          const amount = Number(row.amountValue ?? 0);
+          const isSubItem = Boolean(row.indent);
+          const amount = normalizeNegativeZero(Number(row.amountValue ?? 0));
           const isNegative = amount < 0;
           const isProfit = row.tone === "green";
-          const color = isProfit
-            ? "#6F9838"
-            : isNegative
-              ? "#9A3F3B"
-              : "rgba(0,0,0,0.88)";
+          const color = isSubItem
+            ? "rgba(0,0,0,0.65)"
+            : isProfit
+              ? "#6F9838"
+              : row.isCostDetail
+                ? "#9A3F3B"
+                : isNegative
+                  ? "#9A3F3B"
+                  : "rgba(0,0,0,0.88)";
           return (
             <span style={{ color, fontWeight: row.bold ? 700 : 600 }}>
               {formatSignedAmountText(amount)}
@@ -1220,16 +1099,158 @@ const ProjectRealtimeCostTrackingTable = ({
         },
       },
       {
+        title: "占比",
+        dataIndex: "ratioValue",
+        key: "ratioValue",
+        width: 120,
+        align: "right",
+        onHeaderCell: () => ({ style: { paddingRight: 24 } }),
+        onCell: (row) =>
+          row.note ? { colSpan: 0 } : { style: { paddingRight: 24 } },
+        render: (_value, row) => {
+          if (hiddenRatioRowKeys.has(row.key)) {
+            return null;
+          }
+          const isSubItem = Boolean(row.indent);
+          const text = formatSignedPercentText(row.ratioValue);
+          const ratioValue = normalizeNegativeZero(Number(row.ratioValue ?? 0));
+          const isNegative = ratioValue < 0;
+          const isProfit = row.tone === "green";
+          const color = isSubItem
+            ? "rgba(0,0,0,0.65)"
+            : isProfit
+              ? "#6F9838"
+              : row.isCostDetail
+                ? "#9A3F3B"
+                : isNegative
+                  ? "#9A3F3B"
+                  : "rgba(0,0,0,0.65)";
+          return (
+            <span style={{ color, fontWeight: row.bold ? 700 : 600 }}>
+              {text}
+            </span>
+          );
+        },
+      },
+      {
+        title: `金额占比（相对收入${formatYuanText(incomeBase)}）`,
+        dataIndex: "bar",
+        key: "bar",
+        onHeaderCell: () => ({
+          style: { paddingLeft: 24, paddingRight: 24, maxWidth: 300 },
+        }),
+        onCell: (row) =>
+          row.note
+            ? { colSpan: 0 }
+            : {
+                style: {
+                  minWidth: 180,
+                  maxWidth: 300,
+                  paddingLeft: 24,
+                  paddingRight: 24,
+                },
+              },
+        render: (_value, row) => {
+          if (hiddenBarRowKeys.has(row.key)) {
+            return null;
+          }
+          const amount = Number(row.amountValue ?? 0);
+          const ratio =
+            incomeBase > 0 ? Math.min(1, Math.abs(amount) / incomeBase) : 0;
+          const progressPercent = Math.max(0, Math.min(100, ratio * 100));
+          const barColor = row.barColor || "rgba(0,0,0,0.25)";
+
+          return (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <Progress
+                percent={progressPercent}
+                showInfo={false}
+                strokeColor={barColor}
+                railColor="#f3f1e6"
+                strokeWidth={6}
+                style={{ flex: 1, minWidth: 0 }}
+              />
+            </div>
+          );
+        },
+      },
+      {
         title: "备注",
         dataIndex: "remark",
         key: "remark",
-        width: 220,
-        onHeaderCell: () => ({ style: { paddingRight: 24 } }),
-        onCell: () => ({ style: { paddingRight: 24 } }),
+        onHeaderCell: () => ({ style: { minWidth: 220, paddingRight: 24 } }),
+        onCell: (row) =>
+          row.note
+            ? { colSpan: 0 }
+            : { style: { minWidth: 220, paddingRight: 24 } },
         render: (_value, row) => {
-          if (row.note) return renderHiddenCell();
           const value = String(row.remark ?? "").trim();
+          if (
+            (row.key === "income" ||
+              row.key === "tax" ||
+              row.key === "netIncome" ||
+              row.key === "totalCost" ||
+              row.key === "fund" ||
+              row.key === "finalProfit") &&
+            value === "-"
+          ) {
+            return null;
+          }
           if (!value) return <span>-</span>;
+          if (row.key === "executionCost") {
+            const detailLines = value
+              .split("\n")
+              .map((item) => item.trim())
+              .filter((item) => item && item !== "-");
+            const exceeded = executionCost > executionCostBudget;
+
+            return (
+              <span
+                style={{ whiteSpace: "pre-line", color: "rgba(0,0,0,0.65)" }}
+              >
+                {detailLines.length > 0 ? `${detailLines.join("\n")}\n` : null}
+                <span
+                  style={{
+                    color: exceeded ? "#ff4d4f" : undefined,
+                    fontWeight: exceeded ? 700 : undefined,
+                  }}
+                >
+                  共计 {formatYuanText(executionCost)} 元
+                </span>
+                <span> / 预算 {formatYuanText(executionCostBudget)} 元</span>
+              </span>
+            );
+          }
+          if (row.key === "projectBonus") {
+            return (
+              <Tag color="default" style={{ marginInlineEnd: 0 }}>
+                {value}
+              </Tag>
+            );
+          }
+          if (row.key === "laborCost") {
+            if (!canViewLaborDetail) return null;
+            return (
+              <Button
+                type="link"
+                size="small"
+                style={{
+                  padding: 0,
+                  height: "auto",
+                  color: "rgba(0,0,0,0.5)",
+                  textDecoration: "underline",
+                }}
+                onClick={() => setLaborDetailOpen(true)}
+              >
+                查看详情
+              </Button>
+            );
+          }
           return (
             <span style={{ whiteSpace: "pre-line", color: "rgba(0,0,0,0.65)" }}>
               {value}
@@ -1238,24 +1259,59 @@ const ProjectRealtimeCostTrackingTable = ({
         },
       },
     ];
-  }, [
-    income,
-    incomeTooltipLines,
-    laborTooltipLines,
-    outsourceTooltipLines,
-    taxTooltipLines,
-    agencyFee,
-    canViewLaborCost,
-    executionRemark,
-    financialStructure?.agencyFeeRate,
-  ]);
+  }, [income, executionCost, executionCostBudget, canViewLaborDetail]);
 
   const overdueDays = Math.max(0, elapsedWorkdays - expectedWorkdays);
-  const overdueSuffix = overdueDays > 0 ? (
-    <span style={{ color: "#ff4d4f", fontWeight: 700 }}>
-      （已超期 {overdueDays} 天）
-    </span>
-  ) : null;
+  const projectProfitRatio = income > 0 ? projectProfit / income : null;
+  const finalProfitRatio = income > 0 ? finalProfit / income : null;
+  const renderRatioBarDescription = (
+    ratio: number | null,
+    barColor: string,
+    textColor: string,
+  ) => {
+    const ratioPercent = Number.isFinite(ratio ?? null)
+      ? (ratio ?? 0) * 100
+      : 0;
+    const widthPercent = `${Math.max(0, Math.min(100, ratioPercent))}%`;
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div
+          style={{
+            flex: 1,
+            height: 6,
+            borderRadius: 3,
+            background: "#d9d9d9",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              width: widthPercent,
+              height: "100%",
+              background: barColor,
+            }}
+          />
+        </div>
+        <span
+          style={{
+            fontSize: 12,
+            color: textColor,
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+          }}
+        >
+          {formatRatioPercentText(ratio)}
+        </span>
+      </div>
+    );
+  };
+  const overdueSuffix =
+    overdueDays > 0 ? (
+      <span style={{ color: "#ff4d4f", fontWeight: 700 }}>
+        （已超期 {overdueDays} 天）
+      </span>
+    ) : null;
 
   const actualDurationNode =
     expectedWorkdays > 0 && elapsedWorkdays > expectedWorkdays ? (
@@ -1393,7 +1449,36 @@ const ProjectRealtimeCostTrackingTable = ({
   return (
     <>
       {contextHolder}
-      <div style={{ overflowX: "auto" }}>
+      <Modal
+        title="人力成本详情"
+        open={laborDetailOpen}
+        onCancel={() => setLaborDetailOpen(false)}
+        footer={null}
+        width="80vh"
+        style={{ maxWidth: "80vh", top: 24 }}
+        styles={{
+          body: {
+            maxHeight: "60vh",
+            overflowY: "auto",
+          },
+        }}
+      >
+        <div style={{ color: "rgba(0,0,0,0.88)", fontSize: 16, lineHeight: 1.7 }}>
+          <div>
+            项目共有 {laborDetailData.memberCount} 个成员投入{" "}
+            {formatAmount(laborDetailData.totalWorkdays)} 个工作日：
+          </div>
+          <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
+            {laborDetailData.items.map((item) => (
+              <li key={item.key}>{item.text}</li>
+            ))}
+          </ul>
+          <div style={{ marginTop: 8, fontWeight: 700 }}>
+            {laborDetailData.totalCostText}
+          </div>
+        </div>
+      </Modal>
+8     <div style={{ overflowX: "auto" }}>
         <div style={{ width: "100%" }}>
           <style>{`
             /* Keep only horizontal separators; remove vertical dividers. */
@@ -1411,209 +1496,202 @@ const ProjectRealtimeCostTrackingTable = ({
             .realtime-cost-table-wrap .ant-table-container::after {
               display: none !important;
             }
+            .realtime-cost-table-wrap .ant-table,
+            .realtime-cost-table-wrap .ant-table-container,
+            .realtime-cost-table-wrap .ant-table-content,
+            .realtime-cost-table-wrap .ant-table-content > table {
+              width: 100% !important;
+            }
           `}</style>
-          <div style={{ textAlign: "left", marginBottom: 12 }}>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>
-              {projectName || "未命名项目"}
+          <ProjectDetailTableContainer marginBottom={12}>
+            <div
+              style={{
+                padding: "14px 16px",
+                background: "#fafafa",
+                borderBottom: "1px solid #f0f0f0",
+                textAlign: "center",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 16,
+                  fontWeight: 700,
+                  color: "rgba(0,0,0,0.88)",
+                }}
+              >
+                {projectName || "未命名项目"}
+              </div>
+              <div
+                style={{
+                  marginTop: 6,
+                  fontSize: 14,
+                  color: "rgba(0,0,0,0.45)",
+                  fontWeight: 600,
+                }}
+              >
+                预计工作日：{expectedWorkdays || 0} 天 | 实际工作日：
+                {actualDurationNode} 天
+                {overdueSuffix ? <> {overdueSuffix}</> : null}
+              </div>
             </div>
             <div
               style={{
-                marginTop: 4,
-                fontSize: 12,
-                color: "rgba(0,0,0,0.45)",
-                fontWeight: 700,
+                display: "grid",
+                gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                background: "#f0f0f0",
+                gap: 1,
               }}
             >
-              预计工作日：{expectedWorkdays || 0} 天 | 实际工作日:{" "}
-              {actualDurationNode} 天{overdueSuffix ? <> {overdueSuffix}</> : null}
+              <div style={{ background: "#fafafa", padding: "16px 20px" }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(0,0,0,0.65)",
+                    marginBottom: 6,
+                  }}
+                >
+                  收入
+                </div>
+                <div
+                  style={{
+                    fontSize: 18,
+                    color: FINANCIAL_METRIC_COLORS.income,
+                    fontWeight: 700,
+                  }}
+                >
+                  {`${formatYuanText(income)} 元`}
+                </div>
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    color: "rgba(0,0,0,0.45)",
+                    fontWeight: 600,
+                  }}
+                >
+                  税费 {formatYuanText(tax)} 元
+                </div>
+              </div>
+
+              <div style={{ background: "#fafafa", padding: "16px 20px" }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(0,0,0,0.65)",
+                    marginBottom: 6,
+                  }}
+                >
+                  总费用
+                </div>
+                <div
+                  style={{
+                    fontSize: 18,
+                    color: FINANCIAL_METRIC_COLORS.cost,
+                    fontWeight: 700,
+                    marginBottom: 8,
+                  }}
+                >
+                  {`${formatYuanText(totalCost)} 元`}
+                </div>
+                {renderRatioBarDescription(
+                  totalCostRatio,
+                  FINANCIAL_METRIC_BAR_COLORS.cost,
+                  FINANCIAL_METRIC_COLORS.cost,
+                )}
+              </div>
+
+              <div style={{ background: "#fafafa", padding: "16px 20px" }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(0,0,0,0.65)",
+                    marginBottom: 6,
+                  }}
+                >
+                  项目利润
+                </div>
+                <div
+                  style={{
+                    fontSize: 18,
+                    color: FINANCIAL_METRIC_COLORS.profit,
+                    fontWeight: 700,
+                    marginBottom: 8,
+                  }}
+                >
+                  {`${formatYuanText(projectProfit)} 元`}
+                </div>
+                {renderRatioBarDescription(
+                  projectProfitRatio,
+                  FINANCIAL_METRIC_BAR_COLORS.profit,
+                  FINANCIAL_METRIC_COLORS.profit,
+                )}
+              </div>
+
+              <div style={{ background: "#fafafa", padding: "16px 20px" }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(0,0,0,0.65)",
+                  }}
+                >
+                  最终利润
+                </div>
+                <div
+                  style={{
+                    fontSize: 18,
+                    color: FINANCIAL_METRIC_COLORS.profit,
+                    fontWeight: 700,
+                    marginBottom: 8,
+                  }}
+                >
+                  {`${formatYuanText(finalProfit)} 元`}
+                </div>
+                {renderRatioBarDescription(
+                  finalProfitRatio,
+                  FINANCIAL_METRIC_BAR_COLORS.profit,
+                  FINANCIAL_METRIC_COLORS.profit,
+                )}
+              </div>
             </div>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 16,
-              marginBottom: 16,
-            }}
-          >
-            <StatisticCard
-              style={{ background: "#f7f5ea" }}
-              statistic={{
-                title: "收入",
-                value: income,
-                styles: { content: { fontSize: 18, color: "#4F88D7", fontWeight: 700 } },
-                formatter: (value) => Number(value ?? 0).toLocaleString("zh-CN"),
+            <div
+              className="realtime-cost-table-wrap"
+              style={{
+                overflow: "hidden",
+                background: "#fff",
+                borderTop: "1px solid #f0f0f0",
               }}
-            />
-            <StatisticCard
-              style={{ background: "#f7f5ea" }}
-              statistic={{
-                title: "总费用成本",
-                value: totalCost,
-                styles: { content: { fontSize: 18, color: "#8B5A2B", fontWeight: 700 } },
-                description: (
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: "rgba(0,0,0,0.45)",
-                      fontWeight: 600,
-                    }}
-                  >
-                    占比 {formatRatio(income > 0 ? totalCost / income : null)}
-                  </span>
-                ),
-                formatter: (value) => Number(value ?? 0).toLocaleString("zh-CN"),
-              }}
-            />
-            <StatisticCard
-              style={{ background: "#f7f5ea" }}
-              statistic={{
-                title: "项目利润",
-                value: projectProfit,
-                styles: { content: { fontSize: 18, color: "#6F9838", fontWeight: 700 } },
-                description: (
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: "rgba(0,0,0,0.45)",
-                      fontWeight: 600,
-                    }}
-                  >
-                    占比 {formatRatio(income > 0 ? projectProfit / income : null)}
-                  </span>
-                ),
-                formatter: (value) => Number(value ?? 0).toLocaleString("zh-CN"),
-              }}
-            />
-            <StatisticCard
-              style={{ background: "#f7f5ea" }}
-              statistic={{
-                title: "最终利润",
-                value: finalProfit,
-                styles: { content: { fontSize: 18, color: "#6F9838", fontWeight: 700 } },
-                description: (
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: "rgba(0,0,0,0.45)",
-                      fontWeight: 600,
-                    }}
-                  >
-                    占比 {formatRatio(income > 0 ? finalProfit / income : null)}
-                  </span>
-                ),
-                formatter: (value) => Number(value ?? 0).toLocaleString("zh-CN"),
-              }}
-            />
-          </div>
-          <div
-            style={{
-              marginBottom: 8,
-              color: "rgba(0,0,0,0.45)",
-              fontWeight: 700,
-              fontSize: 12,
-            }}
-          >
-            收入 &gt; 利润 分解
-          </div>
-          <div
-            className="realtime-cost-table-wrap"
-            style={{
-              border: "1px solid #f0f0f0",
-              borderRadius: 12,
-              overflow: "hidden",
-              background: "#fff",
-            }}
-          >
-            <Table<BreakdownRow>
-              rowKey="key"
-              pagination={false}
-              columns={breakdownColumns}
-              dataSource={breakdownRows}
-              size="small"
-              tableLayout="fixed"
-              style={{ width: "100%" }}
-              onRow={(record) => {
-                if (record.note) {
-                  return {
-                    style: {
-                      background: "#fff",
-                      color: "rgba(0,0,0,0.45)",
-                    },
-                  };
-                }
-                if (record.tone === "beige") {
-                  return { style: { background: "#f7f5ea" } };
-                }
-                if (record.tone === "green") {
-                  return { style: { background: "#eaf4df" } };
-                }
-                return { style: { background: "#fff" } };
-              }}
-            />
-          </div>
-          <div
-            style={{
-              marginTop: 10,
-              display: "flex",
-              alignItems: "center",
-              gap: 16,
-              flexWrap: "wrap",
-              paddingLeft: 4,
-              color: "rgba(0,0,0,0.65)",
-              fontWeight: 600,
-              fontSize: 12,
-            }}
-          >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <span
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 3,
-                  background: "#4F88D7",
-                  display: "inline-block",
+            >
+              <Table<BreakdownRow>
+                rowKey="key"
+                pagination={false}
+                columns={breakdownColumns}
+                dataSource={breakdownRows}
+                size="small"
+                tableLayout="auto"
+                style={{ width: "100%" }}
+                onRow={(record) => {
+                  if (record.note) {
+                    return {
+                      style: {
+                        background: record.isSection ? "#fafafa" : "#fff",
+                        color: "rgba(0,0,0,0.45)",
+                      },
+                    };
+                  }
+                  if (record.key === "totalCost") {
+                    return { style: { background: "#fafafa" } };
+                  }
+                  if (record.tone === "beige") {
+                    return { style: { background: "#f7f5ea" } };
+                  }
+                  if (record.tone === "green") {
+                    return { style: { background: "#eaf4df" } };
+                  }
+                  return { style: { background: "#fff" } };
                 }}
               />
-              <span>收入基数</span>
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <span
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 3,
-                  background: "#D15651",
-                  display: "inline-block",
-                }}
-              />
-              <span>成本扣减</span>
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <span
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 3,
-                  background: "#E4A344",
-                  display: "inline-block",
-                }}
-              />
-              <span>分配扣减</span>
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <span
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 3,
-                  background: "#6F9838",
-                  display: "inline-block",
-                }}
-              />
-              <span>利润留存</span>
-            </span>
-          </div>
+            </div>
+          </ProjectDetailTableContainer>
 
           <div style={{ height: 16 }} />
         </div>

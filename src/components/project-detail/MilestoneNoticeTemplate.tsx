@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Checkbox, Input, Modal, Space, message } from "antd";
 import dayjs from "dayjs";
 import DetailPageContainer from "@/components/DetailPageContainer";
+import { copyTextToClipboard } from "@/lib/copyToClipboard";
 
 type MilestoneParticipant = {
   id: string;
@@ -300,7 +301,7 @@ const MilestoneNoticeTemplate = ({
   const handleCopyTemplate = async () => {
     if (!milestoneNoticeTemplate) return;
     try {
-      await navigator.clipboard.writeText(milestoneNoticeTemplate);
+      await copyTextToClipboard(milestoneNoticeTemplate);
       messageApi.success("通知模板已复制");
     } catch {
       messageApi.error("复制失败，请手动复制");

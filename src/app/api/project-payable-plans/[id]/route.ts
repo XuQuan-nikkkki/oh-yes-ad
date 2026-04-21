@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
+import { toNullableInt } from "@/lib/toNullableInt";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -65,15 +66,6 @@ const includeDetail = {
   },
 };
 
-const toNullableInt = (value: unknown) => {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
-  if (typeof value === "string") {
-    const parsed = Number(value.trim());
-    return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
-  }
-  return null;
-};
 
 const toNullableBool = (value: unknown) => {
   if (typeof value === "boolean") return value;
@@ -99,6 +91,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       projectId: true,
       ownerEmployeeId: true,
       contractAmount: true,
+      hasCustomerCollection: true,
       remark: true,
       remarkNeedsAttention: true,
       vendorContractId: true,
@@ -118,6 +111,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       : existing.ownerEmployeeId;
   const contractAmount =
     "contractAmount" in body ? toNullableInt(body.contractAmount) : existing.contractAmount;
+  const hasCustomerCollection =
+    "hasCustomerCollection" in body
+      ? toNullableBool(body.hasCustomerCollection)
+      : existing.hasCustomerCollection;
   const vendorContractIdRaw =
     "vendorContractId" in body
       ? String(body.vendorContractId ?? "").trim() || null
@@ -130,6 +127,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
   if (contractAmount === null || contractAmount < 0) {
     return new Response("contractAmount must be a non-negative integer", {
+      status: 400,
+    });
+  }
+  if (hasCustomerCollection === null) {
+    return new Response("hasCustomerCollection must be boolean", {
       status: 400,
     });
   }
@@ -175,6 +177,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     data: {
       ownerEmployeeId,
       contractAmount,
+      hasCustomerCollection,
       vendorContractId: resolvedVendorContractId,
       remark:
         "remark" in body

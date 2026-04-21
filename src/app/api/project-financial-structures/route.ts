@@ -15,12 +15,11 @@ const includeDetail = {
       name: true,
     },
   },
-  estimation: {
+  initiation: {
     select: {
       id: true,
       projectId: true,
       version: true,
-      type: true,
     },
   },
   executionCostItems: {
@@ -49,6 +48,18 @@ const includeDetail = {
     orderBy: { createdAt: "asc" as const },
   },
 };
+
+const serializeFinancialStructure = (row: Record<string, unknown>) => ({
+  ...row,
+  estimationId: "initiationId" in row ? row.initiationId : null,
+  estimation:
+    "initiation" in row && row.initiation
+      ? {
+          ...(row.initiation as Record<string, unknown>),
+          type: "baseline",
+        }
+      : null,
+});
 
 const toRequiredNumber = (value: unknown) => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -133,13 +144,17 @@ export async function GET(req: NextRequest) {
   const rows = await prisma.projectFinancialStructure.findMany({
     where: {
       ...(projectId ? { projectId } : {}),
-      ...(estimationId ? { estimationId } : {}),
+      ...(estimationId ? { initiationId: estimationId } : {}),
     },
     include: includeDetail,
     orderBy: [{ updatedAt: "desc" }],
   });
 
-  return Response.json(rows);
+  return Response.json(
+    rows.map((row) =>
+      serializeFinancialStructure(row as Record<string, unknown>),
+    ),
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -187,12 +202,12 @@ export async function POST(req: NextRequest) {
 
   const [project, estimation, existingByEstimation] = await Promise.all([
     prisma.project.findUnique({ where: { id: projectId }, select: { id: true } }),
-    prisma.projectCostEstimation.findUnique({
+    prisma.projectInitiation.findUnique({
       where: { id: estimationId },
-      select: { id: true, projectId: true, type: true },
+      select: { id: true, projectId: true },
     }),
     prisma.projectFinancialStructure.findUnique({
-      where: { estimationId },
+      where: { initiationId: estimationId },
       select: { id: true },
     }),
   ]);
@@ -201,9 +216,6 @@ export async function POST(req: NextRequest) {
   if (!estimation) return new Response("Estimation not found", { status: 404 });
   if (estimation.projectId !== projectId) {
     return new Response("estimationId does not belong to projectId", { status: 400 });
-  }
-  if (estimation.type !== "baseline") {
-    return new Response("estimationId must be a baseline estimation", { status: 400 });
   }
   if (existingByEstimation) {
     return new Response("Financial structure already exists for this estimation", {
@@ -214,7 +226,7 @@ export async function POST(req: NextRequest) {
   const created = await prisma.projectFinancialStructure.create({
     data: {
       projectId,
-      estimationId,
+      initiationId: estimationId,
       laborCost,
       rentCost,
       middleOfficeCost,
@@ -239,5 +251,7 @@ export async function POST(req: NextRequest) {
     include: includeDetail,
   });
 
-  return Response.json(created);
+  return Response.json(
+    serializeFinancialStructure(created as Record<string, unknown>),
+  );
 }

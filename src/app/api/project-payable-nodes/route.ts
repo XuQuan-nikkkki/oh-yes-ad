@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
+import { toNullableInt } from "@/lib/toNullableInt";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -23,15 +24,6 @@ const includeDetail = {
   },
 };
 
-const toNullableInt = (value: unknown) => {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
-  if (typeof value === "string") {
-    const parsed = Number(value.trim());
-    return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
-  }
-  return null;
-};
 
 const toNullableDate = (value: unknown) => {
   if (value === null || value === undefined || value === "") return null;
@@ -80,7 +72,6 @@ export async function POST(req: NextRequest) {
 
   const expectedAmountTaxIncluded = toNullableInt(body.expectedAmountTaxIncluded);
   const expectedDate = toNullableDate(body.expectedDate);
-  const hasCustomerCollection = toNullableBool(body.hasCustomerCollection);
   const remarkNeedsAttentionRaw = toNullableBool(body.remarkNeedsAttention);
 
   if (
@@ -93,9 +84,6 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  if (hasCustomerCollection === null) {
-    return new Response("hasCustomerCollection must be boolean", { status: 400 });
-  }
   const remarkNeedsAttention = remarkNeedsAttentionRaw ?? false;
 
   const [plan, stageOption] = await Promise.all([
@@ -122,7 +110,6 @@ export async function POST(req: NextRequest) {
       paymentCondition,
       expectedAmountTaxIncluded,
       expectedDate,
-      hasCustomerCollection,
       remarkNeedsAttention,
       remark:
         typeof body.remark === "string" && body.remark.trim().length > 0

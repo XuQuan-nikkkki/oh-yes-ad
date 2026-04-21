@@ -6,6 +6,7 @@ export const SYSTEM_SETTING_KEYS = {
   pricingMiddleOfficeAverageMonthlyCost:
     "pricing.middleOfficeAverageMonthlyCost",
   pricingMiddleOfficeBaseDays: "pricing.middleOfficeBaseDays",
+  pricingProjectFundAmount: "pricing.projectFundAmount",
   employeeDefaultWorkstationCost: "employee.defaultWorkstationCost",
   employeeDefaultUtilityCost: "employee.defaultUtilityCost",
   employeeMonthlyWorkdayBase: "employee.monthlyWorkdayBase",
@@ -16,6 +17,7 @@ export const DEFAULT_SYSTEM_SETTING_VALUES = {
   [SYSTEM_SETTING_KEYS.pricingProjectCostBaselineRatio]: 53,
   [SYSTEM_SETTING_KEYS.pricingMiddleOfficeAverageMonthlyCost]: 16367.76,
   [SYSTEM_SETTING_KEYS.pricingMiddleOfficeBaseDays]: 30,
+  [SYSTEM_SETTING_KEYS.pricingProjectFundAmount]: 10000,
   [SYSTEM_SETTING_KEYS.employeeDefaultWorkstationCost]: 116.91,
   [SYSTEM_SETTING_KEYS.employeeDefaultUtilityCost]: 24.94,
   [SYSTEM_SETTING_KEYS.employeeMonthlyWorkdayBase]: 21.75,

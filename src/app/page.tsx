@@ -32,7 +32,6 @@ function HomePageContent() {
   const currentUser = useAuthStore((state) => state.currentUser);
   const setNavigating = useNavigationStore((state) => state.setNavigating);
   const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
-  const isAdmin = roleCodes.includes("ADMIN");
   const canViewOwnedProjectsTab = roleCodes.includes("PROJECT_MANAGER");
   const availableHomeTabs = useMemo(
     () => [
@@ -72,7 +71,6 @@ function HomePageContent() {
             label: "网站地图",
             children: (
               <HomeSiteMap
-                isAdmin={isAdmin}
                 onNavigate={(path) => {
                   if (path === pathname) return;
                   setNavigating(true);

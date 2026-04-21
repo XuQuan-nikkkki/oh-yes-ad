@@ -19,6 +19,7 @@ import {
   getSystemSettingNumberFromRecords,
   SYSTEM_SETTING_KEYS,
 } from "@/lib/system-settings";
+import { toNullableTrimmedString } from "@/lib/toNullableTrimmedString";
 import {
   formatProjectOutsourceItemsText,
   getProjectOutsourceTotal,
@@ -96,7 +97,7 @@ type PricingStrategyExecutionCostItem = {
 };
 
 type PricingStrategyResponse = {
-  costItems?: PricingStrategyExecutionCostItem[] | null;
+  executionCostItems?: PricingStrategyExecutionCostItem[] | null;
 };
 
 const MODAL_FORM_MAX_HEIGHT = "calc(100vh - 220px)";
@@ -111,11 +112,6 @@ const MODAL_FORM_MAX_HEIGHT = "calc(100vh - 220px)";
   return 0;
 };
 
-const toNullableTrimmedString = (value: unknown) => {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-};
 
 const roundMoney = (value: unknown) => {
   const amount = toMoney(value);
@@ -133,8 +129,8 @@ const calculateMiddleOfficeCost = (
 };
 
 const parseContractAmount = (estimation?: Project["latestBaselineCostEstimation"]) => {
-  if (typeof estimation?.contractAmountSnapshot === "number") {
-    return estimation.contractAmountSnapshot;
+  if (typeof estimation?.contractAmount === "number") {
+    return estimation.contractAmount;
   }
   if (typeof estimation?.clientBudget === "string") {
     const normalized = estimation.clientBudget.replace(/,/g, "").trim();
@@ -217,7 +213,7 @@ const ProjectFinancialStructureModal = ({
         const byId: Record<string, number> = {};
         const byLabel: Record<string, number> = {};
 
-        for (const item of latest?.costItems ?? []) {
+        for (const item of latest?.executionCostItems ?? []) {
           const optionId = String(item?.costTypeOptionId ?? "").trim();
           const label = String(item?.costTypeOption?.value ?? "").trim();
           if (

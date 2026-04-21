@@ -322,6 +322,8 @@ const ProjectFormModal = ({
                   rules={[{ required: true, message: "请选择客户" }]}
                 >
                   <Select
+                    showSearch
+                    optionFilterProp="label"
                     options={clients.map((client) => ({
                       label: client.name,
                       value: client.id,

@@ -29,6 +29,7 @@ import ProjectDetailProgressContent from "@/components/project-detail/ProjectDet
 import ProjectActualWorkRecordsContent from "@/components/project-detail/ProjectActualWorkRecordsContent";
 import ProjectDocumentsContent from "@/components/project-detail/ProjectDocumentsContent";
 import ProjectCostEstimationCard from "@/components/project-detail/ProjectCostEstimationCard";
+import ProjectInitiationCard from "@/components/project-detail/ProjectInitiationCard";
 import ProjectPricingStrategyCard from "@/components/project-detail/ProjectPricingStrategyCard";
 import ProjectFinancialStructureCard from "@/components/project-detail/ProjectFinancialStructureCard";
 import ProjectRealtimeCostTrackingTable from "@/components/project-detail/ProjectRealtimeCostTrackingTable";
@@ -174,6 +175,9 @@ const ProjectDetailPage = () => {
     "create" | "edit"
   >("create");
   const [receivableNodeModalOpen, setReceivableNodeModalOpen] = useState(false);
+  const [receivableCurrentPlan, setReceivableCurrentPlan] = useState<{
+    id: string;
+  } | null>(null);
   const receivableCardRef = useRef<{
     handleDeletePlan: () => Promise<void>;
   }>(null);
@@ -182,9 +186,6 @@ const ProjectDetailPage = () => {
     "create" | "edit"
   >("create");
   const [payableNodeModalOpen, setPayableNodeModalOpen] = useState(false);
-  const [payableCurrentPlan, setPayableCurrentPlan] = useState<{
-    id: string;
-  } | null>(null);
   const payableCardRef = useRef<{
     handleDeletePlan: () => Promise<void>;
   }>(null);
@@ -339,27 +340,29 @@ const ProjectDetailPage = () => {
   }, [projectId]);
 
   const handleCostEstimationSaved = useCallback(
-    (latestPlanningCostEstimation: Project["latestCostEstimation"]) => {
+    (latestCostEstimation: Project["latestCostEstimation"]) => {
       setProject((prev) => {
         if (!prev) return prev;
         return {
           ...prev,
-          latestCostEstimation: latestPlanningCostEstimation ?? null,
-          latestPlanningCostEstimation: latestPlanningCostEstimation ?? null,
+          latestCostEstimation: latestCostEstimation ?? null,
         };
       });
     },
     [],
   );
 
-  const handleBaselineCostEstimationSaved = useCallback(
-    (latestBaselineCostEstimation: Project["latestBaselineCostEstimation"]) => {
+  const handleInitiationSaved = useCallback(
+    (latestInitiation: Project["latestInitiation"]) => {
       setProject((prev) => {
         if (!prev) return prev;
+        const normalizedLatestInitiation = latestInitiation ?? null;
         return {
           ...prev,
-          latestCostEstimation: latestBaselineCostEstimation ?? null,
-          latestBaselineCostEstimation: latestBaselineCostEstimation ?? null,
+          latestInitiation: normalizedLatestInitiation,
+          initiations: normalizedLatestInitiation
+            ? [normalizedLatestInitiation]
+            : [],
         };
       });
     },
@@ -623,7 +626,7 @@ const ProjectDetailPage = () => {
     if (isInternalProject) return;
 
     const stepIndex = stepParam as 0 | 1 | 2 | 3 | 4;
-    const validKeys = stepTabKeys[stepIndex];
+    const validKeys = stepTabKeys[stepIndex] as readonly string[];
     const normalizedTab =
       tabParamRaw && validKeys.includes(tabParamRaw)
         ? tabParamRaw
@@ -1106,11 +1109,9 @@ const ProjectDetailPage = () => {
                         mode="actions"
                         projectId={projectId}
                         projectName={project.name ?? ""}
-                        canManageProject={canManageProject}
                         latestCostEstimation={
-                          project.latestPlanningCostEstimation
+                          project.latestCostEstimation
                         }
-                        estimationType="planning"
                         employees={employees}
                         showProjectInBasicInfo={false}
                         includeQuoteAmountInSyncSummary={false}
@@ -1124,7 +1125,7 @@ const ProjectDetailPage = () => {
                         projectId={projectId}
                         projectName={project.name ?? ""}
                         latestCostEstimation={
-                          project.latestPlanningCostEstimation
+                          project.latestCostEstimation
                         }
                       />
                     </div>
@@ -1138,11 +1139,9 @@ const ProjectDetailPage = () => {
                         mode="content"
                         projectId={projectId}
                         projectName={project.name ?? ""}
-                        canManageProject={canManageProject}
                         latestCostEstimation={
-                          project.latestPlanningCostEstimation
+                          project.latestCostEstimation
                         }
-                        estimationType="planning"
                         employees={employees}
                         showProjectInBasicInfo={false}
                         includeQuoteAmountInSyncSummary={false}
@@ -1159,7 +1158,7 @@ const ProjectDetailPage = () => {
                         projectId={projectId}
                         projectName={project.name ?? ""}
                         latestCostEstimation={
-                          project.latestPlanningCostEstimation
+                          project.latestCostEstimation
                         }
                       />
                     ),
@@ -1184,24 +1183,23 @@ const ProjectDetailPage = () => {
                 tabBarExtraContent:
                   contractTopTab === "project-initiation" ? (
                     <div style={{ paddingRight: 16 }}>
-                      <ProjectCostEstimationCard
+                      <ProjectInitiationCard
                         mode="actions"
                         projectId={projectId}
                         projectName={project.name ?? ""}
                         canManageProject={canManageProject}
-                        latestCostEstimation={
-                          project.latestBaselineCostEstimation
+                        latestInitiation={
+                          project.latestInitiation
                         }
-                        modalPrefillEstimation={project.latestCostEstimation}
-                        syncSummarySourceEstimation={
+                        modalPrefillInitiation={project.latestCostEstimation}
+                        syncSummarySourceInitiation={
                           project.latestCostEstimation
                         }
-                        estimationType="baseline"
                         employees={employees}
                         showProjectInBasicInfo={false}
                         showContractAmountInBasicInfo
                         includeQuoteAmountInSyncSummary
-                        onSaved={handleBaselineCostEstimationSaved}
+                        onSaved={handleInitiationSaved}
                       />
                     </div>
                   ) : contractTopTab === "project-financial-structure" ? (
@@ -1212,7 +1210,7 @@ const ProjectDetailPage = () => {
                         projectName={project.name ?? ""}
                         canManageProject={canManageProject}
                         latestBaselineCostEstimation={
-                          project.latestBaselineCostEstimation
+                          project.latestInitiation
                         }
                         refreshKey={financialStructureRefreshKey}
                         onSaved={handleFinancialStructureSaved}
@@ -1224,24 +1222,23 @@ const ProjectDetailPage = () => {
                     key: "project-initiation",
                     label: "立项申请",
                     children: (
-                      <ProjectCostEstimationCard
+                      <ProjectInitiationCard
                         mode="content"
                         projectId={projectId}
                         projectName={project.name ?? ""}
                         canManageProject={canManageProject}
-                        latestCostEstimation={
-                          project.latestBaselineCostEstimation
+                        latestInitiation={
+                          project.latestInitiation
                         }
-                        modalPrefillEstimation={project.latestCostEstimation}
-                        syncSummarySourceEstimation={
+                        modalPrefillInitiation={project.latestCostEstimation}
+                        syncSummarySourceInitiation={
                           project.latestCostEstimation
                         }
-                        estimationType="baseline"
                         employees={employees}
                         showProjectInBasicInfo={false}
                         showContractAmountInBasicInfo
                         includeQuoteAmountInSyncSummary
-                        onSaved={handleBaselineCostEstimationSaved}
+                        onSaved={handleInitiationSaved}
                       />
                     ),
                   },
@@ -1255,7 +1252,7 @@ const ProjectDetailPage = () => {
                         projectName={project.name ?? ""}
                         canManageProject={canManageProject}
                         latestBaselineCostEstimation={
-                          project.latestBaselineCostEstimation
+                          project.latestInitiation
                         }
                         refreshKey={financialStructureRefreshKey}
                         onSaved={handleFinancialStructureSaved}
@@ -1697,7 +1694,7 @@ const ProjectDetailPage = () => {
                           projectName={project.name ?? ""}
                           startDate={project.startDate}
                           latestBaselineCostEstimation={
-                            project.latestBaselineCostEstimation
+                            project.latestInitiation
                           }
                           members={project.members}
                           actualWorkEntries={project.actualWorkEntries}
@@ -1741,16 +1738,44 @@ const ProjectDetailPage = () => {
                 tabBarExtraContent: (
                   <div style={{ paddingRight: 16 }}>
                     {financeTopTab === "receivable" ? (
-                      <Button
-                        type="primary"
-                        disabled={!canManageProject}
-                        onClick={() => {
-                          setReceivablePlanModalMode("create");
-                          setReceivablePlanModalOpen(true);
-                        }}
-                      >
-                        新增收款计划
-                      </Button>
+                      receivableCurrentPlan ? (
+                        <>
+                          <Button
+                            style={{ marginRight: 8 }}
+                            disabled={!canManageProject}
+                            onClick={() => {
+                              setReceivablePlanModalMode("edit");
+                              setReceivablePlanModalOpen(true);
+                            }}
+                          >
+                            修改
+                          </Button>
+                          <Popconfirm
+                            title="确定删除当前收款计划吗？删除后节点也会被删除。"
+                            okText="删除"
+                            cancelText="取消"
+                            okButtonProps={{ danger: true }}
+                            onConfirm={async () => {
+                              await receivableCardRef.current?.handleDeletePlan();
+                            }}
+                          >
+                            <Button danger disabled={!canManageProject}>
+                              删除
+                            </Button>
+                          </Popconfirm>
+                        </>
+                      ) : (
+                        <Button
+                          type="primary"
+                          disabled={!canManageProject}
+                          onClick={() => {
+                            setReceivablePlanModalMode("create");
+                            setReceivablePlanModalOpen(true);
+                          }}
+                        >
+                          新增收款计划
+                        </Button>
+                      )
                     ) : (
                       <Button
                         type="primary"
@@ -1779,6 +1804,7 @@ const ProjectDetailPage = () => {
                         planModalMode={receivablePlanModalMode}
                         onPlanModalOpenChange={setReceivablePlanModalOpen}
                         onPlanModalModeChange={setReceivablePlanModalMode}
+                        onCurrentPlanChange={setReceivableCurrentPlan}
                         nodeModalOpen={receivableNodeModalOpen}
                         onNodeModalOpenChange={setReceivableNodeModalOpen}
                       />
@@ -1787,54 +1813,19 @@ const ProjectDetailPage = () => {
                   {
                     key: "payable",
                     label: "项目付款",
-	                    children: (
-	                      <Card
-	                        type="inner"
-	                        title={payableCurrentPlan ? "付款计划-1" : undefined}
-	                        extra={
-	                          payableCurrentPlan ? (
-	                            <>
-                              <Button
-                                style={{ marginRight: 8 }}
-                                disabled={!canManageProject}
-                                onClick={() => {
-                                  setPayablePlanModalMode("edit");
-                                  setPayablePlanModalOpen(true);
-                                }}
-                              >
-                                修改
-                              </Button>
-                              <Popconfirm
-                                title="确定删除当前付款计划吗？删除后节点也会被删除。"
-                                okText="删除"
-                                cancelText="取消"
-                                okButtonProps={{ danger: true }}
-                                onConfirm={async () => {
-                                  await payableCardRef.current?.handleDeletePlan();
-                                }}
-                              >
-                                <Button danger disabled={!canManageProject}>
-                                  删除
-                                </Button>
-                              </Popconfirm>
-                            </>
-                          ) : null
-                        }
-                      >
-                        <ProjectPayableInfo
-                          ref={payableCardRef}
-                          projectId={projectId}
-                          project={project}
-                          canManageProject={canManageProject}
-                          planModalOpen={payablePlanModalOpen}
-                          planModalMode={payablePlanModalMode}
-                          onPlanModalOpenChange={setPayablePlanModalOpen}
-                          onPlanModalModeChange={setPayablePlanModalMode}
-                          onCurrentPlanChange={setPayableCurrentPlan}
-                          nodeModalOpen={payableNodeModalOpen}
-                          onNodeModalOpenChange={setPayableNodeModalOpen}
-                        />
-                      </Card>
+                    children: (
+                      <ProjectPayableInfo
+                        ref={payableCardRef}
+                        projectId={projectId}
+                        project={project}
+                        canManageProject={canManageProject}
+                        planModalOpen={payablePlanModalOpen}
+                        planModalMode={payablePlanModalMode}
+                        onPlanModalOpenChange={setPayablePlanModalOpen}
+                        onPlanModalModeChange={setPayablePlanModalMode}
+                        nodeModalOpen={payableNodeModalOpen}
+                        onNodeModalOpenChange={setPayableNodeModalOpen}
+                      />
                     ),
                   },
                 ],

@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
+import { toNullableInt } from "@/lib/toNullableInt";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -69,15 +70,6 @@ const includeDetail = {
   },
 };
 
-const toNullableInt = (value: unknown) => {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
-  if (typeof value === "string") {
-    const parsed = Number(value.trim());
-    return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
-  }
-  return null;
-};
 
 const toNullableBool = (value: unknown) => {
   if (typeof value === "boolean") return value;
@@ -105,6 +97,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       legalEntityId: true,
       ownerEmployeeId: true,
       contractAmount: true,
+      hasVendorPayment: true,
       serviceContent: true,
       remark: true,
       remarkNeedsAttention: true,
@@ -132,6 +125,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       : existing.ownerEmployeeId;
   const contractAmount =
     "contractAmount" in body ? toNullableInt(body.contractAmount) : existing.contractAmount;
+  const hasVendorPayment =
+    "hasVendorPayment" in body
+      ? toNullableBool(body.hasVendorPayment)
+      : existing.hasVendorPayment;
   const clientContractIdRaw =
     "clientContractId" in body || "customerContractId" in body
       ? String(body.clientContractId ?? body.customerContractId ?? "").trim() || null
@@ -144,6 +141,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
   if (contractAmount === null || contractAmount < 0) {
     return new Response("contractAmount must be a non-negative integer", {
+      status: 400,
+    });
+  }
+  if (hasVendorPayment === null) {
+    return new Response("hasVendorPayment must be boolean", {
       status: 400,
     });
   }
@@ -195,6 +197,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       legalEntityId,
       ownerEmployeeId,
       contractAmount,
+      hasVendorPayment,
       clientContractId: resolvedClientContractId,
       serviceContent:
         "serviceContent" in body

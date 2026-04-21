@@ -1,12 +1,7 @@
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
-
-const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
-});
+import { prisma } from "@/lib/prisma";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -36,14 +31,15 @@ const includeDetail = {
       name: true,
     },
   },
-  estimation: {
+  costEstimation: {
     select: {
       id: true,
       projectId: true,
       version: true,
+      clientBudget: true,
     },
   },
-  costItems: {
+  executionCostItems: {
     select: {
       id: true,
       costTypeOptionId: true,
@@ -144,7 +140,11 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   });
   if (!item) return new Response("Project pricing strategy not found", { status: 404 });
 
-  return Response.json(item);
+  return Response.json({
+    ...item,
+    estimationId: item.costEstimationId,
+    estimation: item.costEstimation,
+  });
 }
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
@@ -159,7 +159,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     select: {
       id: true,
       projectId: true,
-      estimationId: true,
+      costEstimationId: true,
       estimatedDuration: true,
       mode: true,
       rentCost: true,
@@ -167,7 +167,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       suggestedLaborCost: true,
       plannedMiddleOfficeCost: true,
       suggestedMiddleOfficeCost: true,
-      plannedExecutionCost: true,
+      executionCost: true,
       agencyFeeRate: true,
       bottomLinePrice: true,
       bottomLineProfit: true,
@@ -178,12 +178,17 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   if (!existing) return new Response("Project pricing strategy not found", { status: 404 });
 
   const body = await sanitizeRequestBody(req);
+  const incomingCostEstimationId = String(
+    body.costEstimationId ?? body.estimationId ?? "",
+  ).trim();
   if (
     ("projectId" in body && String(body.projectId ?? "").trim() !== existing.projectId) ||
-    ("estimationId" in body &&
-      String(body.estimationId ?? "").trim() !== existing.estimationId)
+    (("costEstimationId" in body || "estimationId" in body) &&
+      incomingCostEstimationId !== existing.costEstimationId)
   ) {
-    return new Response("projectId and estimationId are immutable", { status: 400 });
+    return new Response("projectId and costEstimationId are immutable", {
+      status: 400,
+    });
   }
 
   const mode = "mode" in body ? normalizeMode(body.mode) : null;
@@ -193,7 +198,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const suggestedLaborCost = toNullableNumber(body.suggestedLaborCost);
   const plannedMiddleOfficeCost = toNullableNumber(body.plannedMiddleOfficeCost);
   const suggestedMiddleOfficeCost = toNullableNumber(body.suggestedMiddleOfficeCost);
-  const plannedExecutionCost = toNullableNumber(body.plannedExecutionCost);
+  const executionCost = toNullableNumber(body.executionCost);
   const agencyFeeRate = toNullableNumber(body.agencyFeeRate ?? body.agencyFee);
   const bottomLinePrice = toNullableNumber(body.bottomLinePrice);
   const bottomLineProfit = toNullableNumber(body.bottomLineProfit);
@@ -207,7 +212,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     ["suggestedLaborCost", suggestedLaborCost],
     ["plannedMiddleOfficeCost", plannedMiddleOfficeCost],
     ["suggestedMiddleOfficeCost", suggestedMiddleOfficeCost],
-    ["plannedExecutionCost", plannedExecutionCost],
+    ["executionCost", executionCost],
     ["agencyFeeRate", agencyFeeRate],
     ["bottomLinePrice", bottomLinePrice],
     ["bottomLineProfit", bottomLineProfit],
@@ -220,17 +225,19 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
   }
 
-  const hasCostItems = "costItems" in body;
-  const costItems = hasCostItems ? normalizeCostItems(body.costItems) : [];
+  const hasExecutionCostItems = "executionCostItems" in body;
+  const executionCostItems = hasExecutionCostItems
+    ? normalizeCostItems(body.executionCostItems)
+    : [];
   const hasOutsourceItems = "outsourceItems" in body;
   const outsourceItems = hasOutsourceItems
     ? normalizeOutsourceItems(body.outsourceItems)
     : [];
-  if (hasCostItems) {
-    const optionIds = costItems.map((item) => item.costTypeOptionId);
+  if (hasExecutionCostItems) {
+    const optionIds = executionCostItems.map((item) => item.costTypeOptionId);
     const validOptionIds = await validateOptionIds(optionIds);
     if (!validOptionIds) {
-      return new Response("Invalid costTypeOptionId in costItems", { status: 400 });
+      return new Response("Invalid costTypeOptionId in executionCostItems", { status: 400 });
     }
   }
 
@@ -259,10 +266,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         suggestedMiddleOfficeCost === null || suggestedMiddleOfficeCost === undefined
           ? undefined
           : suggestedMiddleOfficeCost,
-      plannedExecutionCost:
-        plannedExecutionCost === null || plannedExecutionCost === undefined
+      executionCost:
+        executionCost === null || executionCost === undefined
           ? undefined
-          : plannedExecutionCost,
+          : executionCost,
       agencyFeeRate:
         agencyFeeRate === null || agencyFeeRate === undefined
           ? undefined
@@ -283,11 +290,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         targetPrice === null || targetPrice === undefined ? undefined : targetPrice,
       targetProfit:
         targetProfit === null || targetProfit === undefined ? undefined : targetProfit,
-      ...(hasCostItems
+      ...(hasExecutionCostItems
         ? {
-            costItems: {
+            executionCostItems: {
               deleteMany: {},
-              create: costItems.map((item) => ({
+              create: executionCostItems.map((item) => ({
                 costTypeOptionId: item.costTypeOptionId,
                 budgetAmount: item.budgetAmount ?? null,
                 remark: item.remark ?? null,
@@ -310,7 +317,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     include: includeDetail,
   });
 
-  return Response.json(updated);
+  return Response.json({
+    ...updated,
+    estimationId: updated.costEstimationId,
+    estimation: updated.costEstimation,
+  });
 }
 
 export async function DELETE(_req: NextRequest, context: RouteContext) {

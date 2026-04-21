@@ -1,13 +1,13 @@
 "use client";
 
 import dayjs from "dayjs";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { Key } from "react";
 import { DragSortTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import { PayCircleOutlined } from "@ant-design/icons";
 import { Button, Progress, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import BooleanTag from "@/components/BooleanTag";
 import EllipsisPopoverText from "@/components/EllipsisPopoverText";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import TableActions from "@/components/TableActions";
@@ -32,7 +32,6 @@ export type ProjectReceivableNodeRow = {
   expectedAmountTaxIncluded: number;
   expectedDate: string;
   expectedDateChangeCount: number;
-  hasVendorPayment: boolean;
   remark?: string | null;
   remarkNeedsAttention: boolean;
   actualNodes?: Array<{
@@ -117,6 +116,7 @@ const ProjectReceivableNodeTable = ({
   const [collecting, setCollecting] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [expandedRowKeys, setExpandedRowKeys] = useState<Key[]>([]);
   const [editingRow, setEditingRow] = useState<ProjectReceivableNodeRow | null>(
     null,
   );
@@ -124,6 +124,11 @@ const ProjectReceivableNodeTable = ({
     useState<ProjectReceivableNodeRow | null>(null);
   const [editingActualNode, setEditingActualNode] =
     useState<ActualNodeRow | null>(null);
+
+  useEffect(() => {
+    const validIdSet = new Set(rows.map((row) => row.id));
+    setExpandedRowKeys((prev) => prev.filter((key) => validIdSet.has(String(key))));
+  }, [rows]);
 
   const stageValueEnum = useMemo(() => {
     return stageOptions.reduce<Record<string, { text: string }>>(
@@ -241,24 +246,6 @@ const ProjectReceivableNodeTable = ({
         },
       },
       {
-        title: (
-          <span
-            style={{
-              display: "inline-flex",
-              flexDirection: "column",
-              lineHeight: 1.2,
-            }}
-          >
-            有供应商付款
-          </span>
-        ),
-        dataIndex: "hasVendorPayment",
-        valueType: "switch",
-        render: (_dom, row) => (
-          <BooleanTag value={Boolean(row.hasVendorPayment)} />
-        ),
-      },
-      {
         title: "备注",
         dataIndex: "remark",
         valueType: "textarea",
@@ -343,7 +330,7 @@ const ProjectReceivableNodeTable = ({
         dataIndex: "actualDate",
         width: 140,
         render: (_dom, row) =>
-          row.actualDate ? String(row.actualDate).slice(0, 10) : "-",
+          row.actualDate ? dayjs(row.actualDate).format("YYYY-MM-DD") : "-",
       },
       {
         title: "备注",
@@ -418,30 +405,52 @@ const ProjectReceivableNodeTable = ({
         pagination={false}
         toolBarRender={false}
         scroll={{ x: "max-content" }}
+        rowClassName={(record) =>
+          getCollectionProgressPercent(record) === 100
+            ? "receivable-node-row-complete"
+            : ""
+        }
         expandable={{
           columnWidth: 28,
+          expandRowByClick: false,
+          expandedRowKeys,
+          onExpandedRowsChange: (keys) => {
+            setExpandedRowKeys(keys as Key[]);
+          },
           rowExpandable: (record) => (record.actualNodes?.length ?? 0) > 0,
           expandedRowRender: (record) => (
-            <Table
-              rowKey="id"
-              size="small"
-              pagination={false}
-              columns={actualColumns}
-              dataSource={record.actualNodes ?? []}
-            />
+            <div
+              style={{ paddingLeft: 32 }}
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+            >
+              <Table
+                rowKey="id"
+                size="small"
+                pagination={false}
+                columns={actualColumns}
+                dataSource={record.actualNodes ?? []}
+                onRow={() => ({
+                  onClick: (event) => {
+                    event.stopPropagation();
+                  },
+                })}
+              />
+            </div>
           ),
         }}
-        onRow={(record) => ({
-          style:
-            getCollectionProgressPercent(record) === 100
-              ? { background: "#f5f5f5" }
-              : undefined,
-        })}
       />
+      <style jsx global>{`
+        .receivable-node-row-complete > td.ant-table-cell {
+          background: rgba(114, 193, 64, 0.14) !important;
+        }
+      `}</style>
 
       <div style={{ marginTop: 8, textAlign: "center" }}>
         <Button
-          type="text"
+          type="dashed"
+          block
           disabled={!canManageProject}
           onClick={onAddNode}
           style={{ fontWeight: 600, color: "rgba(0,0,0,0.45)" }}
@@ -534,7 +543,6 @@ const ProjectReceivableNodeTable = ({
                 keyDeliverable: editingRow.keyDeliverable,
                 expectedAmountTaxIncluded: editingRow.expectedAmountTaxIncluded,
                 expectedDate: dayjs(editingRow.expectedDate),
-                hasVendorPayment: editingRow.hasVendorPayment,
                 remark: editingRow.remark ?? undefined,
                 remarkNeedsAttention: editingRow.remarkNeedsAttention,
               }

@@ -55,8 +55,8 @@ type FormValues = {
   plannedMiddleOfficeCost?: number;
   suggestedMiddleOfficeCost?: number;
 
-  costItems?: PricingCostItemFormRow[];
-  plannedExecutionCost?: number;
+  executionCostItems?: PricingCostItemFormRow[];
+  executionCost?: number;
 
   bottomLinePrice?: number;
   targetPrice?: number;
@@ -83,10 +83,10 @@ type Props = {
     suggestedLaborCost: number;
     plannedMiddleOfficeCost: number;
     suggestedMiddleOfficeCost: number;
-    plannedExecutionCost?: number | null;
+    executionCost?: number | null;
     bottomLinePrice: number;
     targetPrice: number;
-    costItems?: Array<{
+    executionCostItems?: Array<{
       costTypeOptionId: string;
       budgetAmount?: number | null;
       costTypeOption?: {
@@ -116,6 +116,21 @@ const toOptionalMoney = (value: unknown) => {
   if (value === null || value === undefined || value === "") return undefined;
   return roundMoney(value);
 };
+
+const toNullableMoney = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return null;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+};
+
+const formatClientBudgetText = (value: unknown) => {
+  const budget = toNullableMoney(value);
+  if (budget === null) return "无";
+  return roundMoney(budget).toLocaleString("zh-CN", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+};
+
 const formatPercent = (value: number) => `${value.toFixed(2)}%`;
 const formatMoneyText = (value: unknown) =>
   `${roundMoney(value).toLocaleString("zh-CN", {
@@ -172,10 +187,7 @@ const ProjectPricingStrategyModal = ({
     (state) => state.fetchSystemSettings,
   );
   const pricingMode: "range" | "target" =
-    typeof estimation?.clientBudget === "string" &&
-    estimation.clientBudget.trim().length > 0
-      ? "target"
-      : "range";
+    toNullableMoney(estimation?.clientBudget) !== null ? "target" : "range";
 
   useEffect(() => {
     void fetchSystemSettings();
@@ -202,6 +214,22 @@ const ProjectPricingStrategyModal = ({
       getSystemSettingNumberFromRecords(
         systemSettings,
         SYSTEM_SETTING_KEYS.pricingMiddleOfficeBaseDays,
+      ),
+    [systemSettings],
+  );
+  const laborCostRateWarningLine = useMemo(
+    () =>
+      getSystemSettingNumberFromRecords(
+        systemSettings,
+        SYSTEM_SETTING_KEYS.pricingLaborCostRateWarning,
+      ),
+    [systemSettings],
+  );
+  const projectCostBaselineRatio = useMemo(
+    () =>
+      getSystemSettingNumberFromRecords(
+        systemSettings,
+        SYSTEM_SETTING_KEYS.pricingProjectCostBaselineRatio,
       ),
     [systemSettings],
   );
@@ -234,7 +262,7 @@ const ProjectPricingStrategyModal = ({
     const estimationOptions = (estimation?.executionCostTypes ?? []).filter(
       (item) => Boolean(item?.id),
     );
-    const existingCostItems = existingStrategy?.costItems ?? [];
+    const existingCostItems = existingStrategy?.executionCostItems ?? [];
     const allOptionIds = new Set<string>([
       ...estimationOptions.map((item) => item.id ?? ""),
       ...existingCostItems.map((item) => item.costTypeOptionId),
@@ -264,13 +292,9 @@ const ProjectPricingStrategyModal = ({
       });
 
     return rows;
-  }, [estimation?.executionCostTypes, existingStrategy?.costItems]);
+  }, [estimation?.executionCostTypes, existingStrategy?.executionCostItems]);
 
-  const clientBudgetText =
-    typeof estimation?.clientBudget === "string" &&
-    estimation.clientBudget.trim().length > 0
-      ? estimation.clientBudget.trim()
-      : "无";
+  const clientBudgetText = formatClientBudgetText(estimation?.clientBudget);
 
   const initialValues = useMemo<FormValues>(() => {
     if (existingStrategy) {
@@ -295,8 +319,8 @@ const ProjectPricingStrategyModal = ({
         suggestedLaborCost: existingStrategy.suggestedLaborCost,
         plannedMiddleOfficeCost: existingStrategy.plannedMiddleOfficeCost,
         suggestedMiddleOfficeCost: existingStrategy.suggestedMiddleOfficeCost,
-        costItems: initialCostItems,
-        plannedExecutionCost: suggestedExecutionCost,
+        executionCostItems: initialCostItems,
+        executionCost: suggestedExecutionCost,
         bottomLinePrice: existingStrategy.bottomLinePrice,
         targetPrice: existingStrategy.targetPrice,
       };
@@ -332,8 +356,8 @@ const ProjectPricingStrategyModal = ({
       plannedMiddleOfficeCost: suggestedMiddleOfficeCost,
       suggestedMiddleOfficeCost:
         pricingMode === "target" ? suggestedMiddleOfficeCost : undefined,
-      costItems: initialCostItems,
-      plannedExecutionCost:
+      executionCostItems: initialCostItems,
+      executionCost:
         sumBudgetAmountCents(initialCostItems) > 0
           ? fromMoneyCents(sumBudgetAmountCents(initialCostItems))
           : undefined,
@@ -449,7 +473,7 @@ const ProjectPricingStrategyModal = ({
           if (submitting) return false;
           setSubmitting(true);
 
-          const costItems = (values.costItems ?? [])
+          const executionCostItems = (values.executionCostItems ?? [])
             .filter((item) => item.costTypeOptionId)
             .map((item) => ({
               costTypeOptionId: item.costTypeOptionId,
@@ -459,7 +483,7 @@ const ProjectPricingStrategyModal = ({
                   : null,
             }));
           const suggestedExecution = fromMoneyCents(
-            sumBudgetAmountCents(values.costItems),
+            sumBudgetAmountCents(values.executionCostItems),
           );
           const outsourceItems = normalizeProjectOutsourceItems(
             values.outsourceItems,
@@ -476,7 +500,7 @@ const ProjectPricingStrategyModal = ({
           const plannedMiddleOfficeCostCents = toMoneyCents(
             values.plannedMiddleOfficeCost,
           );
-          const plannedExecutionCostCents = toMoneyCents(suggestedExecution);
+          const executionCostCents = toMoneyCents(suggestedExecution);
           const normalizedSuggestedLaborCost =
             pricingMode === "target"
               ? values.plannedLaborCost
@@ -533,8 +557,8 @@ const ProjectPricingStrategyModal = ({
               normalizedSuggestedMiddleOfficeCost,
             ),
 
-            costItems,
-            plannedExecutionCost: roundMoney(suggestedExecution),
+            executionCostItems,
+            executionCost: roundMoney(suggestedExecution),
 
             bottomLinePrice: roundMoney(
               fromMoneyCents(normalizedBottomPriceCents),
@@ -543,7 +567,7 @@ const ProjectPricingStrategyModal = ({
               normalizedBottomPriceCents -
                 plannedMiddleOfficeCostCents -
                 plannedLaborCostCents -
-                plannedExecutionCostCents -
+                executionCostCents -
                 outsourceCostCents -
                 bottomLineAgencyFeeCents -
                 rentCostCents,
@@ -553,7 +577,7 @@ const ProjectPricingStrategyModal = ({
               normalizedTargetPriceCents -
                 suggestedMiddleOfficeCostCents -
                 suggestedLaborCostCents -
-                plannedExecutionCostCents -
+                executionCostCents -
                 outsourceCostCents -
                 targetAgencyFeeCents -
                 rentCostCents,
@@ -833,17 +857,17 @@ const ProjectPricingStrategyModal = ({
           onValuesChange={(_changedValues, allValues) => {
             const suggestedExecutionCost = fromMoneyCents(
               sumBudgetAmountCents(
-                allValues.costItems as PricingCostItemFormRow[] | undefined,
+                allValues.executionCostItems as PricingCostItemFormRow[] | undefined,
               ),
             );
             formRef.current?.setFieldValue(
-              "plannedExecutionCost",
+              "executionCost",
               suggestedExecutionCost,
             );
             setDraftValues((prev) => ({
               ...prev,
               ...allValues,
-              plannedExecutionCost: suggestedExecutionCost,
+              executionCost: suggestedExecutionCost,
             }));
           }}
         >
@@ -879,17 +903,17 @@ const ProjectPricingStrategyModal = ({
                         }}
                       >
                         <Form.Item
-                          name={["costItems", index, "costTypeOptionId"]}
+                          name={["executionCostItems", index, "costTypeOptionId"]}
                           hidden
                         >
                           <Input />
                         </Form.Item>
-                        <Form.Item name={["costItems", index, "name"]} hidden>
+                        <Form.Item name={["executionCostItems", index, "name"]} hidden>
                           <Input />
                         </Form.Item>
                         <Typography.Text>{label}</Typography.Text>
                         <Form.Item
-                          name={["costItems", index, "budgetAmount"]}
+                          name={["executionCostItems", index, "budgetAmount"]}
                           style={{ marginBottom: 0, width: 320 }}
                         >
                           <InputNumber
@@ -913,7 +937,7 @@ const ProjectPricingStrategyModal = ({
             {({ getFieldValue }) => {
               const suggested = fromMoneyCents(
                 sumBudgetAmountCents(
-                  getFieldValue("costItems") as
+                  getFieldValue("executionCostItems") as
                     | PricingCostItemFormRow[]
                     | undefined,
                 ),
@@ -950,8 +974,8 @@ const ProjectPricingStrategyModal = ({
               const plannedLaborCostCents = toMoneyCents(
                 draftValues.plannedLaborCost,
               );
-              const plannedExecutionCostCents = toMoneyCents(
-                draftValues.plannedExecutionCost,
+              const executionCostCents = toMoneyCents(
+                draftValues.executionCost,
               );
               const agencyFeeRate = toMoney(draftValues.agencyFeeRate);
               const outsourceCostCents = toMoneyCents(
@@ -964,12 +988,9 @@ const ProjectPricingStrategyModal = ({
               const targetPriceCents = toMoneyCents(
                 getFieldValue("targetPrice"),
               );
-              const clientQuoteRaw =
-                typeof estimation?.clientBudget === "string"
-                  ? estimation.clientBudget.trim()
-                  : "";
-              const hasClientQuote = clientQuoteRaw.length > 0;
-              const clientQuoteCents = toMoneyCents(clientQuoteRaw);
+              const clientQuoteValue = toNullableMoney(estimation?.clientBudget);
+              const hasClientQuote = clientQuoteValue !== null;
+              const clientQuoteCents = toMoneyCents(clientQuoteValue ?? 0);
               const clientQuoteAgencyFeeCents = calculateAgencyFeeAmountCents(
                 clientQuoteCents,
                 agencyFeeRate,
@@ -996,7 +1017,7 @@ const ProjectPricingStrategyModal = ({
                 targetPriceCents -
                   suggestedMiddleOfficeCostCents -
                   suggestedLaborCostCents -
-                  plannedExecutionCostCents -
+                  executionCostCents -
                   outsourceCostCents -
                   targetAgencyFeeCents -
                   rentCostCents,
@@ -1005,7 +1026,7 @@ const ProjectPricingStrategyModal = ({
                 bottomLinePriceCents -
                   plannedMiddleOfficeCostCents -
                   plannedLaborCostCents -
-                  plannedExecutionCostCents -
+                  executionCostCents -
                   outsourceCostCents -
                   bottomLineAgencyFeeCents -
                   rentCostCents,
@@ -1016,7 +1037,7 @@ const ProjectPricingStrategyModal = ({
                   plannedMiddleOfficeCostCents +
                   bottomLineAgencyFeeCents +
                   rentCostCents +
-                  plannedExecutionCostCents,
+                  executionCostCents,
               );
               const suggestedBreakEven = fromMoneyCents(
                 outsourceCostCents +
@@ -1024,13 +1045,13 @@ const ProjectPricingStrategyModal = ({
                   suggestedMiddleOfficeCostCents +
                   targetAgencyFeeCents +
                   rentCostCents +
-                  plannedExecutionCostCents,
+                  executionCostCents,
               );
               const clientQuoteProfit = fromMoneyCents(
                 clientQuoteCents -
                   suggestedMiddleOfficeCostCents -
                   suggestedLaborCostCents -
-                  plannedExecutionCostCents -
+                  executionCostCents -
                   outsourceCostCents -
                   clientQuoteAgencyFeeCents -
                   rentCostCents,
@@ -1041,7 +1062,7 @@ const ProjectPricingStrategyModal = ({
                   suggestedMiddleOfficeCostCents +
                   clientQuoteAgencyFeeCents +
                   rentCostCents +
-                  plannedExecutionCostCents,
+                  executionCostCents,
               );
               const hasBottomLinePrice =
                 getFieldValue("bottomLinePrice") !== null &&
@@ -1088,20 +1109,33 @@ const ProjectPricingStrategyModal = ({
                   : null;
               const bottomLineReferenceCost =
                 hasBottomLinePrice && bottomLinePriceCents > 0
-                  ? fromMoneyCents(Math.round(bottomLinePriceCents * 0.53))
+                  ? fromMoneyCents(
+                      Math.round(
+                        bottomLinePriceCents * (projectCostBaselineRatio / 100),
+                      ),
+                    )
                   : null;
               const targetReferenceCost =
                 hasTargetPrice && targetPriceCents > 0
-                  ? fromMoneyCents(Math.round(targetPriceCents * 0.53))
+                  ? fromMoneyCents(
+                      Math.round(
+                        targetPriceCents * (projectCostBaselineRatio / 100),
+                      ),
+                    )
                   : null;
               const clientQuoteReferenceCost =
                 hasClientQuote && clientQuoteCents > 0
-                  ? fromMoneyCents(Math.round(clientQuoteCents * 0.53))
+                  ? fromMoneyCents(
+                      Math.round(
+                        clientQuoteCents * (projectCostBaselineRatio / 100),
+                      ),
+                    )
                   : null;
               const renderCostRatioLine = (ratioText: string) => {
                 const ratioValue = Number.parseFloat(ratioText);
                 const exceededBaseline =
-                  Number.isFinite(ratioValue) && ratioValue > 53;
+                  Number.isFinite(ratioValue) &&
+                  ratioValue > projectCostBaselineRatio;
 
                 return (
                   <>
@@ -1132,7 +1166,8 @@ const ProjectPricingStrategyModal = ({
                 agencyFeeCost: number,
               ) => {
                 const laborRateExceeded =
-                  typeof laborRate === "number" && laborRate > 35;
+                  typeof laborRate === "number" &&
+                  laborRate > laborCostRateWarningLine;
 
                 return (
                   <div
@@ -1218,7 +1253,7 @@ const ProjectPricingStrategyModal = ({
                             bottomLineLaborRate,
                             fromMoneyCents(plannedMiddleOfficeCostCents),
                             fromMoneyCents(rentCostCents),
-                            fromMoneyCents(plannedExecutionCostCents),
+                            fromMoneyCents(executionCostCents),
                             fromMoneyCents(bottomLineAgencyFeeCents),
                           )}
                           {renderCostRatioLine(bottomLineCostRatio)}
@@ -1257,7 +1292,7 @@ const ProjectPricingStrategyModal = ({
                             targetLaborRate,
                             fromMoneyCents(suggestedMiddleOfficeCostCents),
                             fromMoneyCents(rentCostCents),
-                            fromMoneyCents(plannedExecutionCostCents),
+                            fromMoneyCents(executionCostCents),
                             fromMoneyCents(targetAgencyFeeCents),
                           )}
                           {renderCostRatioLine(targetCostRatio)}
@@ -1307,7 +1342,7 @@ const ProjectPricingStrategyModal = ({
                             clientLaborRate,
                             fromMoneyCents(suggestedMiddleOfficeCostCents),
                             fromMoneyCents(rentCostCents),
-                            fromMoneyCents(plannedExecutionCostCents),
+                            fromMoneyCents(executionCostCents),
                             fromMoneyCents(clientQuoteAgencyFeeCents),
                           )}
                           {renderCostRatioLine(clientCostRatio)}
@@ -1346,7 +1381,7 @@ const ProjectPricingStrategyModal = ({
                             targetLaborRate,
                             fromMoneyCents(suggestedMiddleOfficeCostCents),
                             fromMoneyCents(rentCostCents),
-                            fromMoneyCents(plannedExecutionCostCents),
+                            fromMoneyCents(executionCostCents),
                             fromMoneyCents(targetAgencyFeeCents),
                           )}
                           {renderCostRatioLine(targetCostRatio)}

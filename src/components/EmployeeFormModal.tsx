@@ -684,7 +684,7 @@ const EmployeeFormModal = ({
 
       {canManageRoles ? (
         <Row gutter={16}>
-          <Col span={24}>
+          <Col span={isEdit ? 12 : 24}>
             <Form.Item
               label="角色"
               name="roleIds"
@@ -700,7 +700,32 @@ const EmployeeFormModal = ({
               />
             </Form.Item>
           </Col>
+          {isEdit ? (
+            <Col span={12}>
+              <Form.Item label="用工状态" name="employmentStatus">
+                {renderCreatableSelect(
+                  "employmentStatus",
+                  "employmentStatus",
+                  "选择或新增用工状态",
+                )}
+              </Form.Item>
+              {renderCreateRow("employmentStatus", "用工状态")}
+            </Col>
+          ) : null}
         </Row>
+      ) : null}
+
+      {isEdit && !canManageRoles ? (
+        <>
+          <Form.Item label="用工状态" name="employmentStatus">
+            {renderCreatableSelect(
+              "employmentStatus",
+              "employmentStatus",
+              "选择或新增用工状态",
+            )}
+          </Form.Item>
+          {renderCreateRow("employmentStatus", "用工状态")}
+        </>
       ) : null}
 
       {!isEdit ? (
@@ -735,6 +760,7 @@ const EmployeeFormModal = ({
     <StepsForm<FormValues>
       onFinish={onPositionFinish}
       stepsProps={{ size: "small" }}
+      formProps={{ form }}
     >
       <StepsForm.StepForm title="基础信息" initialValues={baseValues}>
         <ProForm.Item

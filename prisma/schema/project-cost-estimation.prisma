@@ -1,0 +1,56 @@
+model ProjectCostEstimation {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  ownerId String?
+  owner   Employee? @relation("ProjectCostEstimationOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  version Int
+
+  estimatedDuration Int
+  clientBudget      Int?
+
+  agencyFeeRate Float? @default(0)
+
+  members        ProjectCostEstimationMember[]
+  totalLaborCost Float                         @default(0)
+
+  outsourceItems  ProjectOutsourceItem[] @relation("ProjectCostEstimationOutsourceItems")
+  outsourceRemark String?
+
+  executionCostTypes       SelectOption[] @relation("ProjectCostEstimationExecutionCostTypes")
+  otherExecutionCostRemark String?
+
+  pricingStrategy ProjectPricingStrategy?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, version])
+  @@index([projectId])
+  @@index([ownerId])
+}
+
+model ProjectCostEstimationMember {
+  id String @id @default(uuid())
+
+  costEstimationId String
+  costEstimation   ProjectCostEstimation @relation(fields: [costEstimationId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  allocationPercent Int // 人员配置占比
+
+  laborCostSnapshot Float
+  rentCostSnapshot  Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([costEstimationId, employeeId])
+  @@index([costEstimationId])
+  @@index([employeeId])
+}

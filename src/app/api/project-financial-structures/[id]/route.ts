@@ -19,12 +19,11 @@ const includeDetail = {
       name: true,
     },
   },
-  estimation: {
+  initiation: {
     select: {
       id: true,
       projectId: true,
       version: true,
-      type: true,
     },
   },
   executionCostItems: {
@@ -53,6 +52,18 @@ const includeDetail = {
     orderBy: { createdAt: "asc" as const },
   },
 };
+
+const serializeFinancialStructure = (row: Record<string, unknown>) => ({
+  ...row,
+  estimationId: "initiationId" in row ? row.initiationId : null,
+  estimation:
+    "initiation" in row && row.initiation
+      ? {
+          ...(row.initiation as Record<string, unknown>),
+          type: "baseline",
+        }
+      : null,
+});
 
 const toNullableNumber = (value: unknown) => {
   if (value === null || value === undefined || value === "") return null;
@@ -142,7 +153,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     return new Response("Project financial structure not found", { status: 404 });
   }
 
-  return Response.json(item);
+  return Response.json(serializeFinancialStructure(item as Record<string, unknown>));
 }
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
@@ -157,7 +168,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     select: {
       id: true,
       projectId: true,
-      estimationId: true,
+      initiationId: true,
     },
   });
   if (!existing) {
@@ -169,7 +180,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   if (
     ("projectId" in body && String(body.projectId ?? "").trim() !== existing.projectId) ||
     ("estimationId" in body &&
-      String(body.estimationId ?? "").trim() !== existing.estimationId)
+      String(body.estimationId ?? "").trim() !== existing.initiationId)
   ) {
     return new Response("projectId and estimationId are immutable", { status: 400 });
   }
@@ -265,7 +276,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     include: includeDetail,
   });
 
-  return Response.json(updated);
+  return Response.json(
+    serializeFinancialStructure(updated as Record<string, unknown>),
+  );
 }
 
 export async function DELETE(_req: NextRequest, context: RouteContext) {

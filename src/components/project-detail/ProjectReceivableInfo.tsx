@@ -9,21 +9,13 @@ import {
   forwardRef,
 } from "react";
 import {
-  Button,
-  Card,
-  Descriptions,
   Empty,
   message,
-  Popconfirm,
-  Progress,
-  Space,
 } from "antd";
-import { ProCard, StatisticCard } from "@ant-design/pro-components";
-import AppLink from "@/components/AppLink";
 import ProjectReceivableNodeTable, {
   type ProjectReceivableNodeRow,
 } from "@/components/project-detail/ProjectReceivableNodeTable";
-import RemarkText from "@/components/RemarkText";
+import ProjectReceivablePlanSnapshot from "@/components/project-detail/ProjectReceivablePlanSnapshot";
 import ProjectReceivablePlanModal, {
   type ProjectReceivablePlanFormValues,
 } from "@/components/project-detail/ProjectReceivablePlanModal";
@@ -77,7 +69,6 @@ type ReceivableNode = {
   expectedAmountTaxIncluded: number;
   expectedDate: string;
   expectedDateChangeCount: number;
-  hasVendorPayment: boolean;
   remark?: string | null;
   remarkNeedsAttention: boolean;
   actualNodes?: Array<{
@@ -96,6 +87,7 @@ type ReceivablePlan = {
   legalEntityId: string;
   ownerEmployeeId: string;
   contractAmount: number;
+  hasVendorPayment: boolean;
   serviceContent?: string | null;
   remark?: string | null;
   remarkNeedsAttention: boolean;
@@ -406,6 +398,13 @@ const ProjectReceivableInfo = forwardRef<
       projectId,
     ]);
 
+    useEffect(() => {
+      if (!planModalOpen || planModalMode !== "edit") return;
+      if (!currentPlan?.id) return;
+      if (editingPlanId === currentPlan.id) return;
+      setEditingPlanId(currentPlan.id);
+    }, [currentPlan?.id, editingPlanId, planModalMode, planModalOpen]);
+
     useImperativeHandle(
       ref,
       () => ({
@@ -450,6 +449,7 @@ const ProjectReceivableInfo = forwardRef<
                       )?.taxAmount ?? 0,
                     ) || undefined,
               serviceContent: editingPlan.serviceContent ?? undefined,
+              hasVendorPayment: editingPlan.hasVendorPayment,
               remark: editingPlan.remark ?? undefined,
               remarkNeedsAttention: editingPlan.remarkNeedsAttention,
             }
@@ -553,6 +553,7 @@ const ProjectReceivableInfo = forwardRef<
             legalEntityId: values.legalEntityId,
             ownerEmployeeId: values.ownerEmployeeId,
             contractAmount: values.contractAmount,
+            hasVendorPayment: Boolean(values.hasVendorPayment),
             serviceContent: values.serviceContent?.trim() || null,
             remark: values.remark?.trim() || null,
             remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
@@ -600,7 +601,6 @@ const ProjectReceivableInfo = forwardRef<
             keyDeliverable: values.keyDeliverable,
             expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
             expectedDate: values.expectedDate?.toISOString(),
-            hasVendorPayment: values.hasVendorPayment,
             remark: values.remark ?? null,
             remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
           }),
@@ -633,7 +633,6 @@ const ProjectReceivableInfo = forwardRef<
           keyDeliverable: values.keyDeliverable,
           expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
           expectedDate: values.expectedDate?.toISOString(),
-          hasVendorPayment: Boolean(values.hasVendorPayment),
           remark: values.remark?.trim() ? values.remark.trim() : null,
           remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
         };
@@ -802,272 +801,72 @@ const ProjectReceivableInfo = forwardRef<
         {plans.length === 0 ? (
           <Empty description="暂无收款计划" />
         ) : (
-          <div>
-            {plans.map((plan, index) => {
-              const contract = getContractForPlan(plan);
-              const summary = getPlanSummary(plan);
-              const contractAmount = formatYuanNumber(
-                contract?.contractAmount ?? plan.contractAmount,
-              );
-              const expectedAmountTotal = formatYuanNumber(
-                summary.expectedAmountTotal,
-              );
-              const actualAmountTotal = formatYuanNumber(
-                summary.actualAmountTotal,
-              );
-              return (
-                <Card
-                  key={plan.id}
-                  style={{ marginBottom: 24 }}
-                  styles={{ body: { paddingBottom: 16 } }}
-                  type="inner"
-                  title={`收款计划-${index + 1}`}
-                  extra={
-                    <Space size={12}>
-                      <Button
-                        disabled={!canManageProject}
-                        onClick={() => {
-                          setEditingPlanId(plan.id);
-                          setPlanModalMode("edit");
-                          setPlanModalOpen(true);
-                        }}
-                      >
-                        修改
-                      </Button>
-                      <Popconfirm
-                        title="确定删除当前收款计划吗？删除后节点也会被删除。"
-                        okText="删除"
-                        cancelText="取消"
-                        okButtonProps={{ danger: true }}
-                        onConfirm={async () => {
-                          const res = await fetch(
-                            `/api/project-receivable-plans/${plan.id}`,
-                            { method: "DELETE" },
-                          );
-                          if (!res.ok) {
-                            messageApi.error("删除收款计划失败");
-                            return;
-                          }
-                          messageApi.success("删除收款计划成功");
-                          await fetchPlans();
-                        }}
-                      >
-                        <Button danger disabled={!canManageProject}>
-                          删除
-                        </Button>
-                      </Popconfirm>
-                    </Space>
+          (() => {
+            const plan = plans[0];
+            const contract = getContractForPlan(plan);
+            const summary = getPlanSummary(plan);
+            const contractAmount = formatYuanNumber(
+              contract?.contractAmount ?? plan.contractAmount,
+            );
+            const expectedAmountTotal = formatYuanNumber(
+              summary.expectedAmountTotal,
+            );
+            const actualAmountTotal = formatYuanNumber(summary.actualAmountTotal);
+
+            return (
+              <div>
+                <ProjectReceivablePlanSnapshot
+                  contractAmount={contractAmount}
+                  taxAmount={contract?.taxAmount}
+                  expectedAmountTotal={expectedAmountTotal}
+                  actualAmountTotal={actualAmountTotal}
+                  legalEntityName={
+                    contract?.legalEntity?.name || plan.legalEntity?.name
                   }
-                >
-                  <ProCard split="horizontal" bordered>
-                    <ProCard split="vertical">
-                      <StatisticCard
-                        style={{
-                          background: "var(--ant-colorFillAlter, #fafafa)",
-                        }}
-                        statistic={{
-                          title: "合同金额（含税）",
-                          styles: { content: { fontSize: 18 } },
-                          value: contractAmount,
-                          suffix: "元",
-                          formatter: (value) =>
-                            Number(value ?? 0).toLocaleString("zh-CN"),
-                        }}
-                      />
-                      <StatisticCard
-                        style={{
-                          background: "var(--ant-colorFillAlter, #fafafa)",
-                        }}
-                        statistic={{
-                          title: "税费",
-                          styles: { content: { fontSize: 18 } },
-                          value:
-                            contract?.taxAmount === null ||
-                            contract?.taxAmount === undefined
-                              ? "-"
-                              : formatYuanNumber(
-                                  contract.taxAmount,
-                                ).toLocaleString("zh-CN"),
-                          suffix: "元",
-                        }}
-                      />
-                      <StatisticCard
-                        style={{
-                          background: "var(--ant-colorFillAlter, #fafafa)",
-                        }}
-                        statistic={{
-                          title: "预收金额合计",
-                          value: summary.expectedAmountTotal,
-                          suffix: "元",
-                          styles: { content: { fontSize: 18 } },
-                          formatter: (value) =>
-                            Number(value ?? 0).toLocaleString("zh-CN"),
-                        }}
-                      />
-                      <StatisticCard
-                        style={{
-                          background: "var(--ant-colorFillAlter, #fafafa)",
-                        }}
-                        statistic={{
-                          title: "实收金额总计",
-                          styles: { content: { fontSize: 18 } },
-                          value: summary.actualAmountTotal,
-                          suffix: "元",
-                          formatter: (value) =>
-                            Number(value ?? 0).toLocaleString("zh-CN"),
-                        }}
-                      />
-                    </ProCard>
-                    <ProCard>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 12,
-                          fontSize: 12,
-                          color: "rgba(0,0,0,0.65)",
-                          fontWeight: 600,
-                        }}
-                      >
-                        <span style={{ minWidth: 30 }}>
-                          {(summary.percent ?? 0).toFixed(0)}%
-                        </span>
-                        <Progress
-                          percent={summary.percent ?? 0}
-                          showInfo={false}
-                          strokeColor="#1677ff"
-                          style={{ flex: 1, marginBottom: 0 }}
-                        />
-                        <span
-                          style={{
-                            color: "rgba(0,0,0,0.45)",
-                            fontWeight: 500,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          实收 {actualAmountTotal.toLocaleString("zh-CN")} /
-                          预收 {expectedAmountTotal.toLocaleString("zh-CN")} 元
-                        </span>
-                      </div>
-                    </ProCard>
-                    <ProCard split="vertical">
-                      <ProCard colSpan={8}>
-                        <div
-                          style={{
-                            color: "rgba(0,0,0,0.45)",
-                            fontSize: 12,
-                            marginBottom: 8,
-                            fontWeight: 600,
-                          }}
-                        >
-                          签约主体
-                        </div>
-                        <div
-                          style={{
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {contract?.legalEntity?.id ? (
-                            <span>
-                              {contract.legalEntity.fullName ||
-                                contract.legalEntity.name ||
-                                "-"}
-                            </span>
-                          ) : (
-                            "-"
-                          )}
-                        </div>
-                      </ProCard>
-                      <ProCard>
-                        <div
-                          style={{
-                            color: "rgba(0,0,0,0.45)",
-                            fontSize: 12,
-                            marginBottom: 8,
-                            fontWeight: 600,
-                          }}
-                        >
-                          服务内容
-                        </div>
-                        <div
-                          style={{
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {plan.serviceContent?.trim()
-                            ? plan.serviceContent
-                            : "-"}
-                        </div>
-                      </ProCard>
-                      <ProCard colSpan={4}>
-                        <div
-                          style={{
-                            color: "rgba(0,0,0,0.45)",
-                            fontSize: 12,
-                            marginBottom: 8,
-                            fontWeight: 600,
-                          }}
-                        >
-                          跟进人
-                        </div>
-                        <div
-                          style={{
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          <span>{plan.ownerEmployee?.name || "-"}</span>
-                        </div>
-                      </ProCard>
-                      <ProCard>
-                        <div>备注</div>
-                        <div style={{ fontSize: 14, lineHeight: 1.5 }}>
-                          <RemarkText
-                            remark={plan.remark}
-                            remarkNeedsAttention={plan.remarkNeedsAttention}
-                          />
-                        </div>
-                      </ProCard>
-                    </ProCard>
-                  </ProCard>
-                  <div style={{ marginTop: 16 }}>
-                    <ProjectReceivableNodeTable
-                      title={`【${projectName}】收款节点`}
-                      rows={
-                        (plan.nodes ?? []).map((node) => ({
-                          ...node,
-                          expectedDate: node.expectedDate,
-                        })) as ProjectReceivableNodeRow[]
-                      }
-                      stageOptions={stageOptions.map((item) => ({
-                        id: item.id,
-                        value: item.value,
-                      }))}
-                      canManageProject={canManageProject}
-                      onAddNode={() => {
-                        setNodeTargetPlanId(plan.id);
-                        setNodeModalOpen(true);
-                      }}
-                      onDeleteNode={handleDeleteNode}
-                      onEditNode={async (row, values) => {
-                        await handleEditNode(row as ReceivableNode, values);
-                      }}
-                      onDragSortNodes={async (nextRows) => {
-                        await handleDragSortNodes(
-                          plan.id,
-                          nextRows as ReceivableNode[],
-                        );
-                      }}
-                      onCollectNode={async (row, values) => {
-                        await handleCollectNode(row as ReceivableNode, values);
-                      }}
-                      onEditActualNode={handleEditActualNode}
-                      onDeleteActualNode={handleDeleteActualNode}
-                    />
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
+                  serviceContent={plan.serviceContent}
+                  ownerName={plan.ownerEmployee?.name}
+                  hasVendorPayment={Boolean(plan.hasVendorPayment)}
+                  remark={plan.remark}
+                  remarkNeedsAttention={plan.remarkNeedsAttention}
+                />
+                <div style={{ marginTop: 16 }}>
+                  <ProjectReceivableNodeTable
+                    title={`【${projectName}】收款节点`}
+                    rows={
+                      (plan.nodes ?? []).map((node) => ({
+                        ...node,
+                        expectedDate: node.expectedDate,
+                      })) as ProjectReceivableNodeRow[]
+                    }
+                    stageOptions={stageOptions.map((item) => ({
+                      id: item.id,
+                      value: item.value,
+                    }))}
+                    canManageProject={canManageProject}
+                    onAddNode={() => {
+                      setNodeTargetPlanId(plan.id);
+                      setNodeModalOpen(true);
+                    }}
+                    onDeleteNode={handleDeleteNode}
+                    onEditNode={async (row, values) => {
+                      await handleEditNode(row as ReceivableNode, values);
+                    }}
+                    onDragSortNodes={async (nextRows) => {
+                      await handleDragSortNodes(
+                        plan.id,
+                        nextRows as ReceivableNode[],
+                      );
+                    }}
+                    onCollectNode={async (row, values) => {
+                      await handleCollectNode(row as ReceivableNode, values);
+                    }}
+                    onEditActualNode={handleEditActualNode}
+                    onDeleteActualNode={handleDeleteActualNode}
+                  />
+                </div>
+              </div>
+            );
+          })()
         )}
 
         <ProjectReceivablePlanModal
@@ -1102,7 +901,6 @@ const ProjectReceivableInfo = forwardRef<
           }))}
           stageOptionsLoading={loadingStageOptions}
           initialValues={{
-            hasVendorPayment: false,
             remarkNeedsAttention: false,
           }}
         />

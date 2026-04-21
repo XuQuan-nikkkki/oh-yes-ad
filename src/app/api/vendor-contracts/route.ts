@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
+import { toNullableInt } from "@/lib/toNullableInt";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -37,15 +38,6 @@ const toNullableText = (value: unknown) => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
-const toNullableInt = (value: unknown) => {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
-  if (typeof value === "string") {
-    const parsed = Number(value.trim());
-    return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
-  }
-  return null;
-};
 
 const serializeContract = (
   row: {
@@ -91,28 +83,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const [project, vendor, legalEntity, existing] = await Promise.all([
+  const [project, vendor, legalEntity] = await Promise.all([
     prisma.project.findUnique({ where: { id: projectId }, select: { id: true } }),
     prisma.vendor.findUnique({ where: { id: vendorId }, select: { id: true } }),
     prisma.legalEntity.findUnique({
       where: { id: legalEntityId },
       select: { id: true },
     }),
-    prisma.vendorContract.findFirst({
-      where: { projectId },
-      select: { id: true },
-      orderBy: { updatedAt: "desc" },
-    }),
   ]);
 
   if (!project) return new Response("Project not found", { status: 404 });
   if (!vendor) return new Response("Vendor not found", { status: 404 });
   if (!legalEntity) return new Response("Legal entity not found", { status: 404 });
-  if (existing) {
-    return new Response("Vendor contract already exists for this project", {
-      status: 409,
-    });
-  }
 
   const created = await prisma.$transaction(async (tx) => {
     const row = await tx.vendorContract.create({

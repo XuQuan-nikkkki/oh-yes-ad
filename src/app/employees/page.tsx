@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Button, message, Radio } from "antd";
+import { useCallback, useEffect, useState } from "react";
+import { Button, Radio, message } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import EmployeeFormModal from "@/components/EmployeeFormModal";
 import EmployeesTable, {
@@ -27,23 +27,27 @@ const EmployeesPage = () => {
   const [open, setOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [viewMode, setViewMode] = useState<EmployeeViewMode>("basic");
+  const [didAutoSwitchMode, setDidAutoSwitchMode] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
 
-  const fetchEmployees = useCallback(async (force = false) => {
-    setLoading(true);
-    try {
-      const data = await fetchEmployeesFromStore({ full: true, force });
-      setEmployees(Array.isArray(data) ? (data as Employee[]) : []);
-    } catch (err) {
-      console.error("获取团队成员失败:", err);
-      setEmployees([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchEmployeesFromStore]);
+  const fetchEmployees = useCallback(
+    async (force = false) => {
+      setLoading(true);
+      try {
+        const data = await fetchEmployeesFromStore({ full: true, force });
+        setEmployees(Array.isArray(data) ? (data as Employee[]) : []);
+      } catch (err) {
+        console.error("获取团队成员失败:", err);
+        setEmployees([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchEmployeesFromStore],
+  );
 
   useEffect(() => {
     fetchEmployees();
@@ -58,9 +62,7 @@ const EmployeesPage = () => {
       const rolesData = await rolesRes.json();
       const legalEntitiesData = await legalEntitiesRes.json();
       setRoleOptions(Array.isArray(rolesData) ? rolesData : []);
-      setLegalEntityOptions(
-        Array.isArray(legalEntitiesData) ? legalEntitiesData : [],
-      );
+      setLegalEntityOptions(Array.isArray(legalEntitiesData) ? legalEntitiesData : []);
     })();
   }, []);
 
@@ -77,6 +79,14 @@ const EmployeesPage = () => {
     }
   }, [viewMode, canUsePositionView]);
 
+  useEffect(() => {
+    if (didAutoSwitchMode) return;
+    if (roleCodes.includes("HR")) {
+      setViewMode("position");
+    }
+    setDidAutoSwitchMode(true);
+  }, [didAutoSwitchMode, roleCodes]);
+
   const functionOptions = Array.from(
     new Set(employees.map((e) => e.function).filter(Boolean) as string[]),
   );
@@ -84,22 +94,16 @@ const EmployeesPage = () => {
     new Set(employees.map((e) => e.position).filter(Boolean) as string[]),
   );
   const departmentLevel1Options = Array.from(
-    new Set(
-      employees.map((e) => e.departmentLevel1).filter(Boolean) as string[],
-    ),
+    new Set(employees.map((e) => e.departmentLevel1).filter(Boolean) as string[]),
   );
   const departmentLevel2Options = Array.from(
-    new Set(
-      employees.map((e) => e.departmentLevel2).filter(Boolean) as string[],
-    ),
+    new Set(employees.map((e) => e.departmentLevel2).filter(Boolean) as string[]),
   );
   const employmentTypeOptions = Array.from(
     new Set(employees.map((e) => e.employmentType).filter(Boolean) as string[]),
   );
   const employmentStatusOptions = Array.from(
-    new Set(
-      employees.map((e) => e.employmentStatus).filter(Boolean) as string[],
-    ),
+    new Set(employees.map((e) => e.employmentStatus).filter(Boolean) as string[]),
   );
 
   const handleAddEmployee = () => {
@@ -183,6 +187,7 @@ const EmployeesPage = () => {
           employees={employees}
           roleOptions={roleOptions}
           columnKeys={columnKeysByMode[viewMode]}
+          viewMode={viewMode}
           columnsStatePersistenceKey={`employees-table-columns-state-${viewMode}`}
           loading={loading}
           onEdit={handleEdit}

@@ -2,7 +2,6 @@
 
 import { PayCircleOutlined } from "@ant-design/icons";
 import { Button, Card, Progress, Space, Typography } from "antd";
-import BooleanTag from "@/components/BooleanTag";
 import RemarkText from "@/components/RemarkText";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import TableActions from "@/components/TableActions";
@@ -69,13 +68,13 @@ const ProjectReceivableNodeProList = ({
                 }}
               >
                 <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "minmax(220px, 1.2fr) repeat(4, minmax(140px, 1fr)) auto",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                      "minmax(220px, 1.2fr) repeat(3, minmax(140px, 1fr)) auto",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
                 >
                   <Space orientation="vertical" size={10} style={{ alignItems: "flex-start" }}>
                     <SelectOptionTag
@@ -127,11 +126,6 @@ const ProjectReceivableNodeProList = ({
                         />
                       );
                     })()}
-                  </div>
-
-                  <div>
-                    <div style={{ color: "#6b7280", marginBottom: 6 }}>有供应商付款</div>
-                    <BooleanTag value={Boolean(row.hasVendorPayment)} />
                   </div>
 
                   <div>
