@@ -5,6 +5,11 @@ import { Col, Form, Input, InputNumber, Row, Select, Switch } from "antd";
 import type { FormInstance } from "antd/es/form";
 import type { EmployeeListItem } from "@/stores/employeesStore";
 import type { LegalEntityListItem } from "@/stores/legalEntitiesStore";
+import {
+  getSystemSettingNumberFromRecords,
+  SYSTEM_SETTING_KEYS,
+} from "@/lib/system-settings";
+import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
 import type { ReceivableEntryDraft } from "./types";
 
 export type PlanFormValues = {
@@ -26,6 +31,7 @@ type Props = {
   legalEntities: LegalEntityListItem[];
   legalEntitiesLoading: boolean;
   employees: EmployeeListItem[];
+  preferredValues?: Partial<PlanFormValues>;
 };
 
 export default function ReceivablePlanForm({
@@ -36,16 +42,34 @@ export default function ReceivablePlanForm({
   legalEntities,
   legalEntitiesLoading,
   employees,
+  preferredValues,
 }: Props) {
   const legalEntityOptions = useMemo(
     () => legalEntities.map((le) => ({ label: le.name, value: le.id })),
     [legalEntities],
+  );
+  const systemSettings = useSystemSettingsStore((state) => state.records);
+  const fetchSystemSettings = useSystemSettingsStore(
+    (state) => state.fetchSystemSettings,
+  );
+  const projectTaxRate = useMemo(
+    () =>
+      getSystemSettingNumberFromRecords(
+        systemSettings,
+        SYSTEM_SETTING_KEYS.pricingProjectTaxRate,
+      ),
+    [systemSettings],
   );
 
   const employeeOptions = useMemo(
     () => employees.map((e) => ({ label: e.name, value: e.id })),
     [employees],
   );
+  const contractAmount = Form.useWatch("contractAmount", form);
+
+  useEffect(() => {
+    void fetchSystemSettings();
+  }, [fetchSystemSettings]);
 
   // Auto-match 签约主体: entry.contractCompany includes legalEntity.name or vice versa
   const matchedLegalEntityId = useMemo(() => {
@@ -65,7 +89,7 @@ export default function ReceivablePlanForm({
 
   // Fill form values whenever entry or matched options resolve
   useEffect(() => {
-    form.setFieldsValue({
+    const defaultValues: PlanFormValues = {
       legalEntityId: matchedLegalEntityId,
       contractAmount: entry.contractAmountTaxIncluded ?? undefined,
       serviceContent: entry.serviceContent || undefined,
@@ -73,8 +97,31 @@ export default function ReceivablePlanForm({
       hasVendorPayment: entry.hasVendorPayment ?? false,
       remark: entry.remark || undefined,
       remarkNeedsAttention: entry.remarkNeedsAttention,
+    };
+    form.setFieldsValue({
+      ...defaultValues,
+      ...preferredValues,
     });
-  }, [form, entry, matchedLegalEntityId, matchedEmployeeId]);
+  }, [form, entry, matchedLegalEntityId, matchedEmployeeId, preferredValues]);
+
+  useEffect(() => {
+    if (contractAmount === null || contractAmount === undefined) {
+      form.setFieldValue("taxAmount", undefined);
+      return;
+    }
+    const contract = Number(contractAmount);
+    if (!Number.isFinite(contract) || contract < 0) {
+      form.setFieldValue("taxAmount", undefined);
+      return;
+    }
+    const denominator = 1 + projectTaxRate / 100;
+    if (!Number.isFinite(denominator) || denominator <= 0) {
+      form.setFieldValue("taxAmount", undefined);
+      return;
+    }
+    const taxAmount = Number(((contract * (projectTaxRate / 100)) / denominator).toFixed(2));
+    form.setFieldValue("taxAmount", taxAmount);
+  }, [contractAmount, form, projectTaxRate]);
 
   return (
     <Form form={form} layout="vertical">
@@ -83,7 +130,9 @@ export default function ReceivablePlanForm({
           <Form.Item label="项目">
             <Select
               disabled
-              options={[{ label: projectName || "未命名项目", value: projectId }]}
+              options={[
+                { label: projectName || "未命名项目", value: projectId },
+              ]}
               value={projectId}
             />
           </Form.Item>
@@ -109,6 +158,7 @@ export default function ReceivablePlanForm({
             label="有供应商付款"
             name="hasVendorPayment"
             valuePropName="checked"
+            layout="horizontal"
           >
             <Switch checkedChildren="是" unCheckedChildren="否" />
           </Form.Item>
@@ -118,7 +168,7 @@ export default function ReceivablePlanForm({
       <Row gutter={16}>
         <Col span={12}>
           <Form.Item
-            label="合同金额"
+            label="合同金额（含税）"
             name="contractAmount"
             rules={[{ required: true, message: "请输入合同金额" }]}
           >
@@ -135,12 +185,14 @@ export default function ReceivablePlanForm({
             label="税费金额"
             name="taxAmount"
             rules={[{ required: true, message: "请输入税费金额" }]}
+            extra={`税费利用系数自动计算（当前系数：${projectTaxRate}%）`}
           >
             <InputNumber
               min={0}
               precision={2}
               style={{ width: "100%" }}
               prefix="¥"
+              disabled
             />
           </Form.Item>
         </Col>
@@ -180,6 +232,7 @@ export default function ReceivablePlanForm({
         label="备注标红"
         name="remarkNeedsAttention"
         valuePropName="checked"
+        layout="horizontal"
       >
         <Switch checkedChildren="是" unCheckedChildren="否" />
       </Form.Item>

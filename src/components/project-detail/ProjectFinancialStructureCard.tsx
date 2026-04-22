@@ -1,10 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { App, Button, Card, Empty, Space, Spin, Table, Tag, message } from "antd";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { InfoCircleOutlined } from "@ant-design/icons";
+import {
+  App,
+  Button,
+  Card,
+  Empty,
+  Space,
+  Spin,
+  Table,
+  Tag,
+  Tooltip,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { Project } from "@/types/projectDetail";
-import ProjectFinancialStructureModal from "@/components/project-detail/ProjectFinancialStructureModal";
+import ProjectFinancialStructureModal, {
+  type ImportedFinancialStructurePrefill,
+} from "@/components/project-detail/ProjectFinancialStructureModal";
 import ProjectDetailTitledTableCard from "@/components/project-detail/ProjectDetailTitledTableCard";
 import { getProjectOutsourceTotal } from "@/lib/project-outsource";
 import {
@@ -21,12 +35,13 @@ import {
   FINANCIAL_METRIC_BAR_COLORS,
   FINANCIAL_METRIC_COLORS,
 } from "@/lib/financial-metric-colors";
+import { DEFAULT_COLOR } from "@/lib/constants";
 
 type Props = {
   projectId: string;
   projectName: string;
   canManageProject: boolean;
-  latestBaselineCostEstimation?: Project["latestBaselineCostEstimation"];
+  latestInitiation?: Project["latestInitiation"];
   mode?: "full" | "actions" | "content";
   refreshKey?: number;
   onSaved?: () => void | Promise<void>;
@@ -35,7 +50,8 @@ type Props = {
 type ProjectFinancialStructure = {
   id: string;
   projectId: string;
-  estimationId: string;
+  estimationId?: string | null;
+  contractAmountTaxIncluded?: number | null;
   laborCost: number;
   rentCost: number;
   middleOfficeCost: number;
@@ -80,6 +96,11 @@ type FinancialStructurePreviewRow = {
   withDot?: boolean;
 };
 
+type ParsedWorksheetCell = {
+  text: string;
+  numberValue: number | null;
+};
+
 const formatAmount = (value?: number | null) => {
   if (typeof value !== "number") return "-";
   return value.toLocaleString("zh-CN", {
@@ -95,11 +116,6 @@ const previewSectionRowStyle = {
   color: "rgba(0,0,0,0.45)",
 } as const;
 
-const formatAmountWithUnit = (value?: number | null) => {
-  const amount = formatAmount(value);
-  return amount === "-" ? "-" : `${amount} 元`;
-};
-
 const formatAmountPlain = (value?: number | null) => formatAmount(value);
 
 const toMoney = (value: unknown) => {
@@ -112,11 +128,205 @@ const toMoney = (value: unknown) => {
   return null;
 };
 
+const normalizeWorksheetText = (value: string) =>
+  value.trim().replace(/\s+/g, "").replace(/[：:]/g, "").toLowerCase();
+
+const extractNumberFromText = (value: string) => {
+  const matched = value.match(/-?\d+(?:,\d{3})*(?:\.\d+)?/);
+  if (!matched) return null;
+  const parsed = Number(matched[0].replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseWorksheetCellValue = (value: unknown): ParsedWorksheetCell => {
+  if (value === null || value === undefined) {
+    return { text: "", numberValue: null };
+  }
+  if (typeof value === "number") {
+    return {
+      text: String(value),
+      numberValue: Number.isFinite(value) ? value : null,
+    };
+  }
+  if (typeof value === "string") {
+    return { text: value.trim(), numberValue: extractNumberFromText(value) };
+  }
+  if (typeof value === "boolean") {
+    return { text: value ? "TRUE" : "FALSE", numberValue: null };
+  }
+  if (value instanceof Date) {
+    return { text: value.toISOString(), numberValue: null };
+  }
+  if (typeof value === "object" && value) {
+    const asRecord = value as Record<string, unknown>;
+    const richText = asRecord.richText;
+    if (Array.isArray(richText)) {
+      const text = richText
+        .map((item) =>
+          typeof item === "object" && item && "text" in item
+            ? String((item as Record<string, unknown>).text ?? "")
+            : "",
+        )
+        .join("")
+        .trim();
+      return { text, numberValue: extractNumberFromText(text) };
+    }
+    if (typeof asRecord.text === "string") {
+      const text = asRecord.text.trim();
+      return { text, numberValue: extractNumberFromText(text) };
+    }
+    if (typeof asRecord.result === "number") {
+      return { text: String(asRecord.result), numberValue: asRecord.result };
+    }
+    if (typeof asRecord.result === "string") {
+      const text = asRecord.result.trim();
+      return { text, numberValue: extractNumberFromText(text) };
+    }
+  }
+
+  const fallbackText = String(value).trim();
+  return {
+    text: fallbackText,
+    numberValue: extractNumberFromText(fallbackText),
+  };
+};
+
+const getRowFirstNumberAfterColumn = (
+  rowCells: ParsedWorksheetCell[],
+  startColumn: number,
+) => {
+  for (
+    let colIndex = startColumn + 1;
+    colIndex < rowCells.length;
+    colIndex += 1
+  ) {
+    const amount = rowCells[colIndex]?.numberValue;
+    if (typeof amount === "number" && Number.isFinite(amount)) {
+      return amount;
+    }
+  }
+  return null;
+};
+
+const findRowCellByLabel = (
+  rows: ParsedWorksheetCell[][],
+  labels: string[],
+) => {
+  const normalizedLabels = labels.map(normalizeWorksheetText);
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex];
+    for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+      const normalizedCellText = normalizeWorksheetText(
+        row[colIndex]?.text ?? "",
+      );
+      if (!normalizedCellText) continue;
+      if (normalizedLabels.includes(normalizedCellText)) {
+        return { rowIndex, colIndex };
+      }
+    }
+  }
+  return null;
+};
+
+const parseFinancialStructurePrefillFromWorksheet = (
+  worksheetRows: ParsedWorksheetCell[][],
+): ImportedFinancialStructurePrefill => {
+  const findRowAmount = (labels: string[]) => {
+    const located = findRowCellByLabel(worksheetRows, labels);
+    if (!located) return null;
+    return getRowFirstNumberAfterColumn(
+      worksheetRows[located.rowIndex] ?? [],
+      located.colIndex,
+    );
+  };
+
+  const incomePos = findRowCellByLabel(worksheetRows, ["收入"]);
+  let incomeTaxIncluded: number | undefined;
+  if (incomePos) {
+    const incomeRow = worksheetRows[incomePos.rowIndex] ?? [];
+    for (
+      let colIndex = incomePos.colIndex + 1;
+      colIndex < incomeRow.length;
+      colIndex += 1
+    ) {
+      const cell = incomeRow[colIndex];
+      if (!cell?.text.includes("含税")) continue;
+      if (typeof cell.numberValue === "number") {
+        incomeTaxIncluded = cell.numberValue;
+        break;
+      }
+    }
+    if (typeof incomeTaxIncluded !== "number") {
+      const fallbackAmount = getRowFirstNumberAfterColumn(
+        incomeRow,
+        incomePos.colIndex,
+      );
+      if (typeof fallbackAmount === "number")
+        incomeTaxIncluded = fallbackAmount;
+    }
+  }
+
+  const outsourceAmount = findRowAmount(["外包成本"]);
+  const laborCost = findRowAmount(["人力成本"]);
+  const rentCost = findRowAmount(["租金成本"]);
+  const middleOfficeCost = findRowAmount(["中台成本", "中台"]);
+
+  const executionCostItems: Array<{ label: string; amount: number }> = [];
+  const executionDetailPos = findRowCellByLabel(worksheetRows, [
+    "费用成本明细",
+  ]);
+  if (executionDetailPos) {
+    let emptyRows = 0;
+    for (
+      let rowIndex = executionDetailPos.rowIndex + 1;
+      rowIndex < worksheetRows.length;
+      rowIndex += 1
+    ) {
+      const row = worksheetRows[rowIndex] ?? [];
+      const firstNonEmptyIndex = row.findIndex(
+        (cell) => cell.text.trim() !== "",
+      );
+      if (firstNonEmptyIndex < 0) {
+        emptyRows += 1;
+        if (emptyRows >= 2) break;
+        continue;
+      }
+      emptyRows = 0;
+      const label = row[firstNonEmptyIndex]?.text.trim() ?? "";
+      if (!label) continue;
+      const normalizedLabel = normalizeWorksheetText(label);
+      if (["合计", "总计", "费用成本合计"].includes(normalizedLabel)) break;
+      const amount = getRowFirstNumberAfterColumn(row, firstNonEmptyIndex);
+      if (
+        typeof amount !== "number" ||
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+        continue;
+      }
+      executionCostItems.push({ label, amount });
+    }
+  }
+
+  return {
+    incomeTaxIncluded,
+    outsourceAmount:
+      typeof outsourceAmount === "number" && outsourceAmount > 0
+        ? outsourceAmount
+        : undefined,
+    laborCost: typeof laborCost === "number" ? laborCost : undefined,
+    rentCost: typeof rentCost === "number" ? rentCost : undefined,
+    middleOfficeCost:
+      typeof middleOfficeCost === "number" ? middleOfficeCost : undefined,
+    executionCostItems,
+  };
+};
+
 const ProjectFinancialStructureCard = ({
   projectId,
   projectName,
   canManageProject,
-  latestBaselineCostEstimation,
+  latestInitiation,
   mode = "full",
   refreshKey = 0,
   onSaved,
@@ -124,10 +334,14 @@ const ProjectFinancialStructureCard = ({
   const app = App.useApp();
   const [messageApi, contextHolder] = message.useMessage();
   const [modalOpen, setModalOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [importedPrefill, setImportedPrefill] =
+    useState<ImportedFinancialStructurePrefill | null>(null);
   const [financialStructure, setFinancialStructure] =
     useState<ProjectFinancialStructure | null>(null);
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const systemSettings = useSystemSettingsStore((state) => state.records);
   const fetchSystemSettings = useSystemSettingsStore(
     (state) => state.fetchSystemSettings,
@@ -146,8 +360,8 @@ const ProjectFinancialStructureCard = ({
     setLoading(true);
     try {
       const query = new URLSearchParams({ projectId });
-      if (latestBaselineCostEstimation?.id) {
-        query.set("estimationId", latestBaselineCostEstimation.id);
+      if (latestInitiation?.id) {
+        query.set("estimationId", latestInitiation.id);
       }
 
       const res = await fetch(
@@ -169,7 +383,7 @@ const ProjectFinancialStructureCard = ({
     } finally {
       setLoading(false);
     }
-  }, [latestBaselineCostEstimation?.id, projectId]);
+  }, [latestInitiation?.id, projectId]);
 
   useEffect(() => {
     void fetchFinancialStructure();
@@ -187,13 +401,25 @@ const ProjectFinancialStructureCard = ({
       ),
     [systemSettings],
   );
+  const projectTaxRate = useMemo(
+    () =>
+      getSystemSettingNumberFromRecords(
+        systemSettings,
+        SYSTEM_SETTING_KEYS.pricingProjectTaxRate,
+      ),
+    [systemSettings],
+  );
 
   const financialSummary = useMemo(() => {
     if (!financialStructure) return null;
     const projectAmount =
-      (typeof latestBaselineCostEstimation?.contractAmount === "number"
-        ? latestBaselineCostEstimation.contractAmount
-        : null) ?? toMoney(latestBaselineCostEstimation?.clientBudget);
+      (typeof financialStructure.contractAmountTaxIncluded === "number"
+        ? financialStructure.contractAmountTaxIncluded
+        : null) ??
+      (typeof latestInitiation?.contractAmount === "number"
+        ? latestInitiation.contractAmount
+        : null) ??
+      toMoney(latestInitiation?.clientBudget);
     const outsourceCost = getProjectOutsourceTotal(
       financialStructure.outsourceItems,
     );
@@ -208,9 +434,17 @@ const ProjectFinancialStructureCard = ({
       financialStructure.rentCost +
       financialStructure.middleOfficeCost +
       financialStructure.executionCost;
+    const projectAmountExcludingTax =
+      typeof projectAmount === "number" && Number.isFinite(projectTaxRate)
+        ? (() => {
+            const denominator = 1 + projectTaxRate / 100;
+            if (!Number.isFinite(denominator) || denominator <= 0) return null;
+            return projectAmount / denominator;
+          })()
+        : null;
     const benchmarkAmount =
-      typeof projectAmount === "number"
-        ? projectAmount * (projectCostBaselineRatio / 100)
+      typeof projectAmountExcludingTax === "number"
+        ? projectAmountExcludingTax * (projectCostBaselineRatio / 100)
         : null;
     const totalCostRatio =
       typeof projectAmount === "number" && projectAmount > 0
@@ -270,6 +504,7 @@ const ProjectFinancialStructureCard = ({
 
     return {
       projectAmount,
+      projectAmountExcludingTax,
       outsourceCost,
       agencyFeeAmount,
       recomputedTotalCost,
@@ -284,38 +519,30 @@ const ProjectFinancialStructureCard = ({
     };
   }, [
     financialStructure,
-    latestBaselineCostEstimation?.clientBudget,
-    latestBaselineCostEstimation?.contractAmount,
+    latestInitiation?.clientBudget,
+    latestInitiation?.contractAmount,
     projectCostBaselineRatio,
+    projectTaxRate,
   ]);
 
   const previewRows = useMemo<FinancialStructurePreviewRow[]>(() => {
     if (!financialStructure || !financialSummary) return [];
 
     const outsourceRemarkText = financialStructure.outsourceRemark?.trim();
+    const otherExecutionCostRemark =
+      latestInitiation?.otherExecutionCostRemark?.trim();
     const hasOutsourceItems = financialSummary.outsourceItems.length > 0;
     const outsourceRemarkNode =
       hasOutsourceItems || outsourceRemarkText ? (
         <div style={{ lineHeight: 1.8 }}>
           {financialSummary.outsourceItems.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "baseline",
-                gap: 12,
-              }}
-            >
-              <span>{item.type}</span>
-              <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>
-                {formatAmountWithUnit(item.amount)}
-              </span>
+            <div key={item.id}>
+              {`${item.type}：${formatAmount(item.amount)}元`}
             </div>
           ))}
           {outsourceRemarkText ? (
             <div style={{ marginTop: 6 }}>
-              <Tag>{outsourceRemarkText}</Tag>
+              <Tag color="default">{outsourceRemarkText}</Tag>
             </div>
           ) : null}
         </div>
@@ -331,15 +558,16 @@ const ProjectFinancialStructureCard = ({
               key={item.id}
               style={{
                 display: "flex",
-                justifyContent: "space-between",
-                alignItems: "baseline",
-                gap: 12,
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
               }}
             >
-              <span>{item.costTypeOption?.value ?? "未命名费用类型"}</span>
-              <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>
-                {formatAmountWithUnit(item.budgetAmount)}
-              </span>
+              <span>{`${item.costTypeOption?.value ?? "未命名费用类型"}：${formatAmount(item.budgetAmount)}元`}</span>
+              {item.costTypeOption?.value?.trim() === "其他" &&
+              otherExecutionCostRemark ? (
+                <Tag color={DEFAULT_COLOR}>{otherExecutionCostRemark}</Tag>
+              ) : null}
             </div>
           ))}
         </div>
@@ -352,8 +580,12 @@ const ProjectFinancialStructureCard = ({
       {
         key: "income",
         type: "item",
-        name: "收入",
+        name: "收入(含税)",
         amount: formatAmount(financialSummary.projectAmount),
+        remark:
+          typeof financialSummary.projectAmountExcludingTax === "number"
+            ? `不含税：${formatAmount(financialSummary.projectAmountExcludingTax)} 元`
+            : "-",
         emphasizeAmountColor: FINANCIAL_METRIC_COLORS.income,
       },
       { key: "cost-section", type: "section", name: "成本明细" },
@@ -364,8 +596,9 @@ const ProjectFinancialStructureCard = ({
         name: "中介费",
         amount: formatAmount(financialSummary.agencyFeeAmount),
         remark:
+          typeof financialSummary.projectAmount === "number" &&
           typeof financialStructure.agencyFeeRate === "number"
-            ? `费率：${formatAmount(financialStructure.agencyFeeRate)}%`
+            ? `合同金额（含税）${formatAmount(financialSummary.projectAmount)} 元 * 费率 ${formatAmount(financialStructure.agencyFeeRate)}%`
             : "-",
       },
       {
@@ -418,7 +651,11 @@ const ProjectFinancialStructureCard = ({
         amount: formatAmount(financialSummary.recomputedTotalCost),
       },
     ];
-  }, [financialStructure, financialSummary]);
+  }, [
+    financialStructure,
+    financialSummary,
+    latestInitiation?.otherExecutionCostRemark,
+  ]);
 
   const previewColumns = useMemo<ColumnsType<FinancialStructurePreviewRow>>(
     () => [
@@ -434,7 +671,11 @@ const ProjectFinancialStructureCard = ({
           row.type === "section"
             ? {
                 colSpan: 3,
-                style: { ...previewSectionRowStyle, paddingLeft: 24 },
+                style: {
+                  ...previewSectionRowStyle,
+                  paddingLeft: 24,
+                  paddingRight: 24,
+                },
               }
             : {
                 style: {
@@ -506,7 +747,7 @@ const ProjectFinancialStructureCard = ({
         dataIndex: "remark",
         key: "remark",
         onHeaderCell: () => ({
-          style: { paddingLeft: 24 },
+          style: { paddingLeft: 24, paddingRight: 24 },
         }),
         onCell: (row) =>
           row.type === "section"
@@ -515,6 +756,7 @@ const ProjectFinancialStructureCard = ({
                 style: {
                   color: "rgba(0,0,0,0.65)",
                   paddingLeft: 24,
+                  paddingRight: 24,
                   ...(row.key === "total"
                     ? { background: "#fafafa", fontWeight: 700 }
                     : null),
@@ -529,9 +771,13 @@ const ProjectFinancialStructureCard = ({
     if (!financialStructure) return;
 
     const projectAmount =
-      (typeof latestBaselineCostEstimation?.contractAmount === "number"
-        ? latestBaselineCostEstimation.contractAmount
-        : null) ?? toMoney(latestBaselineCostEstimation?.clientBudget);
+      (typeof financialStructure.contractAmountTaxIncluded === "number"
+        ? financialStructure.contractAmountTaxIncluded
+        : null) ??
+      (typeof latestInitiation?.contractAmount === "number"
+        ? latestInitiation.contractAmount
+        : null) ??
+      toMoney(latestInitiation?.clientBudget);
     const outsourceCost = getProjectOutsourceTotal(
       financialStructure.outsourceItems,
     );
@@ -547,9 +793,10 @@ const ProjectFinancialStructureCard = ({
       financialStructure.middleOfficeCost +
       financialStructure.executionCost;
     const benchmarkRemark =
-      typeof projectAmount === "number"
+      typeof financialSummary?.projectAmountExcludingTax === "number"
         ? `成本基准参考：${formatAmount(
-            projectAmount * (projectCostBaselineRatio / 100),
+            financialSummary.projectAmountExcludingTax *
+              (projectCostBaselineRatio / 100),
           )}`
         : "成本基准参考：-";
     const totalCostRatioRemark =
@@ -621,7 +868,7 @@ const ProjectFinancialStructureCard = ({
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("项目财务结构");
       const tableTitle = `【${projectName || "未命名项目"}】${
-        latestBaselineCostEstimation?.estimatedDuration ?? "-"
+        latestInitiation?.estimatedDuration ?? "-"
       }个工作日财务结构`;
 
       worksheet.addRow([tableTitle, "", ""]);
@@ -700,15 +947,104 @@ const ProjectFinancialStructureCard = ({
   }, [
     app,
     financialStructure,
-    latestBaselineCostEstimation,
+    financialSummary,
+    latestInitiation,
     messageApi,
     projectCostBaselineRatio,
     projectName,
   ]);
 
+  const openFinancialStructureModal = useCallback(
+    (prefill?: ImportedFinancialStructurePrefill | null) => {
+      setImportedPrefill(prefill ?? null);
+      setModalOpen(true);
+    },
+    [],
+  );
+
+  const handleFinancialStructureImport = useCallback(
+    async (file: File) => {
+      setImporting(true);
+      try {
+        const ExcelJS = await import("exceljs");
+        const workbook = new ExcelJS.Workbook();
+        const fileBuffer = await file.arrayBuffer();
+        await workbook.xlsx.load(fileBuffer);
+        const worksheet = workbook.worksheets[0];
+        if (!worksheet) {
+          throw new Error("MISSING_WORKSHEET");
+        }
+
+        let maxColumnCount = 0;
+        worksheet.eachRow((row) => {
+          if (row.cellCount > maxColumnCount) {
+            maxColumnCount = row.cellCount;
+          }
+        });
+
+        const worksheetRows: ParsedWorksheetCell[][] = [];
+        for (let rowIndex = 1; rowIndex <= worksheet.rowCount; rowIndex += 1) {
+          const rowCells: ParsedWorksheetCell[] = [];
+          for (let colIndex = 1; colIndex <= maxColumnCount; colIndex += 1) {
+            const cellValue = worksheet.getCell(rowIndex, colIndex).value;
+            rowCells.push(parseWorksheetCellValue(cellValue));
+          }
+          worksheetRows.push(rowCells);
+        }
+
+        const parsed =
+          parseFinancialStructurePrefillFromWorksheet(worksheetRows);
+        const hasAnyParsedValue =
+          typeof parsed.incomeTaxIncluded === "number" ||
+          typeof parsed.outsourceAmount === "number" ||
+          typeof parsed.laborCost === "number" ||
+          typeof parsed.rentCost === "number" ||
+          typeof parsed.middleOfficeCost === "number" ||
+          (parsed.executionCostItems?.length ?? 0) > 0;
+        if (!hasAnyParsedValue) {
+          if (typeof app?.message?.error === "function") {
+            app.message.error("未识别到可导入的数据，请检查 Excel 模板内容");
+          } else {
+            void messageApi.error(
+              "未识别到可导入的数据，请检查 Excel 模板内容",
+            );
+          }
+          return;
+        }
+
+        openFinancialStructureModal(parsed);
+        if (typeof app?.message?.success === "function") {
+          app.message.success("已解析 Excel，已为你预填财务结构");
+        } else {
+          void messageApi.success("已解析 Excel，已为你预填财务结构");
+        }
+      } catch (error) {
+        console.error(error);
+        if (typeof app?.message?.error === "function") {
+          app.message.error("导入失败，请确认文件为可读取的 Excel（.xlsx）");
+        } else {
+          void messageApi.error(
+            "导入失败，请确认文件为可读取的 Excel（.xlsx）",
+          );
+        }
+      } finally {
+        setImporting(false);
+      }
+    },
+    [app, messageApi, openFinancialStructureModal],
+  );
+
   const actionsNode = canManageFinancialStructureActions ? (
     <Space>
-      <Button onClick={() => void 0}>导入财务结构</Button>
+      {!financialStructure ? (
+        <Button
+          onClick={() => importFileInputRef.current?.click()}
+          loading={importing}
+          disabled={!canManageProject}
+        >
+          导入财务结构
+        </Button>
+      ) : null}
       <Button
         onClick={() => void downloadFinancialStructureTable()}
         disabled={!financialStructure}
@@ -718,8 +1054,8 @@ const ProjectFinancialStructureCard = ({
       </Button>
       <Button
         type="primary"
-        onClick={() => setModalOpen(true)}
-        disabled={!canManageProject || !latestBaselineCostEstimation?.id}
+        onClick={() => openFinancialStructureModal(null)}
+        disabled={!canManageProject}
       >
         {financialStructure ? "更新财务结构" : "新增财务结构"}
       </Button>
@@ -736,7 +1072,7 @@ const ProjectFinancialStructureCard = ({
         <ProjectDetailTitledTableCard
           projectName={projectName}
           titleSuffix="财务结构"
-          estimatedDuration={latestBaselineCostEstimation?.estimatedDuration}
+          estimatedDuration={latestInitiation?.estimatedDuration}
         >
           <div
             style={{
@@ -756,7 +1092,7 @@ const ProjectFinancialStructureCard = ({
                   marginBottom: 6,
                 }}
               >
-                收入
+                合同金额（含税）
               </div>
               <div
                 style={{
@@ -768,8 +1104,32 @@ const ProjectFinancialStructureCard = ({
               >
                 {`${formatAmount(financialSummary?.projectAmount)}元`}
               </div>
-              <div style={{ fontSize: 13, color: "rgba(0,0,0,0.75)" }}>
-                {`成本基准参考：${formatAmount(financialSummary?.benchmarkAmount)}元`}
+              <div
+                style={{
+                  fontSize: 13,
+                  color: "rgba(0,0,0,0.45)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                }}
+              >
+                <span>
+                  成本基准参考
+                  <Tooltip
+                    title={
+                      typeof financialSummary?.projectAmountExcludingTax ===
+                      "number"
+                        ? `不含税金额 ${formatAmount(financialSummary.projectAmountExcludingTax)} 元 * 成本基准参考系数 ${formatAmount(projectCostBaselineRatio)}% = ${formatAmount(financialSummary.benchmarkAmount)} 元`
+                        : "不含税金额 - 元 * 成本基准参考系数 -% = - 元"
+                    }
+                  >
+                    <InfoCircleOutlined
+                      style={{ marginLeft: 4, color: "rgba(0,0,0,0.45)" }}
+                    />
+                  </Tooltip>
+                </span>
+                <span>
+                  ：{formatAmount(financialSummary?.benchmarkAmount)}元
+                </span>
               </div>
             </div>
 
@@ -793,7 +1153,7 @@ const ProjectFinancialStructureCard = ({
                   marginBottom: 8,
                 }}
               >
-                {`${formatAmount(financialSummary?.recomputedTotalCost)}元`}
+                {`-${formatAmount(financialSummary?.recomputedTotalCost)}元`}
               </div>
               <div
                 style={{
@@ -932,10 +1292,9 @@ const ProjectFinancialStructureCard = ({
             dataSource={previewRows}
             size="small"
             tableLayout="fixed"
-            style={{ width: "100%", borderRadius: 0}}
+            style={{ width: "100%", borderRadius: 0 }}
           />
         </ProjectDetailTitledTableCard>
-
       </div>
     </div>
   ) : (
@@ -945,6 +1304,18 @@ const ProjectFinancialStructureCard = ({
   return (
     <>
       {contextHolder}
+      <input
+        ref={importFileInputRef}
+        type="file"
+        accept=".xlsx"
+        style={{ display: "none" }}
+        onChange={(event) => {
+          const selectedFile = event.target.files?.[0];
+          event.currentTarget.value = "";
+          if (!selectedFile) return;
+          void handleFinancialStructureImport(selectedFile);
+        }}
+      />
       {mode === "full" ? (
         <Card
           title="项目财务结构"
@@ -977,10 +1348,14 @@ const ProjectFinancialStructureCard = ({
       {mode !== "content" ? (
         <ProjectFinancialStructureModal
           open={modalOpen}
-          onCancel={() => setModalOpen(false)}
+          onCancel={() => {
+            setModalOpen(false);
+            setImportedPrefill(null);
+          }}
           projectId={projectId}
-          estimation={latestBaselineCostEstimation}
+          estimation={latestInitiation}
           existingStructure={financialStructure}
+          importedPrefill={importedPrefill}
           onSaved={async () => {
             await fetchFinancialStructure();
             await onSaved?.();

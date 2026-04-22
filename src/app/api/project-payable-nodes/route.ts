@@ -76,7 +76,6 @@ export async function POST(req: NextRequest) {
 
   if (
     expectedAmountTaxIncluded === null ||
-    expectedAmountTaxIncluded < 0 ||
     expectedDate === null
   ) {
     return new Response("expectedAmountTaxIncluded and expectedDate are invalid", {

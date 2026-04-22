@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   const actualDate = toNullableDate(body.actualDate);
   const remarkNeedsAttentionRaw = toNullableBool(body.remarkNeedsAttention);
 
-  if (actualAmountTaxIncluded === null || actualAmountTaxIncluded < 0) {
+  if (actualAmountTaxIncluded === null) {
     return new Response("actualAmountTaxIncluded is invalid", { status: 400 });
   }
   if (actualDate === null) {

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Col, DatePicker, Input, Modal, Row, Select, Switch } from "antd";
+import type { DefaultOptionType } from "antd/es/select";
 import { ProForm, StepsForm } from "@ant-design/pro-components";
 import type { FormInstance } from "antd/es/form";
 import dayjs from "dayjs";
@@ -10,8 +11,6 @@ import SelectOptionSelector, {
   type SelectOptionSelectorValue,
 } from "@/components/SelectOptionSelector";
 import {
-  buildEmployeeLabelMap,
-  buildFlatEmployeeOptions,
   renderEmployeeSelectedLabel,
 } from "@/lib/employee-select";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
@@ -36,6 +35,10 @@ type Employee = {
   id: string;
   name: string;
   employmentStatus?: string | null;
+  function?: string | null;
+  functionOption?: {
+    value?: string | null;
+  } | null;
   employmentStatusOption?: {
     value?: string | null;
   } | null;
@@ -105,6 +108,22 @@ const normalizeDateValue = (value: unknown) => {
   return parsed.isValid() ? parsed.toISOString() : null;
 };
 
+const OWNER_FUNCTION_PRIORITY = ["项目组", "项目经理", "品牌", "设计"] as const;
+
+const getFunctionGroupLabel = (employee: Employee) => {
+  const fromOption = employee.functionOption?.value?.trim();
+  if (fromOption) return fromOption;
+  const fromField = employee.function?.trim();
+  return fromField || "未设置职能";
+};
+
+const isResignedEmployee = (employee: Employee) =>
+  employee.employmentStatus === "离职" ||
+  employee.employmentStatusOption?.value === "离职";
+
+const getOwnerOptionLabel = (employee: Employee) =>
+  isResignedEmployee(employee) ? `${employee.name}（已离职）` : employee.name;
+
 const ProjectFormModal = ({
   open,
   onCancel,
@@ -119,14 +138,22 @@ const ProjectFormModal = ({
   const [currentTypeCode, setCurrentTypeCode] = useState<string | null>(
     normalizeProjectTypeCode(initialValues?.type ?? projectType),
   );
-  const baseFormRef = useRef<FormInstance<ProjectFormValues> | undefined>(undefined);
-  const progressFormRef = useRef<FormInstance<ProjectFormValues> | undefined>(undefined);
-  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
+  const baseFormRef = useRef<FormInstance<ProjectFormValues> | undefined>(
+    undefined,
+  );
+  const progressFormRef = useRef<FormInstance<ProjectFormValues> | undefined>(
+    undefined,
+  );
+  const fetchAllOptions = useSelectOptionsStore(
+    (state) => state.fetchAllOptions,
+  );
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const statusOptions = optionsByField["project.status"] ?? [];
   const stageOptions = optionsByField["project.stage"] ?? [];
 
-  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const fetchEmployeesFromStore = useEmployeesStore(
+    (state) => state.fetchEmployees,
+  );
   const storedEmployeesRaw = useEmployeesStore((state) => state.employees);
   const storedEmployees = useMemo(
     () =>
@@ -134,6 +161,18 @@ const ProjectFormModal = ({
         (item): Employee => ({
           id: item.id,
           name: item.name,
+          function: typeof item.function === "string" ? item.function : undefined,
+          functionOption:
+            item.functionOption &&
+            typeof item.functionOption === "object" &&
+            "value" in item.functionOption
+              ? {
+                  value:
+                    typeof item.functionOption.value === "string"
+                      ? item.functionOption.value
+                      : undefined,
+                }
+              : undefined,
           employmentStatus: item.employmentStatus ?? undefined,
           employmentStatusOption:
             item.employmentStatusOption &&
@@ -152,21 +191,54 @@ const ProjectFormModal = ({
   );
   const employees =
     storedEmployees.length > 0 ? storedEmployees : employeesFromProps;
-  const projectOwnerOptions = useMemo(
-    () => buildFlatEmployeeOptions(employees),
-    [employees],
-  );
-  const projectOwnerLabelMap = buildEmployeeLabelMap(
-    employees,
-    initialValues?.ownerId
-      ? [
-          employees.find((employee) => employee.id === initialValues.ownerId) ?? {
-            id: initialValues.ownerId,
-            name: initialValues.ownerId,
-          },
-        ]
-      : [],
-  );
+  const projectOwnerOptions = useMemo<DefaultOptionType[]>(() => {
+    const grouped = new Map<string, Employee[]>();
+    employees.forEach((employee) => {
+      const label = getFunctionGroupLabel(employee);
+      const list = grouped.get(label) ?? [];
+      list.push(employee);
+      grouped.set(label, list);
+    });
+
+    const rankOfGroup = (label: string) => {
+      const idx = OWNER_FUNCTION_PRIORITY.indexOf(
+        label as (typeof OWNER_FUNCTION_PRIORITY)[number],
+      );
+      return idx >= 0 ? idx : OWNER_FUNCTION_PRIORITY.length + 1;
+    };
+
+    return Array.from(grouped.entries())
+      .sort((left, right) => {
+        const rankDiff = rankOfGroup(left[0]) - rankOfGroup(right[0]);
+        if (rankDiff !== 0) return rankDiff;
+        return left[0].localeCompare(right[0], "zh-CN");
+      })
+      .map(([groupLabel, groupEmployees]) => ({
+        label: groupLabel,
+        options: [...groupEmployees]
+          .sort((left, right) => {
+            const resignedDiff =
+              Number(isResignedEmployee(left)) - Number(isResignedEmployee(right));
+            if (resignedDiff !== 0) return resignedDiff;
+            return left.name.localeCompare(right.name, "zh-CN");
+          })
+          .map((employee) => ({
+            label: getOwnerOptionLabel(employee),
+            value: employee.id,
+          })),
+      }))
+      .filter((group) => Array.isArray(group.options) && group.options.length > 0);
+  }, [employees]);
+  const projectOwnerLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
+    employees.forEach((employee) => {
+      map.set(employee.id, getOwnerOptionLabel(employee));
+    });
+    if (initialValues?.ownerId && !map.has(initialValues.ownerId)) {
+      map.set(initialValues.ownerId, initialValues.ownerId);
+    }
+    return map;
+  }, [employees, initialValues?.ownerId]);
 
   const isEdit = !!initialValues?.id;
   const fixedTypeCode = normalizeProjectTypeCode(projectType);
@@ -174,13 +246,9 @@ const ProjectFormModal = ({
 
   useEffect(() => {
     if (!open) return;
-    void fetchAllOptions();
+    void fetchAllOptions(true);
     void fetchEmployeesFromStore();
-  }, [
-    fetchAllOptions,
-    fetchEmployeesFromStore,
-    open,
-  ]);
+  }, [fetchAllOptions, fetchEmployeesFromStore, open]);
 
   const baseValues: ProjectFormValues = {
     name: initialValues?.name ?? "",
@@ -189,19 +257,24 @@ const ProjectFormModal = ({
       fixedTypeCode ??
       undefined,
     clientId:
-      normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) === "INTERNAL"
+      normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) ===
+      "INTERNAL"
         ? undefined
-        : initialValues?.clientId ?? undefined,
+        : (initialValues?.clientId ?? undefined),
     ownerId: initialValues?.ownerId ?? undefined,
     status:
-      normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) === "INTERNAL"
+      normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) ===
+      "INTERNAL"
         ? undefined
-        : initialValues?.status ?? undefined,
+        : (initialValues?.status ?? undefined),
     stage:
-      normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) === "INTERNAL"
+      normalizeProjectTypeCode(initialValues?.type ?? fixedTypeCode) ===
+      "INTERNAL"
         ? undefined
-        : initialValues?.stage ?? undefined,
-    startDate: initialValues?.startDate ? dayjs(initialValues.startDate) : undefined,
+        : (initialValues?.stage ?? undefined),
+    startDate: initialValues?.startDate
+      ? dayjs(initialValues.startDate)
+      : undefined,
     endDate: initialValues?.endDate ? dayjs(initialValues.endDate) : undefined,
     isArchived: Boolean(initialValues?.isArchived),
   };
@@ -262,7 +335,9 @@ const ProjectFormModal = ({
       open={open}
       afterOpenChange={(nextOpen) => {
         if (!nextOpen) return;
-        setCurrentTypeCode(normalizeProjectTypeCode(initialValues?.type ?? projectType));
+        setCurrentTypeCode(
+          normalizeProjectTypeCode(initialValues?.type ?? projectType),
+        );
       }}
       onCancel={() => {
         if (submitting) return;
@@ -342,9 +417,18 @@ const ProjectFormModal = ({
                 rules={[{ required: true, message: "请选择项目负责人" }]}
               >
                 <Select
+                  showSearch
+                  optionFilterProp="label"
+                  filterOption={(input, option) => {
+                    const label =
+                      typeof option?.label === "string" ? option.label : "";
+                    return label.toLowerCase().includes(input.toLowerCase());
+                  }}
                   options={projectOwnerOptions}
                   placeholder="选择负责人"
-                  labelRender={renderEmployeeSelectedLabel(projectOwnerLabelMap)}
+                  labelRender={renderEmployeeSelectedLabel(
+                    projectOwnerLabelMap,
+                  )}
                 />
               </ProForm.Item>
             </Col>
@@ -417,7 +501,12 @@ const ProjectFormModal = ({
 
           <Row gutter={16}>
             <Col span={12}>
-              <ProForm.Item label="是否归档" name="isArchived" valuePropName="checked">
+              <ProForm.Item
+                label="是否归档"
+                name="isArchived"
+                valuePropName="checked"
+                layout="horizontal"
+              >
                 <Switch checkedChildren="已归档" unCheckedChildren="未归档" />
               </ProForm.Item>
             </Col>

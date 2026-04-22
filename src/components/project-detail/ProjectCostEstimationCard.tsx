@@ -49,6 +49,20 @@ const toTrimmedString = (value?: string | null) => {
   return value.trim();
 };
 
+const toNoVpnLink = (link: string) => {
+  try {
+    const parsed = new URL(link);
+    parsed.protocol = "https:";
+    parsed.host = "app.oh-yes-business.com";
+    return parsed.toString();
+  } catch {
+    return link.replace(
+      /^https?:\/\/[^/]+/i,
+      "https://app.oh-yes-business.com",
+    );
+  }
+};
+
 const parseBudgetValue = (value?: number | string | null) => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -116,7 +130,9 @@ const buildSyncSummary = (
 
   if (detailLink) {
     lines.push("");
-    lines.push(`测算链接：${detailLink}`);
+    lines.push("测算链接：");
+    lines.push(`- 有 vpn：${detailLink}`);
+    lines.push(`- 无 vpn：${toNoVpnLink(detailLink)}`);
   }
 
   return lines.join("\n");

@@ -2,7 +2,17 @@
 
 import type { Dayjs } from "dayjs";
 import { useEffect } from "react";
-import { Col, DatePicker, Form, Input, InputNumber, Modal, Row, Space, Switch } from "antd";
+import {
+  Col,
+  DatePicker,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Row,
+  Space,
+  Switch,
+} from "antd";
 
 export type ProjectReceivableActualNodeFormValues = {
   actualAmountTaxIncluded: number;
@@ -15,7 +25,9 @@ type Props = {
   open: boolean;
   loading?: boolean;
   onCancel: () => void;
-  onSubmit: (values: ProjectReceivableActualNodeFormValues) => void | Promise<void>;
+  onSubmit: (
+    values: ProjectReceivableActualNodeFormValues,
+  ) => void | Promise<void>;
   title?: string;
   initialValues?: Partial<ProjectReceivableActualNodeFormValues>;
 };
@@ -66,7 +78,10 @@ const ProjectReceivableActualNodeModal = ({
         if (!nextOpen) form.resetFields();
       }}
     >
-      <Form<ProjectReceivableActualNodeFormValues> form={form} layout="vertical">
+      <Form<ProjectReceivableActualNodeFormValues>
+        form={form}
+        layout="vertical"
+      >
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
@@ -74,7 +89,7 @@ const ProjectReceivableActualNodeModal = ({
               name="actualAmountTaxIncluded"
               rules={[{ required: true, message: "请输入实收金额" }]}
             >
-              <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+              <InputNumber precision={0} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col span={12}>
@@ -104,6 +119,7 @@ const ProjectReceivableActualNodeModal = ({
                   noStyle
                   name="remarkNeedsAttention"
                   valuePropName="checked"
+                  layout="horizontal"
                 >
                   <Switch size="small" />
                 </Form.Item>

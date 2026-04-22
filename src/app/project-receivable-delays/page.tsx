@@ -655,7 +655,7 @@ function ProjectReceivableDelaysPageContent() {
           {groupedRows.length === 0 ? (
             <Empty description="暂无未完成预收节点" />
           ) : (
-            <Space direction="vertical" size={20} style={{ width: "100%" }}>
+            <Space orientation="vertical" size={20} style={{ width: "100%" }}>
               {groupedRows.map(([monthKey, rows]) => {
                 const monthDate = dayjs(`${monthKey}-01`);
                 const monthText = `${monthDate.year()}年${monthDate.month() + 1}月`;

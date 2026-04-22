@@ -99,7 +99,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   if ("expectedAmountTaxIncluded" in body) {
     const amount = toNullableInt(body.expectedAmountTaxIncluded);
-    if (amount === null || amount < 0) {
+    if (amount === null) {
       return new Response("expectedAmountTaxIncluded is invalid", { status: 400 });
     }
     patchData.expectedAmountTaxIncluded = amount;
@@ -107,9 +107,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   const nextExpectedDate =
     "expectedDate" in body ? toNullableDate(body.expectedDate) : existing.expectedDate;
-  if ("expectedDate" in body && nextExpectedDate === null) {
-    return new Response("expectedDate is invalid", { status: 400 });
-  }
   if ("expectedDate" in body) {
     patchData.expectedDate = nextExpectedDate;
   }
@@ -131,8 +128,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   const expectedDateChanged =
     Boolean("expectedDate" in body) &&
-    nextExpectedDate !== null &&
-    existing.expectedDate.valueOf() !== nextExpectedDate.valueOf();
+    ((existing.expectedDate === null && nextExpectedDate !== null) ||
+      (existing.expectedDate !== null && nextExpectedDate === null) ||
+      (existing.expectedDate !== null &&
+        nextExpectedDate !== null &&
+        existing.expectedDate.valueOf() !== nextExpectedDate.valueOf()));
 
   const changedByEmployeeId = await getCurrentEmployeeId();
   if (expectedDateChanged && !changedByEmployeeId) {
@@ -140,7 +140,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
-    if (expectedDateChanged) {
+    if (expectedDateChanged && nextExpectedDate !== null && existing.expectedDate !== null) {
       await tx.projectReceivableNodeExpectedDateHistory.create({
         data: {
           nodeId: id,

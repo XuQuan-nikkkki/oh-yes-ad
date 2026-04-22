@@ -116,6 +116,7 @@ const BankAccountFormModal = ({
             name="isActive"
             valuePropName="checked"
             style={{ gridColumn: "1 / -1", marginBottom: 0 }}
+            layout="horizontal"
           >
             <Switch checkedChildren="启用" unCheckedChildren="停用" />
           </Form.Item>

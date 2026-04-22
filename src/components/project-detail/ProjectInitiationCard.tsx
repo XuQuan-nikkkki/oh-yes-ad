@@ -49,6 +49,20 @@ const toTrimmedString = (value?: string | null) => {
   return value.trim();
 };
 
+const toNoVpnLink = (link: string) => {
+  try {
+    const parsed = new URL(link);
+    parsed.protocol = "https:";
+    parsed.host = "app.oh-yes-business.com";
+    return parsed.toString();
+  } catch {
+    return link.replace(
+      /^https?:\/\/[^/]+/i,
+      "https://app.oh-yes-business.com",
+    );
+  }
+};
+
 const buildSyncSummary = (
   projectName: string,
   estimation?: Project["latestBaselineCostEstimation"],
@@ -101,7 +115,9 @@ const buildSyncSummary = (
 
   if (detailLink) {
     lines.push("");
-    lines.push(`申请链接：${detailLink}`);
+    lines.push("申请链接：");
+    lines.push(`- 有 vpn：${detailLink}`);
+    lines.push(`- 无 vpn：${toNoVpnLink(detailLink)}`);
   }
 
   return lines.join("\n");
@@ -203,7 +219,7 @@ const ProjectInitiationCard = ({
         >
           <StyledStatisticCard
             statistic={{
-              title: "项目金额",
+              title: "报价金额（含税）",
               value:
                 typeof latestInitiation?.contractAmount === "number"
                   ? formatAmount(latestInitiation.contractAmount)

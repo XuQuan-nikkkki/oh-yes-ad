@@ -4,9 +4,10 @@ model ProjectFinancialStructure {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  initiationId String            @unique
-  initiation   ProjectInitiation @relation(fields: [initiationId], references: [id], onDelete: Restrict)
+  initiationId String?            @unique
+  initiation   ProjectInitiation? @relation(fields: [initiationId], references: [id], onDelete: Restrict)
 
+  contractAmountTaxIncluded Float?
   laborCost        Float
   rentCost         Float
   middleOfficeCost Float

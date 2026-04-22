@@ -1,22 +1,14 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import {
+  EXECUTION_COST_FIELD as FIELD,
+  EXECUTION_COST_TYPE_OPTIONS,
+} from "../src/lib/execution-cost";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
-
-const FIELD = "projectCostEstimation.executionCostType";
-
-const EXECUTION_COST_TYPE_OPTIONS = [
-  "外出打车",
-  "加班打车",
-  "物料费",
-  "快递费",
-  "招待费",
-  "采风费",
-  "其他",
-] as const;
 
 const PALETTE = [
   "#1677ff",

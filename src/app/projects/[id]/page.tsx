@@ -1209,7 +1209,7 @@ const ProjectDetailPage = () => {
                         projectId={projectId}
                         projectName={project.name ?? ""}
                         canManageProject={canManageProject}
-                        latestBaselineCostEstimation={
+                        latestInitiation={
                           project.latestInitiation
                         }
                         refreshKey={financialStructureRefreshKey}
@@ -1251,7 +1251,7 @@ const ProjectDetailPage = () => {
                         projectId={projectId}
                         projectName={project.name ?? ""}
                         canManageProject={canManageProject}
-                        latestBaselineCostEstimation={
+                        latestInitiation={
                           project.latestInitiation
                         }
                         refreshKey={financialStructureRefreshKey}
@@ -1693,7 +1693,7 @@ const ProjectDetailPage = () => {
                           projectId={projectId}
                           projectName={project.name ?? ""}
                           startDate={project.startDate}
-                          latestBaselineCostEstimation={
+                          latestInitiation={
                             project.latestInitiation
                           }
                           members={project.members}

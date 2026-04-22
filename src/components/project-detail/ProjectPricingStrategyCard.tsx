@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { App, Button, Card, Empty, Space, Spin, Table, message } from "antd";
+import { App, Button, Card, Empty, Space, Spin, Table, Tooltip, message } from "antd";
+import { InfoCircleOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import ProjectPricingStrategyModal from "@/components/project-detail/ProjectPricingStrategyModal";
 import ProjectDetailTitledTableCard from "@/components/project-detail/ProjectDetailTitledTableCard";
@@ -888,7 +889,9 @@ const ProjectPricingStrategyCard = ({
           withDot: true,
           leftValue: formatAmount(executionCost),
           rightValue: formatAmount(executionCost),
-          remark: executionRemarkText,
+          remark: renderRemarkBlock(
+            executionRemarkText === "-" ? [] : executionRemarkText.split("\n"),
+          ),
         },
         {
           key: "total",
@@ -1016,7 +1019,9 @@ const ProjectPricingStrategyCard = ({
         withDot: true,
         leftValue: formatAmount(executionCost),
         rightValue: formatAmount(executionCost),
-        remark: executionRemarkText,
+        remark: renderRemarkBlock(
+          executionRemarkText === "-" ? [] : executionRemarkText.split("\n"),
+        ),
       },
       {
         key: "total",
@@ -1073,10 +1078,25 @@ const ProjectPricingStrategyCard = ({
           row.type === "section" ? (
             value
           ) : (
-            <span style={{ fontWeight: row.key === "total" ? 700 : 500 }}>
-              {row.withDot ? <span style={{ marginRight: 8, color: "#bfbfbf" }}>•</span> : null}
-              {value}
-            </span>
+            <div>
+              <span style={{ fontWeight: row.key === "total" ? 700 : 500 }}>
+                {row.withDot ? <span style={{ marginRight: 8, color: "#bfbfbf" }}>•</span> : null}
+                {value}
+              </span>
+              {row.key === "labor" ? (
+                <div
+                  style={{
+                    marginTop: 4,
+                    marginLeft: row.withDot ? 16 : 0,
+                    color: "rgba(0,0,0,0.45)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  人力成本率
+                </div>
+              ) : null}
+            </div>
           ),
       },
       {
@@ -1267,11 +1287,25 @@ const ProjectPricingStrategyCard = ({
                       color: "rgba(0,0,0,0.45)",
                     }}
                   >
-                    {typeof panel.income === "number"
-                      ? `成本基准参考：${formatAmount(
+                    {typeof panel.income === "number" ? (
+                      <span>
+                        成本基准参考
+                        <Tooltip
+                          title={`报价 ${formatAmount(panel.income)} * 成本基准参考率 ${formatAmount(projectCostBaselineRatio)}% = ${formatAmount(
+                            panel.income * (projectCostBaselineRatio / 100),
+                          )} 元`}
+                        >
+                          <InfoCircleOutlined
+                            style={{ marginLeft: 4, color: "rgba(0,0,0,0.45)" }}
+                          />
+                        </Tooltip>
+                        {`：${formatAmount(
                           panel.income * (projectCostBaselineRatio / 100),
-                        )}元`
-                      : "成本基准参考：-"}
+                        )}元`}
+                      </span>
+                    ) : (
+                      "成本基准参考：-"
+                    )}
                   </div>
                 </div>
                 <div>

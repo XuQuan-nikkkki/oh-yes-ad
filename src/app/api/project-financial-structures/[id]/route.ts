@@ -180,7 +180,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   if (
     ("projectId" in body && String(body.projectId ?? "").trim() !== existing.projectId) ||
     ("estimationId" in body &&
-      String(body.estimationId ?? "").trim() !== existing.initiationId)
+      (String(body.estimationId ?? "").trim() || null) !== existing.initiationId)
   ) {
     return new Response("projectId and estimationId are immutable", { status: 400 });
   }
@@ -189,6 +189,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const rentCost = toNullableNumber(body.rentCost);
   const middleOfficeCost = toNullableNumber(body.middleOfficeCost);
   const executionCost = toNullableNumber(body.executionCost);
+  const contractAmountTaxIncluded = toNullableNumber(
+    body.contractAmountTaxIncluded ?? body.contractAmount,
+  );
   const agencyFeeRate = toNullableNumber(body.agencyFeeRate ?? body.agencyFee);
   const totalCost = toNullableNumber(body.totalCost);
   const outsourceRemark = "outsourceRemark" in body ? toNullableString(body.outsourceRemark) : undefined;
@@ -206,6 +209,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     ["rentCost", rentCost],
     ["middleOfficeCost", middleOfficeCost],
     ["executionCost", executionCost],
+    ["contractAmountTaxIncluded", contractAmountTaxIncluded],
     ["agencyFeeRate", agencyFeeRate],
     ["totalCost", totalCost],
   ];
@@ -243,6 +247,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         executionCost === null || executionCost === undefined
           ? undefined
           : executionCost,
+      contractAmountTaxIncluded:
+        contractAmountTaxIncluded === null ||
+        contractAmountTaxIncluded === undefined
+          ? undefined
+          : contractAmountTaxIncluded,
       agencyFeeRate:
         agencyFeeRate === null || agencyFeeRate === undefined
           ? undefined

@@ -10,6 +10,7 @@ import ProjectPayableNodeModal, {
   type ProjectPayableNodeFormValues,
 } from "@/components/project-detail/ProjectPayableNodeModal";
 import type { ProjectPayableActualNodeFormValues } from "@/components/project-detail/ProjectPayableActualNodeModal";
+import AppLink from "../AppLink";
 
 type PayableProjectSectionProps = {
   projectId: string;
@@ -40,9 +41,7 @@ type PayableProjectSectionProps = {
     row: ProjectPayableNodeRow,
     values: ProjectPayableNodeFormValues,
   ) => Promise<void>;
-  onDragSortNodes: (
-    nextRows: ProjectPayableNodeRow[],
-  ) => void | Promise<void>;
+  onDragSortNodes: (nextRows: ProjectPayableNodeRow[]) => void | Promise<void>;
   onPayNode?: (
     row: ProjectPayableNodeRow,
     values: ProjectPayableActualNodeFormValues,
@@ -98,7 +97,8 @@ export default function PayableProjectSection({
         )
       : 0;
   const hasPayableAmount = expectedAmountTotal > 0;
-  const isFullyPaid = hasPayableAmount && actualAmountTotal >= expectedAmountTotal;
+  const isFullyPaid =
+    hasPayableAmount && actualAmountTotal >= expectedAmountTotal;
   const leftBorderColor = !hasPayableAmount
     ? "var(--ant-colorTextQuaternary, #bfbfbf)"
     : isFullyPaid
@@ -122,11 +122,7 @@ export default function PayableProjectSection({
             {signingCompanyName || "未设置签约公司"}
           </span>
           <span style={{ color: "rgba(0,0,0,0.25)" }}>·</span>
-          <span
-            style={{ color: "rgba(0,0,0,0.88)", fontWeight: 700, fontSize: 16 }}
-          >
-            {projectName || "-"}
-          </span>
+  c
           <SelectOptionQuickEditTag
             field="project.status"
             disabled={!canManageProject}

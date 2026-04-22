@@ -61,6 +61,11 @@ const normalizeHeader = (value: string) =>
     .replace(/\s+/g, "")
     .trim();
 
+const findHeaderIndex = (normalizedHeaders: string[], candidates: string[]) =>
+  normalizedHeaders.findIndex((item) =>
+    candidates.some((candidate) => item === normalizeHeader(candidate)),
+  );
+
 const parseMoneyNumber = (value: string) => {
   const normalized = String(value ?? "")
     .replaceAll("¥", "")
@@ -228,6 +233,12 @@ export default function ImportReceivablePayableDetailsPage() {
   const [payableProcessingOpen, setPayableProcessingOpen] = useState(false);
   const [payableProcessingEntry, setPayableProcessingEntry] =
     useState<PayableEntryDraft | null>(null);
+  const [completedEntryKeysByMode, setCompletedEntryKeysByMode] = useState<
+    Record<DetailMode, string[]>
+  >({
+    receivable: [],
+    payable: [],
+  });
 
   const currentImported = importedByMode[mode];
   const modeLabel = mode === "receivable" ? "收款明细" : "付款明细";
@@ -430,6 +441,10 @@ export default function ImportReceivablePayableDetailsPage() {
             fileName: file.name,
           },
         }));
+        setCompletedEntryKeysByMode((prev) => ({
+          ...prev,
+          [mode]: [],
+        }));
         notifySuccess(
           `${mode === "receivable" ? "收款" : "付款"}明细已导入 ${
             parsedRows.length
@@ -572,6 +587,13 @@ export default function ImportReceivablePayableDetailsPage() {
     },
     [currentImported.rows, mode],
   );
+  const visibleReceivableEntries = useMemo(
+    () =>
+      receivableEntries.filter(
+        (entry) => !completedEntryKeysByMode.receivable.includes(entry.key),
+      ),
+    [completedEntryKeysByMode.receivable, receivableEntries],
+  );
 
   const payableEntries = useMemo<PayableEntryDraft[]>(
     () => {
@@ -580,9 +602,33 @@ export default function ImportReceivablePayableDetailsPage() {
       const normalizedPayableHeaders = currentImported.headers.map((item) =>
         normalizeHeader(item),
       );
-      const hasCustomerCollectionColIndex = normalizedPayableHeaders.findIndex(
-        (item) => item === normalizeHeader("是否有客户收款") || item === normalizeHeader("有客户收款"),
-      );
+      const hasCustomerCollectionColIndex = findHeaderIndex(normalizedPayableHeaders, [
+        "是否有客户收款",
+        "有客户收款",
+      ]);
+      const stageNameColIndex = findHeaderIndex(normalizedPayableHeaders, [
+        "付款阶段",
+      ]);
+      const paymentConditionColIndex = findHeaderIndex(normalizedPayableHeaders, [
+        "付款条件",
+        "付款节点",
+      ]);
+      const expectedAmountColIndex = findHeaderIndex(normalizedPayableHeaders, [
+        "预付金额(含税)",
+      ]);
+      const expectedDateColIndex = findHeaderIndex(normalizedPayableHeaders, [
+        "预付日期",
+      ]);
+      const actualAmountColIndex = findHeaderIndex(normalizedPayableHeaders, [
+        "实付金额(含税)",
+      ]);
+      const actualDateColIndex = findHeaderIndex(normalizedPayableHeaders, [
+        "实付日期",
+      ]);
+      const nodeRemarkColIndex = findHeaderIndex(normalizedPayableHeaders, [
+        "备注",
+        "节点备注",
+      ]);
       const lastBase = {
         contractCompany: "",
         brandName: "",
@@ -608,6 +654,34 @@ export default function ImportReceivablePayableDetailsPage() {
           hasCustomerCollectionColIndex >= 0
             ? parseBooleanText(String(row[`c${hasCustomerCollectionColIndex}`] ?? ""))
             : null;
+        const stageName =
+          stageNameColIndex >= 0
+            ? String(row[`c${stageNameColIndex}`] ?? "").trim()
+            : String(row.c8 ?? "").trim();
+        const paymentCondition =
+          paymentConditionColIndex >= 0
+            ? String(row[`c${paymentConditionColIndex}`] ?? "").trim()
+            : String(row.c9 ?? "").trim();
+        const expectedAmountTaxIncluded =
+          expectedAmountColIndex >= 0
+            ? parseMoneyNumber(String(row[`c${expectedAmountColIndex}`] ?? ""))
+            : parseMoneyNumber(String(row.c10 ?? ""));
+        const expectedDate =
+          expectedDateColIndex >= 0
+            ? String(row[`c${expectedDateColIndex}`] ?? "").trim()
+            : String(row.c11 ?? "").trim();
+        const actualAmountTaxIncluded =
+          actualAmountColIndex >= 0
+            ? parseMoneyNumber(String(row[`c${actualAmountColIndex}`] ?? ""))
+            : parseMoneyNumber(String(row.c12 ?? ""));
+        const actualDate =
+          actualDateColIndex >= 0
+            ? String(row[`c${actualDateColIndex}`] ?? "").trim()
+            : String(row.c13 ?? "").trim();
+        const nodeRemark =
+          nodeRemarkColIndex >= 0
+            ? String(row[`c${nodeRemarkColIndex}`] ?? "").trim()
+            : String(row.c14 ?? "").trim();
 
         const contractCompany = contractCompanyRaw || lastBase.contractCompany;
         const brandName = brandNameRaw || lastBase.brandName;
@@ -642,14 +716,14 @@ export default function ImportReceivablePayableDetailsPage() {
         ].join("||");
 
         const node = {
-          key: `${groupKey}::${String(row.c8 ?? "").trim()}::${String(row.c9 ?? "").trim()}::${String(row.c11 ?? "").trim()}`,
-          stageName: String(row.c8 ?? "").trim(),
-          paymentCondition: String(row.c9 ?? "").trim(),
-          expectedAmountTaxIncluded: parseMoneyNumber(String(row.c10 ?? "")),
-          expectedDate: String(row.c11 ?? "").trim(),
-          actualAmountTaxIncluded: parseMoneyNumber(String(row.c12 ?? "")),
-          actualDate: String(row.c13 ?? "").trim(),
-          remark: String(row.c14 ?? "").trim(),
+          key: `${groupKey}::${stageName}::${paymentCondition}::${expectedDate}`,
+          stageName,
+          paymentCondition,
+          expectedAmountTaxIncluded,
+          expectedDate,
+          actualAmountTaxIncluded,
+          actualDate,
+          remark: nodeRemark,
         };
         const hasNodeData = Boolean(
           node.stageName ||
@@ -695,6 +769,13 @@ export default function ImportReceivablePayableDetailsPage() {
     },
     [currentImported.headers, currentImported.rows, mode],
   );
+  const visiblePayableEntries = useMemo(
+    () =>
+      payableEntries.filter(
+        (entry) => !completedEntryKeysByMode.payable.includes(entry.key),
+      ),
+    [completedEntryKeysByMode.payable, payableEntries],
+  );
 
   const handleProcess = useCallback((entry: ReceivableEntryDraft) => {
     setProcessingEntry(entry);
@@ -715,6 +796,22 @@ export default function ImportReceivablePayableDetailsPage() {
   const handlePayableDrawerClose = useCallback(() => {
     setPayableProcessingOpen(false);
     setPayableProcessingEntry(null);
+  }, []);
+  const handleReceivableCompleted = useCallback((entryKey: string) => {
+    setCompletedEntryKeysByMode((prev) => ({
+      ...prev,
+      receivable: prev.receivable.includes(entryKey)
+        ? prev.receivable
+        : [...prev.receivable, entryKey],
+    }));
+  }, []);
+  const handlePayableCompleted = useCallback((entryKey: string) => {
+    setCompletedEntryKeysByMode((prev) => ({
+      ...prev,
+      payable: prev.payable.includes(entryKey)
+        ? prev.payable
+        : [...prev.payable, entryKey],
+    }));
   }, []);
 
   return (
@@ -746,16 +843,16 @@ export default function ImportReceivablePayableDetailsPage() {
         >
           <div style={{ marginTop: 12 }}>
             {(mode === "receivable"
-              ? receivableEntries.length > 0
-              : payableEntries.length > 0) ? (
+              ? visibleReceivableEntries.length > 0
+              : visiblePayableEntries.length > 0) ? (
               mode === "receivable" ? (
                 <ReceivableTable
-                  entries={receivableEntries}
+                  entries={visibleReceivableEntries}
                   onProcess={handleProcess}
                 />
               ) : (
                 <PayableTable
-                  entries={payableEntries}
+                  entries={visiblePayableEntries}
                   onProcess={handlePayableProcess}
                 />
               )
@@ -769,11 +866,13 @@ export default function ImportReceivablePayableDetailsPage() {
         open={processingOpen}
         entry={processingEntry}
         onClose={handleDrawerClose}
+        onCompleted={handleReceivableCompleted}
       />
       <ProcessingPayableDrawer
         open={payableProcessingOpen}
         entry={payableProcessingEntry}
         onClose={handlePayableDrawerClose}
+        onCompleted={handlePayableCompleted}
       />
     </div>
   );

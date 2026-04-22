@@ -7,16 +7,7 @@ import {
   Space,
   Switch,
 } from "antd";
-
-const EXECUTION_COST_TYPE_OPTIONS = [
-  "外出打车",
-  "加班打车",
-  "物料费",
-  "快递费",
-  "招待费",
-  "采风费",
-  "其他",
-] as const;
+import { EXECUTION_COST_TYPE_OPTIONS } from "@/lib/execution-cost";
 
 type FormItemProps = {
   name?: string;
@@ -80,15 +71,15 @@ export const ContractAmountInptut = ({
   name = "contractAmount",
 }: FormItemProps) => (
   <Form.Item
-    label="项目金额"
+    label="报价金额（含税）"
     name={name}
-    rules={[{ required: true, message: "请输入项目金额" }]}
+    rules={[{ required: true, message: "请输入报价金额（含税）" }]}
   >
     <InputNumber
       min={0}
       precision={0}
       style={{ width: "100%" }}
-      placeholder="请输入项目金额"
+      placeholder="请输入报价金额（含税）"
     />
   </Form.Item>
 );

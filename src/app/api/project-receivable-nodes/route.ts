@@ -76,11 +76,9 @@ export async function POST(req: NextRequest) {
   const remarkNeedsAttentionRaw = toNullableBool(body.remarkNeedsAttention);
 
   if (
-    expectedAmountTaxIncluded === null ||
-    expectedAmountTaxIncluded < 0 ||
-    expectedDate === null
+    expectedAmountTaxIncluded === null
   ) {
-    return new Response("expectedAmountTaxIncluded and expectedDate are invalid", {
+    return new Response("expectedAmountTaxIncluded is invalid", {
       status: 400,
     });
   }
@@ -92,10 +90,6 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-  if (actualAmountTaxIncluded !== null && actualAmountTaxIncluded < 0) {
-    return new Response("actualAmountTaxIncluded is invalid", { status: 400 });
-  }
-
   const remarkNeedsAttention = remarkNeedsAttentionRaw ?? false;
 
   const [plan, stageOption] = await Promise.all([

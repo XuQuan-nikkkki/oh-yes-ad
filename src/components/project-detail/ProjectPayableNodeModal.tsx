@@ -2,7 +2,17 @@
 
 import type { Dayjs } from "dayjs";
 import { useEffect } from "react";
-import { Col, DatePicker, Form, Input, InputNumber, Modal, Row, Space, Switch } from "antd";
+import {
+  Col,
+  DatePicker,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Row,
+  Space,
+  Switch,
+} from "antd";
 import SelectOptionSelector, {
   type SelectOptionSelectorValue,
 } from "@/components/SelectOptionSelector";
@@ -103,7 +113,9 @@ const ProjectPayableNodeModal = ({
               rules={[{ required: true, message: "请选择付款阶段" }]}
             >
               <SelectOptionSelector
-                placeholder={stageOptionsLoading ? "加载中..." : "请选择或新增付款阶段"}
+                placeholder={
+                  stageOptionsLoading ? "加载中..." : "请选择或新增付款阶段"
+                }
                 options={stageOptions.map((item) => ({
                   value: item.value,
                   label: item.value,
@@ -130,7 +142,7 @@ const ProjectPayableNodeModal = ({
               name="expectedAmountTaxIncluded"
               rules={[{ required: true, message: "请输入预付金额" }]}
             >
-              <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+              <InputNumber precision={0} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col span={12}>
@@ -151,7 +163,7 @@ const ProjectPayableNodeModal = ({
                 name="actualAmountTaxIncluded"
                 rules={[{ required: true, message: "请输入实付金额" }]}
               >
-                <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+                <InputNumber precision={0} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -181,6 +193,7 @@ const ProjectPayableNodeModal = ({
                 noStyle
                 name="remarkNeedsAttention"
                 valuePropName="checked"
+                layout="horizontal"
               >
                 <Switch size="small" />
               </Form.Item>

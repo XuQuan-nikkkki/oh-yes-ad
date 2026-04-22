@@ -57,7 +57,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   if ("actualAmountTaxIncluded" in body) {
     const actualAmountTaxIncluded = toNullableInt(body.actualAmountTaxIncluded);
-    if (actualAmountTaxIncluded === null || actualAmountTaxIncluded < 0) {
+    if (actualAmountTaxIncluded === null) {
       return new Response("actualAmountTaxIncluded is invalid", { status: 400 });
     }
     patchData.actualAmountTaxIncluded = actualAmountTaxIncluded;
@@ -108,4 +108,3 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
 
   return Response.json({ success: true });
 }
-

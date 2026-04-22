@@ -30,6 +30,7 @@ import { EMPTY_SELECT_OPTIONS } from "@/types/selectOption";
 import ProjectReceivablePlanSnapshot from "@/components/project-detail/ProjectReceivablePlanSnapshot";
 import ProjectReceivableNodeTable, {
   type ProjectReceivableNodeRow,
+  type ReceivableNodeDelayFormValues,
 } from "@/components/project-detail/ProjectReceivableNodeTable";
 import type { ProjectReceivableActualNodeFormValues } from "@/components/project-detail/ProjectReceivableActualNodeModal";
 import ProjectReceivableNodeModal, {
@@ -42,6 +43,7 @@ type Props = {
   open: boolean;
   entry: ReceivableEntryDraft | null;
   onClose: () => void;
+  onCompleted?: (entryKey: string) => void;
 };
 
 type SelectedProject = {
@@ -89,6 +91,13 @@ type ExistingReceivablePlan = {
     expectedAmountTaxIncluded?: number | null;
     expectedDate?: string | null;
     expectedDateChangeCount?: number | null;
+    expectedDateHistories?: Array<{
+      id: string;
+      fromExpectedDate: string;
+      toExpectedDate: string;
+      reason?: string | null;
+      changedAt?: string;
+    }>;
     remark?: string | null;
     remarkNeedsAttention?: boolean | null;
     stageOption?: {
@@ -151,7 +160,12 @@ const resolveProjectFromRaw = (raw: {
   };
 };
 
-export default function ProcessingReceivableDrawer({ open, entry, onClose }: Props) {
+export default function ProcessingReceivableDrawer({
+  open,
+  entry,
+  onClose,
+  onCompleted,
+}: Props) {
   const [messageApi, contextHolder] = message.useMessage();
 
   const [step, setStep] = useState(0);
@@ -162,6 +176,7 @@ export default function ProcessingReceivableDrawer({ open, entry, onClose }: Pro
   const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
   const [existingPlan, setExistingPlan] = useState<ExistingReceivablePlan | null>(null);
   const [checkingExistingPlan, setCheckingExistingPlan] = useState(false);
+  const [editingExistingPlan, setEditingExistingPlan] = useState(false);
   const [stageOptions, setStageOptions] = useState<StageOption[]>([]);
   const [loadingStageOptions, setLoadingStageOptions] = useState(false);
   const [nodeModalOpen, setNodeModalOpen] = useState(false);
@@ -242,6 +257,7 @@ export default function ProcessingReceivableDrawer({ open, entry, onClose }: Pro
       setCreatedPlanId(null);
       setExistingPlan(null);
       setCheckingExistingPlan(false);
+      setEditingExistingPlan(false);
       setNodeModalOpen(false);
       setImportedNodeRows([]);
       setTargetNodeDraft(null);
@@ -359,10 +375,12 @@ export default function ProcessingReceivableDrawer({ open, entry, onClose }: Pro
         setSelectedProject(null);
         setExistingPlan(null);
         setCheckingExistingPlan(false);
+        setEditingExistingPlan(false);
         return;
       }
       const raw = projectsById[value];
       if (!raw) return;
+      setEditingExistingPlan(false);
       setSelectedProject(resolveProjectFromRaw(raw));
     },
     [projectsById],
@@ -456,6 +474,32 @@ export default function ProcessingReceivableDrawer({ open, entry, onClose }: Pro
     return { expectedAmountTotal, actualAmountTotal };
   }, [existingPlan]);
 
+  const existingPlanFormValues = useMemo<Partial<PlanFormValues>>(() => {
+    if (!existingPlan) return {};
+    const contractAmountRaw =
+      existingPlan.clientContract?.contractAmount ?? existingPlan.contractAmount;
+    const taxAmountRaw = existingPlan.clientContract?.taxAmount;
+    return {
+      legalEntityId:
+        existingPlan.clientContract?.legalEntity?.id ??
+        existingPlan.legalEntity?.id ??
+        undefined,
+      contractAmount:
+        contractAmountRaw === null || contractAmountRaw === undefined
+          ? undefined
+          : Number(contractAmountRaw),
+      taxAmount:
+        taxAmountRaw === null || taxAmountRaw === undefined
+          ? undefined
+          : Number(taxAmountRaw),
+      ownerEmployeeId: existingPlan.ownerEmployee?.id ?? undefined,
+      hasVendorPayment: Boolean(existingPlan.hasVendorPayment),
+      serviceContent: existingPlan.serviceContent ?? undefined,
+      remark: existingPlan.remark ?? undefined,
+      remarkNeedsAttention: Boolean(existingPlan.remarkNeedsAttention),
+    };
+  }, [existingPlan]);
+
   const handleNext = useCallback(() => {
     if (!isStepValid(step)) return;
     setStep((prev) => Math.min(prev + 1, TOTAL_STEPS - 1));
@@ -544,6 +588,63 @@ export default function ProcessingReceivableDrawer({ open, entry, onClose }: Pro
       setPlanSubmitting(false);
     }
   }, [existingPlan, selectedProject, entry, planForm, messageApi]);
+
+  const handleSaveExistingPlanAndNext = useCallback(async () => {
+    if (!selectedProject || !existingPlan?.id || !existingPlan.clientContractId) return;
+
+    let values: PlanFormValues;
+    try {
+      values = await planForm.validateFields();
+    } catch {
+      return;
+    }
+
+    setPlanSubmitting(true);
+    try {
+      const contractRes = await fetch(`/api/client-contracts/${existingPlan.clientContractId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          legalEntityId: values.legalEntityId,
+          contractAmount: values.contractAmount,
+          taxAmount: values.taxAmount,
+        }),
+      });
+      if (!contractRes.ok) {
+        messageApi.error((await contractRes.text()) || "更新客户合同失败");
+        return;
+      }
+
+      const planRes = await fetch(`/api/project-receivable-plans/${existingPlan.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          legalEntityId: values.legalEntityId,
+          ownerEmployeeId: values.ownerEmployeeId,
+          contractAmount: values.contractAmount,
+          hasVendorPayment: Boolean(values.hasVendorPayment),
+          serviceContent: values.serviceContent?.trim() || null,
+          remark: values.remark?.trim() || null,
+          remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
+          clientContractId: existingPlan.clientContractId,
+        }),
+      });
+      if (!planRes.ok) {
+        messageApi.error((await planRes.text()) || "更新收款计划失败");
+        return;
+      }
+
+      await fetchExistingPlan(selectedProject.id);
+      setCreatedPlanId(existingPlan.id);
+      setEditingExistingPlan(false);
+      messageApi.success("收款计划已更新");
+      setStep(2);
+    } catch {
+      messageApi.error("保存失败，请重试");
+    } finally {
+      setPlanSubmitting(false);
+    }
+  }, [existingPlan, fetchExistingPlan, messageApi, planForm, selectedProject]);
 
   const handleCreateNode = useCallback(
     async (values: ProjectReceivableNodeFormValues) => {
@@ -673,6 +774,32 @@ export default function ProcessingReceivableDrawer({ open, entry, onClose }: Pro
     },
     [fetchExistingPlan, messageApi, selectedProject?.id],
   );
+  const handleDelayExistingNode = useCallback(
+    async (
+      row: ProjectReceivableNodeRow,
+      values: ReceivableNodeDelayFormValues,
+    ) => {
+      const response = await fetch(`/api/project-receivable-nodes/${row.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          expectedDate: values.delayedExpectedDate?.toISOString(),
+          expectedDateChangeReason: values.delayReason?.trim() || null,
+        }),
+      });
+      if (!response.ok) {
+        messageApi.error((await response.text()) || "延迟收款失败");
+        return;
+      }
+      if (selectedProject?.id) {
+        await fetchExistingPlan(selectedProject.id);
+      }
+      messageApi.success("延迟收款成功");
+    },
+    [fetchExistingPlan, messageApi, selectedProject?.id],
+  );
   const handleDragSortExistingNodes = useCallback(
     async (nextRows: ProjectReceivableNodeRow[]) => {
       await Promise.all(
@@ -772,36 +899,68 @@ export default function ProcessingReceivableDrawer({ open, entry, onClose }: Pro
     [fetchExistingPlan, messageApi, selectedProject?.id],
   );
 
+  const isEditingExistingPlanStep =
+    step === 1 && Boolean(existingPlan?.clientContractId) && editingExistingPlan;
+
   const footer = (
     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-      {step > 0 && (
-        <Button onClick={handlePrev} disabled={planSubmitting}>
-          上一步
-        </Button>
-      )}
-      {step < TOTAL_STEPS - 1 ? (
-        step === 1 ? (
+      {isEditingExistingPlanStep ? (
+        <>
+          <Button
+            disabled={planSubmitting}
+            onClick={() => {
+              setEditingExistingPlan(false);
+              planForm.setFieldsValue(existingPlanFormValues);
+            }}
+          >
+            取消
+          </Button>
           <Button
             type="primary"
             loading={planSubmitting}
-            disabled={checkingExistingPlan}
-            onClick={() => void handlePlanNext()}
+            onClick={() => void handleSaveExistingPlanAndNext()}
           >
-            下一步
+            保存并进入下一步
           </Button>
-        ) : (
-          <Button
-            type="primary"
-            disabled={!isStepValid(step)}
-            onClick={handleNext}
-          >
-            下一步
-          </Button>
-        )
+        </>
       ) : (
-        <Button type="primary" onClick={onClose}>
-          完成
-        </Button>
+        <>
+          {step > 0 && (
+            <Button onClick={handlePrev} disabled={planSubmitting}>
+              上一步
+            </Button>
+          )}
+          {step < TOTAL_STEPS - 1 ? (
+            step === 1 ? (
+              <Button
+                type="primary"
+                loading={planSubmitting}
+                disabled={checkingExistingPlan}
+                onClick={() => void handlePlanNext()}
+              >
+                下一步
+              </Button>
+            ) : (
+              <Button
+                type="primary"
+                disabled={!isStepValid(step)}
+                onClick={handleNext}
+              >
+                下一步
+              </Button>
+            )
+          ) : (
+            <Button
+              type="primary"
+              onClick={() => {
+                if (entry?.key) onCompleted?.(entry.key);
+                onClose();
+              }}
+            >
+              完成
+            </Button>
+          )}
+        </>
       )}
     </div>
   );
@@ -811,26 +970,26 @@ export default function ProcessingReceivableDrawer({ open, entry, onClose }: Pro
       {
         title: "收款阶段",
         dataIndex: "stageName",
-        width: 140,
+        width: 100,
         render: (value: string) => value?.trim() || "-",
       },
       {
         title: "关键交付物",
         dataIndex: "keyDeliverable",
-        width: 220,
+        width: 180,
         render: (value: string) => value?.trim() || "-",
       },
       {
         title: "预收金额",
         dataIndex: "expectedAmountTaxIncluded",
-        width: 140,
+        width: 120,
         render: (value: number | null) =>
           typeof value === "number" ? `${value.toLocaleString("zh-CN")} 元` : "-",
       },
       {
         title: "预收日期",
         dataIndex: "expectedDate",
-        width: 140,
+        width: 120,
         render: (value: string) => value?.trim() || "-",
       },
       {
@@ -842,6 +1001,7 @@ export default function ProcessingReceivableDrawer({ open, entry, onClose }: Pro
         title: "操作",
         key: "actions",
         width: 140,
+        fixed: "right",
         render: (_value, row) => (
           <Button
             type="link"
@@ -876,6 +1036,13 @@ export default function ProcessingReceivableDrawer({ open, entry, onClose }: Pro
         expectedAmountTaxIncluded: Number(node.expectedAmountTaxIncluded ?? 0),
         expectedDate: node.expectedDate ?? "",
         expectedDateChangeCount: Number(node.expectedDateChangeCount ?? 0),
+        expectedDateHistories: (node.expectedDateHistories ?? []).map((history) => ({
+          id: history.id,
+          fromExpectedDate: history.fromExpectedDate,
+          toExpectedDate: history.toExpectedDate,
+          reason: history.reason ?? null,
+          changedAt: history.changedAt,
+        })),
         remark: node.remark ?? null,
         remarkNeedsAttention: Boolean(node.remarkNeedsAttention),
         actualNodes: (node.actualNodes ?? []).map((actual) => ({
@@ -898,7 +1065,7 @@ export default function ProcessingReceivableDrawer({ open, entry, onClose }: Pro
     Boolean(entry) &&
     Boolean(selectedProject) &&
     !checkingExistingPlan &&
-    !existingPlan?.clientContractId;
+    (!existingPlan?.clientContractId || editingExistingPlan);
 
   return (
     <>
@@ -1018,25 +1185,56 @@ export default function ProcessingReceivableDrawer({ open, entry, onClose }: Pro
                   showIcon
                   title="项目已有收款计划"
                 />
-                <ProjectReceivablePlanSnapshot
-                  contractAmount={Number(
-                    existingPlan.clientContract?.contractAmount ??
-                      existingPlan.contractAmount ??
-                      0,
-                  )}
-                  taxAmount={existingPlan.clientContract?.taxAmount}
-                  expectedAmountTotal={existingPlanSummary.expectedAmountTotal}
-                  actualAmountTotal={existingPlanSummary.actualAmountTotal}
-                  legalEntityName={
-                    existingPlan.clientContract?.legalEntity?.name ||
-                    existingPlan.legalEntity?.name
-                  }
-                  serviceContent={existingPlan.serviceContent}
-                  ownerName={existingPlan.ownerEmployee?.name}
-                  hasVendorPayment={Boolean(existingPlan.hasVendorPayment)}
-                  remark={existingPlan.remark}
-                  remarkNeedsAttention={existingPlan.remarkNeedsAttention}
-                />
+                {editingExistingPlan ? (
+                  <ReceivablePlanForm
+                    form={planForm}
+                    entry={entry}
+                    projectId={selectedProject.id}
+                    projectName={selectedProject.name}
+                    legalEntities={legalEntities}
+                    legalEntitiesLoading={legalEntitiesLoading}
+                    employees={employees}
+                    preferredValues={existingPlanFormValues}
+                  />
+                ) : (
+                  <>
+                    <ProjectReceivablePlanSnapshot
+                      contractAmount={Number(
+                        existingPlan.clientContract?.contractAmount ??
+                          existingPlan.contractAmount ??
+                          0,
+                      )}
+                      taxAmount={existingPlan.clientContract?.taxAmount}
+                      expectedAmountTotal={existingPlanSummary.expectedAmountTotal}
+                      actualAmountTotal={existingPlanSummary.actualAmountTotal}
+                      legalEntityName={
+                        existingPlan.clientContract?.legalEntity?.name ||
+                        existingPlan.legalEntity?.name
+                      }
+                      serviceContent={existingPlan.serviceContent}
+                      ownerName={existingPlan.ownerEmployee?.name}
+                      hasVendorPayment={Boolean(existingPlan.hasVendorPayment)}
+                      remark={existingPlan.remark}
+                      remarkNeedsAttention={existingPlan.remarkNeedsAttention}
+                    />
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "flex-end",
+                        marginTop: 12,
+                      }}
+                    >
+                      <Button
+                        onClick={() => {
+                          planForm.setFieldsValue(existingPlanFormValues);
+                          setEditingExistingPlan(true);
+                        }}
+                      >
+                        修改
+                      </Button>
+                    </div>
+                  </>
+                )}
               </>
             ) : (
               <ReceivablePlanForm
@@ -1047,6 +1245,7 @@ export default function ProcessingReceivableDrawer({ open, entry, onClose }: Pro
                 legalEntities={legalEntities}
                 legalEntitiesLoading={legalEntitiesLoading}
                 employees={employees}
+                preferredValues={undefined}
               />
             )
           )}
@@ -1083,6 +1282,7 @@ export default function ProcessingReceivableDrawer({ open, entry, onClose }: Pro
                     onCollectNode={handleCollectExistingNode}
                     onEditActualNode={handleEditExistingActualNode}
                     onDeleteActualNode={handleDeleteExistingActualNode}
+                    onDelayNode={handleDelayExistingNode}
                   />
                 </>
               )}

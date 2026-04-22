@@ -74,7 +74,7 @@ const ProjectPayableActualNodeModal = ({
               name="actualAmountTaxIncluded"
               rules={[{ required: true, message: "请输入实付金额" }]}
             >
-              <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+              <InputNumber precision={0} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col span={12}>

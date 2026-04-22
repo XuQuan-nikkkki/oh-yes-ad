@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Button, Table } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import type { PayableEntryDraft, PayableNodeDraft } from "./types";
 
 type Props = {
@@ -10,7 +11,7 @@ type Props = {
 };
 
 export default function PayableTable({ entries, onProcess }: Props) {
-  const nodeColumns = useMemo(
+  const nodeColumns = useMemo<ColumnsType<PayableNodeDraft>>(
     () => [
       { title: "付款阶段", dataIndex: "stageName", key: "stageName", width: 140 },
       {
@@ -42,37 +43,37 @@ export default function PayableTable({ entries, onProcess }: Props) {
     [],
   );
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnsType<PayableEntryDraft>>(
     () => [
       {
         title: "签约公司",
         dataIndex: "contractCompany",
         key: "contractCompany",
-        width: 180,
+        width: 140,
       },
       {
         title: "品牌名",
         dataIndex: "brandName",
         key: "brandName",
-        width: 160,
+        width: 140,
       },
       {
         title: "服务内容",
         dataIndex: "serviceContent",
         key: "serviceContent",
-        width: 260,
+        width: 220,
       },
       {
         title: "供应商",
         dataIndex: "supplierName",
         key: "supplierName",
-        width: 220,
+        width: 160,
       },
       {
         title: "合同金额",
         dataIndex: "contractAmount",
         key: "contractAmount",
-        width: 180,
+        width: 140,
         render: (value: number | null) =>
           value === null ? "-" : `¥${value.toLocaleString("zh-CN")}`,
       },
@@ -80,6 +81,7 @@ export default function PayableTable({ entries, onProcess }: Props) {
         title: "操作",
         key: "action",
         width: 140,
+        fixed: "right",
         render: (_value: unknown, record: PayableEntryDraft) => (
           <Button
             type="link"

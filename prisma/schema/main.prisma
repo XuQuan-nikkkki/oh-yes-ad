@@ -526,7 +526,7 @@ model ProjectReceivableNode {
   keyDeliverable String
 
   expectedAmountTaxIncluded Int
-  expectedDate              DateTime
+  expectedDate              DateTime?
   expectedDateChangeCount   Int      @default(0)
 
   remark               String?

@@ -5,9 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import type { Key } from "react";
 import { DragSortTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { PayCircleOutlined } from "@ant-design/icons";
-import { Button, Progress, Space, Table, Typography } from "antd";
+import { InfoCircleOutlined } from "@ant-design/icons";
+import { Button, DatePicker, Form, Input, Modal, Progress, Space, Table, Tooltip, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import type { Dayjs } from "dayjs";
+import BooleanTag from "@/components/BooleanTag";
 import EllipsisPopoverText from "@/components/EllipsisPopoverText";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import TableActions from "@/components/TableActions";
@@ -30,8 +32,15 @@ export type ProjectReceivableNodeRow = {
   sortOrder: number;
   keyDeliverable: string;
   expectedAmountTaxIncluded: number;
-  expectedDate: string;
+  expectedDate: string | null;
   expectedDateChangeCount: number;
+  expectedDateHistories?: Array<{
+    id: string;
+    fromExpectedDate: string;
+    toExpectedDate: string;
+    reason?: string | null;
+    changedAt?: string;
+  }>;
   remark?: string | null;
   remarkNeedsAttention: boolean;
   actualNodes?: Array<{
@@ -52,6 +61,11 @@ type StageOption = {
 type ActualNodeRow = NonNullable<
   ProjectReceivableNodeRow["actualNodes"]
 >[number];
+
+export type ReceivableNodeDelayFormValues = {
+  delayedExpectedDate: Dayjs;
+  delayReason: string;
+};
 
 type Props = {
   title?: string;
@@ -76,6 +90,10 @@ type Props = {
     values: ProjectReceivableActualNodeFormValues,
   ) => void | Promise<void>;
   onDeleteActualNode?: (actualNodeId: string) => void | Promise<void>;
+  onDelayNode?: (
+    row: ProjectReceivableNodeRow,
+    values: ReceivableNodeDelayFormValues,
+  ) => void | Promise<void>;
 };
 
 const getActualAmountSum = (row: ProjectReceivableNodeRow) =>
@@ -111,6 +129,7 @@ const ProjectReceivableNodeTable = ({
   onCollectNode,
   onEditActualNode,
   onDeleteActualNode,
+  onDelayNode,
 }: Props) => {
   const [actualModalOpen, setActualModalOpen] = useState(false);
   const [collecting, setCollecting] = useState(false);
@@ -124,6 +143,10 @@ const ProjectReceivableNodeTable = ({
     useState<ProjectReceivableNodeRow | null>(null);
   const [editingActualNode, setEditingActualNode] =
     useState<ActualNodeRow | null>(null);
+  const [delayModalOpen, setDelayModalOpen] = useState(false);
+  const [delaying, setDelaying] = useState(false);
+  const [delayTargetRow, setDelayTargetRow] = useState<ProjectReceivableNodeRow | null>(null);
+  const [delayForm] = Form.useForm<ReceivableNodeDelayFormValues>();
 
   useEffect(() => {
     const validIdSet = new Set(rows.map((row) => row.id));
@@ -241,9 +264,6 @@ const ProjectReceivableNodeTable = ({
         title: "预收日期",
         dataIndex: "expectedDate",
         valueType: "date",
-        formItemProps: {
-          rules: [{ required: true, message: "请选择预收日期" }],
-        },
       },
       {
         title: "备注",
@@ -268,10 +288,52 @@ const ProjectReceivableNodeTable = ({
         },
       },
       {
+        title: "预收延后",
+        dataIndex: "expectedDateHistories",
+        width: 160,
+        editable: false,
+        render: (_dom, row) => {
+          const histories = Array.isArray(row.expectedDateHistories)
+            ? row.expectedDateHistories
+            : [];
+          return (
+            <Space size={4} align="center">
+              <BooleanTag value={histories.length > 0} />
+              <Tooltip
+                title={
+                  histories.length > 0 ? (
+                    <div>
+                      {histories.map((history) => {
+                        const from = dayjs(history.fromExpectedDate).isValid()
+                          ? dayjs(history.fromExpectedDate).format("YYYY/MM/DD")
+                          : "-";
+                        const to = dayjs(history.toExpectedDate).isValid()
+                          ? dayjs(history.toExpectedDate).format("YYYY/MM/DD")
+                          : "-";
+                        const reason = String(history.reason ?? "").trim();
+                        return (
+                          <div key={history.id}>
+                            {`${from} -> ${to}${reason ? ` ${reason}` : ""}`}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    "暂无延后历史"
+                  )
+                }
+              >
+                <InfoCircleOutlined style={{ color: "rgba(0,0,0,0.45)" }} />
+              </Tooltip>
+            </Space>
+          );
+        },
+      },
+      {
         title: "操作",
         valueType: "option",
         fixed: "right",
-        width: 160,
+        width: 220,
         render: (_text, row) => (
           <Space size={4} wrap={false}>
             <Button
@@ -279,7 +341,6 @@ const ProjectReceivableNodeTable = ({
               color="primary"
               style={{ paddingInline: 4 }}
               disabled={!canManageProject}
-              icon={<PayCircleOutlined />}
               onClick={() => {
                 setCurrentCollectRow(row);
                 setActualModalOpen(true);
@@ -287,10 +348,23 @@ const ProjectReceivableNodeTable = ({
             >
               收款
             </Button>
+            <Button
+              variant="text"
+              color="primary"
+              style={{ paddingInline: 4 }}
+              disabled={!canManageProject}
+              onClick={() => {
+                setDelayTargetRow(row);
+                setDelayModalOpen(true);
+              }}
+            >
+              延迟收款
+            </Button>
             <TableActions
               disabled={!canManageProject}
               gap={0}
               buttonStyle={{ paddingInline: 4 }}
+              showIcons={false}
               onEdit={() => {
                 setEditingRow(row);
                 setEditModalOpen(true);
@@ -443,7 +517,7 @@ const ProjectReceivableNodeTable = ({
       />
       <style jsx global>{`
         .receivable-node-row-complete > td.ant-table-cell {
-          background: rgba(114, 193, 64, 0.14) !important;
+          background: #EFF6E6 !important;
         }
       `}</style>
 
@@ -501,7 +575,9 @@ const ProjectReceivableNodeTable = ({
               ? {
                   actualAmountTaxIncluded:
                     currentCollectRow.expectedAmountTaxIncluded,
-                  actualDate: dayjs(currentCollectRow.expectedDate),
+                  actualDate: currentCollectRow.expectedDate
+                    ? dayjs(currentCollectRow.expectedDate)
+                    : undefined,
                 }
               : undefined
         }
@@ -542,13 +618,93 @@ const ProjectReceivableNodeTable = ({
                   undefined,
                 keyDeliverable: editingRow.keyDeliverable,
                 expectedAmountTaxIncluded: editingRow.expectedAmountTaxIncluded,
-                expectedDate: dayjs(editingRow.expectedDate),
+                expectedDate: editingRow.expectedDate
+                  ? dayjs(editingRow.expectedDate)
+                  : undefined,
                 remark: editingRow.remark ?? undefined,
                 remarkNeedsAttention: editingRow.remarkNeedsAttention,
               }
             : undefined
         }
       />
+      <Modal
+        title="延迟收款"
+        open={delayModalOpen}
+        confirmLoading={delaying}
+        destroyOnHidden
+        onCancel={() => {
+          setDelayModalOpen(false);
+          setDelayTargetRow(null);
+          delayForm.resetFields();
+        }}
+        onOk={() => {
+          void (async () => {
+            if (!delayTargetRow) return;
+            const values = await delayForm.validateFields();
+            if (!onDelayNode) return;
+            setDelaying(true);
+            try {
+              await onDelayNode(delayTargetRow, values);
+              setDelayModalOpen(false);
+              setDelayTargetRow(null);
+              delayForm.resetFields();
+            } finally {
+              setDelaying(false);
+            }
+          })();
+        }}
+        afterOpenChange={(nextOpen) => {
+          if (nextOpen) {
+            delayForm.setFieldsValue({
+              delayedExpectedDate: delayTargetRow?.expectedDate
+                ? dayjs(delayTargetRow.expectedDate)
+                : undefined,
+              delayReason: undefined,
+            });
+            return;
+          }
+          delayForm.resetFields();
+        }}
+      >
+        <Form form={delayForm} layout="vertical">
+          <Form.Item label="原预收日期">
+            <Input
+              value={
+                delayTargetRow?.expectedDate
+                  ? dayjs(delayTargetRow.expectedDate).format("YYYY-MM-DD")
+                  : "-"
+              }
+              disabled
+            />
+          </Form.Item>
+          <Form.Item
+            label="延后日期"
+            name="delayedExpectedDate"
+            rules={[
+              { required: true, message: "请选择延后日期" },
+              {
+                validator: async (_, value: Dayjs | undefined) => {
+                  if (!value || !delayTargetRow?.expectedDate) return;
+                  const current = dayjs(delayTargetRow.expectedDate);
+                  if (!current.isValid()) return;
+                  if (!value.isAfter(current, "day")) {
+                    throw new Error("延后日期需晚于原预收日期");
+                  }
+                },
+              },
+            ]}
+          >
+            <DatePicker style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item
+            label="延后原因"
+            name="delayReason"
+            rules={[{ required: true, message: "请输入延后原因" }]}
+          >
+            <Input.TextArea rows={3} placeholder="请输入延后原因" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   );
 };

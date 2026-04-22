@@ -3,6 +3,7 @@ import type { SystemSettingRecord } from "@/stores/systemSettingsStore";
 export const SYSTEM_SETTING_KEYS = {
   pricingLaborCostRateWarning: "pricing.laborCostRateWarning",
   pricingProjectCostBaselineRatio: "pricing.projectCostBaselineRatio",
+  pricingProjectTaxRate: "pricing.projectTaxRate",
   pricingMiddleOfficeAverageMonthlyCost:
     "pricing.middleOfficeAverageMonthlyCost",
   pricingMiddleOfficeBaseDays: "pricing.middleOfficeBaseDays",
@@ -15,6 +16,7 @@ export const SYSTEM_SETTING_KEYS = {
 export const DEFAULT_SYSTEM_SETTING_VALUES = {
   [SYSTEM_SETTING_KEYS.pricingLaborCostRateWarning]: 35,
   [SYSTEM_SETTING_KEYS.pricingProjectCostBaselineRatio]: 53,
+  [SYSTEM_SETTING_KEYS.pricingProjectTaxRate]: 1,
   [SYSTEM_SETTING_KEYS.pricingMiddleOfficeAverageMonthlyCost]: 16367.76,
   [SYSTEM_SETTING_KEYS.pricingMiddleOfficeBaseDays]: 30,
   [SYSTEM_SETTING_KEYS.pricingProjectFundAmount]: 10000,

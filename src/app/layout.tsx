@@ -1,6 +1,7 @@
 "use client";
 
 import "./globals.css";
+import "@/lib/locale-compare-patch";
 import { Layout, ConfigProvider, message, Spin } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import { useRouter, usePathname } from "next/navigation";

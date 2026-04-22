@@ -50,6 +50,7 @@ type Props = {
   open: boolean;
   entry: PayableEntryDraft | null;
   onClose: () => void;
+  onCompleted?: (entryKey: string) => void;
 };
 
 type SelectedProject = {
@@ -165,11 +166,17 @@ const resolveProjectFromRaw = (raw: {
   };
 };
 
-export default function ProcessingPayableDrawer({ open, entry, onClose }: Props) {
+export default function ProcessingPayableDrawer({
+  open,
+  entry,
+  onClose,
+  onCompleted,
+}: Props) {
   const [messageApi, contextHolder] = message.useMessage();
 
   const [step, setStep] = useState(0);
-  const [selectedProject, setSelectedProject] = useState<SelectedProject | null>(null);
+  const [selectedProject, setSelectedProject] =
+    useState<SelectedProject | null>(null);
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [createClientOpen, setCreateClientOpen] = useState(false);
@@ -177,12 +184,15 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
   const [creatingPlan, setCreatingPlan] = useState(false);
   const [existingPlans, setExistingPlans] = useState<ExistingPayablePlan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [checkingExistingPlans, setCheckingExistingPlans] = useState(false);
   const [stageOptions, setStageOptions] = useState<StageOption[]>([]);
   const [loadingStageOptions, setLoadingStageOptions] = useState(false);
   const [nodeModalOpen, setNodeModalOpen] = useState(false);
   const [creatingNode, setCreatingNode] = useState(false);
-  const [importedNodeRows, setImportedNodeRows] = useState<PayableEntryDraft["nodes"]>([]);
+  const [importedNodeRows, setImportedNodeRows] = useState<
+    PayableEntryDraft["nodes"]
+  >([]);
   const [targetNodeDraft, setTargetNodeDraft] = useState<
     PayableEntryDraft["nodes"][number] | null
   >(null);
@@ -190,7 +200,9 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
   const [planForm] = Form.useForm<PayablePlanFormValues>();
 
   const projectsById = useProjectsStore((state) => state.byId);
-  const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
+  const fetchProjectsFromStore = useProjectsStore(
+    (state) => state.fetchProjects,
+  );
   const upsertProjects = useProjectsStore((state) => state.upsertProjects);
 
   const clients = useClientsStore((state) => state.clients);
@@ -204,32 +216,41 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
   const legalEntities = useLegalEntitiesStore((state) => state.legalEntities);
   const legalEntitiesLoading = useLegalEntitiesStore((state) => state.loading);
   const legalEntitiesLoaded = useLegalEntitiesStore((state) => state.loaded);
-  const fetchLegalEntitiesFromStore = useLegalEntitiesStore((state) => state.fetchLegalEntities);
+  const fetchLegalEntitiesFromStore = useLegalEntitiesStore(
+    (state) => state.fetchLegalEntities,
+  );
 
   const employees = useEmployeesStore((state) => state.employees);
   const employeesLoaded = useEmployeesStore((state) => state.loaded);
-  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
+  const fetchEmployeesFromStore = useEmployeesStore(
+    (state) => state.fetchEmployees,
+  );
 
   const clientIndustryOptions = useSelectOptionsStore(
     (state) => state.optionsByField["client.industry"] ?? EMPTY_SELECT_OPTIONS,
   );
   const vendorTypeOptions = useSelectOptionsStore(
-    (state) => state.optionsByField["vendor.vendorType"] ?? EMPTY_SELECT_OPTIONS,
+    (state) =>
+      state.optionsByField["vendor.vendorType"] ?? EMPTY_SELECT_OPTIONS,
   );
   const businessTypeOptions = useSelectOptionsStore(
-    (state) => state.optionsByField["vendor.businessType"] ?? EMPTY_SELECT_OPTIONS,
+    (state) =>
+      state.optionsByField["vendor.businessType"] ?? EMPTY_SELECT_OPTIONS,
   );
   const servicesOptions = useSelectOptionsStore(
     (state) => state.optionsByField["vendor.services"] ?? EMPTY_SELECT_OPTIONS,
   );
   const cooperationStatusOptions = useSelectOptionsStore(
-    (state) => state.optionsByField["vendor.cooperationStatus"] ?? EMPTY_SELECT_OPTIONS,
+    (state) =>
+      state.optionsByField["vendor.cooperationStatus"] ?? EMPTY_SELECT_OPTIONS,
   );
   const ratingOptions = useSelectOptionsStore(
     (state) => state.optionsByField["vendor.rating"] ?? EMPTY_SELECT_OPTIONS,
   );
   const selectOptionsLoaded = useSelectOptionsStore((state) => state.loaded);
-  const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
+  const fetchAllOptions = useSelectOptionsStore(
+    (state) => state.fetchAllOptions,
+  );
 
   const projectIdSnapshotRef = useRef<Set<string>>(new Set());
   const vendorIdSnapshotRef = useRef<Set<string>>(new Set());
@@ -274,9 +295,12 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
     setCheckingExistingPlans(true);
     try {
       const query = new URLSearchParams({ projectId });
-      const response = await fetch(`/api/project-payable-plans?${query.toString()}`, {
-        cache: "no-store",
-      });
+      const response = await fetch(
+        `/api/project-payable-plans?${query.toString()}`,
+        {
+          cache: "no-store",
+        },
+      );
       if (!response.ok) {
         setExistingPlans([]);
         setSelectedPlanId(null);
@@ -337,9 +361,7 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
           field: "projectPayable.stage",
           value: stageValue,
           color:
-            typeof stage === "string"
-              ? undefined
-              : (stage?.color ?? undefined),
+            typeof stage === "string" ? undefined : (stage?.color ?? undefined),
         }),
       });
       if (!createdStageRes.ok) return null;
@@ -376,7 +398,9 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
   const projectOptions = useMemo(() => {
     return Object.values(projectsById)
       .filter((p): p is NonNullable<typeof p> => Boolean(p?.id))
-      .filter((p) => !isInternalProject(p as Parameters<typeof isInternalProject>[0]))
+      .filter(
+        (p) => !isInternalProject(p as Parameters<typeof isInternalProject>[0]),
+      )
       .map((p) => ({
         label: `${String(p.name ?? "未命名项目")}${p.isArchived ? "（已归档）" : ""}`,
         value: p.id,
@@ -468,7 +492,9 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
     const exactMatched = vendors.find((item) => {
       const vendorName = normalize(String(item.name ?? ""));
       const vendorFullName = normalize(String(item.fullName ?? ""));
-      return keywords.some((target) => target === vendorName || target === vendorFullName);
+      return keywords.some(
+        (target) => target === vendorName || target === vendorFullName,
+      );
     });
 
     const fuzzyMatched =
@@ -500,6 +526,7 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
       setCreateVendorOpen(false);
       setExistingPlans([]);
       setSelectedPlanId(null);
+      setEditingPlanId(null);
       setCheckingExistingPlans(false);
       setNodeModalOpen(false);
       setTargetNodeDraft(null);
@@ -515,6 +542,7 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
         setSelectedProject(null);
         setExistingPlans([]);
         setSelectedPlanId(null);
+        setEditingPlanId(null);
         setCheckingExistingPlans(false);
         return;
       }
@@ -619,7 +647,8 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
           legalEntityId: values.legalEntityId,
           serviceContent: values.serviceContent?.trim() || null,
           contractAmount:
-            values.contractAmount === undefined || values.contractAmount === null
+            values.contractAmount === undefined ||
+            values.contractAmount === null
               ? null
               : Math.trunc(values.contractAmount),
         }),
@@ -645,7 +674,8 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
           vendorContractId: savedContract.id,
           ownerEmployeeId: values.ownerEmployeeId,
           contractAmount:
-            values.contractAmount === undefined || values.contractAmount === null
+            values.contractAmount === undefined ||
+            values.contractAmount === null
               ? null
               : Math.trunc(values.contractAmount),
           hasCustomerCollection: Boolean(values.hasCustomerCollection),
@@ -665,10 +695,135 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
       if (savedPlan?.id) {
         setSelectedPlanId(savedPlan.id);
       }
+      setEditingPlanId(null);
+      planForm.resetFields();
     } finally {
       setCreatingPlan(false);
     }
-  }, [fetchExistingPlans, messageApi, planForm, selectedProject?.id, selectedVendorId]);
+  }, [
+    fetchExistingPlans,
+    messageApi,
+    planForm,
+    selectedProject?.id,
+    selectedVendorId,
+  ]);
+
+  const handleEditPlan = useCallback(
+    (plan: ExistingPayablePlan) => {
+      const vendorId = plan.vendorContract?.vendor?.id;
+      if (vendorId) {
+        setSelectedVendorId(vendorId);
+      }
+      setEditingPlanId(plan.id);
+      setSelectedPlanId(plan.id);
+      planForm.setFieldsValue({
+        legalEntityId: plan.vendorContract?.legalEntity?.id ?? undefined,
+        ownerEmployeeId: plan.ownerEmployee?.id ?? undefined,
+        contractAmount:
+          plan.vendorContract?.contractAmount === null ||
+          plan.vendorContract?.contractAmount === undefined
+            ? plan.contractAmount ?? undefined
+            : Number(plan.vendorContract.contractAmount),
+        serviceContent:
+          plan.vendorContract?.serviceContent ?? plan.serviceContent ?? undefined,
+        hasCustomerCollection: Boolean(plan.hasCustomerCollection),
+        remark: plan.remark ?? undefined,
+        remarkNeedsAttention: Boolean(plan.remarkNeedsAttention),
+      });
+    },
+    [planForm],
+  );
+
+  const handleUpdatePlan = useCallback(async () => {
+    if (!selectedProject?.id) {
+      messageApi.error("请先选择项目");
+      return;
+    }
+    if (!selectedVendorId) {
+      messageApi.error("请先选择供应商");
+      return;
+    }
+    if (!editingPlanId) {
+      messageApi.error("请先选择要修改的付款计划");
+      return;
+    }
+
+    const targetPlan = existingPlans.find((plan) => plan.id === editingPlanId);
+    const vendorContractId = targetPlan?.vendorContract?.id;
+    if (!vendorContractId) {
+      messageApi.error("当前付款计划未关联供应商合同，暂不支持修改");
+      return;
+    }
+
+    let values: PayablePlanFormValues;
+    try {
+      values = await planForm.validateFields();
+    } catch {
+      return;
+    }
+
+    setCreatingPlan(true);
+    try {
+      const contractRes = await fetch(`/api/vendor-contracts/${vendorContractId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          vendorId: selectedVendorId,
+          legalEntityId: values.legalEntityId,
+          serviceContent: values.serviceContent?.trim() || null,
+          contractAmount:
+            values.contractAmount === undefined || values.contractAmount === null
+              ? null
+              : Math.trunc(values.contractAmount),
+        }),
+      });
+      if (!contractRes.ok) {
+        const text = await contractRes.text();
+        messageApi.error(text || "更新供应商合同失败");
+        return;
+      }
+
+      const planRes = await fetch(`/api/project-payable-plans/${editingPlanId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          vendorContractId,
+          ownerEmployeeId: values.ownerEmployeeId,
+          contractAmount:
+            values.contractAmount === undefined || values.contractAmount === null
+              ? null
+              : Math.trunc(values.contractAmount),
+          hasCustomerCollection: Boolean(values.hasCustomerCollection),
+          remark: values.remark?.trim() || null,
+          remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
+        }),
+      });
+      if (!planRes.ok) {
+        const text = await planRes.text();
+        messageApi.error(text || "更新付款计划失败");
+        return;
+      }
+
+      messageApi.success("付款计划已更新");
+      await fetchExistingPlans(selectedProject.id);
+      setSelectedPlanId(editingPlanId);
+      setEditingPlanId(null);
+    } finally {
+      setCreatingPlan(false);
+    }
+  }, [
+    editingPlanId,
+    existingPlans,
+    fetchExistingPlans,
+    messageApi,
+    planForm,
+    selectedProject?.id,
+    selectedVendorId,
+  ]);
 
   const handleCreateNode = useCallback(
     async (values: ProjectPayableNodeFormValues) => {
@@ -932,11 +1087,21 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
       {step > 0 && <Button onClick={handlePrev}>上一步</Button>}
       {step < TOTAL_STEPS - 1 ? (
-        <Button type="primary" disabled={!isStepValid(step)} onClick={handleNext}>
+        <Button
+          type="primary"
+          disabled={!isStepValid(step)}
+          onClick={handleNext}
+        >
           下一步
         </Button>
       ) : (
-        <Button type="primary" onClick={onClose}>
+        <Button
+          type="primary"
+          onClick={() => {
+            if (entry?.key) onCompleted?.(entry.key);
+            onClose();
+          }}
+        >
           完成
         </Button>
       )}
@@ -967,7 +1132,9 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
         dataIndex: "expectedAmountTaxIncluded",
         width: 140,
         render: (value: number | null) =>
-          typeof value === "number" ? `${value.toLocaleString("zh-CN")} 元` : "-",
+          typeof value === "number"
+            ? `${value.toLocaleString("zh-CN")} 元`
+            : "-",
       },
       {
         title: "预付日期",
@@ -1058,12 +1225,24 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
           {step === 0 && entry && (
             <>
               <Descriptions column={2} size="small" bordered>
-                <Descriptions.Item label="品牌名">{entry.brandName || "-"}</Descriptions.Item>
-                <Descriptions.Item label="服务内容">{entry.serviceContent || "-"}</Descriptions.Item>
-                <Descriptions.Item label="供应商">{entry.vendorShortName || "-"}</Descriptions.Item>
-                <Descriptions.Item label="供应商全称">{entry.vendorFullName || "-"}</Descriptions.Item>
-                <Descriptions.Item label="跟进人">{entry.ownerName || "-"}</Descriptions.Item>
-                <Descriptions.Item label="项目状态">{entry.projectStatus || "-"}</Descriptions.Item>
+                <Descriptions.Item label="品牌名">
+                  {entry.brandName || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="服务内容">
+                  {entry.serviceContent || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="供应商">
+                  {entry.vendorShortName || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="供应商全称">
+                  {entry.vendorFullName || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="跟进人">
+                  {entry.ownerName || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="项目状态">
+                  {entry.projectStatus || "-"}
+                </Descriptions.Item>
               </Descriptions>
 
               <Divider />
@@ -1079,7 +1258,9 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
                   optionFilterProp="label"
                   status={selectedProject ? undefined : "warning"}
                   onChange={(value) =>
-                    handleProjectChange(typeof value === "string" ? value : undefined)
+                    handleProjectChange(
+                      typeof value === "string" ? value : undefined,
+                    )
                   }
                 />
 
@@ -1111,7 +1292,11 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
                   <span style={{ color: "rgba(0,0,0,0.45)", fontSize: 13 }}>
                     搜不到项目？
                   </span>
-                  <Button size="small" icon={<PlusOutlined />} onClick={handleOpenCreateProject}>
+                  <Button
+                    size="small"
+                    icon={<PlusOutlined />}
+                    onClick={handleOpenCreateProject}
+                  >
                     创建新项目
                   </Button>
                 </Space>
@@ -1143,14 +1328,20 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
                   optionFilterProp="label"
                   status={selectedVendorId ? undefined : "warning"}
                   onChange={(value) =>
-                    setSelectedVendorId(typeof value === "string" ? value : null)
+                    setSelectedVendorId(
+                      typeof value === "string" ? value : null,
+                    )
                   }
                 />
                 <Space size={8} align="center">
                   <span style={{ color: "rgba(0,0,0,0.45)", fontSize: 13 }}>
                     搜不到供应商？
                   </span>
-                  <Button size="small" icon={<PlusOutlined />} onClick={handleOpenCreateVendor}>
+                  <Button
+                    size="small"
+                    icon={<PlusOutlined />}
+                    onClick={handleOpenCreateVendor}
+                  >
                     创建供应商
                   </Button>
                 </Space>
@@ -1168,7 +1359,12 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
                         disabled
                         options={
                           selectedProject
-                            ? [{ label: selectedProject.name, value: selectedProject.id }]
+                            ? [
+                                {
+                                  label: selectedProject.name,
+                                  value: selectedProject.id,
+                                },
+                              ]
                             : []
                         }
                         value={selectedProject?.id}
@@ -1224,7 +1420,11 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
                       name="contractAmount"
                       rules={[{ required: true, message: "请输入合同金额" }]}
                     >
-                      <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+                      <InputNumber
+                        min={0}
+                        precision={0}
+                        style={{ width: "100%" }}
+                      />
                     </Form.Item>
                   </Col>
                   <Col span={12}>
@@ -1257,7 +1457,12 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
                     <span style={{ color: "rgba(0,0,0,0.88)" }}>备注</span>
                     <Space size={8}>
                       <span style={{ fontWeight: 400 }}>标红</span>
-                      <Form.Item name="remarkNeedsAttention" valuePropName="checked" noStyle>
+                      <Form.Item
+                        name="remarkNeedsAttention"
+                        valuePropName="checked"
+                        noStyle
+                        layout="horizontal"
+                      >
                         <Switch size="small" />
                       </Form.Item>
                     </Space>
@@ -1269,8 +1474,14 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
               </Form>
 
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <Button type="primary" loading={creatingPlan} onClick={() => void handleCreatePlan()}>
-                  创建付款计划
+                <Button
+                  type="primary"
+                  loading={creatingPlan}
+                  onClick={() =>
+                    void (editingPlanId ? handleUpdatePlan() : handleCreatePlan())
+                  }
+                >
+                  {editingPlanId ? "更新付款计划" : "创建付款计划"}
                 </Button>
               </div>
 
@@ -1281,31 +1492,58 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
               ) : existingPlans.length > 0 ? (
                 <>
                   <Divider />
-                  <Space direction="vertical" style={{ width: "100%" }} size={12}>
+                  <Space
+                    orientation="vertical"
+                    style={{ width: "100%" }}
+                    size={12}
+                  >
                     {existingPlans.map((plan) => {
                       const expectedAmountTotal = (plan.nodes ?? []).reduce(
-                        (sum, node) => sum + Number(node.expectedAmountTaxIncluded ?? 0),
+                        (sum, node) =>
+                          sum + Number(node.expectedAmountTaxIncluded ?? 0),
                         0,
                       );
-                      const actualAmountTotal = (plan.nodes ?? []).reduce((sum, node) => {
-                        const nodeActual = (node.actualNodes ?? []).reduce(
-                          (nodeSum, actual) => nodeSum + Number(actual.actualAmountTaxIncluded ?? 0),
-                          0,
-                        );
-                        return sum + nodeActual;
-                      }, 0);
+                      const actualAmountTotal = (plan.nodes ?? []).reduce(
+                        (sum, node) => {
+                          const nodeActual = (node.actualNodes ?? []).reduce(
+                            (nodeSum, actual) =>
+                              nodeSum +
+                              Number(actual.actualAmountTaxIncluded ?? 0),
+                            0,
+                          );
+                          return sum + nodeActual;
+                        },
+                        0,
+                      );
 
                       return (
                         <div key={plan.id}>
-                          <Checkbox
-                            checked={selectedPlanId === plan.id}
-                            onChange={(event) => {
-                              setSelectedPlanId(event.target.checked ? plan.id : null);
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              marginBottom: 8,
                             }}
-                            style={{ marginBottom: 8 }}
                           >
-                            关联这个付款计划
-                          </Checkbox>
+                            <Checkbox
+                              checked={selectedPlanId === plan.id}
+                              onChange={(event) => {
+                                setSelectedPlanId(
+                                  event.target.checked ? plan.id : null,
+                                );
+                              }}
+                            >
+                              关联这个付款计划
+                            </Checkbox>
+                            <Button
+                              type="link"
+                              style={{ paddingInline: 0 }}
+                              onClick={() => handleEditPlan(plan)}
+                            >
+                              修改
+                            </Button>
+                          </div>
                           <ProjectPayablePlanSnapshot
                             vendorName={
                               plan.vendorContract?.vendor?.fullName ||
@@ -1319,12 +1557,18 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
                             )}
                             expectedAmountTotal={expectedAmountTotal}
                             actualAmountTotal={actualAmountTotal}
-                            legalEntityName={plan.vendorContract?.legalEntity?.name || "-"}
+                            legalEntityName={
+                              plan.vendorContract?.legalEntity?.name || "-"
+                            }
                             serviceContent={
-                              plan.vendorContract?.serviceContent || plan.serviceContent || ""
+                              plan.vendorContract?.serviceContent ||
+                              plan.serviceContent ||
+                              ""
                             }
                             ownerName={plan.ownerEmployee?.name || "-"}
-                            hasCustomerCollection={Boolean(plan.hasCustomerCollection)}
+                            hasCustomerCollection={Boolean(
+                              plan.hasCustomerCollection,
+                            )}
                             remark={plan.remark}
                             remarkNeedsAttention={plan.remarkNeedsAttention}
                           />
@@ -1337,8 +1581,8 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
             </>
           )}
 
-          {step === 2 && (
-            selectedPlan ? (
+          {step === 2 &&
+            (selectedPlan ? (
               <>
                 <Alert
                   style={{ marginBottom: 12 }}
@@ -1352,7 +1596,9 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
                   dataSource={importedNodeRows}
                   pagination={false}
                   scroll={{ x: "max-content" }}
-                  locale={{ emptyText: <Empty description="暂无可创建的导入付款节点" /> }}
+                  locale={{
+                    emptyText: <Empty description="暂无可创建的导入付款节点" />,
+                  }}
                 />
                 {existingPayableNodeRows.length > 0 && (
                   <>
@@ -1384,8 +1630,7 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
               </>
             ) : (
               <Empty description="请先在上一步关联付款计划" />
-            )
-          )}
+            ))}
         </div>
       </Drawer>
 
@@ -1433,10 +1678,12 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
                 paymentCondition: targetNodeDraft.paymentCondition || "",
                 expectedAmountTaxIncluded:
                   targetNodeDraft.expectedAmountTaxIncluded ?? undefined,
-                expectedDate: parseImportedDate(targetNodeDraft.expectedDate) ?? undefined,
+                expectedDate:
+                  parseImportedDate(targetNodeDraft.expectedDate) ?? undefined,
                 actualAmountTaxIncluded:
                   targetNodeDraft.actualAmountTaxIncluded ?? undefined,
-                actualDate: parseImportedDate(targetNodeDraft.actualDate) ?? undefined,
+                actualDate:
+                  parseImportedDate(targetNodeDraft.actualDate) ?? undefined,
                 remark: targetNodeDraft.remark || undefined,
                 remarkNeedsAttention: false,
               }
@@ -1444,7 +1691,9 @@ export default function ProcessingPayableDrawer({ open, entry, onClose }: Props)
                 remarkNeedsAttention: false,
               }
         }
-        actualAmountTaxIncluded={targetNodeDraft?.actualAmountTaxIncluded ?? null}
+        actualAmountTaxIncluded={
+          targetNodeDraft?.actualAmountTaxIncluded ?? null
+        }
         actualDate={
           targetNodeDraft?.actualDate
             ? parseImportedDate(targetNodeDraft.actualDate)

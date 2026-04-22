@@ -89,7 +89,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   if ("expectedAmountTaxIncluded" in body) {
     const amount = toNullableInt(body.expectedAmountTaxIncluded);
-    if (amount === null || amount < 0) {
+    if (amount === null) {
       return new Response("expectedAmountTaxIncluded is invalid", { status: 400 });
     }
     patchData.expectedAmountTaxIncluded = amount;

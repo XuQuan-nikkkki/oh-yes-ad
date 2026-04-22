@@ -14,6 +14,7 @@ import {
 } from "antd";
 import ProjectReceivableNodeTable, {
   type ProjectReceivableNodeRow,
+  type ReceivableNodeDelayFormValues,
 } from "@/components/project-detail/ProjectReceivableNodeTable";
 import ProjectReceivablePlanSnapshot from "@/components/project-detail/ProjectReceivablePlanSnapshot";
 import ProjectReceivablePlanModal, {
@@ -69,6 +70,13 @@ type ReceivableNode = {
   expectedAmountTaxIncluded: number;
   expectedDate: string;
   expectedDateChangeCount: number;
+  expectedDateHistories?: Array<{
+    id: string;
+    fromExpectedDate: string;
+    toExpectedDate: string;
+    reason?: string | null;
+    changedAt?: string;
+  }>;
   remark?: string | null;
   remarkNeedsAttention: boolean;
   actualNodes?: Array<{
@@ -666,6 +674,31 @@ const ProjectReceivableInfo = forwardRef<
       [fetchPlans, messageApi],
     );
 
+    const handleDelayNode = useCallback(
+      async (
+        row: ProjectReceivableNodeRow,
+        values: ReceivableNodeDelayFormValues,
+      ) => {
+        const res = await fetch(`/api/project-receivable-nodes/${row.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            expectedDate: values.delayedExpectedDate?.toISOString(),
+            expectedDateChangeReason: values.delayReason?.trim() || null,
+          }),
+        });
+        if (!res.ok) {
+          messageApi.error((await res.text()) || "延迟收款失败");
+          return;
+        }
+        messageApi.success("延迟收款成功");
+        await fetchPlans();
+      },
+      [fetchPlans, messageApi],
+    );
+
     const handleCollectNode = useCallback(
       async (
         row: ReceivableNode,
@@ -862,6 +895,7 @@ const ProjectReceivableInfo = forwardRef<
                     }}
                     onEditActualNode={handleEditActualNode}
                     onDeleteActualNode={handleDeleteActualNode}
+                    onDelayNode={handleDelayNode}
                   />
                 </div>
               </div>

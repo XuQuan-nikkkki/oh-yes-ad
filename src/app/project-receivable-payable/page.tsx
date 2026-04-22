@@ -32,7 +32,10 @@ import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import ReceivableProjectSection from "@/components/project-receivable-payable/ReceivableProjectSection";
 import PayableProjectSection from "@/components/project-receivable-payable/PayableProjectSection";
-import type { ProjectReceivableNodeRow } from "@/components/project-detail/ProjectReceivableNodeTable";
+import type {
+  ProjectReceivableNodeRow,
+  ReceivableNodeDelayFormValues,
+} from "@/components/project-detail/ProjectReceivableNodeTable";
 import type { ProjectReceivableNodeFormValues } from "@/components/project-detail/ProjectReceivableNodeModal";
 import type { ProjectReceivableActualNodeFormValues } from "@/components/project-detail/ProjectReceivableActualNodeModal";
 import type { ProjectPayableNodeRow } from "@/components/project-detail/ProjectPayableNodeTable";
@@ -94,6 +97,13 @@ type ReceivableNode = {
   keyDeliverable: string;
   expectedAmountTaxIncluded: number;
   expectedDate: string;
+  expectedDateHistories?: Array<{
+    id: string;
+    fromExpectedDate: string;
+    toExpectedDate: string;
+    reason?: string | null;
+    changedAt?: string;
+  }>;
   remark?: string | null;
   remarkNeedsAttention: boolean;
   actualNodes?: ActualNode[];
@@ -1343,6 +1353,13 @@ function ProjectReceivablePayablePageContent() {
             ),
             expectedDate: node.expectedDate ?? "",
             expectedDateChangeCount: 0,
+            expectedDateHistories: (node.expectedDateHistories ?? []).map((history) => ({
+              id: history.id,
+              fromExpectedDate: history.fromExpectedDate,
+              toExpectedDate: history.toExpectedDate,
+              reason: history.reason ?? null,
+              changedAt: history.changedAt,
+            })),
             remark: node.remark ?? null,
             remarkNeedsAttention: Boolean(node.remarkNeedsAttention),
             actualNodes: (node.actualNodes ?? []).map((actual) => ({
@@ -1414,6 +1431,13 @@ function ProjectReceivablePayablePageContent() {
           ),
           expectedDate: node.expectedDate ?? "",
           expectedDateChangeCount: 0,
+          expectedDateHistories: (node.expectedDateHistories ?? []).map((history) => ({
+            id: history.id,
+            fromExpectedDate: history.fromExpectedDate,
+            toExpectedDate: history.toExpectedDate,
+            reason: history.reason ?? null,
+            changedAt: history.changedAt,
+          })),
           remark: node.remark ?? null,
           remarkNeedsAttention: Boolean(node.remarkNeedsAttention),
           actualNodes: (node.actualNodes ?? []).map((actual) => ({
@@ -1795,6 +1819,31 @@ function ProjectReceivablePayablePageContent() {
         return;
       }
       messageApi.success("删除收款节点成功");
+      await fetchData();
+    },
+    [fetchData, messageApi],
+  );
+
+  const handleDelayReceivableNode = useCallback(
+    async (
+      row: ProjectReceivableNodeRow,
+      values: ReceivableNodeDelayFormValues,
+    ) => {
+      const response = await fetch(`/api/project-receivable-nodes/${row.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          expectedDate: values.delayedExpectedDate?.toISOString(),
+          expectedDateChangeReason: values.delayReason?.trim() || null,
+        }),
+      });
+      if (!response.ok) {
+        messageApi.error((await response.text()) || "延迟收款失败");
+        return;
+      }
+      messageApi.success("延迟收款成功");
       await fetchData();
     },
     [fetchData, messageApi],
@@ -3041,6 +3090,7 @@ function ProjectReceivablePayablePageContent() {
                     onCollectNode={handleCollectReceivableNode}
                     onEditActualNode={handleEditReceivableActualNode}
                     onDeleteActualNode={handleDeleteReceivableActualNode}
+                    onDelayNode={handleDelayReceivableNode}
                   />
                 ))
               ) : (

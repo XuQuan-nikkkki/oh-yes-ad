@@ -2,7 +2,17 @@
 
 import type { Dayjs } from "dayjs";
 import { useEffect, useMemo } from "react";
-import { Col, DatePicker, Form, Input, InputNumber, Modal, Row, Space, Switch } from "antd";
+import {
+  Col,
+  DatePicker,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Row,
+  Space,
+  Switch,
+} from "antd";
 import SelectOptionSelector, {
   type SelectOptionSelectorValue,
 } from "@/components/SelectOptionSelector";
@@ -17,7 +27,7 @@ export type ProjectReceivableNodeFormValues = {
   stage: SelectOptionSelectorValue;
   keyDeliverable: string;
   expectedAmountTaxIncluded: number;
-  expectedDate: Dayjs;
+  expectedDate?: Dayjs;
   actualAmountTaxIncluded?: number;
   actualDate?: Dayjs;
   remark?: string;
@@ -107,7 +117,9 @@ const ProjectReceivableNodeModal = ({
               rules={[{ required: true, message: "请选择收款阶段" }]}
             >
               <SelectOptionSelector
-                placeholder={stageOptionsLoading ? "加载中..." : "请选择或新增收款阶段"}
+                placeholder={
+                  stageOptionsLoading ? "加载中..." : "请选择或新增收款阶段"
+                }
                 options={stageOptions.map((item) => ({
                   value: item.value,
                   label: item.value,
@@ -134,15 +146,11 @@ const ProjectReceivableNodeModal = ({
               name="expectedAmountTaxIncluded"
               rules={[{ required: true, message: "请输入预收金额" }]}
             >
-              <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+              <InputNumber precision={0} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item
-              label="预收日期"
-              name="expectedDate"
-              rules={[{ required: true, message: "请选择预收日期" }]}
-            >
+            <Form.Item label="预收日期" name="expectedDate">
               <DatePicker style={{ width: "100%" }} />
             </Form.Item>
           </Col>
@@ -150,8 +158,11 @@ const ProjectReceivableNodeModal = ({
         {shouldShowActualFields ? (
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item label="实收金额（含税）" name="actualAmountTaxIncluded">
-                <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+              <Form.Item
+                label="实收金额（含税）"
+                name="actualAmountTaxIncluded"
+              >
+                <InputNumber precision={0} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -177,6 +188,7 @@ const ProjectReceivableNodeModal = ({
                 name="remarkNeedsAttention"
                 valuePropName="checked"
                 noStyle
+                layout="horizontal"
               >
                 <Switch size="small" />
               </Form.Item>

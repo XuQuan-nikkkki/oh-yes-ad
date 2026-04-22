@@ -16,6 +16,7 @@ type Props = {
   disableTextVairant?: boolean;
   gap?: number;
   buttonStyle?: CSSProperties;
+  showIcons?: boolean;
 };
 
 const TableActions = ({
@@ -30,6 +31,7 @@ const TableActions = ({
   disableTextVairant = false,
   gap = 4,
   buttonStyle,
+  showIcons = true,
 }: Props) => {
   return (
     <Space size={gap} wrap={false} style={{ whiteSpace: "nowrap" }}>
@@ -40,7 +42,7 @@ const TableActions = ({
           style={buttonStyle}
           disabled={disabled}
           loading={editLoading}
-          icon={<EditOutlined />}
+          icon={showIcons ? <EditOutlined /> : undefined}
           onClick={(e) => {
             e.stopPropagation();
             onEdit?.();
@@ -69,7 +71,7 @@ const TableActions = ({
             style={buttonStyle}
             disabled={disabled}
             loading={deleteLoading}
-            icon={<DeleteOutlined />}
+            icon={showIcons ? <DeleteOutlined /> : undefined}
             onClick={(e) => e.stopPropagation()}
             styles={{ root: disableTextVairant ? undefined : { padding: 8 } }}
           >

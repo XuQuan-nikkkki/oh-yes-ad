@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, Form, Input, InputNumber, Modal, Select, Space, Steps, Switch } from "antd";
+import {
+  Button,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Select,
+  Space,
+  Steps,
+  Switch,
+} from "antd";
 
 export type ProjectPayablePlanFormValues = {
   vendorId?: string;
@@ -24,9 +34,7 @@ type Props = {
   mode: "create" | "edit";
   loading?: boolean;
   onCancel: () => void;
-  onSubmit: (
-    values: ProjectPayablePlanFormValues,
-  ) => void | Promise<void>;
+  onSubmit: (values: ProjectPayablePlanFormValues) => void | Promise<void>;
   initialValues: Partial<ProjectPayablePlanFormValues>;
   projectId: string;
   projectName: string;
@@ -57,7 +65,11 @@ const ProjectPayablePlanModal = ({
   const [form] = Form.useForm<ProjectPayablePlanFormValues>();
   const [currentStep, setCurrentStep] = useState(0);
   const mergedInitialValues = useMemo(
-    () => ({ hasCustomerCollection: false, remarkNeedsAttention: false, ...initialValues }),
+    () => ({
+      hasCustomerCollection: false,
+      remarkNeedsAttention: false,
+      ...initialValues,
+    }),
     [initialValues],
   );
 
@@ -118,102 +130,110 @@ const ProjectPayablePlanModal = ({
               initialValues={mergedInitialValues}
             >
               <div style={{ display: currentStep === 0 ? "block" : "none" }}>
-          <Form.Item label="所属项目">
-            <Select
-              disabled
-              options={[{ label: projectName || "未命名项目", value: projectId }]}
-              value={projectId}
-            />
-          </Form.Item>
-          <Form.Item
-            label="供应商"
-            name="vendorId"
-            rules={[{ required: true, message: "请选择供应商" }]}
-          >
-            <Select
-              showSearch
-              allowClear
-              loading={vendorLoading}
-              placeholder="请选择供应商"
-              options={vendorOptions}
-              optionFilterProp="label"
-            />
-          </Form.Item>
-          <Form.Item
-            label="签约主体"
-            name="legalEntityId"
-            rules={[{ required: true, message: "请选择签约主体" }]}
-          >
-            <Select
-              showSearch
-              allowClear
-              loading={legalEntityLoading}
-              placeholder="请选择签约主体"
-              options={legalEntityOptions}
-              optionFilterProp="label"
-            />
-          </Form.Item>
-          <Form.Item
-            label="合同金额(含税)"
-            name="contractAmount"
-            rules={[{ required: true, message: "请输入合同金额(含税)" }]}
-          >
-            <InputNumber min={0} precision={0} style={{ width: "100%" }} />
-          </Form.Item>
+                <Form.Item label="所属项目">
+                  <Select
+                    disabled
+                    options={[
+                      { label: projectName || "未命名项目", value: projectId },
+                    ]}
+                    value={projectId}
+                  />
+                </Form.Item>
+                <Form.Item
+                  label="供应商"
+                  name="vendorId"
+                  rules={[{ required: true, message: "请选择供应商" }]}
+                >
+                  <Select
+                    showSearch
+                    allowClear
+                    loading={vendorLoading}
+                    placeholder="请选择供应商"
+                    options={vendorOptions}
+                    optionFilterProp="label"
+                  />
+                </Form.Item>
+                <Form.Item
+                  label="签约主体"
+                  name="legalEntityId"
+                  rules={[{ required: true, message: "请选择签约主体" }]}
+                >
+                  <Select
+                    showSearch
+                    allowClear
+                    loading={legalEntityLoading}
+                    placeholder="请选择签约主体"
+                    options={legalEntityOptions}
+                    optionFilterProp="label"
+                  />
+                </Form.Item>
+                <Form.Item
+                  label="合同金额(含税)"
+                  name="contractAmount"
+                  rules={[{ required: true, message: "请输入合同金额(含税)" }]}
+                >
+                  <InputNumber
+                    min={0}
+                    precision={0}
+                    style={{ width: "100%" }}
+                  />
+                </Form.Item>
               </div>
 
               <div style={{ display: currentStep === 1 ? "block" : "none" }}>
-          <Form.Item
-            label="服务内容"
-            name="serviceContent"
-            rules={[{ required: true, message: "请输入服务内容" }]}
-          >
-            <Input placeholder="请输入服务内容" />
-          </Form.Item>
-          <Form.Item
-            label="跟进人"
-            name="ownerEmployeeId"
-            rules={[{ required: true, message: "请选择跟进人" }]}
-          >
-            <Select
-              showSearch
-              placeholder="请选择跟进人"
-              options={ownerOptions}
-              optionFilterProp="label"
-            />
-          </Form.Item>
-          <Form.Item
-            label="有客户收款"
-            name="hasCustomerCollection"
-            valuePropName="checked"
-          >
-            <Switch checkedChildren="是" unCheckedChildren="否" />
-          </Form.Item>
-          <div style={{ marginBottom: 24 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 8,
-              }}
-            >
-              <span style={{ color: "rgba(0,0,0,0.88)" }}>备注</span>
-              <Space size={8}>
-                <span style={{ fontWeight: 400 }}>标红</span>
                 <Form.Item
-                  name="remarkNeedsAttention"
-                  valuePropName="checked"
-                  noStyle
+                  label="服务内容"
+                  name="serviceContent"
+                  rules={[{ required: true, message: "请输入服务内容" }]}
                 >
-                  <Switch size="small" />
+                  <Input placeholder="请输入服务内容" />
                 </Form.Item>
-              </Space>
-            </div>
-            <Form.Item name="remark" style={{ marginBottom: 0 }}>
-              <Input.TextArea rows={4} placeholder="请输入备注" />
-            </Form.Item>
-          </div>
+                <Form.Item
+                  label="跟进人"
+                  name="ownerEmployeeId"
+                  rules={[{ required: true, message: "请选择跟进人" }]}
+                >
+                  <Select
+                    showSearch
+                    placeholder="请选择跟进人"
+                    options={ownerOptions}
+                    optionFilterProp="label"
+                  />
+                </Form.Item>
+                <Form.Item
+                  label="有客户收款"
+                  name="hasCustomerCollection"
+                  valuePropName="checked"
+                  layout="horizontal"
+                >
+                  <Switch checkedChildren="是" unCheckedChildren="否" />
+                </Form.Item>
+                <div style={{ marginBottom: 24 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <span style={{ color: "rgba(0,0,0,0.88)" }}>备注</span>
+                    <Space size={8}>
+                      <span style={{ fontWeight: 400 }}>标红</span>
+                      <Form.Item
+                        name="remarkNeedsAttention"
+                        valuePropName="checked"
+                        noStyle
+                        layout="horizontal"
+                      >
+                        <Switch size="small" />
+                      </Form.Item>
+                    </Space>
+                  </div>
+                  <Form.Item name="remark" style={{ marginBottom: 0 }}>
+                    <Input.TextArea rows={4} placeholder="请输入备注" />
+                  </Form.Item>
+                </div>
               </div>
             </Form>
           </div>

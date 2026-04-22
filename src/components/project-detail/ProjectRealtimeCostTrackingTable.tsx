@@ -21,7 +21,7 @@ type Props = {
   projectId: string;
   projectName: string;
   startDate?: string | null;
-  latestBaselineCostEstimation?: Project["latestBaselineCostEstimation"];
+  latestInitiation?: Project["latestInitiation"];
   members?: Project["members"];
   actualWorkEntries?: Project["actualWorkEntries"];
   workdayAdjustments?: WorkdayAdjustment[];
@@ -183,7 +183,7 @@ const ProjectRealtimeCostTrackingTable = ({
   projectId,
   projectName,
   startDate,
-  latestBaselineCostEstimation,
+  latestInitiation,
   members = [],
   actualWorkEntries = [],
   workdayAdjustments = [],
@@ -386,7 +386,7 @@ const ProjectRealtimeCostTrackingTable = ({
     return middleOfficeMonthlyCost / middleOfficeBaseDays;
   }, [middleOfficeBaseDays, middleOfficeMonthlyCost]);
 
-  const expectedWorkdays = latestBaselineCostEstimation?.estimatedDuration ?? 0;
+  const expectedWorkdays = latestInitiation?.estimatedDuration ?? 0;
 
   const laborBreakdown = useMemo(() => {
     const groupedHours = new Map<string, number>();

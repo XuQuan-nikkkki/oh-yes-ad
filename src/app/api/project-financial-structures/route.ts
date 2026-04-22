@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
@@ -165,14 +165,17 @@ export async function POST(req: NextRequest) {
 
   const projectId = String(body.projectId ?? "").trim();
   const estimationId = String(body.estimationId ?? "").trim();
-  if (!projectId || !estimationId) {
-    return new Response("projectId and estimationId are required", { status: 400 });
+  if (!projectId) {
+    return new Response("projectId is required", { status: 400 });
   }
 
   const laborCost = toRequiredNumber(body.laborCost);
   const rentCost = toRequiredNumber(body.rentCost);
   const middleOfficeCost = toRequiredNumber(body.middleOfficeCost);
   const executionCost = toRequiredNumber(body.executionCost);
+  const contractAmountTaxIncluded = toRequiredNumber(
+    body.contractAmountTaxIncluded ?? body.contractAmount,
+  );
   const agencyFeeRate = toRequiredNumber(body.agencyFeeRate ?? body.agencyFee);
   const totalCost = toRequiredNumber(body.totalCost);
   const executionCostItems = normalizeExecutionCostItems(body.executionCostItems);
@@ -180,6 +183,7 @@ export async function POST(req: NextRequest) {
   const outsourceRemark = toNullableString(body.outsourceRemark);
 
   if (
+    contractAmountTaxIncluded === null ||
     laborCost === null ||
     rentCost === null ||
     middleOfficeCost === null ||
@@ -187,7 +191,7 @@ export async function POST(req: NextRequest) {
     totalCost === null
   ) {
     return new Response(
-      "laborCost, rentCost, middleOfficeCost, executionCost and totalCost are required",
+      "contractAmountTaxIncluded, laborCost, rentCost, middleOfficeCost, executionCost and totalCost are required",
       { status: 400 },
     );
   }
@@ -200,58 +204,97 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const [project, estimation, existingByEstimation] = await Promise.all([
-    prisma.project.findUnique({ where: { id: projectId }, select: { id: true } }),
-    prisma.projectInitiation.findUnique({
-      where: { id: estimationId },
-      select: { id: true, projectId: true },
-    }),
-    prisma.projectFinancialStructure.findUnique({
-      where: { initiationId: estimationId },
-      select: { id: true },
-    }),
-  ]);
+  const [project, estimation, existingByEstimation, existingWithoutEstimation] =
+    await Promise.all([
+      prisma.project.findUnique({ where: { id: projectId }, select: { id: true } }),
+      estimationId
+        ? prisma.projectInitiation.findUnique({
+            where: { id: estimationId },
+            select: { id: true, projectId: true },
+          })
+        : Promise.resolve(null),
+      estimationId
+        ? prisma.projectFinancialStructure.findUnique({
+            where: { initiationId: estimationId },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      estimationId
+        ? Promise.resolve(null)
+        : prisma.projectFinancialStructure.findFirst({
+            where: { projectId, initiationId: null },
+            select: { id: true },
+          }),
+    ]);
 
   if (!project) return new Response("Project not found", { status: 404 });
-  if (!estimation) return new Response("Estimation not found", { status: 404 });
-  if (estimation.projectId !== projectId) {
-    return new Response("estimationId does not belong to projectId", { status: 400 });
+  if (estimationId) {
+    if (!estimation) return new Response("Estimation not found", { status: 404 });
+    if (estimation.projectId !== projectId) {
+      return new Response("estimationId does not belong to projectId", { status: 400 });
+    }
   }
   if (existingByEstimation) {
     return new Response("Financial structure already exists for this estimation", {
       status: 409,
     });
   }
+  if (existingWithoutEstimation) {
+    return new Response(
+      "Financial structure without estimation already exists for this project",
+      { status: 409 },
+    );
+  }
 
-  const created = await prisma.projectFinancialStructure.create({
-    data: {
-      projectId,
-      initiationId: estimationId,
-      laborCost,
-      rentCost,
-      middleOfficeCost,
-      executionCost,
-      agencyFeeRate: agencyFeeRate ?? 0,
-      totalCost,
-      outsourceRemark,
-      outsourceItems: {
-        create: outsourceItems.map((item) => ({
-          type: item.type,
-          amount: item.amount,
-        })),
-      },
-      executionCostItems: {
-        create: executionCostItems.map((item) => ({
-          costTypeOptionId: item.costTypeOptionId,
-          budgetAmount: item.budgetAmount,
-          remark: item.remark ?? null,
-        })),
-      },
-    } as never,
-    include: includeDetail,
-  });
+  let created: Record<string, unknown>;
+  try {
+    created = (await prisma.projectFinancialStructure.create({
+      data: {
+        projectId,
+        initiationId: estimationId || null,
+        contractAmountTaxIncluded,
+        laborCost,
+        rentCost,
+        middleOfficeCost,
+        executionCost,
+        agencyFeeRate: agencyFeeRate ?? 0,
+        totalCost,
+        outsourceRemark,
+        outsourceItems: {
+          create: outsourceItems.map((item) => ({
+            type: item.type,
+            amount: item.amount,
+          })),
+        },
+        executionCostItems: {
+          create: executionCostItems.map((item) => ({
+            costTypeOptionId: item.costTypeOptionId,
+            budgetAmount: item.budgetAmount,
+            remark: item.remark ?? null,
+          })),
+        },
+      } as never,
+      include: includeDetail,
+    })) as Record<string, unknown>;
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2002") {
+        return new Response("Financial structure already exists", { status: 409 });
+      }
+      if (error.code === "P2003") {
+        return new Response("Invalid relation input", { status: 400 });
+      }
+      if (error.code === "P2011") {
+        return new Response("Missing required field", { status: 400 });
+      }
+    }
+    console.error("Create project financial structure failed:", error);
+    return new Response("Create project financial structure failed", {
+      status: 500,
+    });
+  }
 
   return Response.json(
-    serializeFinancialStructure(created as Record<string, unknown>),
+    serializeFinancialStructure(created),
   );
 }

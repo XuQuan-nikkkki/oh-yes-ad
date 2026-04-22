@@ -25,6 +25,7 @@ type CostBasisMemberRow = {
   } | null;
   allocationPercent?: number;
   laborCostSnapshot?: number;
+  isTotalRow?: boolean;
 };
 
 const formatAmount = (value?: number | null) => {
@@ -76,12 +77,32 @@ const ProjectCostBasisMembersTable = ({ members }: Props) => {
     [memberRows],
   );
 
+  const tableRows = useMemo<CostBasisMemberRow[]>(
+    () =>
+      canViewLaborCost && memberRows.length > 0
+        ? [
+            ...memberRows,
+            {
+              id: "labor-cost-total-row",
+              employeeName: "人力成本总计",
+              laborCostSnapshot: totalLaborCost,
+              isTotalRow: true,
+            },
+          ]
+        : memberRows,
+    [canViewLaborCost, memberRows, totalLaborCost],
+  );
+
   const memberViewColumns = useMemo<ColumnsType<CostBasisMemberRow>>(
     () => [
       {
         title: "姓名",
         dataIndex: "employeeName",
         width: 140,
+        onHeaderCell: () => ({ style: { paddingLeft: 24 } }),
+        onCell: (row) => ({
+          style: { paddingLeft: 24, fontWeight: row.isTotalRow ? 600 : undefined },
+        }),
         render: (_value: string | undefined, row) =>
           row.employeeId && row.employeeName ? (
             <AppLink href={`/employees/${row.employeeId}`}>
@@ -95,14 +116,16 @@ const ProjectCostBasisMembersTable = ({ members }: Props) => {
         title: "职能",
         dataIndex: "functionOption",
         width: 140,
-        render: (value) =>
+        render: (value, row) =>
+          row.isTotalRow ? "" :
           value?.value ? <SelectOptionTag option={value} /> : "-",
       },
       {
         title: "占比",
         dataIndex: "allocationPercent",
         width: 220,
-        render: (value: number | undefined) => {
+        render: (value: number | undefined, row) => {
+          if (row.isTotalRow) return "";
           if (typeof value !== "number") return "-";
           const percent = Math.min(Math.max(value, 0), 100);
           return (
@@ -123,8 +146,19 @@ const ProjectCostBasisMembersTable = ({ members }: Props) => {
               dataIndex: "laborCostSnapshot",
               width: 180,
               align: "right" as const,
-              render: (value: number | undefined) =>
-                typeof value === "number" ? `${formatAmount(value)} 元` : "-",
+              onHeaderCell: () => ({ style: { paddingRight: 24 } }),
+              onCell: (row: CostBasisMemberRow) => ({
+                style: {
+                  paddingRight: 24,
+                  fontWeight: row.isTotalRow ? 600 : undefined,
+                },
+              }),
+              render: (value: number | undefined, row: CostBasisMemberRow) =>
+                typeof value === "number"
+                  ? `${formatAmount(value)} 元`
+                  : row.isTotalRow
+                    ? ""
+                    : "-",
             },
           ]
         : []),
@@ -136,26 +170,12 @@ const ProjectCostBasisMembersTable = ({ members }: Props) => {
     <Table
       rowKey="id"
       columns={memberViewColumns}
-      dataSource={memberRows}
+      dataSource={tableRows}
       pagination={false}
       locale={{ emptyText: "暂无成员配置" }}
       size="small"
       style={{ width: "100%", marginBottom: 8 }}
       tableLayout="fixed"
-      summary={
-        canViewLaborCost
-          ? () => (
-              <Table.Summary.Row style={{ fontWeight: 600 }}>
-                <Table.Summary.Cell index={0} colSpan={3}>
-                  人力成本总计
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={1} align="right">
-                  {`${formatAmount(totalLaborCost)} 元`}
-                </Table.Summary.Cell>
-              </Table.Summary.Row>
-            )
-          : undefined
-      }
     />
   );
 };

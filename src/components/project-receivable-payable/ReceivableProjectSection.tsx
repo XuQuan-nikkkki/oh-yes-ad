@@ -5,11 +5,13 @@ import { Card, Empty, Progress } from "antd";
 import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import ProjectReceivableNodeTable, {
   type ProjectReceivableNodeRow,
+  type ReceivableNodeDelayFormValues,
 } from "@/components/project-detail/ProjectReceivableNodeTable";
 import ProjectReceivableNodeModal, {
   type ProjectReceivableNodeFormValues,
 } from "@/components/project-detail/ProjectReceivableNodeModal";
 import type { ProjectReceivableActualNodeFormValues } from "@/components/project-detail/ProjectReceivableActualNodeModal";
+import AppLink from "../AppLink";
 
 type ReceivableProjectSectionProps = {
   projectId: string;
@@ -52,6 +54,10 @@ type ReceivableProjectSectionProps = {
     values: ProjectReceivableActualNodeFormValues,
   ) => void | Promise<void>;
   onDeleteActualNode?: (actualNodeId: string) => void | Promise<void>;
+  onDelayNode?: (
+    row: ProjectReceivableNodeRow,
+    values: ReceivableNodeDelayFormValues,
+  ) => void | Promise<void>;
 };
 
 export default function ReceivableProjectSection({
@@ -73,6 +79,7 @@ export default function ReceivableProjectSection({
   onCollectNode,
   onEditActualNode,
   onDeleteActualNode,
+  onDelayNode,
 }: ReceivableProjectSectionProps) {
   const [nodeModalOpen, setNodeModalOpen] = useState(false);
   const [creatingNode, setCreatingNode] = useState(false);
@@ -123,11 +130,12 @@ export default function ReceivableProjectSection({
             {signingCompanyName || "未设置签约公司"}
           </span>
           <span style={{ color: "rgba(0,0,0,0.25)" }}>·</span>
-          <span
+          <AppLink
+            href={`/projects/${projectId}`}
             style={{ color: "rgba(0,0,0,0.88)", fontWeight: 700, fontSize: 16 }}
           >
             {projectName || "-"}
-          </span>
+          </AppLink>
           <SelectOptionQuickEditTag
             field="project.status"
             disabled={!canManageProject}
@@ -210,6 +218,7 @@ export default function ReceivableProjectSection({
           onCollectNode={onCollectNode}
           onEditActualNode={onEditActualNode}
           onDeleteActualNode={onDeleteActualNode}
+          onDelayNode={onDelayNode}
         />
       ) : (
         <div style={{ padding: 16 }}>

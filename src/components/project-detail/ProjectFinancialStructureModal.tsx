@@ -28,11 +28,13 @@ import {
 } from "@/lib/project-outsource";
 import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
 import type { Project } from "@/types/projectDetail";
+import { EXECUTION_COST_FIELD } from "@/lib/execution-cost";
 
 type ExistingStructure = {
   id: string;
   projectId: string;
-  estimationId: string;
+  estimationId?: string | null;
+  contractAmountTaxIncluded?: number | null;
   laborCost: number;
   rentCost: number;
   middleOfficeCost: number;
@@ -79,12 +81,25 @@ type FormValues = {
   executionCostItems?: ExecutionCostItemFormRow[];
 };
 
+export type ImportedFinancialStructurePrefill = {
+  incomeTaxIncluded?: number;
+  outsourceAmount?: number;
+  laborCost?: number;
+  rentCost?: number;
+  middleOfficeCost?: number;
+  executionCostItems?: Array<{
+    label: string;
+    amount: number;
+  }>;
+};
+
 type Props = {
   open: boolean;
   onCancel: () => void;
   projectId: string;
-  estimation?: Project["latestBaselineCostEstimation"];
+  estimation?: Project["latestInitiation"];
   existingStructure?: ExistingStructure | null;
+  importedPrefill?: ImportedFinancialStructurePrefill | null;
   onSaved?: () => void | Promise<void>;
 };
 
@@ -101,7 +116,6 @@ type PricingStrategyResponse = {
 };
 
 const MODAL_FORM_MAX_HEIGHT = "calc(100vh - 220px)";
-
   const toMoney = (value: unknown) => {
     if (value === null || value === undefined || value === "") return 0;
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -128,7 +142,7 @@ const calculateMiddleOfficeCost = (
   return roundMoney((averageMonthlyCost / baseDays) * duration);
 };
 
-const parseContractAmount = (estimation?: Project["latestBaselineCostEstimation"]) => {
+const parseContractAmount = (estimation?: Project["latestInitiation"]) => {
   if (typeof estimation?.contractAmount === "number") {
     return estimation.contractAmount;
   }
@@ -140,17 +154,28 @@ const parseContractAmount = (estimation?: Project["latestBaselineCostEstimation"
   return 0;
 };
 
+const normalizeExecutionCostLabel = (value: string) =>
+  value
+    .trim()
+    .replace(/[\s:：]/g, "")
+    .replace(/费用/g, "")
+    .replace(/费/g, "")
+    .toLowerCase();
+
 const ProjectFinancialStructureModal = ({
   open,
   onCancel,
   projectId,
   estimation,
   existingStructure,
+  importedPrefill,
   onSaved,
 }: Props) => {
   const app = App.useApp();
   const [messageApi, contextHolder] = message.useMessage();
   const [submitting, setSubmitting] = useState(false);
+  const [fallbackExecutionCostDefinitions, setFallbackExecutionCostDefinitions] =
+    useState<Array<{ id: string; label: string }>>([]);
   const [pricingExecutionCostPrefill, setPricingExecutionCostPrefill] = useState<{
     byId: Record<string, number>;
     byLabel: Record<string, number>;
@@ -239,6 +264,83 @@ const ProjectFinancialStructureModal = ({
     };
   }, [existingStructure?.id, open, projectId]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+    const loadExecutionCostOptions = async () => {
+      const query = new URLSearchParams({ field: EXECUTION_COST_FIELD });
+      const res = await fetch(`/api/select-options?${query.toString()}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        throw new Error("FETCH_EXECUTION_COST_OPTIONS_FAILED");
+      }
+      const rows = (await res.json()) as Array<{
+        id?: string;
+        value?: string | null;
+      }>;
+      return (rows ?? [])
+        .map((item) => ({
+          id: String(item.id ?? "").trim(),
+          label: String(item.value ?? "").trim(),
+        }))
+        .filter((item) => item.id && item.label);
+    };
+
+    const fetchExecutionCostOptions = async () => {
+      try {
+        let definitions = await loadExecutionCostOptions();
+        const importedPositiveLabels = (importedPrefill?.executionCostItems ?? [])
+          .filter(
+            (item) =>
+              typeof item?.amount === "number" &&
+              Number.isFinite(item.amount) &&
+              item.amount > 0,
+          )
+          .map((item) => String(item.label ?? "").trim())
+          .filter(Boolean);
+
+        if (importedPositiveLabels.length > 0) {
+          const existingNormalizedLabels = new Set(
+            definitions.map((item) => normalizeExecutionCostLabel(item.label)),
+          );
+          const missingLabels = importedPositiveLabels.filter((label) => {
+            const normalizedLabel = normalizeExecutionCostLabel(label);
+            if (!normalizedLabel) return false;
+            return !existingNormalizedLabels.has(normalizedLabel);
+          });
+
+          if (missingLabels.length > 0) {
+            await Promise.all(
+              missingLabels.map((label) =>
+                fetch("/api/select-options", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    field: EXECUTION_COST_FIELD,
+                    value: label,
+                  }),
+                }),
+              ),
+            );
+            definitions = await loadExecutionCostOptions();
+          }
+        }
+
+        if (cancelled) return;
+        setFallbackExecutionCostDefinitions(definitions);
+      } catch {
+        if (!cancelled) setFallbackExecutionCostDefinitions([]);
+      }
+    };
+
+    void fetchExecutionCostOptions();
+    return () => {
+      cancelled = true;
+    };
+  }, [importedPrefill?.executionCostItems, open]);
+
   const estimatedLaborCost = useMemo(
     () =>
       roundMoney(
@@ -284,9 +386,23 @@ const ProjectFinancialStructureModal = ({
       ),
     [estimation?.members],
   );
-  const contractAmount = useMemo(() => parseContractAmount(estimation), [estimation]);
+  const contractAmount = useMemo(
+    () =>
+      typeof existingStructure?.contractAmountTaxIncluded === "number"
+        ? existingStructure.contractAmountTaxIncluded
+        :
+      typeof importedPrefill?.incomeTaxIncluded === "number"
+        ? importedPrefill.incomeTaxIncluded
+        : parseContractAmount(estimation),
+    [estimation, existingStructure, importedPrefill],
+  );
+  const importedPrefillKey = useMemo(
+    () => JSON.stringify(importedPrefill ?? {}),
+    [importedPrefill],
+  );
+  const hasImportedExecutionPrefill = Boolean(importedPrefill);
 
-  const executionCostItemDefinitions = useMemo(() => {
+  const estimationExecutionCostItemDefinitions = useMemo(() => {
     const map = new Map<string, { id: string; label: string }>();
     for (const item of estimation?.executionCostTypes ?? []) {
       if (!item?.id) continue;
@@ -299,9 +415,71 @@ const ProjectFinancialStructureModal = ({
     return Array.from(map.values());
   }, [estimation?.executionCostTypes]);
 
+  const executionCostItemDefinitions = useMemo(() => {
+    const baseDefinitions =
+      estimationExecutionCostItemDefinitions.length > 0
+        ? estimationExecutionCostItemDefinitions
+        : fallbackExecutionCostDefinitions;
+    const mergedDefinitions = Array.from(
+      new Map(
+        [...baseDefinitions, ...fallbackExecutionCostDefinitions].map((item) => [
+          item.id,
+          item,
+        ]),
+      ).values(),
+    );
+    if (!hasImportedExecutionPrefill) return baseDefinitions;
+
+    const definitionByNormalizedLabel = new Map<string, { id: string; label: string }>();
+    for (const definition of mergedDefinitions) {
+      definitionByNormalizedLabel.set(
+        normalizeExecutionCostLabel(definition.label),
+        definition,
+      );
+    }
+
+    const selected = new Map<string, { id: string; label: string }>();
+    for (const item of importedPrefill?.executionCostItems ?? []) {
+      if (typeof item?.amount !== "number" || !Number.isFinite(item.amount) || item.amount <= 0) {
+        continue;
+      }
+      const normalizedLabel = normalizeExecutionCostLabel(String(item.label ?? ""));
+      if (!normalizedLabel) continue;
+      const matched = definitionByNormalizedLabel.get(normalizedLabel);
+      if (matched) {
+        selected.set(matched.id, matched);
+      }
+    }
+    return Array.from(selected.values());
+  }, [
+    estimationExecutionCostItemDefinitions,
+    fallbackExecutionCostDefinitions,
+    hasImportedExecutionPrefill,
+    importedPrefill?.executionCostItems,
+  ]);
+
   const initialValues = useMemo<FormValues>(() => {
     const getPrefillAmount = (id: string, label: string) =>
       pricingExecutionCostPrefill.byId[id] ?? pricingExecutionCostPrefill.byLabel[label];
+    const importedExecutionAmountByExactLabel = new Map<string, number>();
+    const importedExecutionAmountByNormalizedLabel = new Map<string, number>();
+    for (const item of importedPrefill?.executionCostItems ?? []) {
+      const normalizedLabel = String(item.label ?? "").trim();
+      if (!normalizedLabel) continue;
+      if (typeof item.amount !== "number" || !Number.isFinite(item.amount)) continue;
+      importedExecutionAmountByExactLabel.set(normalizedLabel, item.amount);
+      importedExecutionAmountByNormalizedLabel.set(
+        normalizeExecutionCostLabel(normalizedLabel),
+        item.amount,
+      );
+    }
+    const getImportedExecutionAmount = (label: string) => {
+      const exact = importedExecutionAmountByExactLabel.get(label);
+      if (typeof exact === "number") return exact;
+      return importedExecutionAmountByNormalizedLabel.get(
+        normalizeExecutionCostLabel(label),
+      );
+    };
 
     if (existingStructure) {
       const initialLaborCost = Number(estimatedLaborCost ?? 0);
@@ -320,16 +498,34 @@ const ProjectFinancialStructureModal = ({
             : existingStructure.agencyFeeRate),
       );
 
+      const importedOutsourceAmount = importedPrefill?.outsourceAmount;
+      const hasImportedOutsource =
+        typeof importedOutsourceAmount === "number" &&
+        Number.isFinite(importedOutsourceAmount) &&
+        importedOutsourceAmount > 0;
+
       return {
-        hasOutsource: (estimation?.outsourceItems?.length ?? 0) > 0,
-        laborCost: initialLaborCost,
-        rentCost: initialRentCost,
-        middleOfficeCost: initialMiddleOfficeCost,
-        outsourceItems: (estimation?.outsourceItems ?? []).map((item) => ({
+        hasOutsource:
+          hasImportedOutsource || (estimation?.outsourceItems?.length ?? 0) > 0,
+        laborCost:
+          typeof importedPrefill?.laborCost === "number"
+            ? importedPrefill.laborCost
+            : initialLaborCost,
+        rentCost:
+          typeof importedPrefill?.rentCost === "number"
+            ? importedPrefill.rentCost
+            : initialRentCost,
+        middleOfficeCost:
+          typeof importedPrefill?.middleOfficeCost === "number"
+            ? importedPrefill.middleOfficeCost
+            : initialMiddleOfficeCost,
+        outsourceItems: hasImportedOutsource
+          ? [{ type: "", amount: importedOutsourceAmount }]
+          : (estimation?.outsourceItems ?? []).map((item) => ({
           id: item.id,
           type: item.type,
           amount: normalizeProjectOutsourceAmount(item.amount) ?? undefined,
-        })),
+            })),
         outsourceRemark:
           typeof existingStructure.outsourceRemark === "string"
             ? existingStructure.outsourceRemark
@@ -346,25 +542,44 @@ const ProjectFinancialStructureModal = ({
           );
           return {
             costTypeOptionId: definition.id,
-            budgetAmount:
+            budgetAmount: getImportedExecutionAmount(definition.label) ??
               existingItem?.budgetAmount ??
-              getPrefillAmount(definition.id, definition.label),
+              (hasImportedExecutionPrefill
+                ? undefined
+                : getPrefillAmount(definition.id, definition.label)),
           };
         }),
       };
     }
 
+    const importedOutsourceAmount = importedPrefill?.outsourceAmount;
+    const hasImportedOutsource =
+      typeof importedOutsourceAmount === "number" &&
+      Number.isFinite(importedOutsourceAmount) &&
+      importedOutsourceAmount > 0;
+
     return {
-      hasOutsource: (estimation?.outsourceItems?.length ?? 0) > 0,
-      outsourceItems: (estimation?.outsourceItems ?? []).map((item) => ({
+      hasOutsource: hasImportedOutsource || (estimation?.outsourceItems?.length ?? 0) > 0,
+      outsourceItems: hasImportedOutsource
+        ? [{ type: "", amount: importedOutsourceAmount }]
+        : (estimation?.outsourceItems ?? []).map((item) => ({
         id: item.id,
         type: item.type,
         amount: normalizeProjectOutsourceAmount(item.amount) ?? undefined,
-      })),
+          })),
       outsourceRemark: estimation?.outsourceRemark ?? "",
-      laborCost: estimatedLaborCost,
-      rentCost: estimatedRentCost,
-      middleOfficeCost: estimatedMiddleOfficeCost,
+      laborCost:
+        typeof importedPrefill?.laborCost === "number"
+          ? importedPrefill.laborCost
+          : estimatedLaborCost,
+      rentCost:
+        typeof importedPrefill?.rentCost === "number"
+          ? importedPrefill.rentCost
+          : estimatedRentCost,
+      middleOfficeCost:
+        typeof importedPrefill?.middleOfficeCost === "number"
+          ? importedPrefill.middleOfficeCost
+          : estimatedMiddleOfficeCost,
       executionCost: undefined,
       agencyFeeRate:
         typeof estimation?.agencyFeeRate === "number"
@@ -373,19 +588,23 @@ const ProjectFinancialStructureModal = ({
       totalCost: undefined,
       executionCostItems: executionCostItemDefinitions.map((item) => ({
         costTypeOptionId: item.id,
-        budgetAmount: getPrefillAmount(item.id, item.label),
+        budgetAmount:
+          getImportedExecutionAmount(item.label) ??
+          (hasImportedExecutionPrefill
+            ? undefined
+            : getPrefillAmount(item.id, item.label)),
       })),
     };
   }, [
     executionCostItemDefinitions,
-    estimation?.agencyFeeRate,
-    estimation?.outsourceItems,
-    estimation?.outsourceRemark,
+    estimation,
     estimatedLaborCost,
     estimatedRentCost,
     estimatedMiddleOfficeCost,
     estimatedOutsourceCost,
     existingStructure,
+    hasImportedExecutionPrefill,
+    importedPrefill,
     pricingExecutionCostPrefill,
   ]);
 
@@ -397,7 +616,7 @@ const ProjectFinancialStructureModal = ({
   useEffect(() => {
     // StepsForm can mount fields lazily. Ensure execution cost item amounts are prefilled
     // once we have the latest pricing strategy numbers. Do not override user input.
-    if (!open || existingStructure?.id) return;
+    if (!open || existingStructure?.id || hasImportedExecutionPrefill) return;
     if (executionCostItemDefinitions.length === 0) return;
     if (
       Object.keys(pricingExecutionCostPrefill.byId).length === 0 &&
@@ -428,6 +647,7 @@ const ProjectFinancialStructureModal = ({
   }, [
     executionCostItemDefinitions,
     existingStructure?.id,
+    hasImportedExecutionPrefill,
     open,
     pricingExecutionCostPrefill,
   ]);
@@ -474,7 +694,7 @@ const ProjectFinancialStructureModal = ({
       >
             <StepsForm<FormValues>
         formRef={formRef}
-        key={`${existingStructure?.id ?? "new-financial-structure"}-${estimation?.id ?? "no-estimation"}`}
+        key={`${existingStructure?.id ?? "new-financial-structure"}-${estimation?.id ?? "no-estimation"}-${importedPrefillKey}`}
         formProps={{ layout: "vertical" }}
         stepsProps={{
           style: {
@@ -517,10 +737,6 @@ const ProjectFinancialStructureModal = ({
           </div>
         )}
         onFinish={async (values) => {
-          if (!estimation?.id) {
-            notifyError("请先创建立项申请");
-            return false;
-          }
           if (submitting) return false;
 
           const executionCostRows = values.executionCostItems ?? [];
@@ -557,15 +773,22 @@ const ProjectFinancialStructureModal = ({
             ? toNullableTrimmedString(values.outsourceRemark)
             : null;
 
-          const executionCostItems = executionCostItemDefinitions.map((definition) => {
-            const row = executionCostRows.find(
-              (item) => item.costTypeOptionId === definition.id,
+          const executionCostItems = executionCostItemDefinitions
+            .map((definition) => {
+              const row = executionCostRows.find(
+                (item) => item.costTypeOptionId === definition.id,
+              );
+              return {
+                costTypeOptionId: definition.id,
+                budgetAmount: roundMoney(row?.budgetAmount),
+              };
+            })
+            .filter(
+              (item) =>
+                typeof item.budgetAmount === "number" &&
+                Number.isFinite(item.budgetAmount) &&
+                item.budgetAmount > 0,
             );
-            return {
-              costTypeOptionId: definition.id,
-              budgetAmount: roundMoney(row?.budgetAmount),
-            };
-          });
           const executionCost = roundMoney(
             executionCostItems.reduce((sum, item) => sum + toMoney(item.budgetAmount), 0),
           );
@@ -592,7 +815,8 @@ const ProjectFinancialStructureModal = ({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   projectId,
-                  estimationId: estimation.id,
+                  ...(estimation?.id ? { estimationId: estimation.id } : {}),
+                  contractAmountTaxIncluded: contractAmount,
                   laborCost,
                   rentCost,
                   middleOfficeCost,
@@ -634,7 +858,7 @@ const ProjectFinancialStructureModal = ({
           ),
           submitButtonProps: {
             loading: submitting,
-            disabled: submitting || !estimation?.id,
+            disabled: submitting,
           },
         }}
       >
@@ -657,7 +881,6 @@ const ProjectFinancialStructureModal = ({
                   precision={2}
                   style={{ width: "100%" }}
                   placeholder="请输入中介费率"
-                  disabled
                 />
               </Form.Item>
               <Input disabled style={{ width: 64, textAlign: "center" }} value="%" />
@@ -689,6 +912,7 @@ const ProjectFinancialStructureModal = ({
             name="hasOutsource"
             initialValue={initialValues.hasOutsource}
             valuePropName="checked"
+            layout="horizontal"
           >
             <Switch checkedChildren="有" unCheckedChildren="没有" />
           </Form.Item>
@@ -825,7 +1049,7 @@ const ProjectFinancialStructureModal = ({
               </ul>
             ) : (
               <Typography.Text type="secondary">
-                立项申请未申请执行费用
+                暂无执行费用类型
               </Typography.Text>
             )}
           </Form.Item>

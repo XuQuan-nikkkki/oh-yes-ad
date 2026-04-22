@@ -8,7 +8,15 @@ import {
   useImperativeHandle,
   forwardRef,
 } from "react";
-import { Button, Card, Empty, message, Popconfirm, Progress, Space } from "antd";
+import {
+  Button,
+  Card,
+  Empty,
+  message,
+  Popconfirm,
+  Progress,
+  Space,
+} from "antd";
 import { ProCard, StatisticCard } from "@ant-design/pro-components";
 import AppLink from "@/components/AppLink";
 import BooleanTag from "@/components/BooleanTag";
@@ -198,14 +206,15 @@ const ProjectPayableInfo = forwardRef<
       [
         currentPlan?.vendorContract,
         currentPlan?.vendorContractId,
-        vendorContracts
+        vendorContracts,
       ],
     );
     const getContractForPlan = useCallback(
       (plan: PayablePlan) =>
         (plan.vendorContractId
-          ? (vendorContracts.find((item) => item.id === plan.vendorContractId) ??
-            null)
+          ? (vendorContracts.find(
+              (item) => item.id === plan.vendorContractId,
+            ) ?? null)
           : null) ??
         plan.vendorContract ??
         null,
@@ -877,7 +886,10 @@ const ProjectPayableInfo = forwardRef<
                             }
                           }
                           messageApi.success("删除付款计划成功");
-                          await Promise.all([fetchPlans(), fetchVendorContracts()]);
+                          await Promise.all([
+                            fetchPlans(),
+                            fetchVendorContracts(),
+                          ]);
                         }}
                       >
                         <Button danger disabled={!canManageProject}>
@@ -917,8 +929,7 @@ const ProjectPayableInfo = forwardRef<
                         statistic={{
                           title: "合同金额（含税）",
                           value:
-                            contract?.contractAmount ??
-                            plan.contractAmount,
+                            contract?.contractAmount ?? plan.contractAmount,
                           suffix: "元",
                           styles: { content: { fontSize: 18 } },
                           formatter: (value) =>
@@ -991,99 +1002,99 @@ const ProjectPayableInfo = forwardRef<
                         </span>
                       </div>
                     </ProCard>
-                    <ProCard split="vertical" bordered>
+                    <ProCard split="vertical">
                       <ProCard>
-                  <div
-                    style={{
-                      color: "rgba(0,0,0,0.45)",
-                      fontSize: 12,
-                      marginBottom: 8,
-                      fontWeight: 600,
-                    }}
-                  >
-                    签约主体
-                  </div>
-                  <div style={{ wordBreak: "break-word" }}>
-                    <span>{contract?.legalEntity?.name || "-"}</span>
-                  </div>
-                </ProCard>
-                <ProCard>
-                  <div
-                    style={{
-                      color: "rgba(0,0,0,0.45)",
-                      fontSize: 12,
-                      marginBottom: 8,
-                      fontWeight: 600,
-                    }}
-                  >
-                    服务内容
-                  </div>
-                  <div style={{ wordBreak: "break-word" }}>
-                    {contract?.serviceContent?.trim()
-                      ? contract.serviceContent
-                      : "-"}
-                  </div>
-                </ProCard>
+                        <div
+                          style={{
+                            color: "rgba(0,0,0,0.45)",
+                            fontSize: 12,
+                            marginBottom: 8,
+                            fontWeight: 600,
+                          }}
+                        >
+                          签约主体
+                        </div>
+                        <div style={{ wordBreak: "break-word" }}>
+                          <span>{contract?.legalEntity?.name || "-"}</span>
+                        </div>
+                      </ProCard>
+                      <ProCard>
+                        <div
+                          style={{
+                            color: "rgba(0,0,0,0.45)",
+                            fontSize: 12,
+                            marginBottom: 8,
+                            fontWeight: 600,
+                          }}
+                        >
+                          服务内容
+                        </div>
+                        <div style={{ wordBreak: "break-word" }}>
+                          {contract?.serviceContent?.trim()
+                            ? contract.serviceContent
+                            : "-"}
+                        </div>
+                      </ProCard>
 
-                <ProCard colSpan={4}>
-                  <div
-                    style={{
-                      color: "rgba(0,0,0,0.45)",
-                      fontSize: 12,
-                      marginBottom: 8,
-                      fontWeight: 600,
-                    }}
-                  >
-                    跟进人
-                  </div>
-                  <div style={{ wordBreak: "break-word" }}>
-                    {plan.ownerEmployee?.id ? (
-                      <AppLink
-                        href={`/employees/${plan.ownerEmployee.id}`}
-                      >
-                        {plan.ownerEmployee.name || "-"}
-                      </AppLink>
-                    ) : (
-                      "-"
-                    )}
-                  </div>
-                </ProCard>
-                <ProCard colSpan={4}>
-                  <div
-                    style={{
-                      color: "rgba(0,0,0,0.45)",
-                      fontSize: 12,
-                      marginBottom: 8,
-                      fontWeight: 600,
-                    }}
-                  >
-                    有客户收款
-                  </div>
-                  <div style={{ wordBreak: "break-word" }}>
-                    <BooleanTag
-                      value={Boolean(plan.hasCustomerCollection)}
-                    />
-                  </div>
-                </ProCard>
+                      <ProCard colSpan={4}>
+                        <div
+                          style={{
+                            color: "rgba(0,0,0,0.45)",
+                            fontSize: 12,
+                            marginBottom: 8,
+                            fontWeight: 600,
+                          }}
+                        >
+                          跟进人
+                        </div>
+                        <div style={{ wordBreak: "break-word" }}>
+                          {plan.ownerEmployee?.id ? (
+                            <AppLink
+                              href={`/employees/${plan.ownerEmployee.id}`}
+                            >
+                              {plan.ownerEmployee.name || "-"}
+                            </AppLink>
+                          ) : (
+                            "-"
+                          )}
+                        </div>
+                      </ProCard>
+                      <ProCard colSpan={4}>
+                        <div
+                          style={{
+                            color: "rgba(0,0,0,0.45)",
+                            fontSize: 12,
+                            marginBottom: 8,
+                            fontWeight: 600,
+                          }}
+                        >
+                          有客户收款
+                        </div>
+                        <div style={{ wordBreak: "break-word" }}>
+                          <BooleanTag
+                            value={Boolean(plan.hasCustomerCollection)}
+                          />
+                        </div>
+                      </ProCard>
 
-                <ProCard>
-                  <div
-                    style={{
-                      color: "rgba(0,0,0,0.45)",
-                      fontSize: 12,
-                      marginBottom: 8,
-                      fontWeight: 600,
-                    }}
-                  >
-                    备注
-                  </div>
-                  <div style={{ fontSize: 14, lineHeight: 1.5 }}>
-                    <RemarkText
-                      remark={plan.remark}
-                      remarkNeedsAttention={plan.remarkNeedsAttention}
-                    />
-                  </div>
-                </ProCard>
+                      <ProCard>
+                        <div
+                          style={{
+                            color: "rgba(0,0,0,0.45)",
+                            fontSize: 12,
+                            marginBottom: 8,
+                            fontWeight: 600,
+                          }}
+                        >
+                          备注
+                        </div>
+                        <div style={{ fontSize: 14, lineHeight: 1.5 }}>
+                          <RemarkText
+                            remark={plan.remark}
+                            remarkNeedsAttention={plan.remarkNeedsAttention}
+                          />
+                        </div>
+                      </ProCard>
                     </ProCard>
                   </ProCard>
                   <ProjectPayableNodeTable

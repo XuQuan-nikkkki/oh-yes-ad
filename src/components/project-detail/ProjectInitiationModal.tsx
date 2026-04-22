@@ -143,11 +143,25 @@ const normalizeMembersForPayload = (members?: CostEstimationMemberFormRow[]) =>
       left.employeeId.localeCompare(right.employeeId, "zh-CN"),
     );
 
+const normalizeOutsourceItemsForPayload = (
+  items?: FormValues["outsourceItems"],
+) =>
+  normalizeProjectOutsourceItems(items)
+    .map((item) => ({
+      type: item.type,
+      amount: item.amount,
+    }))
+    .sort(
+      (left, right) =>
+        left.type.localeCompare(right.type, "zh-CN") ||
+        left.amount - right.amount,
+    );
+
 const toSubmitPayloadFromFormValues = (
   values: FormValues,
 ) => {
   const normalizedOutsourceItems = values.hasOutsource
-    ? normalizeProjectOutsourceItems(values.outsourceItems)
+    ? normalizeOutsourceItemsForPayload(values.outsourceItems)
     : [];
 
   return {
@@ -184,13 +198,53 @@ const toSubmitPayloadFromEstimation = (
     .sort((left, right) =>
       left.employeeId.localeCompare(right.employeeId, "zh-CN"),
     ),
-  outsourceItems: normalizeProjectOutsourceItems(estimation?.outsourceItems),
+  outsourceItems: normalizeOutsourceItemsForPayload(
+    (estimation?.outsourceItems ?? []).map((item) => ({
+      id: item.id,
+      type: item.type,
+      amount: item.amount,
+    })),
+  ),
   outsourceRemark: toNullableTrimmedString(estimation?.outsourceRemark ?? null),
   executionCostTypes: normalizeExecutionCostTypes(
     (estimation?.executionCostTypes ?? []).map((item) => item.value ?? ""),
   ),
   otherExecutionCostRemark: toNullableTrimmedString(
     estimation?.otherExecutionCostRemark ?? null,
+  ),
+});
+
+const normalizeSubmitPayloadForComparison = (
+  payload: CostEstimationSubmitPayload,
+) => ({
+  estimatedDuration: payload.estimatedDuration ?? null,
+  agencyFeeRate: payload.agencyFeeRate ?? null,
+  clientBudget: toNullableTrimmedString(payload.clientBudget ?? null),
+  contractAmount: payload.contractAmount ?? null,
+  members: payload.members
+    .map((item) => ({
+      employeeId: item.employeeId.trim(),
+      allocationPercent: Number(item.allocationPercent ?? 0),
+    }))
+    .filter((item) => Boolean(item.employeeId))
+    .sort((left, right) =>
+      left.employeeId.localeCompare(right.employeeId, "zh-CN"),
+    ),
+  outsourceItems: payload.outsourceItems
+    .map((item) => ({
+      type: item.type.trim(),
+      amount: Number(item.amount ?? 0),
+    }))
+    .filter((item) => Boolean(item.type))
+    .sort(
+      (left, right) =>
+        left.type.localeCompare(right.type, "zh-CN") ||
+        left.amount - right.amount,
+    ),
+  outsourceRemark: toNullableTrimmedString(payload.outsourceRemark ?? null),
+  executionCostTypes: normalizeExecutionCostTypes(payload.executionCostTypes),
+  otherExecutionCostRemark: toNullableTrimmedString(
+    payload.otherExecutionCostRemark ?? null,
   ),
 });
 
@@ -295,9 +349,14 @@ const ProjectInitiationModal = ({
               const previousPayload = toSubmitPayloadFromEstimation(
                 latestInitiation,
               );
-              previousPayload.contractAmount =
-                latestInitiation?.contractAmount ?? null;
-              if (JSON.stringify(previousPayload) === JSON.stringify(payload)) {
+              const normalizedPreviousPayload =
+                normalizeSubmitPayloadForComparison(previousPayload);
+              const normalizedCurrentPayload =
+                normalizeSubmitPayloadForComparison(payload);
+              if (
+                JSON.stringify(normalizedPreviousPayload) ===
+                JSON.stringify(normalizedCurrentPayload)
+              ) {
                 notifyInfo("未检测到变更，无需提交");
                 setSubmitting(false);
                 return false;

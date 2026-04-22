@@ -5,6 +5,7 @@ import { InfoCircleOutlined } from "@ant-design/icons";
 import {
   App,
   Button,
+  Card,
   Form,
   Input,
   InputNumber,
@@ -12,11 +13,14 @@ import {
   Popover,
   Space,
   Switch,
+  Tag,
   Typography,
 } from "antd";
 import { StepsForm } from "@ant-design/pro-components";
 import type { ProFormInstance } from "@ant-design/pro-components";
 import OutsourceItemsFormList from "@/components/project-detail/OutsourceItemsFormList";
+import { DEFAULT_COLOR } from "@/lib/constants";
+import { COST_COMPOSITION_COLORS } from "@/lib/cost-composition-colors";
 import {
   getSystemSettingNumberFromRecords,
   SYSTEM_SETTING_KEYS,
@@ -29,6 +33,7 @@ import {
 } from "@/lib/project-outsource";
 import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
 import type { Project } from "@/types/projectDetail";
+import { FINANCIAL_METRIC_BAR_COLORS } from "@/lib/financial-metric-colors";
 
 type PricingCostItemFormRow = {
   costTypeOptionId: string;
@@ -644,7 +649,10 @@ const ProjectPricingStrategyModal = ({
           >
             <InputNumber min={1} precision={0} style={{ width: "100%" }} />
           </Form.Item>
-          <Form.Item label="中介费率" required={draftValues.agencyFeeRate !== undefined}>
+          <Form.Item
+            label="中介费率"
+            required={draftValues.agencyFeeRate !== undefined}
+          >
             <Space.Compact style={{ width: "100%" }}>
               <Form.Item noStyle name="agencyFeeRate">
                 <InputNumber
@@ -671,6 +679,7 @@ const ProjectPricingStrategyModal = ({
             label="是否有外包"
             name="hasOutsource"
             valuePropName="checked"
+            layout="horizontal"
           >
             <Switch checkedChildren="有" unCheckedChildren="没有" />
           </Form.Item>
@@ -857,7 +866,9 @@ const ProjectPricingStrategyModal = ({
           onValuesChange={(_changedValues, allValues) => {
             const suggestedExecutionCost = fromMoneyCents(
               sumBudgetAmountCents(
-                allValues.executionCostItems as PricingCostItemFormRow[] | undefined,
+                allValues.executionCostItems as
+                  | PricingCostItemFormRow[]
+                  | undefined,
               ),
             );
             formRef.current?.setFieldValue(
@@ -903,12 +914,19 @@ const ProjectPricingStrategyModal = ({
                         }}
                       >
                         <Form.Item
-                          name={["executionCostItems", index, "costTypeOptionId"]}
+                          name={[
+                            "executionCostItems",
+                            index,
+                            "costTypeOptionId",
+                          ]}
                           hidden
                         >
                           <Input />
                         </Form.Item>
-                        <Form.Item name={["executionCostItems", index, "name"]} hidden>
+                        <Form.Item
+                          name={["executionCostItems", index, "name"]}
+                          hidden
+                        >
                           <Input />
                         </Form.Item>
                         <Typography.Text>{label}</Typography.Text>
@@ -988,7 +1006,9 @@ const ProjectPricingStrategyModal = ({
               const targetPriceCents = toMoneyCents(
                 getFieldValue("targetPrice"),
               );
-              const clientQuoteValue = toNullableMoney(estimation?.clientBudget);
+              const clientQuoteValue = toNullableMoney(
+                estimation?.clientBudget,
+              );
               const hasClientQuote = clientQuoteValue !== null;
               const clientQuoteCents = toMoneyCents(clientQuoteValue ?? 0);
               const clientQuoteAgencyFeeCents = calculateAgencyFeeAmountCents(
@@ -1131,88 +1151,279 @@ const ProjectPricingStrategyModal = ({
                       ),
                     )
                   : null;
-              const renderCostRatioLine = (ratioText: string) => {
-                const ratioValue = Number.parseFloat(ratioText);
-                const exceededBaseline =
-                  Number.isFinite(ratioValue) &&
-                  ratioValue > projectCostBaselineRatio;
-
-                return (
-                  <>
-                    <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-                      {`总费用占比：${ratioText}`}
-                    </Typography.Text>
-                    {exceededBaseline ? (
-                      <Typography.Text
-                        style={{
-                          fontSize: 13,
-                          color: "#ff4d4f",
-                          fontWeight: 600,
-                        }}
-                      >
-                        （成本超过基准线）
-                      </Typography.Text>
-                    ) : null}
-                  </>
+              const formatMoneyCompact = (value: number) =>
+                roundMoney(value).toLocaleString("zh-CN", {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 2,
+                });
+              const renderPlanCard = ({
+                breakEven,
+                referenceCost,
+                outsourceCost,
+                laborCost,
+                laborRate,
+                middleOfficeCost,
+                rentCost,
+                executionCost,
+                agencyFeeCost,
+                costRatioText,
+                profitAmount,
+              }: {
+                breakEven: number;
+                referenceCost: number | null;
+                outsourceCost: number;
+                laborCost: number;
+                laborRate: number | null;
+                middleOfficeCost: number;
+                rentCost: number;
+                executionCost: number;
+                agencyFeeCost: number;
+                costRatioText: string;
+                profitAmount: number | null;
+              }) => {
+                const costItems = [
+                  {
+                    key: "agency",
+                    label: "中介费",
+                    amount: agencyFeeCost,
+                    dotColor: COST_COMPOSITION_COLORS.agency,
+                  },
+                  {
+                    key: "outsource",
+                    label: "外包成本",
+                    amount: outsourceCost,
+                    dotColor: COST_COMPOSITION_COLORS.outsource,
+                  },
+                  {
+                    key: "labor",
+                    label: "人力成本",
+                    amount: laborCost,
+                    dotColor: COST_COMPOSITION_COLORS.labor,
+                  },
+                  {
+                    key: "rent",
+                    label: "组件成本",
+                    amount: rentCost,
+                    dotColor: COST_COMPOSITION_COLORS.rent,
+                  },
+                  {
+                    key: "middle",
+                    label: "中台成本",
+                    amount: middleOfficeCost,
+                    dotColor: COST_COMPOSITION_COLORS.middleOffice,
+                  },
+                  {
+                    key: "execution",
+                    label: "执行费用成本",
+                    amount: executionCost,
+                    dotColor: COST_COMPOSITION_COLORS.execution,
+                  },
+                ];
+                const totalCost = costItems.reduce(
+                  (sum, item) => sum + item.amount,
+                  0,
                 );
-              };
-              const renderCostBreakdown = (
-                outsourceCost: number,
-                laborCost: number,
-                laborRate: number | null,
-                middleOfficeCost: number,
-                rentCost: number,
-                executionCost: number,
-                agencyFeeCost: number,
-              ) => {
                 const laborRateExceeded =
                   typeof laborRate === "number" &&
                   laborRate > laborCostRateWarningLine;
 
                 return (
-                  <div
-                    style={{
-                      marginTop: 4,
-                      marginBottom: 4,
-                      paddingLeft: 16,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 4,
-                    }}
+                  <Card
+                    style={{ borderRadius: 16 }}
+                    styles={{ body: { padding: 20 } }}
                   >
-                    <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-                      {`- 外包成本：${formatMoneyText(outsourceCost)}`}
-                    </Typography.Text>
-                    <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-                      {`- 人力成本：${formatMoneyText(laborCost)}`}
-                      {typeof laborRate === "number" ? "（人力成本率 " : ""}
-                      {typeof laborRate === "number" ? (
-                        <span
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "flex-start",
+                      }}
+                    ></div>
+                    <div style={{ marginTop: 0 }}>
+                      <Typography.Text
+                        style={{ fontSize: 14, color: "rgba(0,0,0,0.65)" }}
+                      >
+                        盈亏平衡：
+                        <span style={{ fontWeight: 700 }}>
+                          {`¥${formatMoneyCompact(breakEven)}`}
+                        </span>
+                        {" ・ 成本基准："}
+                        <span style={{ fontWeight: 700 }}>
+                          {typeof referenceCost === "number"
+                            ? `¥${formatMoneyCompact(referenceCost)}`
+                            : "-"}
+                        </span>
+                      </Typography.Text>
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: 12,
+                        borderTop: "1px dashed #d9d9d9",
+                        paddingTop: 12,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      }}
+                    >
+                      {costItems.map((item) => (
+                        <div
+                          key={item.key}
                           style={{
-                            color: laborRateExceeded ? "#ff4d4f" : undefined,
-                            fontWeight: laborRateExceeded ? 700 : undefined,
+                            display: "grid",
+                            gridTemplateColumns: "minmax(0, 1fr) 120px 70px",
+                            alignItems: "center",
+                            gap: 12,
                           }}
                         >
-                          {formatPercent(laborRate)}
-                        </span>
-                      ) : null}
-                      {typeof laborRate === "number" ? "）" : ""}
-                    </Typography.Text>
-                    <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-                      {`- 中台成本：${formatMoneyText(middleOfficeCost)}`}
-                    </Typography.Text>
-                    <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-                      {`- 租金成本：${formatMoneyText(rentCost)}`}
-                    </Typography.Text>
-                    <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-                      {`- 执行成本：${formatMoneyText(executionCost)}`}
-                    </Typography.Text>
-                    <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-                      {`- 中介费：${formatMoneyText(agencyFeeCost)}`}
-                    </Typography.Text>
-                  </div>
+                          <span
+                            style={{ fontSize: 14, color: "rgba(0,0,0,0.65)" }}
+                          >
+                            <span
+                              style={{ color: item.dotColor, marginRight: 4 }}
+                            >
+                              •
+                            </span>
+                            {item.label}
+                            {item.key === "labor" &&
+                            typeof laborRate === "number" ? (
+                              <Tag
+                                color={DEFAULT_COLOR}
+                                style={{ marginLeft: 8, fontSize: 12 }}
+                              >
+                                {formatPercent(laborRate)}
+                              </Tag>
+                            ) : null}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 14,
+                              textAlign: "right",
+                              fontWeight:
+                                item.key === "labor" && laborRateExceeded
+                                  ? 700
+                                  : 600,
+                              color:
+                                item.key === "labor" && laborRateExceeded
+                                  ? "#ff4d4f"
+                                  : "rgba(0,0,0,0.55)",
+                            }}
+                          >
+                            {`¥${formatMoneyCompact(item.amount)}`}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 14,
+                              color: "rgba(0,0,0,0.45)",
+                              textAlign: "right",
+                            }}
+                          >
+                            {totalCost > 0
+                              ? `${((item.amount / totalCost) * 100).toFixed(1)}%`
+                              : "-"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: 16,
+                        borderRadius: 12,
+                        border: "1px solid #f0f0f0",
+                        background: "#fafafa",
+                        overflow: "hidden",
+                        padding: "16px 20px",
+                        display: "grid",
+                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                        columnGap: 24,
+                      }}
+                    >
+                      <div style={{ textAlign: "left", paddingRight: 12 }}>
+                        <Typography.Text
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 500,
+                            color: FINANCIAL_METRIC_BAR_COLORS.cost,
+                          }}
+                        >
+                          费用占比
+                        </Typography.Text>
+                        <div style={{ marginTop: 8 }}>
+                          <Typography.Text
+                            style={{
+                              fontSize: 16,
+                              lineHeight: 1,
+                              fontWeight: 700,
+                              color: FINANCIAL_METRIC_BAR_COLORS.cost,
+                            }}
+                          >
+                            {costRatioText}
+                          </Typography.Text>
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          textAlign: "right",
+                          paddingLeft: 12,
+                          borderLeft: "1px solid #e5e7eb",
+                        }}
+                      >
+                        <Typography.Text
+                          style={{
+                            fontSize: 14,
+                            color: FINANCIAL_METRIC_BAR_COLORS.profit,
+                            fontWeight: 500,
+                          }}
+                        >
+                          利润
+                        </Typography.Text>
+                        <div
+                          style={{
+                            marginTop: 8,
+                          }}
+                        >
+                          <Typography.Text
+                            style={{
+                              fontSize: 16,
+                              lineHeight: 1,
+                              fontWeight: 700,
+                              color: FINANCIAL_METRIC_BAR_COLORS.profit,
+                            }}
+                          >
+                            {typeof profitAmount === "number"
+                              ? `¥${roundMoney(profitAmount).toLocaleString(
+                                  "zh-CN",
+                                  {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  },
+                                )}`
+                              : "-"}
+                          </Typography.Text>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
                 );
               };
+              const getQuotePlaceholder = (breakEven: number) =>
+                `≥ ${formatMoneyCompact(breakEven)}`;
+              const commonCosts = (
+                outsourceCost: number,
+                laborCost: number,
+                middleOfficeCost: number,
+                rentCost: number,
+                executionCost: number,
+                agencyFeeCost: number,
+              ) => ({
+                outsourceCost,
+                laborCost,
+                middleOfficeCost,
+                rentCost,
+                executionCost,
+                agencyFeeCost,
+              });
 
               return (
                 <div>
@@ -1221,89 +1432,87 @@ const ProjectPricingStrategyModal = ({
                       style={{
                         display: "grid",
                         gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                        columnGap: 24,
+                        columnGap: 16,
                         alignItems: "start",
                       }}
                     >
-                      <div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 12,
+                        }}
+                      >
                         <Form.Item
-                          label="最低报价"
+                          label={<span style={{ fontSize: 14 }}>最低报价</span>}
                           name="bottomLinePrice"
                           rules={[
                             { required: true, message: "请输入最低报价" },
                           ]}
+                          style={{ marginBottom: 0 }}
                         >
                           <InputNumber
                             min={0}
                             precision={2}
                             style={{ width: "100%" }}
+                            placeholder={getQuotePlaceholder(plannedBreakEven)}
                           />
                         </Form.Item>
-                        <div style={{ marginTop: -16, marginBottom: 16 }}>
-                          <Typography.Text
-                            type="secondary"
-                            style={{ fontSize: 14 }}
-                          >
-                            {`盈亏平衡：${roundMoney(plannedBreakEven).toFixed(2)}元，成本基准参考：${typeof bottomLineReferenceCost === "number" ? `${roundMoney(bottomLineReferenceCost).toFixed(2)}元` : "-"}`}
-                          </Typography.Text>
-                          <br />
-                          {renderCostBreakdown(
+                        {renderPlanCard({
+                          breakEven: plannedBreakEven,
+                          referenceCost: bottomLineReferenceCost,
+                          laborRate: bottomLineLaborRate,
+                          costRatioText: bottomLineCostRatio,
+                          profitAmount: hasBottomLinePrice
+                            ? bottomProfit
+                            : null,
+                          ...commonCosts(
                             fromMoneyCents(outsourceCostCents),
                             fromMoneyCents(plannedLaborCostCents),
-                            bottomLineLaborRate,
                             fromMoneyCents(plannedMiddleOfficeCostCents),
                             fromMoneyCents(rentCostCents),
                             fromMoneyCents(executionCostCents),
                             fromMoneyCents(bottomLineAgencyFeeCents),
-                          )}
-                          {renderCostRatioLine(bottomLineCostRatio)}
-                          <br />
-                          <Typography.Text
-                            type="secondary"
-                            style={{ fontSize: 14 }}
-                          >
-                            {`利润：${hasBottomLinePrice ? formatMoneyText(bottomProfit) : "-"}`}
-                          </Typography.Text>
-                        </div>
+                          ),
+                        })}
                       </div>
-                      <div style={{ width: 340 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 12,
+                        }}
+                      >
                         <Form.Item
-                          label="理想报价"
+                          label={<span style={{ fontSize: 14 }}>理想报价</span>}
                           name="targetPrice"
                           rules={[{ required: true, message: "请输入报价" }]}
+                          style={{ marginBottom: 0 }}
                         >
                           <InputNumber
                             min={0}
                             precision={2}
                             style={{ width: "100%" }}
+                            placeholder={getQuotePlaceholder(
+                              suggestedBreakEven,
+                            )}
                           />
                         </Form.Item>
-                        <div style={{ marginTop: -16, marginBottom: 16 }}>
-                          <Typography.Text
-                            type="secondary"
-                            style={{ fontSize: 14 }}
-                          >
-                            {`盈亏平衡：${roundMoney(suggestedBreakEven).toFixed(2)}元，成本基准参考：${typeof targetReferenceCost === "number" ? `${roundMoney(targetReferenceCost).toFixed(2)}元` : "-"}`}
-                          </Typography.Text>
-                          <br />
-                          {renderCostBreakdown(
+                        {renderPlanCard({
+                          breakEven: suggestedBreakEven,
+                          referenceCost: targetReferenceCost,
+                          laborRate: targetLaborRate,
+                          costRatioText: targetCostRatio,
+                          profitAmount: hasTargetPrice ? profit : null,
+                          ...commonCosts(
                             fromMoneyCents(outsourceCostCents),
                             fromMoneyCents(suggestedLaborCostCents),
-                            targetLaborRate,
                             fromMoneyCents(suggestedMiddleOfficeCostCents),
                             fromMoneyCents(rentCostCents),
                             fromMoneyCents(executionCostCents),
                             fromMoneyCents(targetAgencyFeeCents),
-                          )}
-                          {renderCostRatioLine(targetCostRatio)}
-                          <br />
-                          <Typography.Text
-                            type="secondary"
-                            style={{ fontSize: 14 }}
-                          >
-                            {`利润：${hasTargetPrice ? formatMoneyText(profit) : "-"}`}
-                          </Typography.Text>
-                        </div>
+                          ),
+                        })}
                       </div>
                     </div>
                   ) : (
@@ -1311,12 +1520,25 @@ const ProjectPricingStrategyModal = ({
                       style={{
                         display: "grid",
                         gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                        columnGap: 24,
+                        columnGap: 16,
                         alignItems: "start",
                       }}
                     >
-                      <div>
-                        <Form.Item label="客户报价">
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 12,
+                        }}
+                      >
+                        <Form.Item
+                          label={
+                            <span style={{ fontSize: 14 }}>
+                              客户报价（不含税）
+                            </span>
+                          }
+                          style={{ marginBottom: 0 }}
+                        >
                           <InputNumber
                             precision={2}
                             style={{ width: "100%" }}
@@ -1328,71 +1550,63 @@ const ProjectPricingStrategyModal = ({
                             disabled
                           />
                         </Form.Item>
-                        <div style={{ marginTop: -16, marginBottom: 16 }}>
-                          <Typography.Text
-                            type="secondary"
-                            style={{ fontSize: 14 }}
-                          >
-                            {`盈亏平衡：${roundMoney(clientQuoteBreakEven).toFixed(2)}元，成本基准参考：${typeof clientQuoteReferenceCost === "number" ? `${roundMoney(clientQuoteReferenceCost).toFixed(2)}元` : "-"}`}
-                          </Typography.Text>
-                          <br />
-                          {renderCostBreakdown(
+                        {renderPlanCard({
+                          breakEven: clientQuoteBreakEven,
+                          referenceCost: clientQuoteReferenceCost,
+                          laborRate: clientLaborRate,
+                          costRatioText: clientCostRatio,
+                          profitAmount: hasClientQuote
+                            ? clientQuoteProfit
+                            : null,
+                          ...commonCosts(
                             fromMoneyCents(outsourceCostCents),
                             fromMoneyCents(suggestedLaborCostCents),
-                            clientLaborRate,
                             fromMoneyCents(suggestedMiddleOfficeCostCents),
                             fromMoneyCents(rentCostCents),
                             fromMoneyCents(executionCostCents),
                             fromMoneyCents(clientQuoteAgencyFeeCents),
-                          )}
-                          {renderCostRatioLine(clientCostRatio)}
-                          <br />
-                          <Typography.Text
-                            type="secondary"
-                            style={{ fontSize: 14 }}
-                          >
-                            {`利润：${hasClientQuote ? formatMoneyText(clientQuoteProfit) : "-"}`}
-                          </Typography.Text>
-                        </div>
+                          ),
+                        })}
                       </div>
-                      <div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 12,
+                        }}
+                      >
                         <Form.Item
-                          label="建议报价"
+                          label={<span style={{ fontSize: 14 }}>建议报价</span>}
                           name="targetPrice"
-                          rules={[{ required: true, message: "请输入建议报价" }]}
+                          rules={[
+                            { required: true, message: "请输入建议报价" },
+                          ]}
+                          style={{ marginBottom: 0 }}
                         >
                           <InputNumber
                             min={0}
                             precision={2}
                             style={{ width: "100%" }}
+                            placeholder={getQuotePlaceholder(
+                              suggestedBreakEven,
+                            )}
                           />
                         </Form.Item>
-                        <div style={{ marginTop: -16, marginBottom: 16 }}>
-                          <Typography.Text
-                            type="secondary"
-                            style={{ fontSize: 14 }}
-                          >
-                            {`盈亏平衡：${roundMoney(suggestedBreakEven).toFixed(2)}元，成本基准参考：${typeof targetReferenceCost === "number" ? `${roundMoney(targetReferenceCost).toFixed(2)}元` : "-"}`}
-                          </Typography.Text>
-                          <br />
-                          {renderCostBreakdown(
+                        {renderPlanCard({
+                          breakEven: suggestedBreakEven,
+                          referenceCost: targetReferenceCost,
+                          laborRate: targetLaborRate,
+                          costRatioText: targetCostRatio,
+                          profitAmount: hasTargetPrice ? profit : null,
+                          ...commonCosts(
                             fromMoneyCents(outsourceCostCents),
                             fromMoneyCents(suggestedLaborCostCents),
-                            targetLaborRate,
                             fromMoneyCents(suggestedMiddleOfficeCostCents),
                             fromMoneyCents(rentCostCents),
                             fromMoneyCents(executionCostCents),
                             fromMoneyCents(targetAgencyFeeCents),
-                          )}
-                          {renderCostRatioLine(targetCostRatio)}
-                          <br />
-                          <Typography.Text
-                            type="secondary"
-                            style={{ fontSize: 14 }}
-                          >
-                            {`利润：${hasTargetPrice ? formatMoneyText(profit) : "-"}`}
-                          </Typography.Text>
-                        </div>
+                          ),
+                        })}
                       </div>
                     </div>
                   )}
