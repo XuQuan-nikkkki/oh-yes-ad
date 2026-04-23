@@ -1,7 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { App, Button, Card, Empty, Space, Spin, Table, Tooltip, message } from "antd";
+import {
+  App,
+  Button,
+  Card,
+  Empty,
+  Space,
+  Spin,
+  Table,
+  Tooltip,
+  message,
+} from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import ProjectPricingStrategyModal from "@/components/project-detail/ProjectPricingStrategyModal";
@@ -58,12 +68,6 @@ const formatAmount = (value?: number | null) => {
   });
 };
 
-const formatRate = (numerator: number, denominator: number) => {
-  if (!denominator) return "-";
-  const value = (numerator / denominator) * 100;
-  return `${value.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 4 })}%`;
-};
-
 const formatPercent = (value?: number | null) => {
   if (typeof value !== "number" || !Number.isFinite(value)) return "-";
   return `${value.toLocaleString("zh-CN", {
@@ -82,13 +86,19 @@ const toMoney = (value: unknown) => {
   return 0;
 };
 
-const formatExecutionCostRemarkText = (pricingStrategy: ProjectPricingStrategy) => {
+const formatExecutionCostRemarkText = (
+  pricingStrategy: ProjectPricingStrategy,
+) => {
   const validItems = (pricingStrategy.executionCostItems ?? []).filter(
-    (item) => typeof item.budgetAmount === "number" && item.costTypeOption?.value,
+    (item) =>
+      typeof item.budgetAmount === "number" && item.costTypeOption?.value,
   );
   if (validItems.length === 0) return "-";
   return validItems
-    .map((item) => `${item.costTypeOption?.value}：${formatAmount(item.budgetAmount)}`)
+    .map(
+      (item) =>
+        `${item.costTypeOption?.value}：${formatAmount(item.budgetAmount)}`,
+    )
     .join("\n");
 };
 
@@ -103,8 +113,11 @@ const computeBreakEvenFallback = ({
   laborCost: number;
   middleOfficeCost: number;
 }) => {
-  const outsourceAmount = getProjectOutsourceTotal(pricingStrategy.outsourceItems);
-  const agencyFeeAmount = ((pricingStrategy.agencyFeeRate ?? 0) * quotePrice) / 100;
+  const outsourceAmount = getProjectOutsourceTotal(
+    pricingStrategy.outsourceItems,
+  );
+  const agencyFeeAmount =
+    ((pricingStrategy.agencyFeeRate ?? 0) * quotePrice) / 100;
   return (
     outsourceAmount +
     laborCost +
@@ -124,9 +137,8 @@ const ProjectPricingStrategyCard = ({
   const app = App.useApp();
   const [messageApi, contextHolder] = message.useMessage();
   const [pricingModalOpen, setPricingModalOpen] = useState(false);
-  const [pricingStrategy, setPricingStrategy] = useState<ProjectPricingStrategy | null>(
-    null,
-  );
+  const [pricingStrategy, setPricingStrategy] =
+    useState<ProjectPricingStrategy | null>(null);
   const [pricingLoading, setPricingLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -153,15 +165,20 @@ const ProjectPricingStrategyCard = ({
         projectId,
         estimationId: latestCostEstimation.id,
       });
-      const res = await fetch(`/api/project-pricing-strategies?${query.toString()}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/project-pricing-strategies?${query.toString()}`,
+        {
+          cache: "no-store",
+        },
+      );
       if (!res.ok) {
         setPricingStrategy(null);
         return;
       }
       const rows = (await res.json()) as ProjectPricingStrategy[];
-      setPricingStrategy(Array.isArray(rows) && rows.length > 0 ? rows[0] : null);
+      setPricingStrategy(
+        Array.isArray(rows) && rows.length > 0 ? rows[0] : null,
+      );
     } catch {
       setPricingStrategy(null);
     } finally {
@@ -238,7 +255,9 @@ const ProjectPricingStrategyCard = ({
       worksheet.mergeCells("A1:D1");
 
       if (pricingStrategy.mode === "target") {
-        const customerBudget = toMoney(latestCostEstimation?.clientBudget ?? null);
+        const customerBudget = toMoney(
+          latestCostEstimation?.clientBudget ?? null,
+        );
         const customerBudgetValue =
           customerBudget > 0
             ? customerBudget
@@ -250,7 +269,8 @@ const ProjectPricingStrategyCard = ({
             ? ((pricingStrategy.agencyFeeRate ?? 0) * customerBudgetValue) / 100
             : 0;
         const suggestedAgencyFee =
-          ((pricingStrategy.agencyFeeRate ?? 0) * pricingStrategy.targetPrice) / 100;
+          ((pricingStrategy.agencyFeeRate ?? 0) * pricingStrategy.targetPrice) /
+          100;
         const breakEvenCustomer =
           customerBudgetValue !== null && customerBudgetValue > 0
             ? (pricingStrategy.plannedBreakEvenAtCustomerBudget ??
@@ -273,7 +293,8 @@ const ProjectPricingStrategyCard = ({
           ? formatPercent(
               pricingStrategy.plannedSummaryAtCustomerBudget?.laborCostRate ??
                 (customerBudgetValue > 0
-                  ? (pricingStrategy.plannedLaborCost / customerBudgetValue) * 100
+                  ? (pricingStrategy.plannedLaborCost / customerBudgetValue) *
+                    100
                   : null),
             )
           : "-";
@@ -281,7 +302,9 @@ const ProjectPricingStrategyCard = ({
           ? formatPercent(
               pricingStrategy.plannedSummaryAtTarget?.laborCostRate ??
                 (pricingStrategy.targetPrice > 0
-                  ? (pricingStrategy.plannedLaborCost / pricingStrategy.targetPrice) * 100
+                  ? (pricingStrategy.plannedLaborCost /
+                      pricingStrategy.targetPrice) *
+                    100
                   : null),
             )
           : "-";
@@ -315,7 +338,9 @@ const ProjectPricingStrategyCard = ({
           ],
           [
             "外包成本",
-            formatAmount(getProjectOutsourceTotal(pricingStrategy.outsourceItems)),
+            formatAmount(
+              getProjectOutsourceTotal(pricingStrategy.outsourceItems),
+            ),
             "",
             formatProjectOutsourceItemsText(pricingStrategy.outsourceItems),
           ],
@@ -325,7 +350,9 @@ const ProjectPricingStrategyCard = ({
             "中介费",
             formatAmount(customerBudgetAgencyFee),
             formatAmount(suggestedAgencyFee),
-            pricingStrategy.agencyFeeRate ? `费率：${pricingStrategy.agencyFeeRate}%` : "-",
+            pricingStrategy.agencyFeeRate
+              ? `费率：${pricingStrategy.agencyFeeRate}%`
+              : "-",
           ],
           ["租金成本", formatAmount(pricingStrategy.rentCost), "", "-"],
           [
@@ -334,7 +361,12 @@ const ProjectPricingStrategyCard = ({
             "",
             executionRemark,
           ],
-          ["中台成本", formatAmount(pricingStrategy.plannedMiddleOfficeCost), "", "-"],
+          [
+            "中台成本",
+            formatAmount(pricingStrategy.plannedMiddleOfficeCost),
+            "",
+            "-",
+          ],
           [
             "盈亏平衡",
             formatAmount(breakEvenCustomer),
@@ -353,9 +385,12 @@ const ProjectPricingStrategyCard = ({
         worksheet.mergeCells("B11:C11");
       } else {
         const bottomAgencyFee =
-          ((pricingStrategy.agencyFeeRate ?? 0) * pricingStrategy.bottomLinePrice) / 100;
+          ((pricingStrategy.agencyFeeRate ?? 0) *
+            pricingStrategy.bottomLinePrice) /
+          100;
         const targetAgencyFee =
-          ((pricingStrategy.agencyFeeRate ?? 0) * pricingStrategy.targetPrice) / 100;
+          ((pricingStrategy.agencyFeeRate ?? 0) * pricingStrategy.targetPrice) /
+          100;
         const plannedBreakEven =
           pricingStrategy.plannedBreakEvenAtBottomLine ??
           computeBreakEvenFallback({
@@ -376,7 +411,9 @@ const ProjectPricingStrategyCard = ({
           ? formatPercent(
               pricingStrategy.suggestedSummaryAtTarget?.laborCostRate ??
                 (pricingStrategy.targetPrice > 0
-                  ? (pricingStrategy.suggestedLaborCost / pricingStrategy.targetPrice) * 100
+                  ? (pricingStrategy.suggestedLaborCost /
+                      pricingStrategy.targetPrice) *
+                    100
                   : null),
             )
           : "-";
@@ -384,7 +421,9 @@ const ProjectPricingStrategyCard = ({
           ? formatPercent(
               pricingStrategy.plannedSummaryAtBottomLine?.laborCostRate ??
                 (pricingStrategy.bottomLinePrice > 0
-                  ? (pricingStrategy.plannedLaborCost / pricingStrategy.bottomLinePrice) * 100
+                  ? (pricingStrategy.plannedLaborCost /
+                      pricingStrategy.bottomLinePrice) *
+                    100
                   : null),
             )
           : "-";
@@ -421,22 +460,46 @@ const ProjectPricingStrategyCard = ({
           ],
           [
             "外包成本",
-            formatAmount(getProjectOutsourceTotal(pricingStrategy.outsourceItems)),
+            formatAmount(
+              getProjectOutsourceTotal(pricingStrategy.outsourceItems),
+            ),
             "",
             formatProjectOutsourceItemsText(pricingStrategy.outsourceItems),
           ],
-          ["人力成本", formatAmount(pricingStrategy.suggestedLaborCost), formatAmount(pricingStrategy.plannedLaborCost), "-"],
+          [
+            "人力成本",
+            formatAmount(pricingStrategy.suggestedLaborCost),
+            formatAmount(pricingStrategy.plannedLaborCost),
+            "-",
+          ],
           ["人力成本率", laborRateTarget, laborRateBottom, "-"],
           [
             "中介费",
             formatAmount(targetAgencyFee),
             formatAmount(bottomAgencyFee),
-            pricingStrategy.agencyFeeRate ? `费率：${pricingStrategy.agencyFeeRate}%` : "-",
+            pricingStrategy.agencyFeeRate
+              ? `费率：${pricingStrategy.agencyFeeRate}%`
+              : "-",
           ],
           ["租金成本", formatAmount(pricingStrategy.rentCost), "", "-"],
-          ["执行费用成本", formatAmount(pricingStrategy.executionCost), "", executionRemark],
-          ["中台成本", formatAmount(pricingStrategy.suggestedMiddleOfficeCost), formatAmount(pricingStrategy.plannedMiddleOfficeCost), "-"],
-          ["盈亏平衡", formatAmount(suggestedBreakEven), formatAmount(plannedBreakEven), "-"],
+          [
+            "执行费用成本",
+            formatAmount(pricingStrategy.executionCost),
+            "",
+            executionRemark,
+          ],
+          [
+            "中台成本",
+            formatAmount(pricingStrategy.suggestedMiddleOfficeCost),
+            formatAmount(pricingStrategy.plannedMiddleOfficeCost),
+            "-",
+          ],
+          [
+            "盈亏平衡",
+            formatAmount(suggestedBreakEven),
+            formatAmount(plannedBreakEven),
+            "-",
+          ],
           ["总费用占比", totalCostRateTarget, totalCostRateBottom, "-"],
         ];
         rows.forEach((row) => worksheet.addRow(row));
@@ -447,9 +510,15 @@ const ProjectPricingStrategyCard = ({
       }
 
       worksheet.getRow(1).font = { bold: true, size: 14 };
-      worksheet.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
+      worksheet.getRow(1).alignment = {
+        vertical: "middle",
+        horizontal: "center",
+      };
       worksheet.getRow(2).font = { bold: true };
-      worksheet.getRow(2).alignment = { vertical: "middle", horizontal: "center" };
+      worksheet.getRow(2).alignment = {
+        vertical: "middle",
+        horizontal: "center",
+      };
       const lastRow = worksheet.rowCount;
       for (let rowIndex = 1; rowIndex <= lastRow; rowIndex += 1) {
         for (let columnIndex = 1; columnIndex <= 4; columnIndex += 1) {
@@ -557,17 +626,20 @@ const ProjectPricingStrategyCard = ({
           ? summary.quote
           : null;
       const summaryTotalCost =
-        typeof summary?.totalCost === "number" && Number.isFinite(summary.totalCost)
+        typeof summary?.totalCost === "number" &&
+        Number.isFinite(summary.totalCost)
           ? summary.totalCost
           : null;
       const income =
         summaryQuote ??
-        (typeof fallback?.quoteIncome === "number" && Number.isFinite(fallback.quoteIncome)
+        (typeof fallback?.quoteIncome === "number" &&
+        Number.isFinite(fallback.quoteIncome)
           ? fallback.quoteIncome
           : null);
       const cost =
         summaryTotalCost ??
-        (typeof fallback?.totalCost === "number" && Number.isFinite(fallback.totalCost)
+        (typeof fallback?.totalCost === "number" &&
+        Number.isFinite(fallback.totalCost)
           ? fallback.totalCost
           : null);
       const profit =
@@ -577,13 +649,15 @@ const ProjectPricingStrategyCard = ({
             ? income - cost
             : null;
       const costRatio =
-        typeof summary?.costRate === "number" && Number.isFinite(summary.costRate)
+        typeof summary?.costRate === "number" &&
+        Number.isFinite(summary.costRate)
           ? summary.costRate
           : income && income > 0 && cost !== null
             ? (cost / income) * 100
             : null;
       const profitRatio =
-        typeof summary?.profitRate === "number" && Number.isFinite(summary.profitRate)
+        typeof summary?.profitRate === "number" &&
+        Number.isFinite(summary.profitRate)
           ? summary.profitRate
           : income && income > 0 && typeof profit === "number"
             ? (profit / income) * 100
@@ -593,7 +667,9 @@ const ProjectPricingStrategyCard = ({
     };
 
     if (pricingStrategy.mode === "target") {
-      const customerBudget = toMoney(latestCostEstimation?.clientBudget ?? null);
+      const customerBudget = toMoney(
+        latestCostEstimation?.clientBudget ?? null,
+      );
       const customerBudgetAmount =
         customerBudget > 0
           ? customerBudget
@@ -625,7 +701,10 @@ const ProjectPricingStrategyCard = ({
           ...buildPanel(
             "客户报价(不含税)",
             pricingStrategy.plannedSummaryAtCustomerBudget,
-            { quoteIncome: customerBudgetAmount, totalCost: customerBudgetBreakEven },
+            {
+              quoteIncome: customerBudgetAmount,
+              totalCost: customerBudgetBreakEven,
+            },
           ),
         },
         {
@@ -678,13 +757,29 @@ const ProjectPricingStrategyCard = ({
     const rent = pricingStrategy.rentCost ?? 0;
     const execution = pricingStrategy.executionCost ?? 0;
 
-    const buildItems = (labor: number, middleOffice: number, agency: number) => {
+    const buildItems = (
+      labor: number,
+      middleOffice: number,
+      agency: number,
+    ) => {
       const items: CompositionRatioItem[] = [
-        { text: "外包", percent: outsource, color: COST_COMPOSITION_COLORS.outsource },
+        {
+          text: "外包",
+          percent: outsource,
+          color: COST_COMPOSITION_COLORS.outsource,
+        },
         { text: "人力", percent: labor, color: COST_COMPOSITION_COLORS.labor },
-        { text: "中介", percent: agency, color: COST_COMPOSITION_COLORS.agency },
+        {
+          text: "中介",
+          percent: agency,
+          color: COST_COMPOSITION_COLORS.agency,
+        },
         { text: "租金", percent: rent, color: COST_COMPOSITION_COLORS.rent },
-        { text: "执行", percent: execution, color: COST_COMPOSITION_COLORS.execution },
+        {
+          text: "执行",
+          percent: execution,
+          color: COST_COMPOSITION_COLORS.execution,
+        },
         {
           text: "中台",
           percent: middleOffice,
@@ -696,7 +791,9 @@ const ProjectPricingStrategyCard = ({
     };
 
     if (pricingStrategy.mode === "target") {
-      const customerBudget = toMoney(latestCostEstimation?.clientBudget ?? null);
+      const customerBudget = toMoney(
+        latestCostEstimation?.clientBudget ?? null,
+      );
       const customerBudgetAmount =
         customerBudget > 0
           ? customerBudget
@@ -704,7 +801,8 @@ const ProjectPricingStrategyCard = ({
             ? pricingStrategy.bottomLinePrice
             : 0;
       const customerAgency = (customerBudgetAmount * agencyFeeRate) / 100;
-      const suggestedAgency = (pricingStrategy.targetPrice * agencyFeeRate) / 100;
+      const suggestedAgency =
+        (pricingStrategy.targetPrice * agencyFeeRate) / 100;
 
       return {
         title: "成本构成对比（各项占总成本比）",
@@ -722,7 +820,8 @@ const ProjectPricingStrategyCard = ({
     }
 
     const targetAgency = (pricingStrategy.targetPrice * agencyFeeRate) / 100;
-    const bottomAgency = (pricingStrategy.bottomLinePrice * agencyFeeRate) / 100;
+    const bottomAgency =
+      (pricingStrategy.bottomLinePrice * agencyFeeRate) / 100;
 
     return {
       title: "成本构成对比（各项占总成本比）",
@@ -743,7 +842,9 @@ const ProjectPricingStrategyCard = ({
     if (!pricingStrategy) return null;
 
     const agencyFeeRate = pricingStrategy.agencyFeeRate ?? 0;
-    const outsourceAmount = getProjectOutsourceTotal(pricingStrategy.outsourceItems);
+    const outsourceAmount = getProjectOutsourceTotal(
+      pricingStrategy.outsourceItems,
+    );
     const executionCost = pricingStrategy.executionCost ?? 0;
     const outsourceRemarkText = formatProjectOutsourceItemsText(
       pricingStrategy.outsourceItems,
@@ -764,7 +865,13 @@ const ProjectPricingStrategyCard = ({
       const validLines = lines.filter((line) => line && line.trim().length > 0);
       if (validLines.length === 0) return "-";
       return (
-        <div style={{ lineHeight: 1.6, color: "rgba(0,0,0,0.65)", whiteSpace: "pre-wrap" }}>
+        <div
+          style={{
+            lineHeight: 1.6,
+            color: "rgba(0,0,0,0.65)",
+            whiteSpace: "pre-wrap",
+          }}
+        >
           {validLines.map((line, index) => (
             <div key={`${line}-${index}`}>{line}</div>
           ))}
@@ -773,7 +880,9 @@ const ProjectPricingStrategyCard = ({
     };
 
     if (pricingStrategy.mode === "target") {
-      const customerBudget = toMoney(latestCostEstimation?.clientBudget ?? null);
+      const customerBudget = toMoney(
+        latestCostEstimation?.clientBudget ?? null,
+      );
       const customerBudgetAmount =
         customerBudget > 0
           ? customerBudget
@@ -781,7 +890,8 @@ const ProjectPricingStrategyCard = ({
             ? pricingStrategy.bottomLinePrice
             : 0;
       const customerAgencyFee = (customerBudgetAmount * agencyFeeRate) / 100;
-      const suggestedAgencyFee = (pricingStrategy.targetPrice * agencyFeeRate) / 100;
+      const suggestedAgencyFee =
+        (pricingStrategy.targetPrice * agencyFeeRate) / 100;
       const leftCostTotal =
         pricingStrategy.plannedSummaryAtCustomerBudget?.totalCost ??
         pricingStrategy.plannedBreakEvenAtCustomerBudget ??
@@ -844,9 +954,12 @@ const ProjectPricingStrategyCard = ({
             pricingStrategy.plannedLaborCost,
             customerBudgetAmount
               ? formatPercent(
-                  pricingStrategy.plannedSummaryAtCustomerBudget?.laborCostRate ??
+                  pricingStrategy.plannedSummaryAtCustomerBudget
+                    ?.laborCostRate ??
                     (customerBudgetAmount > 0
-                      ? (pricingStrategy.plannedLaborCost / customerBudgetAmount) * 100
+                      ? (pricingStrategy.plannedLaborCost /
+                          customerBudgetAmount) *
+                        100
                       : null),
                 )
               : "-",
@@ -857,7 +970,9 @@ const ProjectPricingStrategyCard = ({
               ? formatPercent(
                   pricingStrategy.plannedSummaryAtTarget?.laborCostRate ??
                     (pricingStrategy.targetPrice > 0
-                      ? (pricingStrategy.plannedLaborCost / pricingStrategy.targetPrice) * 100
+                      ? (pricingStrategy.plannedLaborCost /
+                          pricingStrategy.targetPrice) *
+                        100
                       : null),
                 )
               : "-",
@@ -911,7 +1026,8 @@ const ProjectPricingStrategyCard = ({
     }
 
     const targetAgencyFee = (pricingStrategy.targetPrice * agencyFeeRate) / 100;
-    const bottomAgencyFee = (pricingStrategy.bottomLinePrice * agencyFeeRate) / 100;
+    const bottomAgencyFee =
+      (pricingStrategy.bottomLinePrice * agencyFeeRate) / 100;
     const leftCostTotal =
       pricingStrategy.suggestedSummaryAtTarget?.totalCost ??
       pricingStrategy.suggestedBreakEvenAtTarget ??
@@ -976,7 +1092,9 @@ const ProjectPricingStrategyCard = ({
             ? formatPercent(
                 pricingStrategy.suggestedSummaryAtTarget?.laborCostRate ??
                   (pricingStrategy.targetPrice > 0
-                    ? (pricingStrategy.suggestedLaborCost / pricingStrategy.targetPrice) * 100
+                    ? (pricingStrategy.suggestedLaborCost /
+                        pricingStrategy.targetPrice) *
+                      100
                     : null),
               )
             : "-",
@@ -987,7 +1105,9 @@ const ProjectPricingStrategyCard = ({
             ? formatPercent(
                 pricingStrategy.plannedSummaryAtBottomLine?.laborCostRate ??
                   (pricingStrategy.bottomLinePrice > 0
-                    ? (pricingStrategy.plannedLaborCost / pricingStrategy.bottomLinePrice) * 100
+                    ? (pricingStrategy.plannedLaborCost /
+                        pricingStrategy.bottomLinePrice) *
+                      100
                     : null),
               )
             : "-",
@@ -1080,7 +1200,9 @@ const ProjectPricingStrategyCard = ({
           ) : (
             <div>
               <span style={{ fontWeight: row.key === "total" ? 700 : 500 }}>
-                {row.withDot ? <span style={{ marginRight: 8, color: "#bfbfbf" }}>•</span> : null}
+                {row.withDot ? (
+                  <span style={{ marginRight: 8, color: "#bfbfbf" }}>•</span>
+                ) : null}
                 {value}
               </span>
               {row.key === "labor" ? (
@@ -1106,7 +1228,11 @@ const ProjectPricingStrategyCard = ({
         width: "16.67%",
         align: "right",
         onHeaderCell: () => ({
-          style: { borderInlineEnd: "none", textAlign: "right", paddingRight: 28 },
+          style: {
+            borderInlineEnd: "none",
+            textAlign: "right",
+            paddingRight: 28,
+          },
         }),
         onCell: (row) =>
           row.type === "section"
@@ -1129,7 +1255,10 @@ const ProjectPricingStrategyCard = ({
               },
         render: (value, row) => (
           <span
-            style={{ color: row.emphasizeLeftColor, fontWeight: row.key === "total" ? 700 : 600 }}
+            style={{
+              color: row.emphasizeLeftColor,
+              fontWeight: row.key === "total" ? 700 : 600,
+            }}
           >
             {value ?? "-"}
           </span>
@@ -1142,7 +1271,11 @@ const ProjectPricingStrategyCard = ({
         width: "16.66%",
         align: "right",
         onHeaderCell: () => ({
-          style: { borderInlineEnd: "none", textAlign: "right", paddingRight: 28 },
+          style: {
+            borderInlineEnd: "none",
+            textAlign: "right",
+            paddingRight: 28,
+          },
         }),
         onCell: (row) =>
           row.type === "section"
@@ -1165,7 +1298,10 @@ const ProjectPricingStrategyCard = ({
               },
         render: (value, row) => (
           <span
-            style={{ color: row.emphasizeRightColor, fontWeight: row.key === "total" ? 700 : 600 }}
+            style={{
+              color: row.emphasizeRightColor,
+              fontWeight: row.key === "total" ? 700 : 600,
+            }}
           >
             {value ?? "-"}
           </span>
@@ -1330,7 +1466,9 @@ const ProjectPricingStrategyCard = ({
                       ? `${formatAmount(panel.cost)}元`
                       : "-"}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
                     <div
                       style={{
                         flex: 1,
@@ -1428,7 +1566,6 @@ const ProjectPricingStrategyCard = ({
           />
         ) : null}
       </ProjectDetailTitledTableCard>
-
     </div>
   ) : (
     <Empty description="暂无项目报价参考" />

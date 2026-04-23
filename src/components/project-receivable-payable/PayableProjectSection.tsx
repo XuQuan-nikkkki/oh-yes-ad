@@ -122,7 +122,12 @@ export default function PayableProjectSection({
             {signingCompanyName || "未设置签约公司"}
           </span>
           <span style={{ color: "rgba(0,0,0,0.25)" }}>·</span>
-  c
+          <AppLink
+            href={`/projects/${projectId}`}
+            style={{ color: "rgba(0,0,0,0.88)", fontWeight: 700, fontSize: 16 }}
+          >
+            {projectName || "-"}
+          </AppLink>
           <SelectOptionQuickEditTag
             field="project.status"
             disabled={!canManageProject}

@@ -6,7 +6,18 @@ import type { Key } from "react";
 import { DragSortTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import { InfoCircleOutlined } from "@ant-design/icons";
-import { Button, DatePicker, Form, Input, Modal, Progress, Space, Table, Tooltip, Typography } from "antd";
+import {
+  Button,
+  DatePicker,
+  Form,
+  Input,
+  Modal,
+  Progress,
+  Space,
+  Table,
+  Tooltip,
+  Typography,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { Dayjs } from "dayjs";
 import BooleanTag from "@/components/BooleanTag";
@@ -145,12 +156,15 @@ const ProjectReceivableNodeTable = ({
     useState<ActualNodeRow | null>(null);
   const [delayModalOpen, setDelayModalOpen] = useState(false);
   const [delaying, setDelaying] = useState(false);
-  const [delayTargetRow, setDelayTargetRow] = useState<ProjectReceivableNodeRow | null>(null);
+  const [delayTargetRow, setDelayTargetRow] =
+    useState<ProjectReceivableNodeRow | null>(null);
   const [delayForm] = Form.useForm<ReceivableNodeDelayFormValues>();
 
   useEffect(() => {
     const validIdSet = new Set(rows.map((row) => row.id));
-    setExpandedRowKeys((prev) => prev.filter((key) => validIdSet.has(String(key))));
+    setExpandedRowKeys((prev) =>
+      prev.filter((key) => validIdSet.has(String(key))),
+    );
   }, [rows]);
 
   const stageValueEnum = useMemo(() => {
@@ -183,7 +197,7 @@ const ProjectReceivableNodeTable = ({
         title: "收款阶段",
         dataIndex: "stageOptionId",
         fixed: "left",
-        width: 120,
+        width: 100,
         valueType: "select",
         valueEnum: stageValueEnum,
         fieldProps: {
@@ -266,31 +280,9 @@ const ProjectReceivableNodeTable = ({
         valueType: "date",
       },
       {
-        title: "备注",
-        dataIndex: "remark",
-        valueType: "textarea",
-        ellipsis: true,
-        render: (_dom, row) => {
-          const value = row.remark?.trim() ?? "";
-          if (!value) return <span>-</span>;
-          return (
-            <div
-              style={{
-                color: Boolean(row.remarkNeedsAttention)
-                  ? "#ff4d4f"
-                  : undefined,
-                minWidth: 120,
-              }}
-            >
-              {value}
-            </div>
-          );
-        },
-      },
-      {
         title: "预收延后",
         dataIndex: "expectedDateHistories",
-        width: 160,
+        width: 100,
         editable: false,
         render: (_dom, row) => {
           const histories = Array.isArray(row.expectedDateHistories)
@@ -326,6 +318,28 @@ const ProjectReceivableNodeTable = ({
                 <InfoCircleOutlined style={{ color: "rgba(0,0,0,0.45)" }} />
               </Tooltip>
             </Space>
+          );
+        },
+      },
+      {
+        title: "备注",
+        dataIndex: "remark",
+        valueType: "textarea",
+        ellipsis: true,
+        render: (_dom, row) => {
+          const value = row.remark?.trim() ?? "";
+          if (!value) return <span>-</span>;
+          return (
+            <div
+              style={{
+                color: Boolean(row.remarkNeedsAttention)
+                  ? "#ff4d4f"
+                  : undefined,
+                minWidth: 120,
+              }}
+            >
+              {value}
+            </div>
           );
         },
       },
@@ -517,7 +531,7 @@ const ProjectReceivableNodeTable = ({
       />
       <style jsx global>{`
         .receivable-node-row-complete > td.ant-table-cell {
-          background: #EFF6E6 !important;
+          background: #eff6e6 !important;
         }
       `}</style>
 

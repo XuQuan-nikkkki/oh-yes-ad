@@ -205,11 +205,9 @@ const MilestoneNoticeTemplate = ({
 
         const detailLines = [
           ["时间", timeContent],
-          ["描述", " "],
           ["地点", address],
           ["方式", method],
           ["参与人员", membersContent],
-          ["备注", " "],
           ["TODO", `${newLine}  - `],
         ]
           .filter((item) => item[1] !== "")

@@ -83,8 +83,10 @@ const getActualAmountSum = (row: ProjectPayableNodeRow) =>
 const getPaymentProgressPercent = (row: ProjectPayableNodeRow) => {
   const expectedAmount = Number(row.expectedAmountTaxIncluded ?? 0);
   const actualAmount = getActualAmountSum(row);
-  if (expectedAmount <= 0) return 0;
-  return Math.max(0, Math.min(100, Math.round((actualAmount / expectedAmount) * 100)));
+  if (expectedAmount === 0) return 0;
+  const rawPercent = (actualAmount / expectedAmount) * 100;
+  if (!Number.isFinite(rawPercent)) return 0;
+  return Math.min(100, Math.round(Math.abs(rawPercent)));
 };
 
 const formatAmount = (value?: number | null) => {

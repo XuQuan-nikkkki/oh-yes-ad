@@ -29,6 +29,8 @@ const includeDetail = {
   clientContract: {
     select: {
       id: true,
+      contractAmount: true,
+      taxAmount: true,
       legalEntityId: true,
       legalEntity: {
         select: {

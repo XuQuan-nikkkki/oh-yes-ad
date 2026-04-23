@@ -996,11 +996,56 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
               eventContent={(arg) => {
                 const projectName =
                   (arg.event.extendedProps.projectName as string) ?? "";
+                const eventDurationMinutes = (() => {
+                  const start = arg.event.start?.getTime();
+                  const end = arg.event.end?.getTime();
+                  if (typeof start !== "number" || typeof end !== "number") {
+                    return null;
+                  }
+                  return Math.max(Math.round((end - start) / (1000 * 60)), 0);
+                })();
+                const isCompactEvent =
+                  arg.view.type !== "listMonth" &&
+                  typeof eventDurationMinutes === "number" &&
+                  eventDurationMinutes <= 30;
+                const showProjectName =
+                  !isCompactEvent &&
+                  Boolean(projectName) &&
+                  (typeof eventDurationMinutes !== "number" ||
+                    eventDurationMinutes >= 60);
                 return (
-                  <div>
-                    <div style={{ fontSize: 10 }}>{arg.timeText}</div>
-                    <div style={{ fontSize: 11 }}>{arg.event.title}</div>
-                    {projectName ? (
+                  <div
+                    style={{
+                      height: "100%",
+                      overflow: "hidden",
+                      minWidth: 0,
+                    }}
+                  >
+                    {!isCompactEvent ? (
+                      <div
+                        style={{
+                          fontSize: 10,
+                          lineHeight: "12px",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {arg.timeText}
+                      </div>
+                    ) : null}
+                    <div
+                      style={{
+                        fontSize: 11,
+                        lineHeight: "14px",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {arg.event.title}
+                    </div>
+                    {showProjectName ? (
                       <div
                         style={{
                           fontSize: 10,
@@ -1016,9 +1061,9 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
                   </div>
                 );
               }}
-              slotMinTime="09:00:00"
-              slotMaxTime="33:00:00"
-              scrollTime="09:00:00"
+              slotMinTime="00:00:00"
+              slotMaxTime="24:00:00"
+              scrollTime="00:00:00"
               dayMaxEvents
               height="auto"
               editable
@@ -1090,9 +1135,17 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
         .work-logs-calendar .fc-day-sun {
           background-color: #faf6ea;
         }
+
+        .work-logs-calendar .fc-timegrid-event {
+          overflow: hidden;
+        }
+
+        .work-logs-calendar .fc-timegrid-event .fc-event-main {
+          overflow: hidden;
+        }
       `}</style>
       <Modal
-        title={workLogMode === "edit" ? "编辑实际工时" : "登记实际工时"}
+        title={workLogMode === "edit" ? "修改工时记录" : "创建工时记录"}
         open={workLogModalOpen}
         onCancel={() => {
           if (workLogSubmitting || workLogDeleting) return;

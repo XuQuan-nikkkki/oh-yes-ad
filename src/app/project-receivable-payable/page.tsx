@@ -10,7 +10,6 @@ import {
 } from "react";
 import dayjs from "dayjs";
 import {
-  Button,
   Card,
   Divider,
   Empty,
@@ -50,12 +49,15 @@ import { useProjectsStore } from "@/stores/projectsStore";
 type TabKey = "summary" | "receivable" | "payable";
 type ReceivableViewMode = "card" | "table";
 type PayableViewMode = "card" | "table";
+type YearFilterValue = "all" | `${number}`;
 type SummarySettlementFilter =
   | "all"
   | "receivable_unfinished"
   | "payable_unfinished"
   | "settled";
 const TAB_KEYS: TabKey[] = ["summary", "receivable", "payable"];
+const YEAR_FILTER_START = 2024;
+const YEAR_FILTER_ALL: YearFilterValue = "all";
 const ALL_PROJECTS_QUERY_KEY = JSON.stringify({
   type: "",
   ownerId: "",
@@ -137,13 +139,6 @@ type ReceivablePlan = {
   contractAmount: number;
   hasVendorPayment: boolean;
   nodes?: ReceivableNode[];
-};
-
-type ReceivableNodeTableRow = ReceivableNode & {
-  planId: string;
-  project?: { id: string; name: string } | null;
-  contractAmount: number;
-  hasVendorPayment: boolean;
 };
 
 type ReceivableNodeTableViewRow = {
@@ -381,6 +376,48 @@ const getFirstExpectedDateTimestamp = (
   const timestamp = dayjs(firstExpectedDate).valueOf();
   return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
 };
+const normalizeYearFilterValue = (value: unknown): YearFilterValue => {
+  if (value === YEAR_FILTER_ALL) return YEAR_FILTER_ALL;
+  if (typeof value !== "string") return YEAR_FILTER_ALL;
+  const text = value.trim();
+  if (!/^\d{4}$/.test(text)) return YEAR_FILTER_ALL;
+  return text as YearFilterValue;
+};
+const toSelectedYearNumber = (value: YearFilterValue) =>
+  value === YEAR_FILTER_ALL ? null : Number(value);
+const getDateYear = (value?: string | null) => {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const parsed = dayjs(text);
+  if (!parsed.isValid()) return null;
+  return parsed.year();
+};
+const nodeMatchesYear = (
+  expectedDate: string | null | undefined,
+  actualNodes: Array<{ actualDate?: string | null }> | undefined,
+  year: number,
+) => {
+  const expectedYear = getDateYear(expectedDate);
+  if (expectedYear === year) return true;
+  return (actualNodes ?? []).some(
+    (actual) => getDateYear(actual.actualDate) === year,
+  );
+};
+const matchesReceivablePlanByYear = (
+  plan: ReceivablePlan,
+  year: number | null,
+) => {
+  if (year === null) return true;
+  return (plan.nodes ?? []).some((node) =>
+    nodeMatchesYear(node.expectedDate, node.actualNodes, year),
+  );
+};
+const matchesPayablePlanByYear = (plan: PayablePlan, year: number | null) => {
+  if (year === null) return true;
+  return (plan.nodes ?? []).some((node) =>
+    nodeMatchesYear(node.expectedDate, node.actualNodes, year),
+  );
+};
 
 function ProjectReceivablePayablePageContent() {
   const [messageApi, contextHolder] = message.useMessage();
@@ -429,6 +466,8 @@ function ProjectReceivablePayablePageContent() {
   const [receivableOwnerFilterIds, setReceivableOwnerFilterIds] = useState<
     string[]
   >([]);
+  const [receivableYearFilter, setReceivableYearFilter] =
+    useState<YearFilterValue>(YEAR_FILTER_ALL);
   const [payableProjectFilterIds, setPayableProjectFilterIds] = useState<
     string[]
   >([]);
@@ -437,6 +476,8 @@ function ProjectReceivablePayablePageContent() {
   const [payableVendorFilterIds, setPayableVendorFilterIds] = useState<
     string[]
   >([]);
+  const [payableYearFilter, setPayableYearFilter] =
+    useState<YearFilterValue>(YEAR_FILTER_ALL);
   const [payableOwnerFilterIds, setPayableOwnerFilterIds] = useState<string[]>(
     [],
   );
@@ -448,6 +489,8 @@ function ProjectReceivablePayablePageContent() {
     [],
   );
   const [summaryOwnerFilters, setSummaryOwnerFilters] = useState<string[]>([]);
+  const [summaryYearFilter, setSummaryYearFilter] =
+    useState<YearFilterValue>(YEAR_FILTER_ALL);
   const deferredReceivableProjectFilterIds = useDeferredValue(
     receivableProjectFilterIds,
   );
@@ -457,6 +500,7 @@ function ProjectReceivablePayablePageContent() {
   const deferredReceivableOwnerFilterIds = useDeferredValue(
     receivableOwnerFilterIds,
   );
+  const deferredReceivableYearFilter = useDeferredValue(receivableYearFilter);
   const deferredPayableProjectFilterIds = useDeferredValue(
     payableProjectFilterIds,
   );
@@ -466,13 +510,17 @@ function ProjectReceivablePayablePageContent() {
   const deferredPayableVendorFilterIds = useDeferredValue(
     payableVendorFilterIds,
   );
+  const deferredPayableYearFilter = useDeferredValue(payableYearFilter);
   const deferredPayableOwnerFilterIds = useDeferredValue(payableOwnerFilterIds);
-  const deferredSummarySettlementFilter = useDeferredValue(summarySettlementFilter);
+  const deferredSummarySettlementFilter = useDeferredValue(
+    summarySettlementFilter,
+  );
   const deferredSummarySigningCompanyFilters = useDeferredValue(
     summarySigningCompanyFilters,
   );
   const deferredSummaryProjectFilters = useDeferredValue(summaryProjectFilters);
   const deferredSummaryOwnerFilters = useDeferredValue(summaryOwnerFilters);
+  const deferredSummaryYearFilter = useDeferredValue(summaryYearFilter);
   const employeesFull = useEmployeesStore((state) => state.employeesFull);
   const fetchEmployeesFromStore = useEmployeesStore(
     (state) => state.fetchEmployees,
@@ -780,6 +828,19 @@ function ProjectReceivablePayablePageContent() {
         .sort((left, right) => left.label.localeCompare(right.label, "zh-CN")),
     [vendors],
   );
+  const yearFilterOptions = useMemo(() => {
+    const currentYear = Math.max(dayjs().year(), YEAR_FILTER_START);
+    const options: Array<{ label: string; value: YearFilterValue }> = [
+      { label: "全部年度", value: YEAR_FILTER_ALL },
+    ];
+    for (let year = currentYear; year >= YEAR_FILTER_START; year -= 1) {
+      options.push({
+        label: `${year}年`,
+        value: String(year) as YearFilterValue,
+      });
+    }
+    return options;
+  }, []);
 
   useEffect(() => {
     if (receivableProjectFilterIds.length === 0) return;
@@ -899,73 +960,76 @@ function ProjectReceivablePayablePageContent() {
     setPayableVendorFilterIds(validIds);
   }, [payableVendorFilterIds, searchableVendorOptions]);
 
-  const filteredReceivablePlans = useMemo(
-    () =>
-      receivablePlans.filter((plan) => {
-        const matchesProject =
-          deferredReceivableProjectFilterIds.length > 0
-            ? deferredReceivableProjectFilterIds.includes(
-                plan.project?.id ?? "",
-              )
-            : true;
-        const planLegalEntityId =
-          plan.clientContract?.legalEntity?.id || plan.legalEntity?.id || "";
-        const matchesLegalEntity =
-          deferredReceivableLegalEntityFilterIds.length > 0
-            ? deferredReceivableLegalEntityFilterIds.includes(planLegalEntityId)
-            : true;
-        const matchesOwner =
-          deferredReceivableOwnerFilterIds.length > 0
-            ? deferredReceivableOwnerFilterIds.includes(
-                plan.ownerEmployee?.id ?? "",
-              )
-            : true;
-        return matchesProject && matchesLegalEntity && matchesOwner;
-      }),
-    [
-      deferredReceivableLegalEntityFilterIds,
-      deferredReceivableOwnerFilterIds,
-      deferredReceivableProjectFilterIds,
-      receivablePlans,
-    ],
-  );
-  const filteredPayablePlans = useMemo(
-    () =>
-      payablePlans.filter((plan) => {
-        const planLegalEntityId = plan.vendorContract?.legalEntity?.id || "";
-        const matchesProject =
-          deferredPayableProjectFilterIds.length > 0
-            ? deferredPayableProjectFilterIds.includes(plan.project?.id ?? "")
-            : true;
-        const matchesLegalEntity =
-          deferredPayableLegalEntityFilterIds.length > 0
-            ? deferredPayableLegalEntityFilterIds.includes(planLegalEntityId)
-            : true;
-        const matchesVendor =
-          deferredPayableVendorFilterIds.length > 0
-            ? deferredPayableVendorFilterIds.includes(
-                plan.vendorContract?.vendor?.id ?? "",
-              )
-            : true;
-        const matchesOwner =
-          deferredPayableOwnerFilterIds.length > 0
-            ? deferredPayableOwnerFilterIds.includes(
-                plan.ownerEmployee?.id ?? "",
-              )
-            : true;
-        return (
-          matchesProject && matchesLegalEntity && matchesVendor && matchesOwner
-        );
-      }),
-    [
-      deferredPayableLegalEntityFilterIds,
-      deferredPayableOwnerFilterIds,
-      deferredPayableProjectFilterIds,
-      deferredPayableVendorFilterIds,
-      payablePlans,
-    ],
-  );
-  const dataSource = filteredPayablePlans;
+  const filteredReceivablePlans = useMemo(() => {
+    const selectedYear = toSelectedYearNumber(deferredReceivableYearFilter);
+    return receivablePlans.filter((plan) => {
+      const matchesProject =
+        deferredReceivableProjectFilterIds.length > 0
+          ? deferredReceivableProjectFilterIds.includes(plan.project?.id ?? "")
+          : true;
+      const planLegalEntityId =
+        plan.clientContract?.legalEntity?.id || plan.legalEntity?.id || "";
+      const matchesLegalEntity =
+        deferredReceivableLegalEntityFilterIds.length > 0
+          ? deferredReceivableLegalEntityFilterIds.includes(planLegalEntityId)
+          : true;
+      const matchesOwner =
+        deferredReceivableOwnerFilterIds.length > 0
+          ? deferredReceivableOwnerFilterIds.includes(
+              plan.ownerEmployee?.id ?? "",
+            )
+          : true;
+      const matchesYear = matchesReceivablePlanByYear(plan, selectedYear);
+      return (
+        matchesProject && matchesLegalEntity && matchesOwner && matchesYear
+      );
+    });
+  }, [
+    deferredReceivableLegalEntityFilterIds,
+    deferredReceivableOwnerFilterIds,
+    deferredReceivableProjectFilterIds,
+    deferredReceivableYearFilter,
+    receivablePlans,
+  ]);
+  const filteredPayablePlans = useMemo(() => {
+    const selectedYear = toSelectedYearNumber(deferredPayableYearFilter);
+    return payablePlans.filter((plan) => {
+      const planLegalEntityId = plan.vendorContract?.legalEntity?.id || "";
+      const matchesProject =
+        deferredPayableProjectFilterIds.length > 0
+          ? deferredPayableProjectFilterIds.includes(plan.project?.id ?? "")
+          : true;
+      const matchesLegalEntity =
+        deferredPayableLegalEntityFilterIds.length > 0
+          ? deferredPayableLegalEntityFilterIds.includes(planLegalEntityId)
+          : true;
+      const matchesVendor =
+        deferredPayableVendorFilterIds.length > 0
+          ? deferredPayableVendorFilterIds.includes(
+              plan.vendorContract?.vendor?.id ?? "",
+            )
+          : true;
+      const matchesOwner =
+        deferredPayableOwnerFilterIds.length > 0
+          ? deferredPayableOwnerFilterIds.includes(plan.ownerEmployee?.id ?? "")
+          : true;
+      const matchesYear = matchesPayablePlanByYear(plan, selectedYear);
+      return (
+        matchesProject &&
+        matchesLegalEntity &&
+        matchesVendor &&
+        matchesOwner &&
+        matchesYear
+      );
+    });
+  }, [
+    deferredPayableLegalEntityFilterIds,
+    deferredPayableOwnerFilterIds,
+    deferredPayableProjectFilterIds,
+    deferredPayableVendorFilterIds,
+    deferredPayableYearFilter,
+    payablePlans,
+  ]);
   const payableNodeTableRows = useMemo<PayableNodeTableViewRow[]>(() => {
     const rows: PayableNodeTableViewRow[] = [];
     const sortedPlans = [...filteredPayablePlans].sort((left, right) => {
@@ -1088,19 +1152,6 @@ function ProjectReceivablePayablePageContent() {
     return rows;
   }, [filteredPayablePlans]);
 
-  const receivableNodeRows = useMemo<ReceivableNodeTableRow[]>(
-    () =>
-      filteredReceivablePlans.flatMap((plan) =>
-        (plan.nodes ?? []).map((node) => ({
-          ...node,
-          planId: plan.id,
-          project: plan.project ?? null,
-          contractAmount: plan.contractAmount,
-          hasVendorPayment: Boolean(plan.hasVendorPayment),
-        })),
-      ),
-    [filteredReceivablePlans],
-  );
   const receivableNodeTableRows = useMemo<ReceivableNodeTableViewRow[]>(() => {
     const rows: ReceivableNodeTableViewRow[] = [];
     const sortedPlans = [...filteredReceivablePlans].sort((left, right) => {
@@ -1353,13 +1404,15 @@ function ProjectReceivablePayablePageContent() {
             ),
             expectedDate: node.expectedDate ?? "",
             expectedDateChangeCount: 0,
-            expectedDateHistories: (node.expectedDateHistories ?? []).map((history) => ({
-              id: history.id,
-              fromExpectedDate: history.fromExpectedDate,
-              toExpectedDate: history.toExpectedDate,
-              reason: history.reason ?? null,
-              changedAt: history.changedAt,
-            })),
+            expectedDateHistories: (node.expectedDateHistories ?? []).map(
+              (history) => ({
+                id: history.id,
+                fromExpectedDate: history.fromExpectedDate,
+                toExpectedDate: history.toExpectedDate,
+                reason: history.reason ?? null,
+                changedAt: history.changedAt,
+              }),
+            ),
             remark: node.remark ?? null,
             remarkNeedsAttention: Boolean(node.remarkNeedsAttention),
             actualNodes: (node.actualNodes ?? []).map((actual) => ({
@@ -1431,13 +1484,15 @@ function ProjectReceivablePayablePageContent() {
           ),
           expectedDate: node.expectedDate ?? "",
           expectedDateChangeCount: 0,
-          expectedDateHistories: (node.expectedDateHistories ?? []).map((history) => ({
-            id: history.id,
-            fromExpectedDate: history.fromExpectedDate,
-            toExpectedDate: history.toExpectedDate,
-            reason: history.reason ?? null,
-            changedAt: history.changedAt,
-          })),
+          expectedDateHistories: (node.expectedDateHistories ?? []).map(
+            (history) => ({
+              id: history.id,
+              fromExpectedDate: history.fromExpectedDate,
+              toExpectedDate: history.toExpectedDate,
+              reason: history.reason ?? null,
+              changedAt: history.changedAt,
+            }),
+          ),
           remark: node.remark ?? null,
           remarkNeedsAttention: Boolean(node.remarkNeedsAttention),
           actualNodes: (node.actualNodes ?? []).map((actual) => ({
@@ -1955,10 +2010,22 @@ function ProjectReceivablePayablePageContent() {
     [fetchData, messageApi],
   );
 
+  const summaryFilteredReceivablePlans = useMemo(() => {
+    const selectedYear = toSelectedYearNumber(deferredSummaryYearFilter);
+    return receivablePlans.filter((plan) =>
+      matchesReceivablePlanByYear(plan, selectedYear),
+    );
+  }, [deferredSummaryYearFilter, receivablePlans]);
+  const summaryFilteredPayablePlans = useMemo(() => {
+    const selectedYear = toSelectedYearNumber(deferredSummaryYearFilter);
+    return payablePlans.filter((plan) =>
+      matchesPayablePlanByYear(plan, selectedYear),
+    );
+  }, [deferredSummaryYearFilter, payablePlans]);
   const summaryProjectRows = useMemo<SummaryProjectRow[]>(() => {
     const projectMap = new Map<string, SummaryProjectRow>();
 
-    filteredReceivablePlans.forEach((plan) => {
+    summaryFilteredReceivablePlans.forEach((plan) => {
       const projectId = plan.project?.id ?? null;
       const projectName = plan.project?.name?.trim() || "未关联项目";
       const signingCompanyName =
@@ -1996,7 +2063,9 @@ function ProjectReceivablePayablePageContent() {
         }
         if (
           plan.ownerEmployee?.id &&
-          !existing.ownerEmployees.some((item) => item.id === plan.ownerEmployee?.id)
+          !existing.ownerEmployees.some(
+            (item) => item.id === plan.ownerEmployee?.id,
+          )
         ) {
           existing.ownerEmployees.push({
             id: plan.ownerEmployee.id,
@@ -2014,10 +2083,12 @@ function ProjectReceivablePayablePageContent() {
             ? [signingCompanyName]
             : [],
         ownerEmployees: plan.ownerEmployee?.id
-          ? [{
-              id: plan.ownerEmployee.id,
-              name: plan.ownerEmployee.name?.trim() || "-",
-            }]
+          ? [
+              {
+                id: plan.ownerEmployee.id,
+                name: plan.ownerEmployee.name?.trim() || "-",
+              },
+            ]
           : [],
         hasReceivablePlan: true,
         hasPayablePlan: false,
@@ -2030,7 +2101,7 @@ function ProjectReceivablePayablePageContent() {
       });
     });
 
-    filteredPayablePlans.forEach((plan) => {
+    summaryFilteredPayablePlans.forEach((plan) => {
       const projectId = plan.project?.id ?? null;
       const projectName = plan.project?.name?.trim() || "未关联项目";
       const signingCompanyName =
@@ -2068,7 +2139,9 @@ function ProjectReceivablePayablePageContent() {
         }
         if (
           plan.ownerEmployee?.id &&
-          !existing.ownerEmployees.some((item) => item.id === plan.ownerEmployee?.id)
+          !existing.ownerEmployees.some(
+            (item) => item.id === plan.ownerEmployee?.id,
+          )
         ) {
           existing.ownerEmployees.push({
             id: plan.ownerEmployee.id,
@@ -2086,10 +2159,12 @@ function ProjectReceivablePayablePageContent() {
             ? [signingCompanyName]
             : [],
         ownerEmployees: plan.ownerEmployee?.id
-          ? [{
-              id: plan.ownerEmployee.id,
-              name: plan.ownerEmployee.name?.trim() || "-",
-            }]
+          ? [
+              {
+                id: plan.ownerEmployee.id,
+                name: plan.ownerEmployee.name?.trim() || "-",
+              },
+            ]
           : [],
         hasReceivablePlan: false,
         hasPayablePlan: true,
@@ -2136,7 +2211,7 @@ function ProjectReceivablePayablePageContent() {
       .sort((left, right) =>
         compareProjectName(left.projectName, right.projectName),
       );
-  }, [filteredPayablePlans, filteredReceivablePlans]);
+  }, [summaryFilteredPayablePlans, summaryFilteredReceivablePlans]);
   const summaryProjectColumns = useMemo<ColumnsType<SummaryProjectRow>>(
     () => [
       {
@@ -2729,7 +2804,6 @@ function ProjectReceivablePayablePageContent() {
       variant="borderless"
       tabList={tabList}
       activeTabKey={activeTab}
-      extra={activeTab === "receivable" ? <Button>下载表格</Button> : undefined}
       onTabChange={(key) => {
         const nextTab = toTabKey(key);
         setActiveTab(nextTab);
@@ -2744,166 +2818,173 @@ function ProjectReceivablePayablePageContent() {
       {showDevelopmentPlaceholder ? (
         <PageAccessResult type="developing" />
       ) : activeTab === "summary" ? (
-        filteredReceivablePlans.length === 0 &&
-        filteredPayablePlans.length === 0 ? (
-          <Empty description="暂无数据" />
-        ) : (
-          <>
-            <div
-              style={{
-                marginBottom: 12,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                flexWrap: "wrap",
-              }}
-            >
-              <Space size={8} wrap>
-                <Segmented
-                  options={[
-                    { label: "全部", value: "all" },
-                    { label: "收款未完成", value: "receivable_unfinished" },
-                    { label: "付款未完成", value: "payable_unfinished" },
-                    { label: "结算完毕", value: "settled" },
-                  ]}
-                  value={summarySettlementFilter}
-                  onChange={(value) =>
-                    setSummarySettlementFilter(value as SummarySettlementFilter)
-                  }
-                />
-                <Select
-                  mode="multiple"
-                  allowClear
-                  showSearch
-                  placeholder="选择签约公司"
-                  style={{ width: 180 }}
-                  options={summarySigningCompanyOptions}
-                  value={summarySigningCompanyFilters}
-                  optionFilterProp="label"
-                  onChange={(value) => {
-                    setSummarySigningCompanyFilters(
-                      Array.isArray(value) ? (value as string[]) : [],
-                    );
-                  }}
-                />
-                <Select
-                  mode="multiple"
-                  allowClear
-                  showSearch
-                  placeholder="选择项目"
-                  style={{ width: 260 }}
-                  options={summaryProjectOptions}
-                  value={summaryProjectFilters}
-                  optionFilterProp="label"
-                  onChange={(value) => {
-                    setSummaryProjectFilters(
-                      Array.isArray(value) ? (value as string[]) : [],
-                    );
-                  }}
-                />
-                <Select
-                  mode="multiple"
-                  allowClear
-                  showSearch
-                  placeholder="选择跟进人"
-                  style={{ width: 160 }}
-                  options={summaryOwnerOptions}
-                  value={summaryOwnerFilters}
-                  optionFilterProp="label"
-                  onChange={(value) => {
-                    setSummaryOwnerFilters(
-                      Array.isArray(value) ? (value as string[]) : [],
-                    );
-                  }}
-                />
-              </Space>
-            </div>
-            <Divider
-              style={{
-                width: "calc(100% + 48px)",
-                margin: "0 -24px 12px",
+        <>
+          <div
+            style={{
+              marginBottom: 12,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <Space size={8} wrap>
+              <Segmented
+                options={[
+                  { label: "全部", value: "all" },
+                  { label: "收款未完成", value: "receivable_unfinished" },
+                  { label: "付款未完成", value: "payable_unfinished" },
+                  { label: "结算完毕", value: "settled" },
+                ]}
+                value={summarySettlementFilter}
+                onChange={(value) =>
+                  setSummarySettlementFilter(value as SummarySettlementFilter)
+                }
+              />
+              <Select
+                allowClear
+                placeholder="选择年度"
+                style={{ width: 120 }}
+                options={yearFilterOptions}
+                value={summaryYearFilter}
+                onChange={(value) =>
+                  setSummaryYearFilter(normalizeYearFilterValue(value))
+                }
+              />
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                placeholder="选择签约公司"
+                style={{ width: 180 }}
+                options={summarySigningCompanyOptions}
+                value={summarySigningCompanyFilters}
+                optionFilterProp="label"
+                onChange={(value) => {
+                  setSummarySigningCompanyFilters(
+                    Array.isArray(value) ? (value as string[]) : [],
+                  );
+                }}
+              />
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                placeholder="选择项目"
+                style={{ width: 260 }}
+                options={summaryProjectOptions}
+                value={summaryProjectFilters}
+                optionFilterProp="label"
+                onChange={(value) => {
+                  setSummaryProjectFilters(
+                    Array.isArray(value) ? (value as string[]) : [],
+                  );
+                }}
+              />
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                placeholder="选择跟进人"
+                style={{ width: 160 }}
+                options={summaryOwnerOptions}
+                value={summaryOwnerFilters}
+                optionFilterProp="label"
+                onChange={(value) => {
+                  setSummaryOwnerFilters(
+                    Array.isArray(value) ? (value as string[]) : [],
+                  );
+                }}
+              />
+            </Space>
+          </div>
+          <Divider
+            style={{
+              width: "calc(100% + 48px)",
+              margin: "0 -24px 12px",
+            }}
+          />
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+              gap: 12,
+              marginBottom: 12,
+            }}
+          >
+            <StatisticCard
+              style={{ background: "#F5F4EE" }}
+              statistic={{
+                title: "项目总数",
+                value: summaryOverview.projectCount,
+                formatter: (value) =>
+                  Number(value ?? 0).toLocaleString("zh-CN"),
               }}
             />
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-                gap: 12,
-                marginBottom: 12,
+            <StatisticCard
+              style={{ background: "#F5F4EE" }}
+              statistic={{
+                title: "预收合计",
+                value: summaryOverview.receivableExpectedTotal,
+                formatter: (value) =>
+                  `¥${Number(value ?? 0).toLocaleString("zh-CN")}`,
               }}
-            >
-              <StatisticCard
-                style={{ background: "#F5F4EE" }}
-                statistic={{
-                  title: "项目总数",
-                  value: summaryOverview.projectCount,
-                  formatter: (value) =>
-                    Number(value ?? 0).toLocaleString("zh-CN"),
-                }}
-              />
-              <StatisticCard
-                style={{ background: "#F5F4EE" }}
-                statistic={{
-                  title: "预收合计",
-                  value: summaryOverview.receivableExpectedTotal,
-                  formatter: (value) =>
-                    `¥${Number(value ?? 0).toLocaleString("zh-CN")}`,
-                }}
-              />
-              <StatisticCard
-                style={{ background: "#F5F4EE" }}
-                statistic={{
-                  title: "实收合计",
-                  value: summaryOverview.receivableActualTotal,
-                  description: (
-                    <Progress
-                      percent={Math.round(summaryOverview.receivableActualPercent)}
-                      strokeColor="green"
-                    />
-                  ),
-                  formatter: (value) =>
-                    `¥${Number(value ?? 0).toLocaleString("zh-CN")}`,
-                }}
-              />
-              <StatisticCard
-                style={{ background: "#F5F4EE" }}
-                statistic={{
-                  title: "预付合计",
-                  value: summaryOverview.payableExpectedTotal,
-                  formatter: (value) =>
-                    `¥${Number(value ?? 0).toLocaleString("zh-CN")}`,
-                }}
-              />
-              <StatisticCard
-                style={{ background: "#F5F4EE" }}
-                statistic={{
-                  title: "实付合计",
-                  value: summaryOverview.payableActualTotal,
-                  description: (
-                    <Progress
-                      percent={Math.round(summaryOverview.payableActualPercent)}
-                      strokeColor="green"
-                    />
-                  ),
-                  formatter: (value) =>
-                    `¥${Number(value ?? 0).toLocaleString("zh-CN")}`,
-                }}
-              />
-            </div>
-            <Table
-              rowKey="key"
-              loading={loading}
-              bordered
-              size="small"
-              columns={summaryProjectColumns}
-              dataSource={filteredSummaryProjectRows}
-              pagination={false}
-              scroll={{ x: "max-content" }}
-              style={{ marginBottom: 16 }}
             />
-          </>
-        )
+            <StatisticCard
+              style={{ background: "#F5F4EE" }}
+              statistic={{
+                title: "实收合计",
+                value: summaryOverview.receivableActualTotal,
+                description: (
+                  <Progress
+                    percent={Math.round(
+                      summaryOverview.receivableActualPercent,
+                    )}
+                    strokeColor="green"
+                  />
+                ),
+                formatter: (value) =>
+                  `¥${Number(value ?? 0).toLocaleString("zh-CN")}`,
+              }}
+            />
+            <StatisticCard
+              style={{ background: "#F5F4EE" }}
+              statistic={{
+                title: "预付合计",
+                value: summaryOverview.payableExpectedTotal,
+                formatter: (value) =>
+                  `¥${Number(value ?? 0).toLocaleString("zh-CN")}`,
+              }}
+            />
+            <StatisticCard
+              style={{ background: "#F5F4EE" }}
+              statistic={{
+                title: "实付合计",
+                value: summaryOverview.payableActualTotal,
+                description: (
+                  <Progress
+                    percent={Math.round(summaryOverview.payableActualPercent)}
+                    strokeColor="green"
+                  />
+                ),
+                formatter: (value) =>
+                  `¥${Number(value ?? 0).toLocaleString("zh-CN")}`,
+              }}
+            />
+          </div>
+          <Table
+            rowKey="key"
+            loading={loading}
+            bordered
+            size="small"
+            columns={summaryProjectColumns}
+            dataSource={filteredSummaryProjectRows}
+            pagination={false}
+            scroll={{ x: "max-content" }}
+            style={{ marginBottom: 16 }}
+          />
+        </>
       ) : activeTab === "receivable" ? (
         <>
           <div
@@ -2917,6 +2998,16 @@ function ProjectReceivablePayablePageContent() {
             }}
           >
             <Space size={8}>
+              <Select
+                allowClear
+                placeholder="选择年度"
+                style={{ width: 120 }}
+                options={yearFilterOptions}
+                value={receivableYearFilter}
+                onChange={(value) => {
+                  setReceivableYearFilter(normalizeYearFilterValue(value));
+                }}
+              />
               <Select
                 mode="multiple"
                 allowClear
@@ -2993,8 +3084,6 @@ function ProjectReceivablePayablePageContent() {
               pagination={false}
               scroll={{ x: "max-content" }}
             />
-          ) : receivableNodeRows.length === 0 ? (
-            <Empty description="暂无数据" />
           ) : (
             <>
               <div
@@ -3113,6 +3202,16 @@ function ProjectReceivablePayablePageContent() {
           >
             <Space size={8}>
               <Select
+                allowClear
+                placeholder="选择年度"
+                style={{ width: 120 }}
+                options={yearFilterOptions}
+                value={payableYearFilter}
+                onChange={(value) => {
+                  setPayableYearFilter(normalizeYearFilterValue(value));
+                }}
+              />
+              <Select
                 mode="multiple"
                 allowClear
                 showSearch
@@ -3192,9 +3291,7 @@ function ProjectReceivablePayablePageContent() {
               margin: "0 -24px 12px",
             }}
           />
-          {dataSource.length === 0 ? (
-            <Empty description="暂无数据" />
-          ) : payableViewMode === "table" ? (
+          {payableViewMode === "table" ? (
             <Table
               rowKey="key"
               loading={loading}
