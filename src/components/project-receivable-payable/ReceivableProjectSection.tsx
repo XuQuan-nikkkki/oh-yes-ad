@@ -58,6 +58,7 @@ type ReceivableProjectSectionProps = {
     row: ProjectReceivableNodeRow,
     values: ReceivableNodeDelayFormValues,
   ) => void | Promise<void>;
+  onHistoryChanged?: () => void | Promise<void>;
 };
 
 export default function ReceivableProjectSection({
@@ -80,6 +81,7 @@ export default function ReceivableProjectSection({
   onEditActualNode,
   onDeleteActualNode,
   onDelayNode,
+  onHistoryChanged,
 }: ReceivableProjectSectionProps) {
   const [nodeModalOpen, setNodeModalOpen] = useState(false);
   const [creatingNode, setCreatingNode] = useState(false);
@@ -219,6 +221,7 @@ export default function ReceivableProjectSection({
           onEditActualNode={onEditActualNode}
           onDeleteActualNode={onDeleteActualNode}
           onDelayNode={onDelayNode}
+          onHistoryChanged={onHistoryChanged}
         />
       ) : (
         <div style={{ padding: 16 }}>

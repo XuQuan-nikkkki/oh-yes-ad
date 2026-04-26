@@ -68,6 +68,14 @@ const includeDetail = {
         },
       },
       expectedDateHistories: {
+        include: {
+          changedByEmployee: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
         orderBy: [{ changedAt: "desc" as const }],
       },
       actualNodes: {

@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
 import DetailPageContainer from "@/components/DetailPageContainer";
+import PageAccessResult from "@/components/PageAccessResult";
 import ActualWorkEntryForm, { ActualWorkEntryFormPayload } from "@/components/project-detail/ActualWorkEntryForm";
 import { DATE_FORMAT, DEFAULT_COLOR } from "@/lib/constants";
 import { formatDate, formatDateRange } from "@/lib/date";
@@ -44,6 +45,9 @@ export default function Page() {
   const [messageApi, contextHolder] = message.useMessage();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
+  const isAdmin = roleCodes.includes("ADMIN");
+  const hideWorktimeEntryPages =
+    !isAdmin && (roleCodes.includes("HR") || roleCodes.includes("FINANCE"));
   const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const clearEntriesCache = useActualWorkEntriesStore(
@@ -165,6 +169,10 @@ export default function Page() {
   const canManageEntry =
     canManageAnyActualWorkEntry ||
     (Boolean(currentUser?.id) && data?.employee?.id === currentUser?.id);
+
+  if (hideWorktimeEntryPages) {
+    return <PageAccessResult type="forbidden" />;
+  }
 
   if (loading) {
     return (

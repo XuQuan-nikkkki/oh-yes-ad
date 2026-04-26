@@ -3,6 +3,7 @@
 import { Tag } from "antd";
 import type { PresetColorType } from "antd/es/_util/colors";
 import dayjs from "dayjs";
+import type { ReactNode } from "react";
 
 type CountdownTag = {
   text: string;
@@ -40,13 +41,15 @@ const formatCountdown = (value?: string | null): CountdownTag => {
 
 type Props = {
   date?: string | null;
+  icon?: ReactNode;
 };
 
-const MilestoneCountdownTag = ({ date }: Props) => {
+const MilestoneCountdownTag = ({ date, icon }: Props) => {
   const countdown = formatCountdown(date);
 
   return (
     <Tag
+      icon={icon}
       color={countdown.color}
       style={{
         fontWeight: 600,

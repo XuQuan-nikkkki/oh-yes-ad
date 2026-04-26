@@ -106,7 +106,7 @@ function ProjectReimbursementsPageContent() {
     (state) => state.fetchAdjustments,
   );
   const selectedProjectId = searchParams.get("projectId");
-  const [projectIdsWithExecutionCosts, setProjectIdsWithExecutionCosts] =
+  const [projectIdsWithFinancialStructure, setProjectIdsWithFinancialStructure] =
     useState<Set<string>>(new Set());
   const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
   const canCreateReimbursement = useMemo(
@@ -141,7 +141,7 @@ function ProjectReimbursementsPageContent() {
 
   useEffect(() => {
     if (!authLoaded) return;
-    const fetchExecutionCostProjectIds = async () => {
+    const fetchFinancialStructureProjectIds = async () => {
       try {
         const res = await fetch("/api/project-financial-structures", {
           cache: "no-store",
@@ -157,19 +157,16 @@ function ProjectReimbursementsPageContent() {
               : typeof row?.project?.id === "string"
                 ? row.project.id
                 : "";
-          const hasExecutionCost = Array.isArray(row?.executionCostItems)
-            ? row.executionCostItems.length > 0
-            : false;
-          if (projectId && hasExecutionCost) {
+          if (projectId) {
             next.add(projectId);
           }
         }
-        setProjectIdsWithExecutionCosts(next);
+        setProjectIdsWithFinancialStructure(next);
       } catch {
-        setProjectIdsWithExecutionCosts(new Set());
+        setProjectIdsWithFinancialStructure(new Set());
       }
     };
-    void fetchExecutionCostProjectIds();
+    void fetchFinancialStructureProjectIds();
   }, [authLoaded]);
 
   const allNonInternalProjects = useMemo(() => {
@@ -208,28 +205,22 @@ function ProjectReimbursementsPageContent() {
   const activeProjects = useMemo(() => {
     const projects = allNonInternalProjects
       .filter((item) => !Boolean(item.isArchived))
-      .filter((item) => isClientProject(item));
+      .filter((item) => isClientProject(item))
+      .filter((item) => projectIdsWithFinancialStructure.has(item.id));
 
     const sorted = projects.sort((left, right) => {
-      const leftHasExecutionCost = projectIdsWithExecutionCosts.has(left.id);
-      const rightHasExecutionCost = projectIdsWithExecutionCosts.has(right.id);
-      if (leftHasExecutionCost !== rightHasExecutionCost) {
-        return leftHasExecutionCost ? -1 : 1;
-      }
       return compareProjectName(left.name, right.name);
     });
 
     if (!selectedProjectId) return sorted;
 
-    const matched = allNonInternalProjects.find(
-      (project) => project.id === selectedProjectId,
-    );
-    if (!matched) return sorted;
+    const matched = sorted.find((project) => project.id === selectedProjectId);
+    if (!matched) return [];
 
     return [matched];
   }, [
     allNonInternalProjects,
-    projectIdsWithExecutionCosts,
+    projectIdsWithFinancialStructure,
     selectedProjectId,
   ]);
 

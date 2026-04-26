@@ -39,7 +39,6 @@ type Props = {
   data: ProjectProgressSegmentRow[];
   segmentCount: number;
   taskCount: number;
-  pageSize?: number;
   hideCompletedItems?: boolean;
   showPlannedDaysForCurrentWeekOnly?: boolean;
   actionsDisabled?: boolean;
@@ -75,13 +74,16 @@ type Props = {
   onAfterDeletePlannedWork?: () => Promise<void> | void;
 };
 
-type PaginationState = {
-  current: number;
-  pageSize: number;
-};
-
 const formatDateOrEmpty = (value?: string | null) => {
-  return formatDate(value, DATE_FORMAT, "").replaceAll("-", "/");
+  if (!value) return "";
+  const date = dayjs(value);
+  if (!date.isValid()) return "";
+
+  if (date.year() === dayjs().year()) {
+    return date.format("MM/DD");
+  }
+
+  return date.format("YYYY/MM/DD");
 };
 
 const formatSegmentDateRange = (
@@ -134,7 +136,6 @@ const ProjectDetailProgressContent = ({
   projectId,
   projectName = "",
   data,
-  pageSize = 20,
   hideCompletedItems = false,
   showPlannedDaysForCurrentWeekOnly = false,
   actionsDisabled = false,
@@ -146,9 +147,6 @@ const ProjectDetailProgressContent = ({
   onAfterUpdateTask,
   onAfterDeleteTask,
 }: Props) => {
-  const [paginationBySegment, setPaginationBySegment] = useState<
-    Record<string, PaginationState>
-  >({});
   const [editingTask, setEditingTask] = useState<ProjectProgressTaskRow | null>(null);
   const currentIsoWeek = dayjs().isoWeek();
   const currentIsoWeekYear = dayjs().isoWeekYear();
@@ -268,7 +266,7 @@ const ProjectDetailProgressContent = ({
     {
       title: "工时分布",
       key: "plannedSchedules",
-      width: 320,
+      width: 280,
       render: (_value, row) => {
         const entries = [...(row.plannedEntries ?? [])]
           .filter((entry) =>
@@ -369,12 +367,8 @@ const ProjectDetailProgressContent = ({
       <>
         <Collapse
           style={{ width: "100%", overflowX: "auto" }}
+          styles={{ body: { padding: 0 } }}
           items={sortedVisibleSegments.map((segment) => {
-            const pagination = paginationBySegment[segment.id] ?? {
-              current: 1,
-              pageSize,
-            };
-
             return {
               key: segment.id,
               label: (
@@ -468,25 +462,11 @@ const ProjectDetailProgressContent = ({
                     search={false}
                     options={false}
                     toolBarRender={false}
-                    pagination={{
-                      current: pagination.current,
-                      pageSize: pagination.pageSize,
-                      placement: ["bottomEnd"],
-                      showSizeChanger: true,
-                      pageSizeOptions: ["10", "20", "50", "100"],
-                      onChange: (nextPage, nextPageSize) => {
-                        setPaginationBySegment((prev) => ({
-                          ...prev,
-                          [segment.id]: {
-                            current: nextPage,
-                            pageSize: nextPageSize ?? pagination.pageSize,
-                          },
-                        }));
-                      },
-                    }}
+                    pagination={false}
                     cardBordered={false}
                     size="small"
                     rowClassName={() => "project-progress-task-row-compact"}
+                    className="project-progress-task-table"
                     scroll={{ x: "max-content" }}
                     locale={{ emptyText: "暂无任务" }}
                     tableStyle={{
@@ -495,6 +475,14 @@ const ProjectDetailProgressContent = ({
                     tableRender={(_, dom) => (
                       <>
                         <style>{`
+                          .project-progress-task-table .ant-table-thead > tr > th:first-child,
+                          .project-progress-task-table .ant-table-tbody > tr > td:first-child {
+                            padding-left: 24px !important;
+                          }
+                          .project-progress-task-table .ant-table-thead > tr > th:last-child,
+                          .project-progress-task-table .ant-table-tbody > tr > td:last-child {
+                            padding-right: 16px !important;
+                          }
                           .project-progress-task-row-compact td.ant-table-cell {
                             padding-top: 8px !important;
                             padding-bottom: 8px !important;

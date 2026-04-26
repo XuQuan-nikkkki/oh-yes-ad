@@ -50,10 +50,7 @@ const LegalEntityFormModal = ({
   );
 
   useEffect(() => {
-    if (!open) {
-      form.resetFields();
-      return;
-    }
+    if (!open) return;
     form.setFieldsValue(normalizedInitialValues);
   }, [form, normalizedInitialValues, open]);
 

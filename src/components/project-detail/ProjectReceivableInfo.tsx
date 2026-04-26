@@ -687,6 +687,7 @@ const ProjectReceivableInfo = forwardRef<
           body: JSON.stringify({
             expectedDate: values.delayedExpectedDate?.toISOString(),
             expectedDateChangeReason: values.delayReason?.trim() || null,
+            expectedDateChangeRemark: values.delayRemark?.trim() || null,
           }),
         });
         if (!res.ok) {
@@ -896,6 +897,7 @@ const ProjectReceivableInfo = forwardRef<
                     onEditActualNode={handleEditActualNode}
                     onDeleteActualNode={handleDeleteActualNode}
                     onDelayNode={handleDelayNode}
+                    onHistoryChanged={fetchPlans}
                   />
                 </div>
               </div>

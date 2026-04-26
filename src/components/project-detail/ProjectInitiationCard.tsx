@@ -18,6 +18,7 @@ import StyledStatisticCard from "./StyledStatisticCard";
 type Props = {
   projectId: string;
   projectName: string;
+  projectMembers?: Project["members"];
   canManageProject: boolean;
   latestInitiation?: Project["latestBaselineCostEstimation"];
   modalPrefillInitiation?: Project["latestBaselineCostEstimation"];
@@ -126,6 +127,7 @@ const buildSyncSummary = (
 const ProjectInitiationCard = ({
   projectId,
   projectName,
+  projectMembers,
   canManageProject,
   latestInitiation,
   modalPrefillInitiation,
@@ -259,7 +261,11 @@ const ProjectInitiationCard = ({
         <Typography.Title level={5} style={sectionTitleStyle}>
           人员配置
         </Typography.Title>
-        <ProjectCostBasisMembersTable members={latestInitiation?.members} />
+        <ProjectCostBasisMembersTable
+          members={latestInitiation?.members}
+          projectMembers={projectMembers}
+          estimatedDuration={latestInitiation?.estimatedDuration}
+        />
       </div>
 
       <div>

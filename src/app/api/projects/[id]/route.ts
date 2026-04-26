@@ -22,6 +22,26 @@ const ownerPublicSelect = {
   },
 } as const;
 
+const employeeCostSelect = {
+  id: true,
+  name: true,
+  salary: true,
+  socialSecurity: true,
+  providentFund: true,
+  functionOption: {
+    select: {
+      value: true,
+      color: true,
+    },
+  },
+  employmentStatusOption: {
+    select: {
+      value: true,
+      color: true,
+    },
+  },
+} as const;
+
 const toProjectTypeCode = (value?: string | null) => {
   if (!value) return null;
   if (value === "客户项目") return "CLIENT";
@@ -112,7 +132,9 @@ type ProjectDocumentPayload = {
 } & Record<string, unknown>;
 type ProjectCostEstimationMemberPayload = {
   id: string;
-  estimationId: string;
+  estimationId?: string;
+  costEstimationId?: string;
+  initiationId?: string;
   employeeId: string;
   allocationPercent: number;
   laborCostSnapshot: number;
@@ -192,7 +214,7 @@ const projectCostEstimationSelect = {
       createdAt: true,
       updatedAt: true,
       employee: {
-        select: ownerPublicSelect,
+        select: employeeCostSelect,
       },
     },
     orderBy: { createdAt: "asc" as const },
@@ -240,7 +262,7 @@ const projectInitiationSelect = {
       createdAt: true,
       updatedAt: true,
       employee: {
-        select: ownerPublicSelect,
+        select: employeeCostSelect,
       },
     },
     orderBy: { createdAt: "asc" as const },

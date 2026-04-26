@@ -787,6 +787,7 @@ export default function ProcessingReceivableDrawer({
         body: JSON.stringify({
           expectedDate: values.delayedExpectedDate?.toISOString(),
           expectedDateChangeReason: values.delayReason?.trim() || null,
+          expectedDateChangeRemark: values.delayRemark?.trim() || null,
         }),
       });
       if (!response.ok) {
@@ -1283,6 +1284,11 @@ export default function ProcessingReceivableDrawer({
                     onEditActualNode={handleEditExistingActualNode}
                     onDeleteActualNode={handleDeleteExistingActualNode}
                     onDelayNode={handleDelayExistingNode}
+                    onHistoryChanged={async () => {
+                      if (selectedProject?.id) {
+                        await fetchExistingPlan(selectedProject.id);
+                      }
+                    }}
                   />
                 </>
               )}

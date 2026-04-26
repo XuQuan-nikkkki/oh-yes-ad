@@ -561,9 +561,9 @@ const ProjectPricingStrategyCard = ({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       if (typeof app?.message?.success === "function") {
-        app.message.success("表格已下载");
+        app.message.success("开始下载表格");
       } else {
-        void messageApi.success("表格已下载");
+        void messageApi.success("开始下载表格");
       }
     } catch (error) {
       console.error(error);

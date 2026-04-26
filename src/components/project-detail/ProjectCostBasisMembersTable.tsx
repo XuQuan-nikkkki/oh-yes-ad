@@ -1,23 +1,34 @@
 "use client";
 
-import { useMemo } from "react";
-import { Progress, Table } from "antd";
+import { useEffect, useMemo } from "react";
+import { InfoCircleOutlined } from "@ant-design/icons";
+import { Progress, Table, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import AppLink from "@/components/AppLink";
 import SelectOptionTag from "@/components/SelectOptionTag";
+import {
+  getSystemSettingNumberFromRecords,
+  SYSTEM_SETTING_KEYS,
+} from "@/lib/system-settings";
 import type { Project } from "@/types/projectDetail";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
+import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
 
 type CostBasisMembers = NonNullable<Project["latestCostEstimation"]>["members"];
 
 type Props = {
   members?: CostBasisMembers;
+  projectMembers?: Project["members"];
+  estimatedDuration?: number;
 };
 
 type CostBasisMemberRow = {
   id: string;
   employeeId?: string;
   employeeName?: string;
+  memberSalary?: number;
+  memberSocialSecurity?: number;
+  memberProvidentFund?: number;
   functionOption?: {
     id?: string;
     value?: string | null;
@@ -35,12 +46,23 @@ const formatAmount = (value?: number | null) => {
     maximumFractionDigits: 2,
   });
 };
+const toNumber = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.trim().replace(/,/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
 
 const mapMembers = (members?: CostBasisMembers): CostBasisMemberRow[] =>
   (members ?? []).map((member) => ({
     id: member.id,
     employeeId: member.employee?.id ?? member.employeeId,
     employeeName: member.employee?.name,
+    memberSalary: toNumber(member.employee?.salary),
+    memberSocialSecurity: toNumber(member.employee?.socialSecurity),
+    memberProvidentFund: toNumber(member.employee?.providentFund),
     functionOption:
       member.employee?.functionOption ??
       (member.employee?.function
@@ -54,15 +76,34 @@ const mapMembers = (members?: CostBasisMembers): CostBasisMemberRow[] =>
     laborCostSnapshot: member.laborCostSnapshot,
   }));
 
-const ProjectCostBasisMembersTable = ({ members }: Props) => {
+const ProjectCostBasisMembersTable = ({
+  members,
+  projectMembers,
+  estimatedDuration,
+}: Props) => {
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
+  const systemSettings = useSystemSettingsStore((state) => state.records);
+  const fetchSystemSettings = useSystemSettingsStore(
+    (state) => state.fetchSystemSettings,
+  );
   const canViewLaborCost =
     roleCodes.includes("ADMIN") ||
     roleCodes.includes("HR") ||
     roleCodes.includes("FINANCE");
+  const monthlyWorkdayBase = useMemo(
+    () =>
+      getSystemSettingNumberFromRecords(
+        systemSettings,
+        SYSTEM_SETTING_KEYS.employeeMonthlyWorkdayBase,
+      ),
+    [systemSettings],
+  );
 
   const memberRows = useMemo(() => mapMembers(members), [members]);
+  useEffect(() => {
+    void fetchSystemSettings();
+  }, [fetchSystemSettings]);
 
   const totalLaborCost = useMemo(
     () =>
@@ -92,6 +133,31 @@ const ProjectCostBasisMembersTable = ({ members }: Props) => {
         : memberRows,
     [canViewLaborCost, memberRows, totalLaborCost],
   );
+  const projectMemberCostMap = useMemo(() => {
+    const map = new Map<
+      string,
+      { salary: number; socialSecurity: number; providentFund: number }
+    >();
+    const mapByName = new Map<
+      string,
+      { salary: number; socialSecurity: number; providentFund: number }
+    >();
+    for (const member of projectMembers ?? []) {
+      const cost = {
+        salary: toNumber(member.salary),
+        socialSecurity: toNumber(member.socialSecurity),
+        providentFund: toNumber(member.providentFund),
+      };
+      if (member.id) {
+        map.set(member.id, cost);
+      }
+      const nameKey = String(member.name ?? "").trim();
+      if (nameKey) {
+        mapByName.set(nameKey, cost);
+      }
+    }
+    return { byId: map, byName: mapByName };
+  }, [projectMembers]);
 
   const memberViewColumns = useMemo<ColumnsType<CostBasisMemberRow>>(
     () => [
@@ -101,7 +167,10 @@ const ProjectCostBasisMembersTable = ({ members }: Props) => {
         width: 140,
         onHeaderCell: () => ({ style: { paddingLeft: 24 } }),
         onCell: (row) => ({
-          style: { paddingLeft: 24, fontWeight: row.isTotalRow ? 600 : undefined },
+          style: {
+            paddingLeft: 24,
+            fontWeight: row.isTotalRow ? 600 : undefined,
+          },
         }),
         render: (_value: string | undefined, row) =>
           row.employeeId && row.employeeName ? (
@@ -109,7 +178,7 @@ const ProjectCostBasisMembersTable = ({ members }: Props) => {
               {row.employeeName}
             </AppLink>
           ) : (
-            row.employeeName ?? "-"
+            (row.employeeName ?? "-")
           ),
       },
       {
@@ -117,8 +186,13 @@ const ProjectCostBasisMembersTable = ({ members }: Props) => {
         dataIndex: "functionOption",
         width: 140,
         render: (value, row) =>
-          row.isTotalRow ? "" :
-          value?.value ? <SelectOptionTag option={value} /> : "-",
+          row.isTotalRow ? (
+            ""
+          ) : value?.value ? (
+            <SelectOptionTag option={value} />
+          ) : (
+            "-"
+          ),
       },
       {
         title: "占比",
@@ -154,16 +228,83 @@ const ProjectCostBasisMembersTable = ({ members }: Props) => {
                 },
               }),
               render: (value: number | undefined, row: CostBasisMemberRow) =>
-                typeof value === "number"
-                  ? `${formatAmount(value)} 元`
-                  : row.isTotalRow
-                    ? ""
-                    : "-",
+                typeof value === "number" ? (
+                  row.isTotalRow ? (
+                    `${formatAmount(value)} 元`
+                  ) : (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <span>{`${formatAmount(value)} 元`}</span>
+                      <Tooltip
+                        title={(() => {
+                          const memberCostById = row.employeeId
+                            ? projectMemberCostMap.byId.get(row.employeeId)
+                            : undefined;
+                          const memberCostByName = row.employeeName
+                            ? projectMemberCostMap.byName.get(
+                                row.employeeName.trim(),
+                              )
+                            : undefined;
+                          const memberCost = memberCostById ?? memberCostByName;
+                          const salary =
+                            memberCost?.salary ?? row.memberSalary ?? 0;
+                          const socialSecurity =
+                            memberCost?.socialSecurity ??
+                            row.memberSocialSecurity ??
+                            0;
+                          const providentFund =
+                            memberCost?.providentFund ??
+                            row.memberProvidentFund ??
+                            0;
+                          const total = salary + socialSecurity + providentFund;
+                          const allocationPercent = Number(
+                            row.allocationPercent ?? 0,
+                          );
+                          const duration = Number(estimatedDuration ?? 0);
+                          return (
+                            <div style={{ lineHeight: 1.55, width: 500 }}>
+                              <div>{`${row.employeeName ?? "成员"}人力成本：`}</div>
+                              <div>{`- 薪资：${formatAmount(salary)}元`}</div>
+                              <div>{`- 社保：${formatAmount(socialSecurity)}元`}</div>
+                              <div>{`- 公积金：${formatAmount(providentFund)}元`}</div>
+                              <div>{`合计：${formatAmount(total)}元`}</div>
+                              <br />
+                              <div>项目成本：</div>
+                              <div>{`人力成本（${formatAmount(total)}元）`}</div>
+                              <div>{`/ 月工作日基数（${formatAmount(monthlyWorkdayBase)}天）`}</div>
+                              <div>{`* 项目预估时长（${formatAmount(duration)}个工作日）`}</div>
+                              <div>{`* 成员占比（${formatAmount(allocationPercent)}%）`}</div>
+                              <div>{`= ${formatAmount(value)} 元`}</div>
+                            </div>
+                          );
+                        })()}
+                      >
+                        <InfoCircleOutlined
+                          style={{ color: "rgba(0,0,0,0.45)" }}
+                        />
+                      </Tooltip>
+                    </span>
+                  )
+                ) : row.isTotalRow ? (
+                  ""
+                ) : (
+                  "-"
+                ),
             },
           ]
         : []),
     ],
-    [canViewLaborCost],
+    [
+      canViewLaborCost,
+      estimatedDuration,
+      monthlyWorkdayBase,
+      projectMemberCostMap,
+    ],
   );
 
   return (

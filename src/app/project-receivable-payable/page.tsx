@@ -10,6 +10,7 @@ import {
 } from "react";
 import dayjs from "dayjs";
 import {
+  Button,
   Card,
   Divider,
   Empty,
@@ -174,6 +175,8 @@ type PayableNodeTableViewRow = {
   planId: string;
   planRowSpan: number;
   expectedRowSpan: number;
+  isPlanFullyPaid: boolean;
+  isNodeFullyPaid: boolean;
   hasCustomerCollection: boolean;
   planRemark: string;
   signingCompanyName: string;
@@ -254,6 +257,7 @@ type SummaryProjectRow = {
 type LegalEntityOption = {
   id: string;
   name?: string | null;
+  fullName?: string | null;
 };
 
 type FilterEmployee = {
@@ -418,7 +422,6 @@ const matchesPayablePlanByYear = (plan: PayablePlan, year: number | null) => {
     nodeMatchesYear(node.expectedDate, node.actualNodes, year),
   );
 };
-
 function ProjectReceivablePayablePageContent() {
   const [messageApi, contextHolder] = message.useMessage();
   const router = useRouter();
@@ -481,8 +484,7 @@ function ProjectReceivablePayablePageContent() {
   const [payableOwnerFilterIds, setPayableOwnerFilterIds] = useState<string[]>(
     [],
   );
-  const [summarySettlementFilter, setSummarySettlementFilter] =
-    useState<SummarySettlementFilter>("all");
+  const [summarySettlementFilter] = useState<SummarySettlementFilter>("all");
   const [summarySigningCompanyFilters, setSummarySigningCompanyFilters] =
     useState<string[]>([]);
   const [summaryProjectFilters, setSummaryProjectFilters] = useState<string[]>(
@@ -1042,6 +1044,7 @@ function ProjectReceivablePayablePageContent() {
     });
 
     sortedPlans.forEach((plan) => {
+      const nodes = Array.isArray(plan.nodes) ? plan.nodes : [];
       const planRemark =
         "remark" in plan && typeof plan.remark === "string"
           ? plan.remark.trim() || "-"
@@ -1059,12 +1062,34 @@ function ProjectReceivablePayablePageContent() {
         plan.vendorContract?.vendor?.fullName?.trim() || "";
       const ownerName = plan.ownerEmployee?.name?.trim() || "-";
       const contractAmountTaxIncluded = Number(plan.contractAmount ?? 0);
+      const planExpectedAmountTotal = nodes.reduce(
+        (sum, node) => sum + Number(node.expectedAmountTaxIncluded ?? 0),
+        0,
+      );
+      const planActualAmountTotal = nodes.reduce((sum, node) => {
+        const actualNodeTotal = (node.actualNodes ?? []).reduce(
+          (actualSum, actual) =>
+            actualSum + Number(actual.actualAmountTaxIncluded ?? 0),
+          0,
+        );
+        return sum + actualNodeTotal;
+      }, 0);
+      const isPlanFullyPaid =
+        planExpectedAmountTotal > 0 &&
+        planActualAmountTotal >= planExpectedAmountTotal;
       const planRows: PayableNodeTableViewRow[] = [];
 
-      (plan.nodes ?? []).forEach((node) => {
+      nodes.forEach((node) => {
         const actualNodes = Array.isArray(node.actualNodes)
           ? node.actualNodes
           : [];
+        const nodeExpectedAmount = Number(node.expectedAmountTaxIncluded ?? 0);
+        const nodeActualAmount = actualNodes.reduce(
+          (sum, actual) => sum + Number(actual.actualAmountTaxIncluded ?? 0),
+          0,
+        );
+        const isNodeFullyPaid =
+          nodeExpectedAmount > 0 && nodeActualAmount >= nodeExpectedAmount;
         if (actualNodes.length === 0) {
           planRows.push({
             key: `${plan.id}-${node.id}`,
@@ -1072,6 +1097,8 @@ function ProjectReceivablePayablePageContent() {
             planId: plan.id,
             planRowSpan: 0,
             expectedRowSpan: 1,
+            isPlanFullyPaid,
+            isNodeFullyPaid,
             hasCustomerCollection: Boolean(plan.hasCustomerCollection),
             planRemark,
             signingCompanyName,
@@ -1109,6 +1136,8 @@ function ProjectReceivablePayablePageContent() {
             planId: plan.id,
             planRowSpan: 0,
             expectedRowSpan: actualIndex === 0 ? actualNodes.length : 0,
+            isPlanFullyPaid,
+            isNodeFullyPaid,
             hasCustomerCollection: Boolean(plan.hasCustomerCollection),
             planRemark,
             signingCompanyName,
@@ -1892,6 +1921,7 @@ function ProjectReceivablePayablePageContent() {
         body: JSON.stringify({
           expectedDate: values.delayedExpectedDate?.toISOString(),
           expectedDateChangeReason: values.delayReason?.trim() || null,
+          expectedDateChangeRemark: values.delayRemark?.trim() || null,
         }),
       });
       if (!response.ok) {
@@ -2248,21 +2278,21 @@ function ProjectReceivablePayablePageContent() {
           {
             title: "预收金额总计",
             dataIndex: "receivableExpectedAmountTotal",
-            width: 120,
+            width: 110,
             render: (value, row) =>
               row.hasReceivablePlan ? formatAmountWithYen(value) : "-",
           },
           {
             title: "实收金额总计",
             dataIndex: "receivableActualAmountTotal",
-            width: 120,
+            width: 110,
             render: (value, row) =>
               row.hasReceivablePlan ? formatAmountWithYen(value) : "-",
           },
           {
             title: "收款进度",
             dataIndex: "receivableProgressPercent",
-            width: 140,
+            width: 120,
             render: (value, row) => {
               if (!row.hasReceivablePlan) return "-";
               const percent = Math.round(Number(value ?? 0));
@@ -2283,21 +2313,21 @@ function ProjectReceivablePayablePageContent() {
           {
             title: "预付金额总计",
             dataIndex: "payableExpectedAmountTotal",
-            width: 120,
+            width: 110,
             render: (value, row) =>
               row.hasPayablePlan ? formatAmountWithYen(value) : "-",
           },
           {
             title: "实付金额总计",
             dataIndex: "payableActualAmountTotal",
-            width: 120,
+            width: 110,
             render: (value, row) =>
               row.hasPayablePlan ? formatAmountWithYen(value) : "-",
           },
           {
             title: "付款进度",
             dataIndex: "payableProgressPercent",
-            width: 140,
+            width: 120,
             render: (value, row) => {
               if (!row.hasPayablePlan) return "-";
               const percent = Math.round(Number(value ?? 0));
@@ -2318,12 +2348,20 @@ function ProjectReceivablePayablePageContent() {
   const summarySigningCompanyOptions = useMemo(
     () =>
       Array.from(
-        new Set(summaryProjectRows.flatMap((row) => row.signingCompanyNames)),
+        new Set([
+          ...legalEntities.map((item) => {
+            const name = String(item.name ?? "").trim();
+            if (name) return name;
+            const fullName = String(item.fullName ?? "").trim();
+            return fullName;
+          }),
+          ...summaryProjectRows.flatMap((row) => row.signingCompanyNames),
+        ]),
       )
         .filter((name) => Boolean(name && name !== "-"))
         .sort((left, right) => compareProjectName(left, right))
         .map((name) => ({ label: name, value: name })),
-    [summaryProjectRows],
+    [legalEntities, summaryProjectRows],
   );
   const summaryProjectOptions = useMemo(
     () =>
@@ -2797,11 +2835,353 @@ function ProjectReceivablePayablePageContent() {
     ],
     [],
   );
+  const handleDownloadTable = useCallback(async () => {
+    try {
+      const ExcelJS = await import("exceljs");
+      const workbook = new ExcelJS.Workbook();
+      const headerFill = {
+        type: "pattern" as const,
+        pattern: "solid" as const,
+        fgColor: { argb: "FF95D8F7" },
+      };
+      const completedFill = {
+        type: "pattern" as const,
+        pattern: "solid" as const,
+        fgColor: { argb: "FFDEE0E3" },
+      };
+      const applyCellFillByColumns = (
+        worksheet: InstanceType<typeof ExcelJS.Workbook>["worksheets"][number],
+        rowIndex: number,
+        columnIndexes: number[],
+      ) => {
+        columnIndexes.forEach((columnIndex) => {
+          worksheet.getRow(rowIndex).getCell(columnIndex).fill = completedFill;
+        });
+      };
+      const applyHeaderStyle = (
+        worksheet: InstanceType<typeof ExcelJS.Workbook>["worksheets"][number],
+        headerRowCount = 1,
+        startRow = 1,
+      ) => {
+        for (
+          let rowIndex = startRow;
+          rowIndex < startRow + headerRowCount;
+          rowIndex += 1
+        ) {
+          const headerRow = worksheet.getRow(rowIndex);
+          headerRow.eachCell((cell) => {
+            cell.fill = headerFill;
+            cell.font = { bold: false };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+            cell.border = {
+              top: { style: "thin", color: { argb: "FF000000" } },
+              left: { style: "thin", color: { argb: "FF000000" } },
+              bottom: { style: "thin", color: { argb: "FF000000" } },
+              right: { style: "thin", color: { argb: "FF000000" } },
+            };
+          });
+        }
+      };
+      const applyTitleRowStyle = (
+        worksheet: InstanceType<typeof ExcelJS.Workbook>["worksheets"][number],
+      ) => {
+        const titleRow = worksheet.getRow(1);
+        titleRow.eachCell((cell) => {
+          cell.fill = headerFill;
+          cell.font = { bold: false };
+          cell.alignment = { vertical: "middle", horizontal: "center" };
+          cell.border = {
+            top: { style: "thin", color: { argb: "FF000000" } },
+            left: { style: "thin", color: { argb: "FF000000" } },
+            bottom: { style: "thin", color: { argb: "FF000000" } },
+            right: { style: "thin", color: { argb: "FF000000" } },
+          };
+        });
+      };
+      const applyBodyBorder = (
+        worksheet: InstanceType<typeof ExcelJS.Workbook>["worksheets"][number],
+        headerRowCount = 1,
+        startRow = 1,
+      ) => {
+        worksheet.eachRow((row, rowIndex) => {
+          if (rowIndex < startRow + headerRowCount) return;
+          row.eachCell((cell) => {
+            cell.border = {
+              top: { style: "thin", color: { argb: "FF000000" } },
+              left: { style: "thin", color: { argb: "FF000000" } },
+              bottom: { style: "thin", color: { argb: "FF000000" } },
+              right: { style: "thin", color: { argb: "FF000000" } },
+            };
+            cell.alignment = {
+              vertical: "middle",
+              horizontal: "left",
+              wrapText: true,
+            };
+          });
+        });
+      };
+
+      const summarySheet = workbook.addWorksheet("收付款汇总");
+      summarySheet.addRow(["一条龙项目收付款汇总"]);
+      summarySheet.mergeCells("A1:H1");
+      summarySheet.addRow([
+        "签约公司",
+        "项目",
+        "收款",
+        "",
+        "",
+        "付款",
+        "",
+        "",
+      ]);
+      summarySheet.addRow([
+        "",
+        "",
+        "预收金额总计",
+        "实收金额总计",
+        "收款进度",
+        "预付金额总计",
+        "实付金额总计",
+        "付款进度",
+      ]);
+      summarySheet.mergeCells("A2:A3");
+      summarySheet.mergeCells("B2:B3");
+      summarySheet.mergeCells("C2:E2");
+      summarySheet.mergeCells("F2:H2");
+      filteredSummaryProjectRows.forEach((row) => {
+        summarySheet.addRow([
+          row.signingCompanyNames.join("、"),
+          row.projectName,
+          formatAmountWithYen(row.receivableExpectedAmountTotal),
+          formatAmountWithYen(row.receivableActualAmountTotal),
+          `${Math.round(row.receivableProgressPercent)}%`,
+          formatAmountWithYen(row.payableExpectedAmountTotal),
+          formatAmountWithYen(row.payableActualAmountTotal),
+          `${Math.round(row.payableProgressPercent)}%`,
+        ]);
+      });
+      filteredSummaryProjectRows.forEach((row, index) => {
+        const dataRowIndex = index + 4; // title row + 2 header rows
+        const receivableCompleted = row.receivableProgressPercent >= 100;
+        const payableCompleted = row.payableProgressPercent >= 100;
+        if (receivableCompleted) {
+          applyCellFillByColumns(summarySheet, dataRowIndex, [3, 4, 5]);
+        }
+        if (payableCompleted) {
+          applyCellFillByColumns(summarySheet, dataRowIndex, [6, 7, 8]);
+        }
+        if (receivableCompleted && payableCompleted) {
+          applyCellFillByColumns(summarySheet, dataRowIndex, [1, 2]);
+        }
+      });
+      summarySheet.columns = [
+        { width: 20 },
+        { width: 24 },
+        { width: 16 },
+        { width: 16 },
+        { width: 12 },
+        { width: 16 },
+        { width: 16 },
+        { width: 12 },
+      ];
+      applyTitleRowStyle(summarySheet);
+      applyHeaderStyle(summarySheet, 2, 2);
+      applyBodyBorder(summarySheet, 2, 2);
+
+      const receivableSheet = workbook.addWorksheet("收款明细");
+      receivableSheet.addRow(["一条龙项目收款明细"]);
+      receivableSheet.mergeCells("A1:N1");
+      const receivableHeaders = [
+        "签约公司",
+        "项目名称",
+        "跟进人",
+        "合同金额(含税)",
+        "项目状态",
+        "收款阶段",
+        "收款关键交付物",
+        "预收金额(含税)",
+        "预收日期",
+        "实收金额(含税)",
+        "实收日期",
+        "节点备注",
+        "是否有供应商付款",
+        "备注",
+      ];
+      receivableSheet.addRow(receivableHeaders);
+      receivableNodeTableRows.forEach((row) => {
+        receivableSheet.addRow([
+          row.signingCompanyName,
+          row.projectName,
+          row.ownerName,
+          formatAmountWithYen(row.contractAmountTaxIncluded),
+          row.projectStatus,
+          row.stageName,
+          row.keyDeliverable,
+          formatAmountWithYen(row.expectedAmountTaxIncluded),
+          formatDate(row.expectedDate),
+          formatAmountWithYen(row.actualAmountTaxIncluded),
+          formatDate(row.actualDate),
+          row.nodeRemark,
+          row.hasVendorPayment ? "是" : "否",
+          row.planRemark,
+        ]);
+      });
+      // Keep merged-cell structure consistent with the table view:
+      // - merge receivable-node level fields by expectedRowSpan
+      // - merge project-plan level fields by planRowSpan
+      receivableNodeTableRows.forEach((row, index) => {
+        const startRow = index + 3; // title row + header row
+        if (row.isNodeFullyCollected) {
+          applyCellFillByColumns(receivableSheet, startRow, [6, 7, 8, 9, 10, 11, 12]);
+        }
+        if (row.isPlanFullyCollected) {
+          applyCellFillByColumns(receivableSheet, startRow, [1, 2, 3, 4, 5, 13, 14]);
+        }
+        if (row.expectedRowSpan > 1) {
+          const endRow = startRow + row.expectedRowSpan - 1;
+          [6, 7, 8, 9, 12].forEach((columnIndex) => {
+            receivableSheet.mergeCells(startRow, columnIndex, endRow, columnIndex);
+          });
+        }
+        if (row.planRowSpan > 1) {
+          const endRow = startRow + row.planRowSpan - 1;
+          [1, 2, 3, 4, 5, 13, 14].forEach((columnIndex) => {
+            receivableSheet.mergeCells(startRow, columnIndex, endRow, columnIndex);
+          });
+        }
+      });
+      receivableSheet.columns = [
+        { width: 14 },
+        { width: 20 },
+        { width: 12 },
+        { width: 16 },
+        { width: 12 },
+        { width: 12 },
+        { width: 20 },
+        { width: 16 },
+        { width: 12 },
+        { width: 16 },
+        { width: 12 },
+        { width: 18 },
+        { width: 14 },
+        { width: 18 },
+      ];
+      applyTitleRowStyle(receivableSheet);
+      applyHeaderStyle(receivableSheet, 1, 2);
+      applyBodyBorder(receivableSheet, 1, 2);
+
+      const payableSheet = workbook.addWorksheet("付款明细");
+      payableSheet.addRow(["一条龙项目付款明细"]);
+      payableSheet.mergeCells("A1:O1");
+      const payableHeaders = [
+        "签约公司",
+        "项目名称",
+        "供应商",
+        "供应商全称",
+        "跟进人",
+        "合同金额(含税)",
+        "付款阶段",
+        "付款条件",
+        "预付金额(含税)",
+        "预付日期",
+        "实付金额(含税)",
+        "实付日期",
+        "节点备注",
+        "是否有客户收款",
+        "备注",
+      ];
+      payableSheet.addRow(payableHeaders);
+      payableNodeTableRows.forEach((row) => {
+        payableSheet.addRow([
+          row.signingCompanyName,
+          row.projectName,
+          row.vendorName,
+          row.vendorFullName,
+          row.ownerName,
+          formatAmountWithYen(row.contractAmountTaxIncluded),
+          row.stageName,
+          row.paymentCondition,
+          formatAmountWithYen(row.expectedAmountTaxIncluded),
+          formatDate(row.expectedDate),
+          formatAmountWithYen(row.actualAmountTaxIncluded),
+          formatDate(row.actualDate),
+          row.nodeRemark,
+          row.hasCustomerCollection ? "是" : "否",
+          row.planRemark,
+        ]);
+      });
+      // Keep merged-cell structure consistent with the table view:
+      // - merge payable-node level fields by expectedRowSpan
+      // - merge project-plan level fields by planRowSpan
+      payableNodeTableRows.forEach((row, index) => {
+        const startRow = index + 3; // title row + header row
+        if (row.isNodeFullyPaid) {
+          applyCellFillByColumns(payableSheet, startRow, [7, 8, 9, 10, 11, 12, 13]);
+        }
+        if (row.isPlanFullyPaid) {
+          applyCellFillByColumns(payableSheet, startRow, [1, 2, 3, 4, 5, 6, 14, 15]);
+        }
+        if (row.expectedRowSpan > 1) {
+          const endRow = startRow + row.expectedRowSpan - 1;
+          [7, 8, 9, 10, 13].forEach((columnIndex) => {
+            payableSheet.mergeCells(startRow, columnIndex, endRow, columnIndex);
+          });
+        }
+        if (row.planRowSpan > 1) {
+          const endRow = startRow + row.planRowSpan - 1;
+          [1, 2, 3, 4, 5, 6, 14, 15].forEach((columnIndex) => {
+            payableSheet.mergeCells(startRow, columnIndex, endRow, columnIndex);
+          });
+        }
+      });
+      payableSheet.columns = [
+        { width: 14 },
+        { width: 20 },
+        { width: 16 },
+        { width: 22 },
+        { width: 12 },
+        { width: 16 },
+        { width: 12 },
+        { width: 18 },
+        { width: 16 },
+        { width: 12 },
+        { width: 16 },
+        { width: 12 },
+        { width: 18 },
+        { width: 14 },
+        { width: 18 },
+      ];
+      applyTitleRowStyle(payableSheet);
+      applyHeaderStyle(payableSheet, 1, 2);
+      applyBodyBorder(payableSheet, 1, 2);
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `项目收付款-${dayjs().format("YYYYMMDD_HHmmss")}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      messageApi.success("开始下载表格");
+    } catch {
+      messageApi.error("下载失败，请稍后重试");
+    }
+  }, [filteredSummaryProjectRows, receivableNodeTableRows, payableNodeTableRows, messageApi]);
 
   return (
     <Card
       title="收付款明细"
       variant="borderless"
+      extra={
+        <Button onClick={handleDownloadTable}>
+          下载表格
+        </Button>
+      }
       tabList={tabList}
       activeTabKey={activeTab}
       onTabChange={(key) => {
@@ -2830,18 +3210,6 @@ function ProjectReceivablePayablePageContent() {
             }}
           >
             <Space size={8} wrap>
-              <Segmented
-                options={[
-                  { label: "全部", value: "all" },
-                  { label: "收款未完成", value: "receivable_unfinished" },
-                  { label: "付款未完成", value: "payable_unfinished" },
-                  { label: "结算完毕", value: "settled" },
-                ]}
-                value={summarySettlementFilter}
-                onChange={(value) =>
-                  setSummarySettlementFilter(value as SummarySettlementFilter)
-                }
-              />
               <Select
                 allowClear
                 placeholder="选择年度"
@@ -3180,6 +3548,7 @@ function ProjectReceivablePayablePageContent() {
                     onEditActualNode={handleEditReceivableActualNode}
                     onDeleteActualNode={handleDeleteReceivableActualNode}
                     onDelayNode={handleDelayReceivableNode}
+                    onHistoryChanged={fetchData}
                   />
                 ))
               ) : (

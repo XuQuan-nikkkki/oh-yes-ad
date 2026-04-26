@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Modal, Radio, Select, Space, Spin } from "antd";
 import type { DefaultOptionType } from "antd/es/select";
 import { useSearchParams } from "next/navigation";
+import PageAccessResult from "@/components/PageAccessResult";
 import ActualWorkEntryForm, {
   ActualWorkEntryFormPayload,
 } from "@/components/project-detail/ActualWorkEntryForm";
@@ -39,6 +40,9 @@ function ActualWorkEntriesPageContent() {
   const searchParams = useSearchParams();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
+  const isAdmin = roleCodes.includes("ADMIN");
+  const hideWorktimeEntryPages =
+    !isAdmin && (roleCodes.includes("HR") || roleCodes.includes("FINANCE"));
   const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [employees, setEmployees] = useState<EmployeeOptionItem[]>([]);
@@ -388,6 +392,10 @@ function ActualWorkEntriesPageContent() {
       )}
     </Space>
   );
+
+  if (hideWorktimeEntryPages) {
+    return <PageAccessResult type="forbidden" />;
+  }
 
   return (
     <ListPageContainer>

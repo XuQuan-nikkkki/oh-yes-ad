@@ -19,6 +19,7 @@ import CopyTextButton from "../actions/CopyTextButton";
 type Props = {
   projectId: string;
   projectName: string;
+  projectMembers?: Project["members"];
   latestCostEstimation?: Project["latestPlanningCostEstimation"];
   modalPrefillEstimation?: Project["latestPlanningCostEstimation"];
   syncSummarySourceEstimation?: Project["latestPlanningCostEstimation"];
@@ -141,6 +142,7 @@ const buildSyncSummary = (
 const ProjectCostEstimationCard = ({
   projectId,
   projectName,
+  projectMembers,
   latestCostEstimation,
   modalPrefillEstimation,
   syncSummarySourceEstimation,
@@ -289,7 +291,11 @@ const ProjectCostEstimationCard = ({
         <Typography.Title level={5} style={sectionTitleStyle}>
           人员配置
         </Typography.Title>
-        <ProjectCostBasisMembersTable members={latestCostEstimation?.members} />
+        <ProjectCostBasisMembersTable
+          members={latestCostEstimation?.members}
+          projectMembers={projectMembers}
+          estimatedDuration={latestCostEstimation?.estimatedDuration}
+        />
       </div>
 
       <div>

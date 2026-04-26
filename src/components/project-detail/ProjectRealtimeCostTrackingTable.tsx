@@ -1,7 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { App, Button, Card, Modal, Progress, Spin, Table, Tag, message } from "antd";
+import {
+  App,
+  Button,
+  Card,
+  Modal,
+  Progress,
+  Spin,
+  Table,
+  Tag,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import {
@@ -1408,9 +1418,9 @@ const ProjectRealtimeCostTrackingTable = ({
       URL.revokeObjectURL(url);
 
       if (typeof app?.message?.success === "function") {
-        app.message.success("表格已下载");
+        app.message.success("开始下载表格");
       } else {
-        void messageApi.success("表格已下载");
+        void messageApi.success("开始下载表格");
       }
     } catch (error) {
       console.error(error);
@@ -1463,7 +1473,9 @@ const ProjectRealtimeCostTrackingTable = ({
           },
         }}
       >
-        <div style={{ color: "rgba(0,0,0,0.88)", fontSize: 16, lineHeight: 1.7 }}>
+        <div
+          style={{ color: "rgba(0,0,0,0.88)", fontSize: 16, lineHeight: 1.7 }}
+        >
           <div>
             项目共有 {laborDetailData.memberCount} 个成员投入{" "}
             {formatAmount(laborDetailData.totalWorkdays)} 个工作日：
@@ -1478,7 +1490,7 @@ const ProjectRealtimeCostTrackingTable = ({
           </div>
         </div>
       </Modal>
-8     <div style={{ overflowX: "auto" }}>
+      <div style={{ overflowX: "auto" }}>
         <div style={{ width: "100%" }}>
           <style>{`
             /* Keep only horizontal separators; remove vertical dividers. */

@@ -1,6 +1,12 @@
 "use client";
 
 import { Progress } from "antd";
+import {
+  AccountBookTwoTone,
+  BankTwoTone,
+  FileTextTwoTone,
+  WalletTwoTone,
+} from "@ant-design/icons";
 import { ProCard, StatisticCard } from "@ant-design/pro-components";
 import BooleanTag from "@/components/BooleanTag";
 import RemarkText from "@/components/RemarkText";
@@ -19,7 +25,8 @@ export type ProjectReceivablePlanSnapshotProps = {
 };
 
 const toYuanNumber = (value: unknown) => {
-  const num = typeof value === "number" ? value : Number(String(value ?? "").trim());
+  const num =
+    typeof value === "number" ? value : Number(String(value ?? "").trim());
   return Number.isFinite(num) ? num : 0;
 };
 
@@ -39,17 +46,29 @@ export default function ProjectReceivablePlanSnapshot({
   const actualAmount = toYuanNumber(actualAmountTotal);
   const percent =
     expectedAmount > 0
-      ? Math.max(0, Math.min(100, Math.round((actualAmount / expectedAmount) * 100)))
+      ? Math.max(
+          0,
+          Math.min(100, Math.round((actualAmount / expectedAmount) * 100)),
+        )
       : 0;
 
   return (
     <ProCard split="horizontal" bordered>
       <ProCard split="vertical">
         <StatisticCard
-          style={{ background: "var(--ant-colorFillAlter, #fafafa)" }}
+          style={{
+            background: "var(--ant-colorFillAlter, #fafafa)",
+          }}
           statistic={{
             title: "合同金额（含税）",
-            styles: { content: { fontSize: 18 } },
+            icon: <FileTextTwoTone />,
+            styles: {
+              title: { fontSize: 13 },
+              content: {
+                fontSize: 18,
+                fontWeight: 600,
+              },
+            },
             value: contractAmount,
             suffix: "元",
             formatter: (value) => Number(value ?? 0).toLocaleString("zh-CN"),
@@ -59,7 +78,14 @@ export default function ProjectReceivablePlanSnapshot({
           style={{ background: "var(--ant-colorFillAlter, #fafafa)" }}
           statistic={{
             title: "税费",
-            styles: { content: { fontSize: 18 } },
+            icon: <BankTwoTone />,
+            styles: {
+              title: { fontSize: 13 },
+              content: {
+                fontSize: 18,
+                fontWeight: 600,
+              },
+            },
             value:
               taxAmount === null || taxAmount === undefined
                 ? "-"
@@ -71,9 +97,16 @@ export default function ProjectReceivablePlanSnapshot({
           style={{ background: "var(--ant-colorFillAlter, #fafafa)" }}
           statistic={{
             title: "预收金额合计",
+            icon: <WalletTwoTone />,
             value: expectedAmount,
             suffix: "元",
-            styles: { content: { fontSize: 18 } },
+            styles: {
+              title: { fontSize: 13 },
+              content: {
+                fontSize: 18,
+                fontWeight: 600,
+              },
+            },
             formatter: (value) => Number(value ?? 0).toLocaleString("zh-CN"),
           }}
         />
@@ -81,7 +114,14 @@ export default function ProjectReceivablePlanSnapshot({
           style={{ background: "var(--ant-colorFillAlter, #fafafa)" }}
           statistic={{
             title: "实收金额总计",
-            styles: { content: { fontSize: 18 } },
+            icon: <AccountBookTwoTone />,
+            styles: {
+              title: { fontSize: 13 },
+              content: {
+                fontSize: 18,
+                fontWeight: 600,
+              },
+            },
             value: actualAmount,
             suffix: "元",
             formatter: (value) => Number(value ?? 0).toLocaleString("zh-CN"),
@@ -103,7 +143,7 @@ export default function ProjectReceivablePlanSnapshot({
           <Progress
             percent={percent}
             showInfo={false}
-            strokeColor="#1677ff"
+            strokeColor={percent === 100 ? "#52c41a" : "#1677ff"}
             style={{ flex: 1, marginBottom: 0 }}
           />
           <span
@@ -113,7 +153,8 @@ export default function ProjectReceivablePlanSnapshot({
               whiteSpace: "nowrap",
             }}
           >
-            实收 {actualAmount.toLocaleString("zh-CN")} / 预收 {expectedAmount.toLocaleString("zh-CN")} 元
+            实收 {actualAmount.toLocaleString("zh-CN")} / 预收{" "}
+            {expectedAmount.toLocaleString("zh-CN")} 元
           </span>
         </div>
       </ProCard>

@@ -30,6 +30,7 @@ type Props = {
   ) => void | Promise<void>;
   title?: string;
   initialValues?: Partial<ProjectReceivableActualNodeFormValues>;
+  maxAmountTaxIncluded?: number;
 };
 
 const ProjectReceivableActualNodeModal = ({
@@ -39,6 +40,7 @@ const ProjectReceivableActualNodeModal = ({
   onSubmit,
   title = "新增实收",
   initialValues,
+  maxAmountTaxIncluded,
 }: Props) => {
   const [form] = Form.useForm<ProjectReceivableActualNodeFormValues>();
 
@@ -87,9 +89,37 @@ const ProjectReceivableActualNodeModal = ({
             <Form.Item
               label="实收金额（含税）"
               name="actualAmountTaxIncluded"
-              rules={[{ required: true, message: "请输入实收金额" }]}
+              rules={[
+                { required: true, message: "请输入实收金额" },
+                {
+                  validator: async (_, value: number | undefined) => {
+                    if (value === undefined || value === null) return;
+                    if (!Number.isFinite(Number(value))) {
+                      throw new Error("请输入有效的实收金额");
+                    }
+                    if (Number(value) < 0) {
+                      throw new Error("实收金额不能小于0");
+                    }
+                    if (
+                      maxAmountTaxIncluded !== undefined &&
+                      Number(value) > Number(maxAmountTaxIncluded)
+                    ) {
+                      throw new Error(
+                        `实收金额不能大于剩余可收金额（${Number(
+                          maxAmountTaxIncluded,
+                        ).toLocaleString("zh-CN")}）`,
+                      );
+                    }
+                  },
+                },
+              ]}
             >
-              <InputNumber precision={0} style={{ width: "100%" }} />
+              <InputNumber
+                precision={0}
+                min={0}
+                max={maxAmountTaxIncluded}
+                style={{ width: "100%" }}
+              />
             </Form.Item>
           </Col>
           <Col span={12}>

@@ -33,15 +33,21 @@ function HomePageContent() {
   const setNavigating = useNavigationStore((state) => state.setNavigating);
   const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
   const canViewOwnedProjectsTab = roleCodes.includes("PROJECT_MANAGER");
+  const hideParticipationAndWorkLogsTabs =
+    roleCodes.includes("HR") || roleCodes.includes("FINANCE");
   const availableHomeTabs = useMemo(
     () => [
       HOME_TAB_SITE_MAP,
       ...(canViewOwnedProjectsTab ? [HOME_TAB_OWNED_PROJECTS] : []),
-      HOME_TAB_PARTICIPATION,
-      HOME_TAB_PARTICIPATION_MILESTONES,
-      HOME_TAB_WORK_LOGS,
+      ...(!hideParticipationAndWorkLogsTabs
+        ? [
+            HOME_TAB_PARTICIPATION,
+            HOME_TAB_PARTICIPATION_MILESTONES,
+            HOME_TAB_WORK_LOGS,
+          ]
+        : []),
     ],
-    [canViewOwnedProjectsTab],
+    [canViewOwnedProjectsTab, hideParticipationAndWorkLogsTabs],
   );
   const urlActiveTab = validHomeTab(searchParams.get("tab"), availableHomeTabs);
   const [activeTab, setActiveTab] = useState(urlActiveTab);
@@ -92,29 +98,33 @@ function HomePageContent() {
                 },
               ]
             : []),
-          {
-            key: HOME_TAB_PARTICIPATION,
-            label: "参与项目",
-            children: (
-              <HomeParticipationNestedTable
-                active={activeTab === HOME_TAB_PARTICIPATION}
-              />
-            ),
-          },
-          {
-            key: HOME_TAB_PARTICIPATION_MILESTONES,
-            label: "参与里程碑",
-            children: (
-              <HomeParticipationMilestones
-                active={activeTab === HOME_TAB_PARTICIPATION_MILESTONES}
-              />
-            ),
-          },
-          {
-            key: HOME_TAB_WORK_LOGS,
-            label: "工时记录",
-            children: <WorkLogsPanel />,
-          },
+          ...(!hideParticipationAndWorkLogsTabs
+            ? [
+                {
+                  key: HOME_TAB_PARTICIPATION,
+                  label: "参与项目",
+                  children: (
+                    <HomeParticipationNestedTable
+                      active={activeTab === HOME_TAB_PARTICIPATION}
+                    />
+                  ),
+                },
+                {
+                  key: HOME_TAB_PARTICIPATION_MILESTONES,
+                  label: "参与里程碑",
+                  children: (
+                    <HomeParticipationMilestones
+                      active={activeTab === HOME_TAB_PARTICIPATION_MILESTONES}
+                    />
+                  ),
+                },
+                {
+                  key: HOME_TAB_WORK_LOGS,
+                  label: "工时记录",
+                  children: <WorkLogsPanel />,
+                },
+              ]
+            : []),
         ]}
       />
     </Card>

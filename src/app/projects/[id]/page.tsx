@@ -1109,6 +1109,7 @@ const ProjectDetailPage = () => {
                         mode="actions"
                         projectId={projectId}
                         projectName={project.name ?? ""}
+                        projectMembers={project.members}
                         latestCostEstimation={
                           project.latestCostEstimation
                         }
@@ -1139,6 +1140,7 @@ const ProjectDetailPage = () => {
                         mode="content"
                         projectId={projectId}
                         projectName={project.name ?? ""}
+                        projectMembers={project.members}
                         latestCostEstimation={
                           project.latestCostEstimation
                         }
@@ -1187,6 +1189,7 @@ const ProjectDetailPage = () => {
                         mode="actions"
                         projectId={projectId}
                         projectName={project.name ?? ""}
+                        projectMembers={project.members}
                         canManageProject={canManageProject}
                         latestInitiation={
                           project.latestInitiation
@@ -1226,6 +1229,7 @@ const ProjectDetailPage = () => {
                         mode="content"
                         projectId={projectId}
                         projectName={project.name ?? ""}
+                        projectMembers={project.members}
                         canManageProject={canManageProject}
                         latestInitiation={
                           project.latestInitiation

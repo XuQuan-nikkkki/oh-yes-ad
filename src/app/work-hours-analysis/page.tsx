@@ -20,8 +20,6 @@ import {
 import ListPageContainer from "@/components/ListPageContainer";
 import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
-import { useEmployeesStore } from "@/stores/employeesStore";
-import { useProjectsStore } from "@/stores/projectsStore";
 import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
 import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
 import type { WorkdayAdjustment } from "@/types/workdayAdjustment";
@@ -172,8 +170,6 @@ export default function WorkHoursAnalysisPage() {
   const [loading, setLoading] = useState(false);
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
-  const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
-  const fetchProjectsFromStore = useProjectsStore((state) => state.fetchProjects);
   const systemSettings = useSystemSettingsStore((state) => state.records);
   const fetchSystemSettings = useSystemSettingsStore(
     (state) => state.fetchSystemSettings,
@@ -222,13 +218,13 @@ export default function WorkHoursAnalysisPage() {
       try {
         const [entriesRes, employeesRes, projectsRes] = await Promise.all([
           fetch("/api/actual-work-entries", { cache: "no-store" }),
-          fetchEmployeesFromStore({ full: true }),
-          fetchProjectsFromStore(),
+          fetch("/api/employees?list=full", { cache: "no-store" }),
+          fetch("/api/projects", { cache: "no-store" }),
         ]);
         if (!mountedRef.current) return;
         const entriesData = entriesRes.ok ? await entriesRes.json() : [];
-        const employeesData = Array.isArray(employeesRes) ? employeesRes : [];
-        const projectsData = Array.isArray(projectsRes) ? projectsRes : [];
+        const employeesData = employeesRes.ok ? await employeesRes.json() : [];
+        const projectsData = projectsRes.ok ? await projectsRes.json() : [];
         if (!mountedRef.current) return;
         setEntries(Array.isArray(entriesData) ? entriesData : []);
         setEmployees(Array.isArray(employeesData) ? employeesData : []);
@@ -266,7 +262,7 @@ export default function WorkHoursAnalysisPage() {
         }
       }
     })();
-  }, [fetchEmployeesFromStore, fetchProjectsFromStore]);
+  }, []);
 
   useEffect(() => {
     void fetchSystemSettings();
@@ -1200,7 +1196,7 @@ export default function WorkHoursAnalysisPage() {
       anchor.click();
       window.URL.revokeObjectURL(url);
       if (mountedRef.current) {
-        messageApi.success("表格已下载");
+        messageApi.success("开始下载表格");
       }
     } catch (error) {
       console.error(error);

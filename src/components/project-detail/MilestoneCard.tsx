@@ -1,7 +1,12 @@
 "use client";
 
 import { ProCard } from "@ant-design/pro-components";
-import { Space, Tag } from "antd";
+import {
+  CheckCircleFilled,
+  ClockCircleFilled,
+  ScheduleFilled,
+} from "@ant-design/icons";
+import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
 import MilestoneCountdownTag from "@/components/project-detail/MilestoneCountdownTag";
 import MilestoneTypeValue from "@/components/project-detail/MilestoneTypeValue";
@@ -53,26 +58,92 @@ const renderClientPeople = (participants?: MilestoneClientParticipant[]) =>
         .join("、")
     : "-";
 
+const participantTitleStyle = {
+  fontSize: 11,
+  color: "#8C8C8C",
+  fontWeight: 600,
+} as const;
+
 type Props = {
   milestone: MilestoneCardRow;
   height?: number;
 };
 
+const getMilestoneDateStatus = (date?: string | null) => {
+  if (!date) return null;
+
+  const milestoneDay = dayjs(date);
+  if (!milestoneDay.isValid()) return null;
+
+  const milestoneStart = milestoneDay.startOf("day");
+  const todayStart = dayjs().startOf("day");
+
+  if (milestoneStart.isBefore(todayStart)) return "past";
+  if (milestoneStart.isAfter(todayStart)) return "future";
+  return "today";
+};
+
+const getCountdownIcon = (dateStatus: "past" | "today" | "future" | null) => {
+  if (dateStatus === "past") {
+    return <CheckCircleFilled style={{ color: "#8C8C8C", fontSize: 12 }} />;
+  }
+  if (dateStatus === "today") {
+    return <ClockCircleFilled style={{ color: "#D15750", fontSize: 12 }} />;
+  }
+  if (dateStatus === "future") {
+    return <ScheduleFilled style={{ color: "#4A9C78", fontSize: 12 }} />;
+  }
+  return null;
+};
+
 const MilestoneCard = ({ milestone, height }: Props) => {
+  const dateStatus = getMilestoneDateStatus(milestone.date);
+  const countdownIcon = getCountdownIcon(dateStatus);
+  const rightBorderColor =
+    dateStatus === "today"
+      ? "#D15750"
+      : dateStatus === "future"
+        ? "#4A9C78"
+        : undefined;
+
   return (
     <ProCard
       title={
-        <span style={{ fontSize: 14 }}>
-          <AppLink href={`/project-milestones/${milestone.id}`}>
-            {milestone.name}
-          </AppLink>
-        </span>
+        <div
+          style={{
+            display: "flex",
+            width: "100%",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: 8,
+          }}
+        >
+          <span style={{ fontSize: 14, minWidth: 0, flex: 1 }}>
+            <AppLink href={`/project-milestones/${milestone.id}`}>
+              {milestone.name}
+            </AppLink>
+          </span>
+          {/* <MilestoneTypeValue
+            type={milestone.type}
+            typeOption={milestone.typeOption}
+          /> */}
+        </div>
       }
       bordered
+      extra={
+        <MilestoneTypeValue
+          type={milestone.type}
+          typeOption={milestone.typeOption}
+        />
+      }
       style={{
         height: height ?? "100%",
         width: "100%",
         minWidth: 0,
+        opacity: dateStatus === "past" ? 0.7 : 1,
+        ...(rightBorderColor
+          ? { borderLeft: `3px solid ${rightBorderColor}` }
+          : {}),
       }}
       headStyle={{ padding: "6px 12px 0" }}
       bodyStyle={{
@@ -81,51 +152,50 @@ const MilestoneCard = ({ milestone, height }: Props) => {
         overflowY: height ? "auto" : "visible",
       }}
     >
-      <Space orientation="vertical" size={10} style={{ width: "100%" }}>
-        <MilestoneTypeValue
-          type={milestone.type}
-          typeOption={milestone.typeOption}
-        />
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+          }}
+        >
+          {milestone.clientParticipants &&
+          milestone.clientParticipants.length > 0 ? (
+            <div style={{ fontSize: 12 }}>
+              <div style={participantTitleStyle}>客户人员：</div>
+              <div>{renderClientPeople(milestone.clientParticipants)}</div>
+            </div>
+          ) : null}
 
-        {milestone.clientParticipants && milestone.clientParticipants.length > 0 ? (
-          <div style={{ fontSize: 12 }}>
-            <Tag
-              color="gold"
-              style={{ fontWeight: 600, fontSize: 11, padding: "0 6px" }}
-            >
-              客户人员：
-            </Tag>
-            <div>{renderClientPeople(milestone.clientParticipants)}</div>
-          </div>
-        ) : null}
+          {milestone.internalParticipants &&
+          milestone.internalParticipants.length > 0 ? (
+            <div style={{ fontSize: 12 }}>
+              <div style={participantTitleStyle}>项目人员：</div>
+              <div>{renderPeople(milestone.internalParticipants)}</div>
+            </div>
+          ) : null}
 
-        {milestone.internalParticipants &&
-        milestone.internalParticipants.length > 0 ? (
-          <div style={{ fontSize: 12 }}>
-            <Tag
-              color="gold"
-              style={{ fontWeight: 600, fontSize: 11, padding: "0 6px" }}
-            >
-              项目人员：
-            </Tag>
-            <div>{renderPeople(milestone.internalParticipants)}</div>
-          </div>
-        ) : null}
+          {milestone.vendorParticipants &&
+          milestone.vendorParticipants.length > 0 ? (
+            <div style={{ fontSize: 12 }}>
+              <div style={participantTitleStyle}>供应商：</div>
+              <div>{renderPeople(milestone.vendorParticipants)}</div>
+            </div>
+          ) : null}
+        </div>
 
-        {milestone.vendorParticipants && milestone.vendorParticipants.length > 0 ? (
-          <div style={{ fontSize: 12 }}>
-            <Tag
-              color="gold"
-              style={{ fontWeight: 600, fontSize: 11, padding: "0 6px" }}
-            >
-              供应商
-            </Tag>
-            <div>{renderPeople(milestone.vendorParticipants)}</div>
-          </div>
-        ) : null}
-
-        <MilestoneCountdownTag date={milestone.date} />
-      </Space>
+        <div style={{ marginTop: "auto", paddingTop: 10 }}>
+          <MilestoneCountdownTag date={milestone.date} icon={countdownIcon} />
+        </div>
+      </div>
     </ProCard>
   );
 };

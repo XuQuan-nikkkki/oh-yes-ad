@@ -1,6 +1,14 @@
 "use client";
 
 import { Progress } from "antd";
+import {
+  AccountBookTwoTone,
+  BankTwoTone,
+  CreditCardTwoTone,
+  FileTextTwoTone,
+  FlagTwoTone,
+  WalletTwoTone,
+} from "@ant-design/icons";
 import { ProCard, StatisticCard } from "@ant-design/pro-components";
 import BooleanTag from "@/components/BooleanTag";
 import RemarkText from "@/components/RemarkText";
@@ -34,7 +42,10 @@ export default function ProjectPayablePlanSnapshot({
     expectedAmountTotal > 0
       ? Math.max(
           0,
-          Math.min(100, Math.round((actualAmountTotal / expectedAmountTotal) * 100)),
+          Math.min(
+            100,
+            Math.round((actualAmountTotal / expectedAmountTotal) * 100),
+          ),
         )
       : 0;
 
@@ -46,16 +57,30 @@ export default function ProjectPayablePlanSnapshot({
           statistic={{
             title: "供应商",
             value: String(vendorName || "-"),
-            styles: { content: { fontSize: 18 } },
+            icon: <FlagTwoTone />,
+            styles: {
+              title: { fontSize: 13 },
+              content: {
+                fontSize: 18,
+                fontWeight: 600,
+              },
+            },
           }}
         />
         <StatisticCard
           style={{ background: "var(--ant-colorFillAlter, #fafafa)" }}
           statistic={{
             title: "合同金额（含税）",
+            icon: <FileTextTwoTone />,
             value: contractAmount,
             suffix: "元",
-            styles: { content: { fontSize: 18 } },
+            styles: {
+              title: { fontSize: 13 },
+              content: {
+                fontSize: 18,
+                fontWeight: 600,
+              },
+            },
             formatter: (value) => Number(value ?? 0).toLocaleString("zh-CN"),
           }}
         />
@@ -64,8 +89,15 @@ export default function ProjectPayablePlanSnapshot({
           statistic={{
             title: "预付金额总计",
             value: expectedAmountTotal,
+            icon: <CreditCardTwoTone />,
             suffix: "元",
-            styles: { content: { fontSize: 18 } },
+            styles: {
+              title: { fontSize: 13 },
+              content: {
+                fontSize: 18,
+                fontWeight: 600,
+              },
+            },
             formatter: (value) => Number(value ?? 0).toLocaleString("zh-CN"),
           }}
         />
@@ -74,8 +106,15 @@ export default function ProjectPayablePlanSnapshot({
           statistic={{
             title: "实付金额总计",
             value: actualAmountTotal,
+            icon: <AccountBookTwoTone />,
             suffix: "元",
-            styles: { content: { fontSize: 18 } },
+            styles: {
+              title: { fontSize: 13 },
+              content: {
+                fontSize: 18,
+                fontWeight: 600,
+              },
+            },
             formatter: (value) => Number(value ?? 0).toLocaleString("zh-CN"),
           }}
         />
@@ -122,7 +161,9 @@ export default function ProjectPayablePlanSnapshot({
           >
             签约主体
           </div>
-          <div style={{ wordBreak: "break-word" }}>{legalEntityName || "-"}</div>
+          <div style={{ wordBreak: "break-word" }}>
+            {legalEntityName || "-"}
+          </div>
         </ProCard>
 
         <ProCard>

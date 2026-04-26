@@ -64,6 +64,9 @@ export type ProjectCostEstimationSummary = {
       id: string;
       name: string;
       function?: string | null;
+      salary?: string | number | null;
+      socialSecurity?: string | number | null;
+      providentFund?: string | number | null;
       functionOption?: {
         id?: string;
         value?: string | null;

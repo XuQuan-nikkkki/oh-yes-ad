@@ -159,6 +159,9 @@ const EmployeeDetailPage = () => {
   const [messageApi, contextHolder] = message.useMessage();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
+  const isAdmin = roleCodes.includes("ADMIN");
+  const hideProjectAndWorkLogTabs =
+    !isAdmin && (roleCodes.includes("HR") || roleCodes.includes("FINANCE"));
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const removeEmployeeFromStore = useEmployeesStore((state) => state.removeEmployee);
   const fetchAdjustmentsFromStore = useWorkdayAdjustmentsStore(
@@ -243,6 +246,13 @@ const EmployeeDetailPage = () => {
       setActiveTabKey("catering-projects");
     }
   }, [activeTabKey, canViewHrFinanceInfo]);
+
+  useEffect(() => {
+    if (!hideProjectAndWorkLogTabs) return;
+    if (activeTabKey === "catering-projects" || activeTabKey === "work-logs") {
+      setActiveTabKey(canViewHrFinanceInfo ? "employee-info" : "leave-records");
+    }
+  }, [activeTabKey, canViewHrFinanceInfo, hideProjectAndWorkLogTabs]);
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -622,119 +632,123 @@ const EmployeeDetailPage = () => {
                   },
                 ]
               : []),
-            {
-              key: "catering-projects",
-              label: "参与项目",
-              children: (
-                <ProjectsTable
-                  projects={employee?.projects ?? []}
-                  workdayAdjustments={workdayAdjustments}
-                  compactHorizontalPadding
-                  columnKeys={["name", "type", "status", "stage", "period"]}
-                  defaultVisibleColumnKeys={["name", "type", "status", "stage", "period"]}
-                  onOptionUpdated={fetchEmployee}
-                  renderTypeOption={(project) =>
-                    renderProjectQuickEditTag(
-                      project,
-                      "project.type",
-                      "type",
-                      project.typeOption,
-                      project.type ?? "-",
-                      "项目类型",
-                    )
-                  }
-                  renderStatusOption={(project) =>
-                    renderProjectQuickEditTag(
-                      project,
-                      "project.status",
-                      "status",
-                      project.statusOption,
-                      project.status ?? "-",
-                      "项目状态",
-                    )
-                  }
-                  renderStageOption={(project) =>
-                    renderProjectQuickEditTag(
-                      project,
-                      "project.stage",
-                      "stage",
-                      project.stageOption,
-                      project.stage ?? "-",
-                      "项目阶段",
-                    )
-                  }
-                />
-              ),
-            },
-            {
-              key: "work-logs",
-              label: "实际工时记录",
-              children: (
-                <ActualWorkEntriesTable
-                  refreshKey={actualWorkRefreshKey}
-                  compactHorizontalPadding
-                  headerTitle={null}
-                  showTableOptions={false}
-                  employeeFilterOptions={
-                    employee?.name
-                      ? [{ label: employee.name, value: employee.name }]
-                      : []
-                  }
-                  columnKeys={["title", "projectName", "startDate", "workDay"]}
-                  requestData={async ({ current, pageSize, filters }) => {
-                    const search = new URLSearchParams({
-                      page: String(current),
-                      pageSize: String(pageSize),
-                      employeeId: id,
-                    });
-                    if (filters.title) search.set("title", filters.title);
-                    if (filters.employeeName) {
-                      search.set("employeeName", filters.employeeName);
-                    }
-                    if (filters.projectName) {
-                      search.set("projectName", filters.projectName);
-                    }
-                    if (filters.startDate) search.set("startDate", filters.startDate);
-                    if (filters.startDateFrom) {
-                      search.set("startDateFrom", filters.startDateFrom);
-                    }
-                    if (filters.startDateTo) {
-                      search.set("startDateTo", filters.startDateTo);
-                    }
+            ...(!hideProjectAndWorkLogTabs
+              ? [
+                  {
+                    key: "catering-projects",
+                    label: "参与项目",
+                    children: (
+                      <ProjectsTable
+                        projects={employee?.projects ?? []}
+                        workdayAdjustments={workdayAdjustments}
+                        compactHorizontalPadding
+                        columnKeys={["name", "type", "status", "stage", "period"]}
+                        defaultVisibleColumnKeys={["name", "type", "status", "stage", "period"]}
+                        onOptionUpdated={fetchEmployee}
+                        renderTypeOption={(project) =>
+                          renderProjectQuickEditTag(
+                            project,
+                            "project.type",
+                            "type",
+                            project.typeOption,
+                            project.type ?? "-",
+                            "项目类型",
+                          )
+                        }
+                        renderStatusOption={(project) =>
+                          renderProjectQuickEditTag(
+                            project,
+                            "project.status",
+                            "status",
+                            project.statusOption,
+                            project.status ?? "-",
+                            "项目状态",
+                          )
+                        }
+                        renderStageOption={(project) =>
+                          renderProjectQuickEditTag(
+                            project,
+                            "project.stage",
+                            "stage",
+                            project.stageOption,
+                            project.stage ?? "-",
+                            "项目阶段",
+                          )
+                        }
+                      />
+                    ),
+                  },
+                  {
+                    key: "work-logs",
+                    label: "实际工时记录",
+                    children: (
+                      <ActualWorkEntriesTable
+                        refreshKey={actualWorkRefreshKey}
+                        compactHorizontalPadding
+                        headerTitle={null}
+                        showTableOptions={false}
+                        employeeFilterOptions={
+                          employee?.name
+                            ? [{ label: employee.name, value: employee.name }]
+                            : []
+                        }
+                        columnKeys={["title", "projectName", "startDate", "workDay"]}
+                        requestData={async ({ current, pageSize, filters }) => {
+                          const search = new URLSearchParams({
+                            page: String(current),
+                            pageSize: String(pageSize),
+                            employeeId: id,
+                          });
+                          if (filters.title) search.set("title", filters.title);
+                          if (filters.employeeName) {
+                            search.set("employeeName", filters.employeeName);
+                          }
+                          if (filters.projectName) {
+                            search.set("projectName", filters.projectName);
+                          }
+                          if (filters.startDate) search.set("startDate", filters.startDate);
+                          if (filters.startDateFrom) {
+                            search.set("startDateFrom", filters.startDateFrom);
+                          }
+                          if (filters.startDateTo) {
+                            search.set("startDateTo", filters.startDateTo);
+                          }
 
-                    const res = await fetch(
-                      `/api/actual-work-entries?${search.toString()}`,
-                    );
-                    if (!res.ok) {
-                      return { data: [], total: 0 };
-                    }
-                    const data = await res.json();
-                    const rows = Array.isArray(data?.data)
-                      ? (data.data as ActualWorkEntryRow[])
-                      : [];
-                    return {
-                      data: rows,
-                      total:
-                        typeof data?.total === "number" ? data.total : rows.length,
-                    };
-                  }}
-                  onEdit={(row) => {
-                    router.push(`/actual-work-entries/${row.id}`);
-                  }}
-                  onDelete={async (entryId, title) => {
-                    const res = await fetch(`/api/actual-work-entries/${entryId}`, {
-                      method: "DELETE",
-                    });
-                    if (!res.ok) {
-                      messageApi.error("删除实际工时失败");
-                      return;
-                    }
-                    messageApi.success(`已删除实际工时「${title}」`);
-                    setActualWorkRefreshKey((prev) => prev + 1);
-                  }}
-                />
-              ),
-            },
+                          const res = await fetch(
+                            `/api/actual-work-entries?${search.toString()}`,
+                          );
+                          if (!res.ok) {
+                            return { data: [], total: 0 };
+                          }
+                          const data = await res.json();
+                          const rows = Array.isArray(data?.data)
+                            ? (data.data as ActualWorkEntryRow[])
+                            : [];
+                          return {
+                            data: rows,
+                            total:
+                              typeof data?.total === "number" ? data.total : rows.length,
+                          };
+                        }}
+                        onEdit={(row) => {
+                          router.push(`/actual-work-entries/${row.id}`);
+                        }}
+                        onDelete={async (entryId, title) => {
+                          const res = await fetch(`/api/actual-work-entries/${entryId}`, {
+                            method: "DELETE",
+                          });
+                          if (!res.ok) {
+                            messageApi.error("删除实际工时失败");
+                            return;
+                          }
+                          messageApi.success(`已删除实际工时「${title}」`);
+                          setActualWorkRefreshKey((prev) => prev + 1);
+                        }}
+                      />
+                    ),
+                  },
+                ]
+              : []),
             {
               key: "leave-records",
               label: "请假记录",

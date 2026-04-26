@@ -3,24 +3,26 @@
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 import type { Key } from "react";
-import { DragSortTable } from "@ant-design/pro-components";
+import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { InfoCircleOutlined } from "@ant-design/icons";
 import {
   Button,
+  Col,
   DatePicker,
+  Divider,
   Form,
   Input,
   Modal,
+  Popconfirm,
   Progress,
+  Row,
   Space,
   Table,
-  Tooltip,
+  Timeline,
   Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { Dayjs } from "dayjs";
-import BooleanTag from "@/components/BooleanTag";
 import EllipsisPopoverText from "@/components/EllipsisPopoverText";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import TableActions from "@/components/TableActions";
@@ -50,7 +52,12 @@ export type ProjectReceivableNodeRow = {
     fromExpectedDate: string;
     toExpectedDate: string;
     reason?: string | null;
+    remark?: string | null;
     changedAt?: string;
+    changedByEmployee?: {
+      id: string;
+      name: string;
+    } | null;
   }>;
   remark?: string | null;
   remarkNeedsAttention: boolean;
@@ -74,8 +81,17 @@ type ActualNodeRow = NonNullable<
 >[number];
 
 export type ReceivableNodeDelayFormValues = {
+  originalExpectedDate?: string;
   delayedExpectedDate: Dayjs;
   delayReason: string;
+  delayRemark?: string;
+};
+
+type ReceivableDelayHistoryEditFormValues = {
+  originalExpectedDate?: string;
+  updatedExpectedDate?: string;
+  reason: string;
+  remark?: string;
 };
 
 type Props = {
@@ -105,6 +121,7 @@ type Props = {
     row: ProjectReceivableNodeRow,
     values: ReceivableNodeDelayFormValues,
   ) => void | Promise<void>;
+  onHistoryChanged?: () => void | Promise<void>;
 };
 
 const getActualAmountSum = (row: ProjectReceivableNodeRow) =>
@@ -128,6 +145,14 @@ const formatAmount = (value?: number | null) => {
   return `${value.toLocaleString("zh-CN")} 元`;
 };
 
+const getExpectedDateTs = (value: string | null | undefined) => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return Number.POSITIVE_INFINITY;
+  const parsed = dayjs(raw);
+  if (!parsed.isValid()) return Number.POSITIVE_INFINITY;
+  return parsed.valueOf();
+};
+
 const ProjectReceivableNodeTable = ({
   title,
   rows,
@@ -136,11 +161,11 @@ const ProjectReceivableNodeTable = ({
   onAddNode,
   onDeleteNode,
   onEditNode,
-  onDragSortNodes,
   onCollectNode,
   onEditActualNode,
   onDeleteActualNode,
   onDelayNode,
+  onHistoryChanged,
 }: Props) => {
   const [actualModalOpen, setActualModalOpen] = useState(false);
   const [collecting, setCollecting] = useState(false);
@@ -159,6 +184,11 @@ const ProjectReceivableNodeTable = ({
   const [delayTargetRow, setDelayTargetRow] =
     useState<ProjectReceivableNodeRow | null>(null);
   const [delayForm] = Form.useForm<ReceivableNodeDelayFormValues>();
+  const [historyEditModalOpen, setHistoryEditModalOpen] = useState(false);
+  const [historyEditSubmitting, setHistoryEditSubmitting] = useState(false);
+  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
+  const [historyEditForm] =
+    Form.useForm<ReceivableDelayHistoryEditFormValues>();
 
   useEffect(() => {
     const validIdSet = new Set(rows.map((row) => row.id));
@@ -177,22 +207,24 @@ const ProjectReceivableNodeTable = ({
     );
   }, [stageOptions]);
 
+  const sortedRows = useMemo(() => {
+    return [...rows].sort((left, right) => {
+      const byDate =
+        getExpectedDateTs(left.expectedDate) -
+        getExpectedDateTs(right.expectedDate);
+      if (byDate !== 0) return byDate;
+
+      const leftSortOrder = Number(left.sortOrder ?? 0);
+      const rightSortOrder = Number(right.sortOrder ?? 0);
+      if (leftSortOrder !== rightSortOrder)
+        return leftSortOrder - rightSortOrder;
+
+      return String(left.id).localeCompare(String(right.id));
+    });
+  }, [rows]);
+
   const columns = useMemo<ProColumns<ProjectReceivableNodeRow>[]>(
     () => [
-      {
-        title: "",
-        dataIndex: "sortOrder",
-        fixed: "left",
-        width: 10,
-        editable: false,
-        render: () => null,
-        onHeaderCell: () => ({
-          style: { paddingInline: 4 },
-        }),
-        onCell: () => ({
-          style: { paddingInline: 4 },
-        }),
-      },
       {
         title: "收款阶段",
         dataIndex: "stageOptionId",
@@ -269,7 +301,12 @@ const ProjectReceivableNodeTable = ({
                   lineHeight: 1.1,
                 }}
               >{`${actualAmount.toLocaleString("zh-CN")} / ${expectedAmount.toLocaleString("zh-CN")}`}</Typography.Text>
-              <Progress percent={percent} showInfo={false} size="small" />
+              <Progress
+                percent={percent}
+                showInfo={false}
+                size="small"
+                strokeColor={percent === 100 ? "#52c41a" : undefined}
+              />
             </div>
           );
         },
@@ -278,46 +315,30 @@ const ProjectReceivableNodeTable = ({
         title: "预收日期",
         dataIndex: "expectedDate",
         valueType: "date",
-      },
-      {
-        title: "预收延后",
-        dataIndex: "expectedDateHistories",
-        width: 100,
-        editable: false,
         render: (_dom, row) => {
-          const histories = Array.isArray(row.expectedDateHistories)
-            ? row.expectedDateHistories
-            : [];
+          const dateText = row.expectedDate
+            ? dayjs(row.expectedDate).format("YYYY-MM-DD")
+            : "-";
+          const delayCount = Array.isArray(row.expectedDateHistories)
+            ? row.expectedDateHistories.length
+            : 0;
+
           return (
-            <Space size={4} align="center">
-              <BooleanTag value={histories.length > 0} />
-              <Tooltip
-                title={
-                  histories.length > 0 ? (
-                    <div>
-                      {histories.map((history) => {
-                        const from = dayjs(history.fromExpectedDate).isValid()
-                          ? dayjs(history.fromExpectedDate).format("YYYY/MM/DD")
-                          : "-";
-                        const to = dayjs(history.toExpectedDate).isValid()
-                          ? dayjs(history.toExpectedDate).format("YYYY/MM/DD")
-                          : "-";
-                        const reason = String(history.reason ?? "").trim();
-                        return (
-                          <div key={history.id}>
-                            {`${from} -> ${to}${reason ? ` ${reason}` : ""}`}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    "暂无延后历史"
-                  )
-                }
-              >
-                <InfoCircleOutlined style={{ color: "rgba(0,0,0,0.45)" }} />
-              </Tooltip>
-            </Space>
+            <div style={{ lineHeight: 1.25 }}>
+              <div>{dateText}</div>
+              {delayCount > 0 ? (
+                <div
+                  style={{
+                    marginTop: 2,
+                    color: "#BE2E2C",
+                    fontSize: 11,
+                    fontWeight: 600,
+                  }}
+                >
+                  {`已变动${delayCount}次`}
+                </div>
+              ) : null}
+            </div>
           );
         },
       },
@@ -372,7 +393,7 @@ const ProjectReceivableNodeTable = ({
                 setDelayModalOpen(true);
               }}
             >
-              延迟收款
+              收款变动
             </Button>
             <TableActions
               disabled={!canManageProject}
@@ -464,9 +485,222 @@ const ProjectReceivableNodeTable = ({
     [canManageProject, onDeleteActualNode],
   );
 
+  const renderActualNodesTable = (record: ProjectReceivableNodeRow) => (
+    <div>
+      <div style={{ fontSize: 14, fontWeight: 600 }}>实收记录</div>
+      <Divider style={{ margin: "8px 0" }} />
+      <Table
+        rowKey="id"
+        size="small"
+        pagination={false}
+        columns={actualColumns}
+        dataSource={record.actualNodes ?? []}
+        onRow={() => ({
+          onClick: (event) => {
+            event.stopPropagation();
+          },
+        })}
+      />
+    </div>
+  );
+
+  const renderExpectedDateHistoryTimeline = (
+    record: ProjectReceivableNodeRow,
+  ) => {
+    const histories = Array.isArray(record.expectedDateHistories)
+      ? [...record.expectedDateHistories]
+      : [];
+    const sorted = histories.sort((left, right) => {
+      const leftTs = dayjs(left.changedAt).isValid()
+        ? dayjs(left.changedAt).valueOf()
+        : Number.POSITIVE_INFINITY;
+      const rightTs = dayjs(right.changedAt).isValid()
+        ? dayjs(right.changedAt).valueOf()
+        : Number.POSITIVE_INFINITY;
+      return leftTs - rightTs;
+    });
+
+    return (
+      <div>
+        <div style={{ marginBottom: 8, fontSize: 14, fontWeight: 600 }}>
+          收款变动记录
+        </div>
+        <Divider style={{ margin: "8px 0" }} />
+        <Timeline
+          style={{ marginTop: 2 }}
+          items={sorted.map((history) => {
+            const fromDate = dayjs(history.fromExpectedDate).isValid()
+              ? dayjs(history.fromExpectedDate).format("YYYY-MM-DD")
+              : "-";
+            const toDate = dayjs(history.toExpectedDate).isValid()
+              ? dayjs(history.toExpectedDate).format("YYYY-MM-DD")
+              : "-";
+            const dateDiffDays =
+              dayjs(history.fromExpectedDate).isValid() &&
+              dayjs(history.toExpectedDate).isValid()
+                ? dayjs(history.toExpectedDate)
+                    .startOf("day")
+                    .diff(dayjs(history.fromExpectedDate).startOf("day"), "day")
+                : 0;
+            const changeText =
+              dateDiffDays > 0
+                ? `延后${dateDiffDays}天`
+                : dateDiffDays < 0
+                  ? `提前${Math.abs(dateDiffDays)}天`
+                  : "无变化";
+            const reason = String(history.reason ?? "").trim() || "-";
+            const remark = String(history.remark ?? "").trim();
+            const changedAt = dayjs(history.changedAt).isValid()
+              ? dayjs(history.changedAt).format("YYYY-MM-DD")
+              : "-";
+            const changedBy = history.changedByEmployee?.name?.trim() || "-";
+
+            return {
+              key: history.id,
+              content: (
+                <div style={{ lineHeight: 1.45 }}>
+                  <div style={{ marginBottom: 4 }}>
+                    <span
+                      style={{
+                        fontSize: 13,
+                        color: "rgba(0,0,0,0.45)",
+                        textDecoration: "line-through",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {fromDate}
+                    </span>
+                    <span
+                      style={{
+                        margin: "0 6px",
+                        color: "rgba(0,0,0,0.45)",
+                        fontWeight: 500,
+                      }}
+                    >
+                      -&gt;
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 13,
+                        color: dateDiffDays >= 0 ? "#BE2E2C" : "#387E22",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {toDate}
+                    </span>
+                    <span
+                      style={{
+                        marginLeft: 8,
+                        fontSize: 12,
+                        color: dateDiffDays >= 0 ? "#BE2E2C" : "#387E22",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {changeText}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      marginBottom: 2,
+                      fontSize: 13,
+                      color: "rgba(0,0,0,0.65)",
+                    }}
+                  >{`原因：${reason}`}</div>
+                  {remark ? (
+                    <div
+                      style={{
+                        marginBottom: 2,
+                        fontSize: 13,
+                        color: "rgba(0,0,0,0.65)",
+                      }}
+                    >{`备注：${remark}`}</div>
+                  ) : null}
+                  <div style={{ fontSize: 12, color: "rgba(0,0,0,0.45)" }}>
+                    <span>{`${changedAt} · ${changedBy}`}</span>
+                    <Space size={8} style={{ marginLeft: 8 }}>
+                      <Button
+                        type="link"
+                        size="small"
+                        style={{
+                          paddingInline: 0,
+                          fontSize: 12,
+                          height: "auto",
+                          lineHeight: 1,
+                        }}
+                        disabled={!canManageProject}
+                        onClick={() => {
+                          setEditingHistoryId(history.id);
+                          historyEditForm.setFieldsValue({
+                            originalExpectedDate: dayjs(
+                              history.fromExpectedDate,
+                            ).isValid()
+                              ? dayjs(history.fromExpectedDate).format(
+                                  "YYYY-MM-DD",
+                                )
+                              : "-",
+                            updatedExpectedDate: dayjs(
+                              history.toExpectedDate,
+                            ).isValid()
+                              ? dayjs(history.toExpectedDate).format(
+                                  "YYYY-MM-DD",
+                                )
+                              : "-",
+                            reason:
+                              String(history.reason ?? "").trim() || undefined,
+                            remark:
+                              String(history.remark ?? "").trim() || undefined,
+                          });
+                          setHistoryEditModalOpen(true);
+                        }}
+                      >
+                        编辑
+                      </Button>
+                      <Popconfirm
+                        title="确认删除该条延后记录吗？"
+                        okText="删除"
+                        cancelText="取消"
+                        okButtonProps={{ danger: true }}
+                        disabled={!canManageProject}
+                        onConfirm={() => {
+                          void (async () => {
+                            const response = await fetch(
+                              `/api/project-receivable-node-expected-date-histories/${history.id}`,
+                              { method: "DELETE" },
+                            );
+                            if (!response.ok) return;
+                            await onHistoryChanged?.();
+                          })();
+                        }}
+                      >
+                        <Button
+                          type="link"
+                          size="small"
+                          danger
+                          style={{
+                            paddingInline: 0,
+                            height: "auto",
+                            lineHeight: 1,
+                            fontSize: 12,
+                          }}
+                          disabled={!canManageProject}
+                        >
+                          删除
+                        </Button>
+                      </Popconfirm>
+                    </Space>
+                  </div>
+                </div>
+              ),
+            };
+          })}
+        />
+      </div>
+    );
+  };
+
   return (
     <>
-      <DragSortTable<ProjectReceivableNodeRow>
+      <ProTable<ProjectReceivableNodeRow>
         style={{ marginTop: 0 }}
         rowKey="id"
         columns={
@@ -479,15 +713,7 @@ const ProjectReceivableNodeTable = ({
               ] as ProColumns<ProjectReceivableNodeRow>[])
             : columns
         }
-        dragSortKey="sortOrder"
-        dataSource={rows}
-        onDragSortEnd={(
-          _beforeIndex: number,
-          _afterIndex: number,
-          nextRows: ProjectReceivableNodeRow[],
-        ) => {
-          void onDragSortNodes(nextRows);
-        }}
+        dataSource={sortedRows}
         search={false}
         options={false}
         pagination={false}
@@ -505,7 +731,9 @@ const ProjectReceivableNodeTable = ({
           onExpandedRowsChange: (keys) => {
             setExpandedRowKeys(keys as Key[]);
           },
-          rowExpandable: (record) => (record.actualNodes?.length ?? 0) > 0,
+          rowExpandable: (record) =>
+            (record.actualNodes?.length ?? 0) > 0 ||
+            (record.expectedDateHistories?.length ?? 0) > 0,
           expandedRowRender: (record) => (
             <div
               style={{ paddingLeft: 32 }}
@@ -513,18 +741,39 @@ const ProjectReceivableNodeTable = ({
                 event.stopPropagation();
               }}
             >
-              <Table
-                rowKey="id"
-                size="small"
-                pagination={false}
-                columns={actualColumns}
-                dataSource={record.actualNodes ?? []}
-                onRow={() => ({
-                  onClick: (event) => {
-                    event.stopPropagation();
-                  },
-                })}
-              />
+              {(() => {
+                const hasActualNodes = (record.actualNodes?.length ?? 0) > 0;
+                const hasExpectedDateHistories =
+                  (record.expectedDateHistories?.length ?? 0) > 0;
+
+                if (hasActualNodes && !hasExpectedDateHistories) {
+                  return renderActualNodesTable(record);
+                }
+                if (!hasActualNodes && hasExpectedDateHistories) {
+                  return renderExpectedDateHistoryTimeline(record);
+                }
+                if (hasActualNodes && hasExpectedDateHistories) {
+                  return (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "minmax(0, 1fr) auto minmax(0, 1fr)",
+                        columnGap: 16,
+                        alignItems: "stretch",
+                      }}
+                    >
+                      <div>{renderActualNodesTable(record)}</div>
+                      <Divider
+                        orientation="vertical"
+                        style={{ height: "100%", margin: 0 }}
+                      />
+                      <div>{renderExpectedDateHistoryTimeline(record)}</div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
           ),
         }}
@@ -550,6 +799,15 @@ const ProjectReceivableNodeTable = ({
       <ProjectReceivableActualNodeModal
         open={actualModalOpen}
         loading={collecting}
+        maxAmountTaxIncluded={
+          editingActualNode || !currentCollectRow
+            ? undefined
+            : Math.max(
+                Number(currentCollectRow.expectedAmountTaxIncluded ?? 0) -
+                  getActualAmountSum(currentCollectRow),
+                0,
+              )
+        }
         onCancel={() => {
           setActualModalOpen(false);
           setCurrentCollectRow(null);
@@ -588,7 +846,11 @@ const ProjectReceivableNodeTable = ({
             : currentCollectRow
               ? {
                   actualAmountTaxIncluded:
-                    currentCollectRow.expectedAmountTaxIncluded,
+                    Math.max(
+                      Number(currentCollectRow.expectedAmountTaxIncluded ?? 0) -
+                        getActualAmountSum(currentCollectRow),
+                      0,
+                    ),
                   actualDate: currentCollectRow.expectedDate
                     ? dayjs(currentCollectRow.expectedDate)
                     : undefined,
@@ -642,8 +904,106 @@ const ProjectReceivableNodeTable = ({
         }
       />
       <Modal
-        title="延迟收款"
+        title="编辑收款延后记录"
+        open={historyEditModalOpen}
+        width={780}
+        confirmLoading={historyEditSubmitting}
+        destroyOnHidden
+        onCancel={() => {
+          setHistoryEditModalOpen(false);
+          setEditingHistoryId(null);
+          historyEditForm.resetFields();
+        }}
+        onOk={() => {
+          void (async () => {
+            if (!editingHistoryId) return;
+            const values = await historyEditForm.validateFields();
+            setHistoryEditSubmitting(true);
+            try {
+              const response = await fetch(
+                `/api/project-receivable-node-expected-date-histories/${editingHistoryId}`,
+                {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    reason: values.reason?.trim() || null,
+                    remark: values.remark?.trim() || null,
+                  }),
+                },
+              );
+              if (!response.ok) return;
+              setHistoryEditModalOpen(false);
+              setEditingHistoryId(null);
+              historyEditForm.resetFields();
+              await onHistoryChanged?.();
+            } finally {
+              setHistoryEditSubmitting(false);
+            }
+          })();
+        }}
+      >
+        <Form form={historyEditForm} layout="vertical">
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item
+                label="原预收日期"
+                name="originalExpectedDate"
+                required
+                rules={[
+                  { required: true, message: "原预收日期不能为空" },
+                  {
+                    validator: async (_, value: string | undefined) => {
+                      if (!value || !String(value).trim()) {
+                        throw new Error("原预收日期不能为空");
+                      }
+                    },
+                  },
+                ]}
+              >
+                <Input disabled />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="修改后日期"
+                name="updatedExpectedDate"
+                required
+                rules={[
+                  { required: true, message: "修改后日期不能为空" },
+                  {
+                    validator: async (_, value: string | undefined) => {
+                      if (!value || !String(value).trim()) {
+                        throw new Error("修改后日期不能为空");
+                      }
+                    },
+                  },
+                ]}
+              >
+                <Input disabled />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="原因"
+                name="reason"
+                required
+                rules={[{ required: true, message: "请输入原因" }]}
+              >
+                <Input.TextArea rows={3} placeholder="请输入原因" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="备注" name="remark">
+                <Input.TextArea rows={3} placeholder="请输入备注（选填）" />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+      </Modal>
+      <Modal
+        title="收款变动"
         open={delayModalOpen}
+        width={780}
         confirmLoading={delaying}
         destroyOnHidden
         onCancel={() => {
@@ -654,7 +1014,12 @@ const ProjectReceivableNodeTable = ({
         onOk={() => {
           void (async () => {
             if (!delayTargetRow) return;
-            const values = await delayForm.validateFields();
+            let values: ReceivableNodeDelayFormValues;
+            try {
+              values = await delayForm.validateFields();
+            } catch {
+              return;
+            }
             if (!onDelayNode) return;
             setDelaying(true);
             try {
@@ -670,10 +1035,14 @@ const ProjectReceivableNodeTable = ({
         afterOpenChange={(nextOpen) => {
           if (nextOpen) {
             delayForm.setFieldsValue({
+              originalExpectedDate: delayTargetRow?.expectedDate
+                ? dayjs(delayTargetRow.expectedDate).format("YYYY-MM-DD")
+                : undefined,
               delayedExpectedDate: delayTargetRow?.expectedDate
                 ? dayjs(delayTargetRow.expectedDate)
                 : undefined,
               delayReason: undefined,
+              delayRemark: undefined,
             });
             return;
           }
@@ -681,42 +1050,64 @@ const ProjectReceivableNodeTable = ({
         }}
       >
         <Form form={delayForm} layout="vertical">
-          <Form.Item label="原预收日期">
-            <Input
-              value={
-                delayTargetRow?.expectedDate
-                  ? dayjs(delayTargetRow.expectedDate).format("YYYY-MM-DD")
-                  : "-"
-              }
-              disabled
-            />
-          </Form.Item>
-          <Form.Item
-            label="延后日期"
-            name="delayedExpectedDate"
-            rules={[
-              { required: true, message: "请选择延后日期" },
-              {
-                validator: async (_, value: Dayjs | undefined) => {
-                  if (!value || !delayTargetRow?.expectedDate) return;
-                  const current = dayjs(delayTargetRow.expectedDate);
-                  if (!current.isValid()) return;
-                  if (!value.isAfter(current, "day")) {
-                    throw new Error("延后日期需晚于原预收日期");
-                  }
-                },
-              },
-            ]}
-          >
-            <DatePicker style={{ width: "100%" }} />
-          </Form.Item>
-          <Form.Item
-            label="延后原因"
-            name="delayReason"
-            rules={[{ required: true, message: "请输入延后原因" }]}
-          >
-            <Input.TextArea rows={3} placeholder="请输入延后原因" />
-          </Form.Item>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item
+                label="原预收日期"
+                name="originalExpectedDate"
+                required
+                rules={[
+                  { required: true, message: "原预收日期不能为空" },
+                  {
+                    validator: async (_, value: string | undefined) => {
+                      if (!value || !String(value).trim()) {
+                        throw new Error("原预收日期不能为空");
+                      }
+                    },
+                  },
+                ]}
+              >
+                <Input disabled />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="现预收日期"
+                name="delayedExpectedDate"
+                required
+                rules={[
+                  { required: true, message: "请选择现预收日期" },
+                  {
+                    validator: async (_, value: Dayjs | undefined) => {
+                      if (!value || !delayTargetRow?.expectedDate) return;
+                      const current = dayjs(delayTargetRow.expectedDate);
+                      if (!current.isValid()) return;
+                      if (value.isSame(current, "day")) {
+                        throw new Error("现预收日期不能与原预收日期相同");
+                      }
+                    },
+                  },
+                ]}
+              >
+                <DatePicker style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="变动原因"
+                name="delayReason"
+                required
+                rules={[{ required: true, message: "请输入变动原因" }]}
+              >
+                <Input.TextArea rows={3} placeholder="请输入变动原因" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="备注" name="delayRemark">
+                <Input.TextArea rows={3} placeholder="请输入备注（选填）" />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </>
