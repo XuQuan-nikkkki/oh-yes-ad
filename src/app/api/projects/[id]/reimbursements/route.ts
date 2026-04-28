@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
-import { requireProjectWritePermission } from "@/lib/api-permissions";
+import { requireFinanceOrAdminPermission } from "@/lib/api-permissions";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -78,7 +78,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
 }
 
 export async function POST(req: NextRequest, context: RouteContext) {
-  const denied = await requireProjectWritePermission();
+  const denied = await requireFinanceOrAdminPermission();
   if (denied) return denied;
 
   const { id: projectId } = await context.params;
@@ -109,21 +109,19 @@ export async function POST(req: NextRequest, context: RouteContext) {
       select: { id: true },
     }),
     prisma.projectFinancialStructure.findFirst({
-      where: { projectId },
-      select: {
-        id: true,
+      where: {
+        projectId,
         executionCostItems: {
-          where: { costTypeOptionId: categoryOptionId },
-          select: { id: true },
-          take: 1,
+          some: { costTypeOptionId: categoryOptionId },
         },
       },
+      select: { id: true },
     }),
   ]);
 
   if (!project) return new Response("Project not found", { status: 404 });
   if (!employee) return new Response("Applicant not found", { status: 404 });
-  if (!validCategory?.executionCostItems?.length) {
+  if (!validCategory) {
     return new Response("Invalid reimbursement category for this project", {
       status: 400,
     });

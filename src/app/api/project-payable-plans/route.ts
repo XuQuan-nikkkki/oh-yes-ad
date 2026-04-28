@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
   const rows = await prisma.projectPayablePlan.findMany({
     where: projectId ? { projectId } : undefined,
     include: includeDetail,
-    orderBy: [{ updatedAt: "desc" }],
+    orderBy: [{ createdAt: "asc" }],
   });
 
   return Response.json(rows);

@@ -10,7 +10,6 @@ import {
 } from "next/navigation";
 import { ProCard } from "@ant-design/pro-components";
 import DetailPageContainer from "@/components/DetailPageContainer";
-import PageAccessResult from "@/components/PageAccessResult";
 import ProjectFormModal from "@/components/ProjectFormModal";
 import dayjs from "dayjs";
 import { ProjectMilestoneRow } from "@/components/ProjectMilestonesTable";
@@ -220,12 +219,10 @@ const ProjectDetailPage = () => {
   const { canManageProject } = useProjectPermission();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
-  const isAdmin = roleCodes.includes("ADMIN");
-  const isClientProject =
-    project?.type === "CLIENT" ||
-    project?.type === "客户项目" ||
-    project?.typeOption?.value === "客户项目";
-  const shouldShowDevelopingCommercialSteps = isClientProject && !isAdmin;
+  const canViewRealtimeCostDownload = useMemo(
+    () => roleCodes.includes("ADMIN") || roleCodes.includes("FINANCE"),
+    [roleCodes],
+  );
   const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
   const storeClients = useClientsStore((state) => state.clients);
   const fetchClientsFromStore = useClientsStore((state) => state.fetchClients);
@@ -1672,16 +1669,18 @@ const ProjectDetailPage = () => {
                       </div>
                     ) : costTrackingTab === "realtime-cost" ? (
                       <div style={{ paddingRight: 16 }}>
-	                        <Button
-	                          onClick={() => {
-	                            realtimeCostDownload?.();
-	                          }}
-	                          disabled={!realtimeCostDownload}
-	                        >
-	                          下载数据
-	                        </Button>
-	                      </div>
-	                    ) : null,
+                        {canViewRealtimeCostDownload ? (
+                          <Button
+                            onClick={() => {
+                              realtimeCostDownload?.();
+                            }}
+                            disabled={!realtimeCostDownload}
+                          >
+                            下载数据
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : null,
                   onChange: (key) => {
                     setCostTrackingTab(
                       key as "expense-records" | "realtime-cost",

@@ -325,7 +325,6 @@ const parseFinancialStructurePrefillFromWorksheet = (
 const ProjectFinancialStructureCard = ({
   projectId,
   projectName,
-  canManageProject,
   latestInitiation,
   mode = "full",
   refreshKey = 0,
@@ -348,6 +347,8 @@ const ProjectFinancialStructureCard = ({
   );
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
+  const canCreateFinancialStructure =
+    roleCodes.includes("ADMIN") || roleCodes.includes("FINANCE");
   const canManageFinancialStructureActions =
     roleCodes.includes("ADMIN") || roleCodes.includes("FINANCE");
 
@@ -1040,7 +1041,7 @@ const ProjectFinancialStructureCard = ({
         <Button
           onClick={() => importFileInputRef.current?.click()}
           loading={importing}
-          disabled={!canManageProject}
+          disabled={!canCreateFinancialStructure}
         >
           导入财务结构
         </Button>
@@ -1055,7 +1056,7 @@ const ProjectFinancialStructureCard = ({
       <Button
         type="primary"
         onClick={() => openFinancialStructureModal(null)}
-        disabled={!canManageProject}
+        disabled={!canCreateFinancialStructure}
       >
         {financialStructure ? "更新财务结构" : "新增财务结构"}
       </Button>
@@ -1292,6 +1293,7 @@ const ProjectFinancialStructureCard = ({
             dataSource={previewRows}
             size="small"
             tableLayout="fixed"
+            styles={{ content: { borderRadius: 0 } }}
             style={{ width: "100%", borderRadius: 0 }}
           />
         </ProjectDetailTitledTableCard>
@@ -1335,6 +1337,8 @@ const ProjectFinancialStructureCard = ({
           > thead
           > tr:first-child
           > *:first-child {
+          border-start-start-radius: 0px;
+          border-start-end-radius: 0px;
         }
         .financial-structure-preview-table.ant-table-wrapper
           .ant-table-container
@@ -1342,6 +1346,16 @@ const ProjectFinancialStructureCard = ({
           > thead
           > tr:first-child
           > *:last-child {
+          border-start-start-radius: 0px;
+          border-start-end-radius: 0px;
+        }
+        .financial-structure-preview-table.ant-table-wrapper
+          .ant-table-container
+          table
+          > tbody
+          > tr:last-child
+          > td {
+          border-bottom: none !important;
         }
       `}</style>
 

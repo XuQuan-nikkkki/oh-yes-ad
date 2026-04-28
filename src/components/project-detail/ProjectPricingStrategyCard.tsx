@@ -150,9 +150,7 @@ const ProjectPricingStrategyCard = ({
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
   const canCreateQuoteReference =
-    roleCodes.includes("ADMIN") ||
-    roleCodes.includes("HR") ||
-    roleCodes.includes("FINANCE");
+    roleCodes.includes("ADMIN") || roleCodes.includes("FINANCE");
 
   const fetchPricingStrategy = useCallback(async () => {
     if (!projectId || !latestCostEstimation?.id) {

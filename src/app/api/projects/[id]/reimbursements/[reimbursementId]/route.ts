@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
-import { requireProjectWritePermission } from "@/lib/api-permissions";
+import { requireFinanceOrAdminPermission } from "@/lib/api-permissions";
 
 type RouteContext = {
   params: Promise<{ id: string; reimbursementId: string }>;
@@ -63,7 +63,7 @@ const serializeReimbursement = <
 });
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
-  const denied = await requireProjectWritePermission();
+  const denied = await requireFinanceOrAdminPermission();
   if (denied) return denied;
 
   const { id: projectId, reimbursementId } = await context.params;
@@ -94,15 +94,13 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       select: { id: true },
     }),
     prisma.projectFinancialStructure.findFirst({
-      where: { projectId },
-      select: {
-        id: true,
+      where: {
+        projectId,
         executionCostItems: {
-          where: { costTypeOptionId: categoryOptionId },
-          select: { id: true },
-          take: 1,
+          some: { costTypeOptionId: categoryOptionId },
         },
       },
+      select: { id: true },
     }),
   ]);
 
@@ -112,7 +110,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   if (!employee) {
     return new Response("Applicant not found", { status: 404 });
   }
-  if (!validCategory?.executionCostItems?.length) {
+  if (!validCategory) {
     return new Response("Invalid reimbursement category for this project", {
       status: 400,
     });
@@ -133,7 +131,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(_req: NextRequest, context: RouteContext) {
-  const denied = await requireProjectWritePermission();
+  const denied = await requireFinanceOrAdminPermission();
   if (denied) return denied;
 
   const { id: projectId, reimbursementId } = await context.params;

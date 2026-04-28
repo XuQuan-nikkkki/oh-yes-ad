@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
-import { requireProjectWritePermission } from "@/lib/api-permissions";
+import { requireFinanceOrAdminPermission } from "@/lib/api-permissions";
 import { prisma } from "@/lib/prisma";
 
 type CostItemInput = {
@@ -157,7 +157,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const denied = await requireProjectWritePermission();
+  const denied = await requireFinanceOrAdminPermission();
   if (denied) return denied;
 
   const body = await sanitizeRequestBody(req);

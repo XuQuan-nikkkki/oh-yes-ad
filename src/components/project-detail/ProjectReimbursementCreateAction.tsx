@@ -6,6 +6,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import ProjectReimbursementFormModal, {
   type ProjectReimbursementFormValues,
 } from "@/components/project-detail/ProjectReimbursementFormModal";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 
 type EmployeeOption = {
   id: string;
@@ -42,7 +43,6 @@ const ProjectReimbursementCreateAction = ({
   projectId,
   projectName,
   employees,
-  canManageProject = false,
   onCreated,
   buttonType = "primary",
 }: Props) => {
@@ -54,6 +54,10 @@ const ProjectReimbursementCreateAction = ({
   const [resolvedEmployees, setResolvedEmployees] = useState<EmployeeOption[]>(
     () => (employees ?? []).filter((item) => item?.id && item?.name),
   );
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const roleCodes = getRoleCodesFromUser(currentUser);
+  const canCreateReimbursement =
+    roleCodes.includes("ADMIN") || roleCodes.includes("FINANCE");
 
   const mergedEmployees = useMemo(() => {
     if (resolvedEmployees.length > 0) return resolvedEmployees;
@@ -135,11 +139,11 @@ const ProjectReimbursementCreateAction = ({
   }, [categoryOptions.length, projectId]);
 
   const openModal = useCallback(() => {
-    if (!canManageProject) return;
+    if (!canCreateReimbursement) return;
     setOpen(true);
     void ensureEmployeesLoaded();
     void ensureCategoryOptionsLoaded();
-  }, [canManageProject, ensureCategoryOptionsLoaded, ensureEmployeesLoaded]);
+  }, [canCreateReimbursement, ensureCategoryOptionsLoaded, ensureEmployeesLoaded]);
 
   const closeModal = useCallback(() => {
     setOpen(false);
@@ -155,7 +159,8 @@ const ProjectReimbursementCreateAction = ({
           body: JSON.stringify(values),
         });
         if (!res.ok) {
-          notifyError("新增报销失败");
+          const errorText = (await res.text()) || "新增报销失败";
+          notifyError(errorText);
           return;
         }
         notifySuccess("新增报销成功");
@@ -181,7 +186,7 @@ const ProjectReimbursementCreateAction = ({
       <Button
         type={buttonType}
         icon={<PlusOutlined />}
-        disabled={!canManageProject}
+        disabled={!canCreateReimbursement}
         onClick={openModal}
       >
         新增报销

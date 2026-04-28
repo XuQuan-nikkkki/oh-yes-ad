@@ -50,7 +50,7 @@ export default function ProjectPayablePlanSnapshot({
       : 0;
 
   return (
-    <ProCard split="horizontal" bordered>
+    <ProCard split="horizontal" style={{ borderTop: "1px solid #F0F0F0" }}>
       <ProCard split="vertical">
         <StatisticCard
           style={{ background: "var(--ant-colorFillAlter, #fafafa)" }}
@@ -149,7 +149,7 @@ export default function ProjectPayablePlanSnapshot({
           </span>
         </div>
       </ProCard>
-      <ProCard split="vertical" bordered>
+      <ProCard split="vertical" style={{ borderBottom: "1px solid #F0F0F0"}}>
         <ProCard>
           <div
             style={{

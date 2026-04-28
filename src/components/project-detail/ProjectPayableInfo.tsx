@@ -8,14 +8,7 @@ import {
   useImperativeHandle,
   forwardRef,
 } from "react";
-import {
-  Button,
-  Card,
-  Empty,
-  message,
-  Popconfirm,
-  Space,
-} from "antd";
+import { Button, Card, Empty, message, Popconfirm, Space } from "antd";
 import ProjectPayableNodeTable, {
   type ProjectPayableNodeRow,
 } from "@/components/project-detail/ProjectPayableNodeTable";
@@ -117,7 +110,8 @@ type PayablePlan = {
 };
 
 const toYuanNumber = (value: unknown) => {
-  const num = typeof value === "number" ? value : Number(String(value ?? "").trim());
+  const num =
+    typeof value === "number" ? value : Number(String(value ?? "").trim());
   return Number.isFinite(num) ? num : 0;
 };
 
@@ -839,6 +833,7 @@ const ProjectPayableInfo = forwardRef<
                 <Card
                   key={plan.id}
                   style={{ marginBottom: index === plans.length - 1 ? 0 : 24 }}
+                  styles={{ body: { padding: "0px 0px 10px" } }}
                   type="inner"
                   title={`付款计划-${index + 1}`}
                   extra={
@@ -902,7 +897,9 @@ const ProjectPayableInfo = forwardRef<
                 >
                   <ProjectPayablePlanSnapshot
                     vendorName={
-                      contract?.vendor?.fullName || contract?.vendor?.name || "-"
+                      contract?.vendor?.fullName ||
+                      contract?.vendor?.name ||
+                      "-"
                     }
                     contractAmount={toYuanNumber(
                       contract?.contractAmount ?? plan.contractAmount,
