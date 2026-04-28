@@ -849,6 +849,7 @@ model ProjectMilestone {
   endAt          DateTime?
   datePrecision  MilestoneDatePrecision @default(DATE)
   location       String?
+  detail         String?
   methodOptionId String?
   methodOption   SelectOption?          @relation("ProjectMilestoneMethod", fields: [methodOptionId], references: [id])
 

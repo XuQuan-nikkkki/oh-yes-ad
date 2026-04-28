@@ -124,6 +124,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
       endAt: datePayload.endAt,
       datePrecision: datePayload.datePrecision,
       location: body.location ?? null,
+      detail: body.detail ?? null,
       methodOptionId,
       internalParticipants: {
         connect: internalParticipantIds.map((id) => ({ id })),

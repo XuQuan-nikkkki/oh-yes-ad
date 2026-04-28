@@ -142,6 +142,7 @@ export type Project = {
     datePrecision?: "DATE" | "DATETIME" | null;
     date?: string | null;
     location?: string | null;
+    detail?: string | null;
     method?: string | null;
     methodOption?: {
       id?: string;

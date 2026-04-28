@@ -7,7 +7,7 @@ type Props = {
 };
 
 const ProTableHeaderTitle = ({ children }: Props) => {
-  return <h3 style={{ margin: 0 }}>{children}</h3>;
+  return <h3 style={{ margin: 0, fontSize: 18 }}>{children}</h3>;
 };
 
 export default ProTableHeaderTitle;

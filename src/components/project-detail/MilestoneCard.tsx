@@ -33,6 +33,7 @@ export type MilestoneCardRow = {
     color?: string | null;
   } | null;
   date?: string | null;
+  detail?: string | null;
   clientParticipants?: MilestoneClientParticipant[];
   internalParticipants?: MilestoneParticipant[];
   vendorParticipants?: MilestoneParticipant[];
@@ -188,6 +189,13 @@ const MilestoneCard = ({ milestone, height }: Props) => {
             <div style={{ fontSize: 12 }}>
               <div style={participantTitleStyle}>供应商：</div>
               <div>{renderPeople(milestone.vendorParticipants)}</div>
+            </div>
+          ) : null}
+
+          {milestone.detail?.trim() ? (
+            <div style={{ fontSize: 12, marginTop: 10 }}>
+              <div style={participantTitleStyle}>详情：</div>
+              <div>{milestone.detail}</div>
             </div>
           ) : null}
         </div>

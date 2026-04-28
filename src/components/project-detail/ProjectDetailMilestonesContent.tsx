@@ -17,6 +17,7 @@ const ProjectDetailMilestonesContent = ({ milestones = [] }: Props) => {
         type: milestone.type ?? null,
         typeOption: milestone.typeOption ?? null,
         date: milestone.date ?? milestone.startAt ?? milestone.endAt ?? null,
+        detail: milestone.detail ?? null,
         clientParticipants: milestone.clientParticipants ?? [],
         internalParticipants: milestone.internalParticipants ?? [],
         vendorParticipants: milestone.vendorParticipants ?? [],

@@ -20,6 +20,7 @@ export type ProjectMilestoneRow = {
   datePrecision?: "DATE" | "DATETIME" | null;
   date?: string | null;
   location?: string | null;
+  detail?: string | null;
   method?: string | null;
   methodOption?: NullableSelectOptionValue;
   project?: { id: string; name: string; client?: { id: string; name: string } | null } | null;

@@ -98,7 +98,7 @@ const upsertSelectOption = async (field: string, value: unknown) => {
 const includeDetailBase = {
   typeOption: { select: { id: true, value: true, color: true } },
   methodOption: { select: { id: true, value: true, color: true } },
-  project: { select: { id: true, name: true } },
+  project: { select: { id: true, name: true, client: { select: { id: true, name: true } } } },
   internalParticipants: {
     select: {
       id: true,
@@ -315,6 +315,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         }
       : {}),
     ...(body.location !== undefined ? { location: body.location ?? null } : {}),
+    ...(body.detail !== undefined ? { detail: body.detail ?? null } : {}),
     ...(body.method !== undefined ? { methodOptionId } : {}),
     ...(body.projectId !== undefined ? { projectId: body.projectId } : {}),
     ...(internalParticipantIds

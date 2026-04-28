@@ -20,6 +20,7 @@ export type ProjectMilestoneFormPayload = {
   endAt?: string | null;
   datePrecision?: "DATE" | "DATETIME";
   location?: string;
+  detail?: string;
   method?: SelectOptionSelectorValue;
   internalParticipantIds: string[];
   clientParticipantIds: string[];
@@ -35,6 +36,7 @@ type FormValues = {
   startAt?: dayjs.Dayjs;
   endAt?: dayjs.Dayjs;
   location?: string;
+  detail?: string;
   method?: SelectOptionSelectorValue;
   internalParticipantIds: string[];
   clientParticipantIds: string[];
@@ -174,6 +176,7 @@ const ProjectMilestoneForm = ({
             endAt: toPayloadDate(end),
             datePrecision: values.includeTime ? "DATETIME" : "DATE",
             location: values.location,
+            detail: values.detail,
             method: values.method,
             internalParticipantIds: values.internalParticipantIds ?? [],
             clientParticipantIds: values.clientParticipantIds ?? [],
@@ -207,6 +210,7 @@ const ProjectMilestoneForm = ({
           startAt: startRaw ? dayjs(startRaw) : undefined,
           endAt: endRaw ? dayjs(endRaw) : undefined,
           location: initialValues?.location ?? undefined,
+          detail: initialValues?.detail ?? undefined,
           method: initialValues?.method ?? undefined,
           internalParticipantIds:
             initialValues?.internalParticipants?.map((item) => item.id) ?? [],
@@ -289,6 +293,10 @@ const ProjectMilestoneForm = ({
           <Input />
         </Form.Item>
 
+        <Form.Item label="详情" name="detail">
+          <Input.TextArea rows={2} allowClear />
+        </Form.Item>
+
         <Form.Item label="时间类型" style={{ marginBottom: 24 }}>
           <Space style={{ paddingTop: 4 }}>
             <Form.Item name="includeTime" valuePropName="checked" noStyle>
@@ -367,6 +375,7 @@ const ProjectMilestoneForm = ({
             );
           }}
         </Form.Item>
+
       </StepsForm.StepForm>
 
       <StepsForm.StepForm title="参与人员">

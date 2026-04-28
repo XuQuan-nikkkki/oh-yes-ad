@@ -147,13 +147,20 @@ export async function POST(req: NextRequest) {
       endAt: datePayload.endAt,
       datePrecision: datePayload.datePrecision,
       location: body.location ?? null,
+      detail: body.detail ?? null,
       methodOptionId,
       projectId: body.projectId,
     },
     include: {
       typeOption: { select: { id: true, value: true, color: true } },
       methodOption: { select: { id: true, value: true, color: true } },
-      project: { select: { id: true, name: true } },
+      project: {
+        select: {
+          id: true,
+          name: true,
+          client: { select: { id: true, name: true } },
+        },
+      },
       internalParticipants: { select: { id: true, name: true } },
       vendorParticipants: { select: { id: true, name: true } },
       clientParticipants: { select: { id: true, name: true } },

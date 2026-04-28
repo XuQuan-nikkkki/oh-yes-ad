@@ -59,6 +59,7 @@ type MilestoneDetail = {
   type?: string | null;
   date?: string | null;
   location?: string | null;
+  detail?: string | null;
   methodOption?: NullableSelectOptionValue;
   method?: string | null;
   project?: { id: string; name: string } | null;
@@ -201,6 +202,7 @@ const mapStoreMilestoneToDetail = (
   type: row.type ?? null,
   date: row.date ?? null,
   location: row.location ?? null,
+  detail: row.detail ?? null,
   methodOption: row.methodOption ?? null,
   method: row.method ?? null,
   project: row.project
@@ -643,6 +645,9 @@ export default function Page() {
             </Descriptions.Item>
             <Descriptions.Item label="地点">
               {data.location ?? "-"}
+            </Descriptions.Item>
+            <Descriptions.Item label="详情">
+              {data.detail ?? "-"}
             </Descriptions.Item>
           </Descriptions>
         ) : null}

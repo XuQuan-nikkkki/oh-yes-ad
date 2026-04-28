@@ -138,6 +138,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
           }
         : {}),
       location: body.location ?? null,
+      detail: body.detail ?? null,
       methodOptionId,
       internalParticipants: {
         set: internalParticipantIds.map((id) => ({ id })),

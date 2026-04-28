@@ -471,6 +471,7 @@ export async function GET(req: Request) {
           endAt: true,
           datePrecision: true,
           location: true,
+          detail: true,
           methodOption: {
             select: {
               value: true,
