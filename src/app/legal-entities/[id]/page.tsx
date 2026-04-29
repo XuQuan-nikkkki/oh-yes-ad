@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button, Card, Descriptions, Space, Table, Tag, message } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { PlusOutlined, WalletOutlined } from "@ant-design/icons";
 import { useParams, useRouter } from "next/navigation";
 import DetailPageContainer from "@/components/DetailPageContainer";
 import TableActions from "@/components/TableActions";
@@ -18,6 +18,10 @@ type BankAccount = {
   bankBranch: string;
   accountNumber: string;
   isActive: boolean;
+  balanceRecords?: Array<{
+    balance: number | string;
+    snapshotAt: string;
+  }>;
 };
 
 type LegalEntityDetail = {
@@ -110,7 +114,7 @@ const LegalEntityDetailPage = () => {
           <Descriptions.Item label="税号">{data?.taxNumber ?? "-"}</Descriptions.Item>
           <Descriptions.Item label="地址">{data?.address ?? "-"}</Descriptions.Item>
           <Descriptions.Item label="状态">
-            {data ? <Tag color={data.isActive ? "green" : "default"}>{data.isActive ? "启用" : "停用"}</Tag> : "-"}
+            {data ? <Tag color={data.isActive ? "green" : "red"}>{data.isActive ? "启用" : "停用"}</Tag> : "-"}
           </Descriptions.Item>
         </Descriptions>
       </Card>
@@ -143,10 +147,24 @@ const LegalEntityDetailPage = () => {
             { title: "开户支行", dataIndex: "bankBranch" },
             { title: "银行卡号", dataIndex: "accountNumber" },
             {
+              title: "当前金额",
+              key: "currentBalance",
+              render: (_value: unknown, record: BankAccount) => {
+                const latest = record.balanceRecords?.[0];
+                if (!latest) return "-";
+                const amount = Number(latest.balance);
+                if (!Number.isFinite(amount)) return "-";
+                return `¥${amount.toLocaleString("zh-CN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}`;
+              },
+            },
+            {
               title: "状态",
               dataIndex: "isActive",
               render: (value: boolean) => (
-                <Tag color={value ? "green" : "default"}>{value ? "启用" : "停用"}</Tag>
+                <Tag color={value ? "green" : "red"}>{value ? "启用" : "停用"}</Tag>
               ),
             },
             {
@@ -157,6 +175,7 @@ const LegalEntityDetailPage = () => {
                 <Space size={4} wrap={false}>
                   <Button
                     type="link"
+                    icon={<WalletOutlined />}
                     disabled={!canManageCrm}
                     onClick={() => {
                       setCurrentBankAccount(record);

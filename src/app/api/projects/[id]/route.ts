@@ -605,6 +605,12 @@ export async function GET(req: Request) {
               providentFund: true,
               workstationCost: true,
               utilityCost: true,
+              functionOption: {
+                select: {
+                  value: true,
+                  color: true,
+                },
+              },
             },
           },
         },

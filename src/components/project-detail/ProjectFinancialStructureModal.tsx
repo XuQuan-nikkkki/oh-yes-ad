@@ -65,6 +65,7 @@ type ExecutionCostItemFormRow = {
 };
 
 type FormValues = {
+  contractAmountTaxIncluded?: number;
   hasOutsource?: boolean;
   laborCost?: number;
   rentCost?: number;
@@ -505,6 +506,7 @@ const ProjectFinancialStructureModal = ({
         importedOutsourceAmount > 0;
 
       return {
+        contractAmountTaxIncluded: contractAmount,
         hasOutsource:
           hasImportedOutsource || (estimation?.outsourceItems?.length ?? 0) > 0,
         laborCost:
@@ -559,6 +561,7 @@ const ProjectFinancialStructureModal = ({
       importedOutsourceAmount > 0;
 
     return {
+      contractAmountTaxIncluded: contractAmount,
       hasOutsource: hasImportedOutsource || (estimation?.outsourceItems?.length ?? 0) > 0,
       outsourceItems: hasImportedOutsource
         ? [{ type: "", amount: importedOutsourceAmount }]
@@ -756,6 +759,9 @@ const ProjectFinancialStructureModal = ({
             return false;
           }
 
+          const contractAmountTaxIncluded = roundMoney(
+            values.contractAmountTaxIncluded,
+          );
           const laborCost = roundMoney(values.laborCost);
           const rentCost = roundMoney(values.rentCost);
           const middleOfficeCost = roundMoney(values.middleOfficeCost);
@@ -793,7 +799,9 @@ const ProjectFinancialStructureModal = ({
             executionCostItems.reduce((sum, item) => sum + toMoney(item.budgetAmount), 0),
           );
           const agencyFeeRate = roundMoney(values.agencyFeeRate);
-          const agencyFeeAmount = roundMoney((contractAmount * agencyFeeRate) / 100);
+          const agencyFeeAmount = roundMoney(
+            (contractAmountTaxIncluded * agencyFeeRate) / 100,
+          );
           const totalCost = roundMoney(
             laborCost +
               rentCost +
@@ -816,7 +824,7 @@ const ProjectFinancialStructureModal = ({
                 body: JSON.stringify({
                   projectId,
                   ...(estimation?.id ? { estimationId: estimation.id } : {}),
-                  contractAmountTaxIncluded: contractAmount,
+                  contractAmountTaxIncluded,
                   laborCost,
                   rentCost,
                   middleOfficeCost,
@@ -863,11 +871,16 @@ const ProjectFinancialStructureModal = ({
         }}
       >
         <StepsForm.StepForm title="基础信息">
-          <Form.Item label="合同金额(含税)">
-            <Input
-              value={contractAmount > 0 ? contractAmount.toLocaleString("zh-CN") : "无"}
-              readOnly
-              disabled
+          <Form.Item
+            label="合同金额(含税)"
+            name="contractAmountTaxIncluded"
+            rules={[{ required: true, message: "请输入合同金额(含税)" }]}
+          >
+            <InputNumber
+              min={0}
+              precision={2}
+              style={{ width: "100%" }}
+              placeholder="请输入合同金额(含税)"
             />
           </Form.Item>
 
@@ -889,8 +902,12 @@ const ProjectFinancialStructureModal = ({
 
           <Form.Item noStyle shouldUpdate>
             {({ getFieldValue }) => {
+              const contractAmountTaxIncluded = toMoney(
+                getFieldValue("contractAmountTaxIncluded"),
+              );
               const agencyFeeAmount = roundMoney(
-                (contractAmount * toMoney(getFieldValue("agencyFeeRate"))) / 100,
+                (contractAmountTaxIncluded * toMoney(getFieldValue("agencyFeeRate"))) /
+                  100,
               );
               return (
                 <Form.Item label="中介费">
@@ -1081,6 +1098,9 @@ const ProjectFinancialStructureModal = ({
             shouldUpdate
           >
             {({ getFieldValue }) => {
+              const contractAmountTaxIncluded = toMoney(
+                getFieldValue("contractAmountTaxIncluded"),
+              );
               const outsourceTotal = getProjectOutsourceTotal(
                 getFieldValue("outsourceItems") as
                   | Array<{ type?: string; amount?: number }>
@@ -1090,7 +1110,10 @@ const ProjectFinancialStructureModal = ({
                   toMoney(getFieldValue("laborCost")) +
                   toMoney(getFieldValue("rentCost")) +
                   toMoney(getFieldValue("middleOfficeCost")) +
-                  roundMoney((contractAmount * toMoney(getFieldValue("agencyFeeRate"))) / 100) +
+                  roundMoney(
+                    (contractAmountTaxIncluded * toMoney(getFieldValue("agencyFeeRate"))) /
+                      100,
+                  ) +
                   outsourceTotal +
                   ((getFieldValue("executionCostItems") as ExecutionCostItemFormRow[]) ?? []).reduce(
                     (sum, item) => sum + toMoney(item.budgetAmount),

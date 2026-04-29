@@ -40,16 +40,13 @@ const BankAccountFormModal = ({
       bankName: initialValues?.bankName ?? "",
       bankBranch: initialValues?.bankBranch ?? "",
       accountNumber: initialValues?.accountNumber ?? "",
-      isActive: initialValues?.isActive ?? false,
+      isActive: initialValues?.isActive ?? true,
     }),
     [initialValues, legalEntityId],
   );
 
   useEffect(() => {
-    if (!open) {
-      form.resetFields();
-      return;
-    }
+    if (!open) return;
     form.setFieldsValue(normalized);
   }, [form, normalized, open]);
 

@@ -20,6 +20,7 @@ type BankAccountOption = {
   id: string;
   accountNumber: string;
   legalEntityId: string;
+  isActive: boolean;
   legalEntity?: {
     id: string;
     name: string;
@@ -75,7 +76,11 @@ const CompanyAccountBalancesPage = () => {
       const bankAccountsData = (await bankAccountsRes.json()) as BankAccountOption[];
       const legalEntitiesData = (await legalEntitiesRes.json()) as LegalEntity[];
       setRows(Array.isArray(balancesData) ? balancesData : []);
-      setBankAccountOptions(Array.isArray(bankAccountsData) ? bankAccountsData : []);
+      setBankAccountOptions(
+        Array.isArray(bankAccountsData)
+          ? bankAccountsData.filter((item) => item.isActive)
+          : [],
+      );
       setLegalEntityOptions(Array.isArray(legalEntitiesData) ? legalEntitiesData : []);
     } catch (error) {
       console.error("获取账户余额失败", error);
@@ -171,6 +176,15 @@ const CompanyAccountBalancesPage = () => {
     const value = Number(row.balance);
     return Number.isFinite(value) ? sum + value : sum;
   }, 0);
+  const latestSnapshotAt =
+    rows.length > 0
+      ? rows.reduce((latest, row) => {
+          if (!latest) return row.snapshotAt;
+          return new Date(row.snapshotAt).getTime() > new Date(latest).getTime()
+            ? row.snapshotAt
+            : latest;
+        }, "" as string)
+      : "";
 
   return (
     <>
@@ -192,29 +206,51 @@ const CompanyAccountBalancesPage = () => {
           </Button>
         }
       >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            background: "#fafafa",
+            border: "1px solid #f0f0f0",
+            borderRadius: 8,
+            marginBottom: 12,
+          }}
+        >
+          <div style={{ padding: "16px 20px", borderRight: "1px solid #f0f0f0" }}>
+            <div style={{ fontSize: 12, color: "rgba(0,0,0,0.65)", marginBottom: 6 }}>
+              账户数
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#1677ff" }}>
+              {rows.length}
+            </div>
+          </div>
+          <div style={{ padding: "16px 20px", borderRight: "1px solid #f0f0f0" }}>
+            <div style={{ fontSize: 12, color: "rgba(0,0,0,0.65)", marginBottom: 6 }}>
+              账户余额合计
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#389e0d" }}>
+              {`¥${totalBalance.toLocaleString("zh-CN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}`}
+            </div>
+          </div>
+          <div style={{ padding: "16px 20px" }}>
+            <div style={{ fontSize: 12, color: "rgba(0,0,0,0.65)", marginBottom: 6 }}>
+              最近更新时间
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "rgba(0,0,0,0.88)" }}>
+              {latestSnapshotAt ? formatDate(latestSnapshotAt) : "-"}
+            </div>
+          </div>
+        </div>
         <Table
           rowKey="id"
           tableLayout="auto"
           loading={loading}
           dataSource={rows}
           columns={columns}
-          pagination={{ pageSize: 20 }}
-          summary={() => (
-            <Table.Summary.Row>
-              <Table.Summary.Cell index={0} colSpan={3}>
-                <strong>合计</strong>
-              </Table.Summary.Cell>
-              <Table.Summary.Cell index={3}>
-                <strong>
-                  {totalBalance.toLocaleString("zh-CN", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </strong>
-              </Table.Summary.Cell>
-              <Table.Summary.Cell index={4} colSpan={3} />
-            </Table.Summary.Row>
-          )}
+          pagination={false}
         />
       </Card>
 

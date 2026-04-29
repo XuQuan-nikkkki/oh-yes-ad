@@ -17,6 +17,16 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     where: { id },
     include: {
       bankAccounts: {
+        include: {
+          balanceRecords: {
+            select: {
+              balance: true,
+              snapshotAt: true,
+            },
+            orderBy: [{ snapshotAt: "desc" }, { createdAt: "desc" }],
+            take: 1,
+          },
+        },
         orderBy: { createdAt: "desc" },
       },
       _count: {

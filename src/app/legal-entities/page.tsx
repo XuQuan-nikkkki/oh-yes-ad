@@ -87,7 +87,7 @@ const LegalEntitiesPage = () => {
       title: "状态",
       dataIndex: "isActive",
       render: (value: boolean) => (
-        <Tag color={value ? "green" : "default"}>{value ? "启用" : "停用"}</Tag>
+        <Tag color={value ? "green" : "red"}>{value ? "启用" : "停用"}</Tag>
       ),
     },
     {

@@ -101,11 +101,7 @@ const BankAccountBalanceRecordModal = ({
       open={open}
       onCancel={onCancel}
       afterOpenChange={(nextOpen) => {
-        if (!nextOpen) {
-          form.resetFields();
-          setSelectedLegalEntityId("");
-          return;
-        }
+        if (!nextOpen) return;
         form.setFieldsValue(formInitialValues);
         setSelectedLegalEntityId(String(formInitialValues.legalEntityId ?? ""));
       }}
@@ -161,6 +157,13 @@ const BankAccountBalanceRecordModal = ({
                 const nextValue = String(value ?? "");
                 setSelectedLegalEntityId(nextValue);
                 if (!lockBankAccount) {
+                  const matchedOptions = bankAccountOptions.filter(
+                    (item) => item.legalEntityId === nextValue,
+                  );
+                  if (matchedOptions.length === 1) {
+                    form.setFieldValue("bankAccountId", matchedOptions[0].id);
+                    return;
+                  }
                   form.setFieldValue("bankAccountId", undefined);
                 }
               }}

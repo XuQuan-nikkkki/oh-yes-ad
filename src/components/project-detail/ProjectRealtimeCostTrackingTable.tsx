@@ -114,6 +114,26 @@ type BreakdownRow = {
   isCostDetail?: boolean;
 };
 
+type LaborDetailRow = {
+  key: string;
+  indexLabel: string;
+  name: string;
+  functionName: string;
+  functionColor?: string;
+  workdays: number;
+  cost: number;
+};
+
+type ActualWorkEntryEmployeeWithFunction = NonNullable<
+  NonNullable<Project["actualWorkEntries"]>[number]["employee"]
+> & {
+  function?: string | null;
+  functionOption?: {
+    value?: string | null;
+    color?: string | null;
+  } | null;
+};
+
 const toNumber = (value: unknown) => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -187,6 +207,12 @@ const getBonusRatio = (level: string) => {
   if (level === "A") return 0.15;
   if (level === "B") return 0.1;
   return 0.08;
+};
+
+const getProjectLevelTagColor = (level: string) => {
+  if (level === "A") return "#52C41A";
+  if (level === "B") return "#1677FF";
+  return "#FA8C16";
 };
 
 const ProjectRealtimeCostTrackingTable = ({
@@ -399,6 +425,36 @@ const ProjectRealtimeCostTrackingTable = ({
   const expectedWorkdays = latestInitiation?.estimatedDuration ?? 0;
 
   const laborBreakdown = useMemo(() => {
+    const getFunctionMeta = (candidate: {
+      function?: string | null;
+      functionOption?: { value?: string | null; color?: string | null } | null;
+    }) => ({
+      functionName:
+        candidate.functionOption?.value?.trim() ||
+        candidate.function?.trim() ||
+        "未设置",
+      functionColor: candidate.functionOption?.color?.trim() || undefined,
+    });
+    const memberFunctionById = new Map<string, { functionName: string; functionColor?: string }>();
+    const memberFunctionByName = new Map<string, { functionName: string; functionColor?: string }>();
+    for (const member of members) {
+      const meta = getFunctionMeta(member);
+      memberFunctionById.set(member.id, meta);
+      const memberName = member.name?.trim();
+      if (memberName) memberFunctionByName.set(memberName, meta);
+    }
+    for (const initiationMember of latestInitiation?.members ?? []) {
+      const employee = initiationMember.employee;
+      if (!employee?.id) continue;
+      const meta = getFunctionMeta(employee);
+      if (!memberFunctionById.has(employee.id)) {
+        memberFunctionById.set(employee.id, meta);
+      }
+      const employeeName = employee.name?.trim();
+      if (employeeName && !memberFunctionByName.has(employeeName)) {
+        memberFunctionByName.set(employeeName, meta);
+      }
+    }
     const groupedHours = new Map<string, number>();
     actualWorkEntries.forEach((entry) => {
       const employeeId = entry.employee?.id ?? "";
@@ -413,11 +469,19 @@ const ProjectRealtimeCostTrackingTable = ({
 
     const byEmployee = new Map<
       string,
-      { name: string; workdays: number; cost: number }
+      {
+        name: string;
+        functionName: string;
+        functionColor?: string;
+        workdays: number;
+        cost: number;
+      }
     >();
 
     actualWorkEntries.forEach((entry) => {
-      const employee = entry.employee;
+      const employee = entry.employee as
+        | ActualWorkEntryEmployeeWithFunction
+        | undefined;
       if (!employee?.id) return;
       const monthlyHumanCost =
         toNumber(employee.salary) +
@@ -429,13 +493,26 @@ const ProjectRealtimeCostTrackingTable = ({
         hours;
       const entryWorkdays = calcEntryWorkdays(hours, total);
       const cost = (monthlyHumanCost / monthlyWorkdayBase) * entryWorkdays;
+      const employeeName = employee.name?.trim() || "";
+      const functionMeta =
+        memberFunctionById.get(employee.id) ||
+        (employeeName ? memberFunctionByName.get(employeeName) : undefined);
+      const fallbackFunctionName =
+        employee.functionOption?.value?.trim() ||
+        employee.function?.trim() ||
+        "未设置";
+      const fallbackFunctionColor = employee.functionOption?.color?.trim() || undefined;
       const prev = byEmployee.get(employee.id) ?? {
         name: employee.name ?? "-",
+        functionName: functionMeta?.functionName ?? fallbackFunctionName,
+        functionColor: functionMeta?.functionColor ?? fallbackFunctionColor,
         workdays: 0,
         cost: 0,
       };
       byEmployee.set(employee.id, {
         name: prev.name,
+        functionName: prev.functionName,
+        functionColor: prev.functionColor,
         workdays: prev.workdays + entryWorkdays,
         cost: prev.cost + cost,
       });
@@ -445,37 +522,53 @@ const ProjectRealtimeCostTrackingTable = ({
       ([employeeId, value]) => ({
         employeeId,
         name: value.name,
+        functionName: value.functionName,
+        functionColor: value.functionColor,
         workdays: value.workdays,
         cost: value.cost,
       }),
     );
-    rows.sort((a, b) => b.workdays - a.workdays);
+    rows.sort((a, b) => {
+      const functionCompare = (a.functionName || "").localeCompare(
+        b.functionName || "",
+        "zh-CN",
+      );
+      if (functionCompare !== 0) return functionCompare;
+      return (a.name || "").localeCompare(b.name || "", "zh-CN");
+    });
     return rows;
-  }, [actualWorkEntries, monthlyWorkdayBase]);
+  }, [actualWorkEntries, latestInitiation?.members, members, monthlyWorkdayBase]);
 
   const actualLaborCost = useMemo(
     () => laborBreakdown.reduce((sum, item) => sum + toNumber(item.cost), 0),
     [laborBreakdown],
   );
-  const laborDetailData = useMemo(() => {
+  const laborDetailRows = useMemo<LaborDetailRow[]>(() => {
     const totalWorkdays = laborBreakdown.reduce(
       (sum, item) => sum + toNumber(item.workdays),
       0,
     );
-    const memberCount = laborBreakdown.filter(
-      (item) => toNumber(item.workdays) > 0,
-    ).length;
-    return {
-      memberCount,
-      totalWorkdays,
-      items: laborBreakdown.map((item) => ({
-        key: item.employeeId,
-        text: `${item.name}：登记工时 ${formatAmount(
-          toNumber(item.workdays),
-        )}d，折合 ${formatYuanText(toNumber(item.cost))} 元`,
-      })),
-      totalCostText: `共计 ${formatYuanText(actualLaborCost)} 元`,
-    };
+    const detailRows = laborBreakdown.map((item, index) => ({
+      key: item.employeeId,
+      indexLabel: String(index + 1),
+      name: item.name,
+      functionName: item.functionName,
+      functionColor: item.functionColor,
+      workdays: toNumber(item.workdays),
+      cost: toNumber(item.cost),
+    }));
+    return [
+      ...detailRows,
+      {
+        key: "summary",
+        indexLabel: "汇总",
+        name: "",
+        functionName: "",
+        functionColor: undefined,
+        workdays: totalWorkdays,
+        cost: actualLaborCost,
+      },
+    ];
   }, [actualLaborCost, laborBreakdown]);
 
   const rentCost = useMemo(
@@ -1238,7 +1331,10 @@ const ProjectRealtimeCostTrackingTable = ({
           }
           if (row.key === "projectBonus") {
             return (
-              <Tag color="default" style={{ marginInlineEnd: 0 }}>
+              <Tag
+                color={getProjectLevelTagColor(projectLevel)}
+                style={{ marginInlineEnd: 0 }}
+              >
                 {value}
               </Tag>
             );
@@ -1269,7 +1365,13 @@ const ProjectRealtimeCostTrackingTable = ({
         },
       },
     ];
-  }, [income, executionCost, executionCostBudget, canViewLaborDetail]);
+  }, [
+    income,
+    executionCost,
+    executionCostBudget,
+    canViewLaborDetail,
+    projectLevel,
+  ]);
 
   const overdueDays = Math.max(0, elapsedWorkdays - expectedWorkdays);
   const projectProfitRatio = income > 0 ? projectProfit / income : null;
@@ -1468,27 +1570,59 @@ const ProjectRealtimeCostTrackingTable = ({
         style={{ maxWidth: "80vh", top: 24 }}
         styles={{
           body: {
-            maxHeight: "60vh",
+            maxHeight: "80vh",
             overflowY: "auto",
           },
         }}
       >
-        <div
-          style={{ color: "rgba(0,0,0,0.88)", fontSize: 16, lineHeight: 1.7 }}
-        >
-          <div>
-            项目共有 {laborDetailData.memberCount} 个成员投入{" "}
-            {formatAmount(laborDetailData.totalWorkdays)} 个工作日：
-          </div>
-          <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
-            {laborDetailData.items.map((item) => (
-              <li key={item.key}>{item.text}</li>
-            ))}
-          </ul>
-          <div style={{ marginTop: 8, fontWeight: 700 }}>
-            {laborDetailData.totalCostText}
-          </div>
-        </div>
+        <Table<LaborDetailRow>
+          rowKey="key"
+          size="small"
+          pagination={false}
+          dataSource={laborDetailRows}
+          rowClassName={(record) =>
+            record.key === "summary" ? "labor-detail-summary-row" : ""
+          }
+          columns={[
+            {
+              title: "序号",
+              dataIndex: "indexLabel",
+              key: "indexLabel",
+              width: 80,
+              align: "center",
+            },
+            {
+              title: "姓名",
+              dataIndex: "name",
+              key: "name",
+            },
+            {
+              title: "职能",
+              dataIndex: "functionName",
+              key: "functionName",
+              render: (value: string, record: LaborDetailRow) =>
+                record.key === "summary" ? (
+                  ""
+                ) : (
+                  <Tag color={record.functionColor}>{value}</Tag>
+                ),
+            },
+            {
+              title: "工时（天）",
+              dataIndex: "workdays",
+              key: "workdays",
+              align: "right",
+              render: (value: number) => `${formatAmount(value)}d`,
+            },
+            {
+              title: "折合人力成本",
+              dataIndex: "cost",
+              key: "cost",
+              align: "right",
+              render: (value: number) => `¥${formatYuanText(value)}`,
+            },
+          ]}
+        />
       </Modal>
       <div style={{ overflowX: "auto" }}>
         <div style={{ width: "100%" }}>
@@ -1513,6 +1647,9 @@ const ProjectRealtimeCostTrackingTable = ({
             .realtime-cost-table-wrap .ant-table-content,
             .realtime-cost-table-wrap .ant-table-content > table {
               width: 100% !important;
+            }
+            .labor-detail-summary-row > td {
+              font-weight: 700;
             }
           `}</style>
           <ProjectDetailTableContainer marginBottom={12}>

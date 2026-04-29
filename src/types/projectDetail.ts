@@ -219,6 +219,12 @@ export type Project = {
       providentFund?: string | number | null;
       workstationCost?: string | number | null;
       utilityCost?: string | number | null;
+      function?: string | null;
+      functionOption?: {
+        id?: string;
+        value?: string | null;
+        color?: string | null;
+      } | null;
     };
   }[];
   documents?: {
