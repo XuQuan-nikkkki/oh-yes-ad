@@ -32,6 +32,7 @@ type PayableProjectSectionProps = {
     color?: string | null;
   }>;
   canManageProject?: boolean;
+  canManageProjectStatus?: boolean;
   onCreateNode: (
     planId: string,
     values: ProjectPayableNodeFormValues,
@@ -65,6 +66,7 @@ export default function PayableProjectSection({
   rows,
   stageOptions,
   canManageProject = true,
+  canManageProjectStatus = canManageProject,
   onCreateNode,
   onDeleteNode,
   onEditNode,
@@ -130,7 +132,7 @@ export default function PayableProjectSection({
           </AppLink>
           <SelectOptionQuickEditTag
             field="project.status"
-            disabled={!canManageProject}
+            disabled={!canManageProjectStatus}
             option={
               projectStatusOption?.value
                 ? {

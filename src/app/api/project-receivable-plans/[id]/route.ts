@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
-import { requireProjectWritePermission } from "@/lib/api-permissions";
+import { requireReceivablePayableWritePermission } from "@/lib/api-permissions";
 import { toNullableInt } from "@/lib/toNullableInt";
 
 const prisma = new PrismaClient({
@@ -84,7 +84,7 @@ const toNullableBool = (value: unknown) => {
 };
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
-  const denied = await requireProjectWritePermission();
+  const denied = await requireReceivablePayableWritePermission();
   if (denied) return denied;
 
   const { id } = await context.params;
@@ -222,7 +222,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(_req: NextRequest, context: RouteContext) {
-  const denied = await requireProjectWritePermission();
+  const denied = await requireReceivablePayableWritePermission();
   if (denied) return denied;
 
   const { id } = await context.params;

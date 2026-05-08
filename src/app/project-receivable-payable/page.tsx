@@ -65,6 +65,18 @@ const ALL_PROJECTS_QUERY_KEY = JSON.stringify({
   clientId: "",
   vendorId: "",
 });
+const RECEIVABLE_PAYABLE_VIEW_ROLE_CODES = [
+  "ADMIN",
+  "PROJECT_MANAGER",
+  "HR",
+  "FINANCE",
+] as const;
+const RECEIVABLE_PAYABLE_WRITE_ROLE_CODES = [
+  "ADMIN",
+  "PROJECT_MANAGER",
+  "FINANCE",
+] as const;
+const PROJECT_WRITE_ROLE_CODES = ["ADMIN", "PROJECT_MANAGER"] as const;
 
 const toTabKey = (value: string | null): TabKey => {
   if (!value) return "summary";
@@ -434,6 +446,21 @@ function ProjectReceivablePayablePageContent() {
     () => getRoleCodesFromUser(currentUser),
     [currentUser],
   );
+  const hasViewAccess = roleCodes.some((roleCode) =>
+    RECEIVABLE_PAYABLE_VIEW_ROLE_CODES.includes(
+      roleCode as (typeof RECEIVABLE_PAYABLE_VIEW_ROLE_CODES)[number],
+    ),
+  );
+  const hasWriteAccess = roleCodes.some((roleCode) =>
+    RECEIVABLE_PAYABLE_WRITE_ROLE_CODES.includes(
+      roleCode as (typeof RECEIVABLE_PAYABLE_WRITE_ROLE_CODES)[number],
+    ),
+  );
+  const hasProjectWriteAccess = roleCodes.some((roleCode) =>
+    PROJECT_WRITE_ROLE_CODES.includes(
+      roleCode as (typeof PROJECT_WRITE_ROLE_CODES)[number],
+    ),
+  );
   const projectsById = useProjectsStore((state) => state.byId);
   const projectIds = useProjectsStore(
     (state) => state.queryState[ALL_PROJECTS_QUERY_KEY]?.ids,
@@ -444,7 +471,6 @@ function ProjectReceivablePayablePageContent() {
   const fetchProjectsFromStore = useProjectsStore(
     (state) => state.fetchProjects,
   );
-  const isAdmin = roleCodes.includes("ADMIN");
   const [activeTab, setActiveTab] = useState<TabKey>("summary");
   const [receivableViewMode, setReceivableViewMode] =
     useState<ReceivableViewMode>("card");
@@ -559,18 +585,18 @@ function ProjectReceivablePayablePageContent() {
   }, []);
 
   useEffect(() => {
-    if (!authLoaded || !isAdmin) return;
+    if (!authLoaded || !hasViewAccess) return;
     void fetchData();
-  }, [authLoaded, isAdmin, fetchData]);
+  }, [authLoaded, fetchData, hasViewAccess]);
 
   useEffect(() => {
-    if (!authLoaded || !isAdmin) return;
+    if (!authLoaded || !hasViewAccess) return;
     if (projectsLoaded) return;
     void fetchProjectsFromStore();
-  }, [authLoaded, fetchProjectsFromStore, isAdmin, projectsLoaded]);
+  }, [authLoaded, fetchProjectsFromStore, hasViewAccess, projectsLoaded]);
 
   useEffect(() => {
-    if (!authLoaded || !isAdmin) return;
+    if (!authLoaded || !hasViewAccess) return;
     (async () => {
       try {
         const response = await fetch("/api/legal-entities", {
@@ -586,9 +612,9 @@ function ProjectReceivablePayablePageContent() {
         setLegalEntities([]);
       }
     })();
-  }, [authLoaded, isAdmin]);
+  }, [authLoaded, hasViewAccess]);
   useEffect(() => {
-    if (!authLoaded || !isAdmin) return;
+    if (!authLoaded || !hasViewAccess) return;
     (async () => {
       try {
         const response = await fetch("/api/vendors", {
@@ -614,12 +640,12 @@ function ProjectReceivablePayablePageContent() {
         setVendors([]);
       }
     })();
-  }, [authLoaded, isAdmin]);
+  }, [authLoaded, hasViewAccess]);
 
   useEffect(() => {
-    if (!authLoaded || !isAdmin) return;
+    if (!authLoaded || !hasViewAccess) return;
     void fetchEmployeesFromStore({ full: true });
-  }, [authLoaded, fetchEmployeesFromStore, isAdmin]);
+  }, [authLoaded, fetchEmployeesFromStore, hasViewAccess]);
 
   const fetchStageOptions = useCallback(async () => {
     try {
@@ -639,9 +665,9 @@ function ProjectReceivablePayablePageContent() {
   }, []);
 
   useEffect(() => {
-    if (!authLoaded || !isAdmin) return;
+    if (!authLoaded || !hasViewAccess) return;
     void fetchStageOptions();
-  }, [authLoaded, fetchStageOptions, isAdmin]);
+  }, [authLoaded, fetchStageOptions, hasViewAccess]);
   const fetchPayableStageOptions = useCallback(async () => {
     try {
       const query = new URLSearchParams({ field: "projectPayable.stage" });
@@ -660,9 +686,9 @@ function ProjectReceivablePayablePageContent() {
   }, []);
 
   useEffect(() => {
-    if (!authLoaded || !isAdmin) return;
+    if (!authLoaded || !hasViewAccess) return;
     void fetchPayableStageOptions();
-  }, [authLoaded, fetchPayableStageOptions, isAdmin]);
+  }, [authLoaded, fetchPayableStageOptions, hasViewAccess]);
 
   const resolveStageOptionId = useCallback(
     async (stage: ProjectReceivableNodeFormValues["stage"]) => {
@@ -2825,8 +2851,6 @@ function ProjectReceivablePayablePageContent() {
     [fetchData],
   );
 
-  const showDevelopmentPlaceholder = authLoaded && !isAdmin;
-
   const tabList = useMemo(
     () => [
       { key: "summary", tab: "收付款汇总" },
@@ -3173,6 +3197,10 @@ function ProjectReceivablePayablePageContent() {
     }
   }, [filteredSummaryProjectRows, receivableNodeTableRows, payableNodeTableRows, messageApi]);
 
+  if (authLoaded && !hasViewAccess) {
+    return <PageAccessResult type="forbidden" />;
+  }
+
   return (
     <Card
       title="收付款明细"
@@ -3195,9 +3223,7 @@ function ProjectReceivablePayablePageContent() {
       }}
     >
       {contextHolder}
-      {showDevelopmentPlaceholder ? (
-        <PageAccessResult type="developing" />
-      ) : activeTab === "summary" ? (
+      {activeTab === "summary" ? (
         <>
           <div
             style={{
@@ -3539,7 +3565,8 @@ function ProjectReceivablePayablePageContent() {
                         ? stageOptions
                         : Array.from(project.stageOptionMap.values())
                     }
-                    canManageProject
+                    canManageProject={hasWriteAccess}
+                    canManageProjectStatus={hasProjectWriteAccess}
                     onCreateNode={handleCreateReceivableNode}
                     onDeleteNode={handleDeleteReceivableNode}
                     onEditNode={handleEditReceivableNode}
@@ -3757,7 +3784,8 @@ function ProjectReceivablePayablePageContent() {
                         ? payableStageOptions
                         : Array.from(project.stageOptionMap.values())
                     }
-                    canManageProject
+                    canManageProject={hasWriteAccess}
+                    canManageProjectStatus={hasProjectWriteAccess}
                     onCreateNode={handleCreatePayableNode}
                     onDeleteNode={handleDeletePayableNode}
                     onEditNode={handleEditPayableNode}

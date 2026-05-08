@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
-import { requireProjectWritePermission } from "@/lib/api-permissions";
+import { requireReceivablePayableWritePermission } from "@/lib/api-permissions";
 import { toNullableInt } from "@/lib/toNullableInt";
 
 const prisma = new PrismaClient({
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const denied = await requireProjectWritePermission();
+  const denied = await requireReceivablePayableWritePermission();
   if (denied) return denied;
 
   const body = await sanitizeRequestBody(req);

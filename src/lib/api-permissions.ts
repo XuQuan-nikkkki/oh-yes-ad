@@ -65,6 +65,22 @@ export const requireProjectWritePermission = async () => {
   return null;
 };
 
+export const requireReceivablePayableWritePermission = async () => {
+  const { employee, response } = await requireAuthenticatedEmployee();
+  if (response) return response;
+
+  const roleCodes = extractRoleCodes(employee);
+  if (
+    !roleCodes.includes("ADMIN") &&
+    !roleCodes.includes("PROJECT_MANAGER") &&
+    !roleCodes.includes("FINANCE")
+  ) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  return null;
+};
+
 export const requireFinanceOrAdminPermission = async () => {
   const { employee, response } = await requireAuthenticatedEmployee();
   if (response) return response;

@@ -33,6 +33,7 @@ type ReceivableProjectSectionProps = {
     color?: string | null;
   }>;
   canManageProject?: boolean;
+  canManageProjectStatus?: boolean;
   onCreateNode: (
     planId: string,
     values: ProjectReceivableNodeFormValues,
@@ -73,6 +74,7 @@ export default function ReceivableProjectSection({
   rows,
   stageOptions,
   canManageProject = true,
+  canManageProjectStatus = canManageProject,
   onCreateNode,
   onDeleteNode,
   onEditNode,
@@ -140,7 +142,7 @@ export default function ReceivableProjectSection({
           </AppLink>
           <SelectOptionQuickEditTag
             field="project.status"
-            disabled={!canManageProject}
+            disabled={!canManageProjectStatus}
             option={
               projectStatusOption?.value
                 ? {
