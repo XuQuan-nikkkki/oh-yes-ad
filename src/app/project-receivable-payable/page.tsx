@@ -20,10 +20,12 @@ import {
   Space,
   Tag,
   Table,
+  Tooltip,
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { StatisticCard } from "@ant-design/pro-components";
+import { ArrowDownOutlined, ArrowUpOutlined } from "@ant-design/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AppLink from "@/components/AppLink";
 import PageAccessResult from "@/components/PageAccessResult";
@@ -137,6 +139,7 @@ type ReceivablePlan = {
   } | null;
   clientContract?: {
     id: string;
+    contractAmount?: number | string | null;
     legalEntity?: {
       id: string;
       name?: string | null;
@@ -229,6 +232,8 @@ type PayablePlan = {
   project?: { id: string; name: string } | null;
   vendorContract?: {
     id: string;
+    serviceContent?: string | null;
+    contractAmount?: number | string | null;
     legalEntity?: {
       id: string;
       name?: string | null;
@@ -258,9 +263,18 @@ type SummaryProjectRow = {
   ownerEmployees: Array<{ id: string; name: string }>;
   hasReceivablePlan: boolean;
   hasPayablePlan: boolean;
+  receivableContractAmountTotal: number;
   receivableExpectedAmountTotal: number;
   receivableActualAmountTotal: number;
   receivableProgressPercent: number;
+  payableContractAmountTotal: number;
+  payableContractDetails: Array<{
+    key: string;
+    supplierName: string;
+    planContent: string;
+    contractAmount: number;
+    expectedAmountTotal: number;
+  }>;
   payableExpectedAmountTotal: number;
   payableActualAmountTotal: number;
   payableProgressPercent: number;
@@ -348,6 +362,37 @@ const formatAmountWithYen = (value?: number | string | null) => {
     typeof value === "number" ? value : Number(String(value).trim());
   if (!Number.isFinite(numberValue)) return "-";
   return `¥${numberValue.toLocaleString("zh-CN")}`;
+};
+const toMoneyNumber = (value?: number | string | null) => {
+  if (value === null || value === undefined || value === "") return 0;
+  const numberValue =
+    typeof value === "number" ? value : Number(String(value).trim());
+  return Number.isFinite(numberValue) ? numberValue : 0;
+};
+const toCentAmount = (value: number) => Math.round(value * 100);
+const renderAmountTrend = ({
+  amount,
+  baselineAmount,
+  tooltipTitle,
+}: {
+  amount: number;
+  baselineAmount: number;
+  tooltipTitle: React.ReactNode;
+}) => {
+  const diff = amount - baselineAmount;
+  const diffInCents = toCentAmount(diff);
+  if (diffInCents === 0) return <>{formatAmountWithYen(amount)}</>;
+
+  const isIncrease = diffInCents > 0;
+  const Icon = isIncrease ? ArrowUpOutlined : ArrowDownOutlined;
+  return (
+    <Space size={4} wrap={false}>
+      <span>{formatAmountWithYen(amount)}</span>
+      <Tooltip title={tooltipTitle}>
+        <Icon style={{ color: isIncrease ? "#52c41a" : "#ff4d4f" }} />
+      </Tooltip>
+    </Space>
+  );
 };
 
 const formatDate = (value?: string | null) =>
@@ -2096,6 +2141,9 @@ function ProjectReceivablePayablePageContent() {
         (sum, node) => sum + Number(node.expectedAmountTaxIncluded ?? 0),
         0,
       );
+      const receivableContractAmount = toMoneyNumber(
+        plan.clientContract?.contractAmount ?? plan.contractAmount,
+      );
       const receivableActualAmountTotal = (plan.nodes ?? []).reduce(
         (sum, node) =>
           sum +
@@ -2108,6 +2156,7 @@ function ProjectReceivablePayablePageContent() {
       );
       if (existing) {
         existing.hasReceivablePlan = true;
+        existing.receivableContractAmountTotal += receivableContractAmount;
         existing.receivableExpectedAmountTotal += receivableExpectedAmountTotal;
         existing.receivableActualAmountTotal += receivableActualAmountTotal;
         if (
@@ -2148,9 +2197,12 @@ function ProjectReceivablePayablePageContent() {
           : [],
         hasReceivablePlan: true,
         hasPayablePlan: false,
+        receivableContractAmountTotal: receivableContractAmount,
         receivableExpectedAmountTotal,
         receivableActualAmountTotal,
         receivableProgressPercent: 0,
+        payableContractAmountTotal: 0,
+        payableContractDetails: [],
         payableExpectedAmountTotal: 0,
         payableActualAmountTotal: 0,
         payableProgressPercent: 0,
@@ -2172,6 +2224,19 @@ function ProjectReceivablePayablePageContent() {
         (sum, node) => sum + Number(node.expectedAmountTaxIncluded ?? 0),
         0,
       );
+      const payableContractAmount = toMoneyNumber(
+        plan.vendorContract?.contractAmount ?? plan.contractAmount,
+      );
+      const payableContractDetail = {
+        key: plan.id,
+        supplierName:
+          plan.vendorContract?.vendor?.name?.trim() ||
+          plan.vendorContract?.vendor?.fullName?.trim() ||
+          "-",
+        planContent: plan.vendorContract?.serviceContent?.trim() || "-",
+        contractAmount: payableContractAmount,
+        expectedAmountTotal: payableExpectedAmountTotal,
+      };
       const payableActualAmountTotal = (plan.nodes ?? []).reduce(
         (sum, node) =>
           sum +
@@ -2184,6 +2249,8 @@ function ProjectReceivablePayablePageContent() {
       );
       if (existing) {
         existing.hasPayablePlan = true;
+        existing.payableContractAmountTotal += payableContractAmount;
+        existing.payableContractDetails.push(payableContractDetail);
         existing.payableExpectedAmountTotal += payableExpectedAmountTotal;
         existing.payableActualAmountTotal += payableActualAmountTotal;
         if (
@@ -2224,9 +2291,12 @@ function ProjectReceivablePayablePageContent() {
           : [],
         hasReceivablePlan: false,
         hasPayablePlan: true,
+        receivableContractAmountTotal: 0,
         receivableExpectedAmountTotal: 0,
         receivableActualAmountTotal: 0,
         receivableProgressPercent: 0,
+        payableContractAmountTotal: payableContractAmount,
+        payableContractDetails: [payableContractDetail],
         payableExpectedAmountTotal,
         payableActualAmountTotal,
         payableProgressPercent: 0,
@@ -2305,8 +2375,26 @@ function ProjectReceivablePayablePageContent() {
             title: "预收金额总计",
             dataIndex: "receivableExpectedAmountTotal",
             width: 110,
-            render: (value, row) =>
-              row.hasReceivablePlan ? formatAmountWithYen(value) : "-",
+            render: (value, row) => {
+              if (!row.hasReceivablePlan) return "-";
+              const amount = toMoneyNumber(value as number);
+              const contractAmount = row.receivableContractAmountTotal;
+              const diff = amount - contractAmount;
+              return renderAmountTrend({
+                amount,
+                baselineAmount: contractAmount,
+                tooltipTitle: (
+                  <div style={{ whiteSpace: "nowrap" }}>
+                    <div>合同金额：{formatAmount(contractAmount)}</div>
+                    <div>预收金额合计：{formatAmount(amount)}</div>
+                    <div>
+                      {diff >= 0 ? "增加" : "减少"}：
+                      {formatAmount(Math.abs(diff))}
+                    </div>
+                  </div>
+                ),
+              });
+            },
           },
           {
             title: "实收金额总计",
@@ -2340,8 +2428,56 @@ function ProjectReceivablePayablePageContent() {
             title: "预付金额总计",
             dataIndex: "payableExpectedAmountTotal",
             width: 110,
-            render: (value, row) =>
-              row.hasPayablePlan ? formatAmountWithYen(value) : "-",
+            render: (value, row) => {
+              if (!row.hasPayablePlan) return "-";
+              const amount = toMoneyNumber(value as number);
+              const contractAmount = row.payableContractAmountTotal;
+              let changedDetailCount = 0;
+              const payableContractDetails = row.payableContractDetails.map(
+                (detail) => {
+                  const diff = detail.expectedAmountTotal - detail.contractAmount;
+                  const hasDiff = toCentAmount(diff) !== 0;
+                  const changedIndex = hasDiff ? changedDetailCount : -1;
+                  if (hasDiff) changedDetailCount += 1;
+                  return { ...detail, diff, hasDiff, changedIndex };
+                },
+              );
+              return renderAmountTrend({
+                amount,
+                baselineAmount: contractAmount,
+                tooltipTitle: (
+                  <div style={{ minWidth: 220 }}>
+                    {payableContractDetails.map((detail, index) => {
+                      return (
+                        <div
+                          key={detail.key}
+                          style={
+                            detail.hasDiff && detail.changedIndex > 0
+                              ? { marginTop: 16 }
+                              : index > 0
+                                ? { marginTop: 8 }
+                                : undefined
+                          }
+                        >
+                          <div>
+                            {detail.supplierName}-{detail.planContent}
+                          </div>
+                          <div>合同金额：{formatAmount(detail.contractAmount)}</div>
+                          <div>
+                            预付金额合计：
+                            {formatAmount(detail.expectedAmountTotal)}
+                          </div>
+                          <div>
+                            {detail.diff >= 0 ? "增加" : "减少"}：
+                            {formatAmount(Math.abs(detail.diff))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ),
+              });
+            },
           },
           {
             title: "实付金额总计",
