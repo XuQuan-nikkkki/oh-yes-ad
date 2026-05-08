@@ -174,7 +174,7 @@ const ProjectPayablePlanModal = ({
                 >
                   <InputNumber
                     min={0}
-                    precision={0}
+                    precision={2}
                     style={{ width: "100%" }}
                   />
                 </Form.Item>

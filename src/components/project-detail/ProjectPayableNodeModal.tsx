@@ -1,7 +1,7 @@
 "use client";
 
 import type { Dayjs } from "dayjs";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   Col,
   DatePicker,
@@ -27,9 +27,9 @@ export type ProjectPayableNodeFormValues = {
   stage: SelectOptionSelectorValue;
   paymentCondition: string;
   expectedAmountTaxIncluded: number;
-  expectedDate: Dayjs;
+  expectedDate?: Dayjs | null;
   actualAmountTaxIncluded?: number;
-  actualDate?: Dayjs;
+  actualDate?: Dayjs | null;
   remark?: string;
   remarkNeedsAttention?: boolean;
 };
@@ -60,6 +60,7 @@ const ProjectPayableNodeModal = ({
   title = "新增付款节点",
 }: Props) => {
   const [form] = Form.useForm<ProjectPayableNodeFormValues>();
+  const hasInitializedOpenFormRef = useRef(false);
   const showActualFields =
     actualAmountTaxIncluded !== null &&
     actualAmountTaxIncluded !== undefined &&
@@ -67,7 +68,12 @@ const ProjectPayableNodeModal = ({
     actualDate !== undefined;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      hasInitializedOpenFormRef.current = false;
+      return;
+    }
+    if (hasInitializedOpenFormRef.current) return;
+    hasInitializedOpenFormRef.current = true;
     form.resetFields();
     form.setFieldsValue({
       remarkNeedsAttention: false,
@@ -142,15 +148,11 @@ const ProjectPayableNodeModal = ({
               name="expectedAmountTaxIncluded"
               rules={[{ required: true, message: "请输入预付金额" }]}
             >
-              <InputNumber precision={0} style={{ width: "100%" }} />
+              <InputNumber precision={2} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item
-              label="预付日期"
-              name="expectedDate"
-              rules={[{ required: true, message: "请选择预付日期" }]}
-            >
+            <Form.Item label="预付日期" name="expectedDate">
               <DatePicker style={{ width: "100%" }} />
             </Form.Item>
           </Col>
@@ -163,15 +165,11 @@ const ProjectPayableNodeModal = ({
                 name="actualAmountTaxIncluded"
                 rules={[{ required: true, message: "请输入实付金额" }]}
               >
-                <InputNumber precision={0} style={{ width: "100%" }} />
+                <InputNumber precision={2} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item
-                label="实付日期"
-                name="actualDate"
-                rules={[{ required: true, message: "请选择实付日期" }]}
-              >
+              <Form.Item label="实付日期" name="actualDate">
                 <DatePicker style={{ width: "100%" }} />
               </Form.Item>
             </Col>

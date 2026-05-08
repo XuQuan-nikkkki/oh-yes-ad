@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireReceivablePayableWritePermission } from "@/lib/api-permissions";
-import { toNullableInt } from "@/lib/toNullableInt";
+import { toNullableDecimal } from "@/lib/toNullableDecimal";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -126,7 +126,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       ? String(body.ownerEmployeeId ?? "").trim()
       : existing.ownerEmployeeId;
   const contractAmount =
-    "contractAmount" in body ? toNullableInt(body.contractAmount) : existing.contractAmount;
+    "contractAmount" in body ? toNullableDecimal(body.contractAmount) : existing.contractAmount;
   const hasVendorPayment =
     "hasVendorPayment" in body
       ? toNullableBool(body.hasVendorPayment)
@@ -141,8 +141,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       status: 400,
     });
   }
-  if (contractAmount === null || contractAmount < 0) {
-    return new Response("contractAmount must be a non-negative integer", {
+  if (contractAmount === null || Number(contractAmount) < 0) {
+    return new Response("contractAmount must be a non-negative number", {
       status: 400,
     });
   }

@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireReceivablePayableWritePermission } from "@/lib/api-permissions";
+import { toNullableDecimal } from "@/lib/toNullableDecimal";
 import { toNullableInt } from "@/lib/toNullableInt";
 
 const prisma = new PrismaClient({
@@ -70,15 +71,12 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const expectedAmountTaxIncluded = toNullableInt(body.expectedAmountTaxIncluded);
+  const expectedAmountTaxIncluded = toNullableDecimal(body.expectedAmountTaxIncluded);
   const expectedDate = toNullableDate(body.expectedDate);
   const remarkNeedsAttentionRaw = toNullableBool(body.remarkNeedsAttention);
 
-  if (
-    expectedAmountTaxIncluded === null ||
-    expectedDate === null
-  ) {
-    return new Response("expectedAmountTaxIncluded and expectedDate are invalid", {
+  if (expectedAmountTaxIncluded === null) {
+    return new Response("expectedAmountTaxIncluded is invalid", {
       status: 400,
     });
   }

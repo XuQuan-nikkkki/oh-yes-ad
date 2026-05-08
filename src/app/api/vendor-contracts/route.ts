@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
-import { toNullableInt } from "@/lib/toNullableInt";
+import { toNullableDecimal } from "@/lib/toNullableDecimal";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
   const projectId = String(body.projectId ?? "").trim();
   const vendorId = String(body.vendorId ?? "").trim();
   const legalEntityId = String(body.legalEntityId ?? "").trim();
-  const contractAmount = toNullableInt(body.contractAmount);
+  const contractAmount = toNullableDecimal(body.contractAmount);
 
   if (!projectId || !vendorId || !legalEntityId || contractAmount === null || contractAmount < 0) {
     return new Response(

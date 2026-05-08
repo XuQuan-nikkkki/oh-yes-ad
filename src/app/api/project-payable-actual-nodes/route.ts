@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireReceivablePayableWritePermission } from "@/lib/api-permissions";
-import { toNullableInt } from "@/lib/toNullableInt";
+import { toNullableDecimal } from "@/lib/toNullableDecimal";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -58,15 +58,12 @@ export async function POST(req: NextRequest) {
     return new Response("payableNodeId is required", { status: 400 });
   }
 
-  const actualAmountTaxIncluded = toNullableInt(body.actualAmountTaxIncluded);
+  const actualAmountTaxIncluded = toNullableDecimal(body.actualAmountTaxIncluded);
   const actualDate = toNullableDate(body.actualDate);
   const remarkNeedsAttentionRaw = toNullableBool(body.remarkNeedsAttention);
 
   if (actualAmountTaxIncluded === null) {
     return new Response("actualAmountTaxIncluded is invalid", { status: 400 });
-  }
-  if (actualDate === null) {
-    return new Response("actualDate is invalid", { status: 400 });
   }
 
   const remarkNeedsAttention = remarkNeedsAttentionRaw ?? false;

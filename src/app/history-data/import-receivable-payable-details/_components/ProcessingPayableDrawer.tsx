@@ -650,7 +650,7 @@ export default function ProcessingPayableDrawer({
             values.contractAmount === undefined ||
             values.contractAmount === null
               ? null
-              : Math.trunc(values.contractAmount),
+              : values.contractAmount,
         }),
       });
       if (!contractRes.ok) {
@@ -677,7 +677,7 @@ export default function ProcessingPayableDrawer({
             values.contractAmount === undefined ||
             values.contractAmount === null
               ? null
-              : Math.trunc(values.contractAmount),
+              : values.contractAmount,
           hasCustomerCollection: Boolean(values.hasCustomerCollection),
           remark: values.remark?.trim() || null,
           remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
@@ -776,7 +776,7 @@ export default function ProcessingPayableDrawer({
           contractAmount:
             values.contractAmount === undefined || values.contractAmount === null
               ? null
-              : Math.trunc(values.contractAmount),
+              : values.contractAmount,
         }),
       });
       if (!contractRes.ok) {
@@ -796,7 +796,7 @@ export default function ProcessingPayableDrawer({
           contractAmount:
             values.contractAmount === undefined || values.contractAmount === null
               ? null
-              : Math.trunc(values.contractAmount),
+              : values.contractAmount,
           hasCustomerCollection: Boolean(values.hasCustomerCollection),
           remark: values.remark?.trim() || null,
           remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
@@ -835,11 +835,6 @@ export default function ProcessingPayableDrawer({
       const hasActualAmount =
         values.actualAmountTaxIncluded !== undefined &&
         values.actualAmountTaxIncluded !== null;
-      const hasActualDate = Boolean(values.actualDate);
-      if (hasActualAmount !== hasActualDate) {
-        messageApi.error("请同时填写实付金额和实付日期，或同时留空");
-        return;
-      }
 
       setCreatingNode(true);
       try {
@@ -859,7 +854,7 @@ export default function ProcessingPayableDrawer({
             stageOptionId,
             paymentCondition: values.paymentCondition,
             expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
-            expectedDate: values.expectedDate?.toISOString(),
+            expectedDate: values.expectedDate?.toISOString() ?? null,
             remark: values.remark ?? null,
             remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
           }),
@@ -871,7 +866,7 @@ export default function ProcessingPayableDrawer({
           return;
         }
         const createdNode = (await response.json()) as { id?: string };
-        if (hasActualAmount && hasActualDate && createdNode?.id) {
+        if (hasActualAmount && createdNode?.id) {
           const actualRes = await fetch("/api/project-payable-actual-nodes", {
             method: "POST",
             headers: {
@@ -880,7 +875,7 @@ export default function ProcessingPayableDrawer({
             body: JSON.stringify({
               payableNodeId: createdNode.id,
               actualAmountTaxIncluded: values.actualAmountTaxIncluded,
-              actualDate: values.actualDate?.toISOString(),
+              actualDate: values.actualDate?.toISOString() ?? null,
             }),
           });
           if (!actualRes.ok) {
@@ -934,7 +929,7 @@ export default function ProcessingPayableDrawer({
           stageOptionId,
           paymentCondition: values.paymentCondition,
           expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
-          expectedDate: values.expectedDate?.toISOString(),
+          expectedDate: values.expectedDate?.toISOString() ?? null,
           remark: values.remark ?? null,
           remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
         }),
@@ -998,7 +993,7 @@ export default function ProcessingPayableDrawer({
         body: JSON.stringify({
           payableNodeId: row.id,
           actualAmountTaxIncluded: values.actualAmountTaxIncluded,
-          actualDate: values.actualDate?.toISOString(),
+          actualDate: values.actualDate?.toISOString() ?? null,
           remark: values.remark ?? null,
           remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
         }),
@@ -1028,7 +1023,7 @@ export default function ProcessingPayableDrawer({
           },
           body: JSON.stringify({
             actualAmountTaxIncluded: values.actualAmountTaxIncluded,
-            actualDate: values.actualDate?.toISOString(),
+            actualDate: values.actualDate?.toISOString() ?? null,
             remark: values.remark ?? null,
             remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
           }),
@@ -1422,7 +1417,7 @@ export default function ProcessingPayableDrawer({
                     >
                       <InputNumber
                         min={0}
-                        precision={0}
+                        precision={2}
                         style={{ width: "100%" }}
                       />
                     </Form.Item>

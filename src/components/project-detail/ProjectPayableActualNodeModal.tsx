@@ -6,7 +6,7 @@ import { Col, DatePicker, Form, Input, InputNumber, Modal, Row, Space, Switch } 
 
 export type ProjectPayableActualNodeFormValues = {
   actualAmountTaxIncluded: number;
-  actualDate: Dayjs;
+  actualDate?: Dayjs | null;
   remark?: string;
   remarkNeedsAttention?: boolean;
 };
@@ -74,15 +74,11 @@ const ProjectPayableActualNodeModal = ({
               name="actualAmountTaxIncluded"
               rules={[{ required: true, message: "请输入实付金额" }]}
             >
-              <InputNumber precision={0} style={{ width: "100%" }} />
+              <InputNumber precision={2} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item
-              label="实付日期"
-              name="actualDate"
-              rules={[{ required: true, message: "请选择实付日期" }]}
-            >
+            <Form.Item label="实付日期" name="actualDate">
               <DatePicker style={{ width: "100%" }} />
             </Form.Item>
           </Col>

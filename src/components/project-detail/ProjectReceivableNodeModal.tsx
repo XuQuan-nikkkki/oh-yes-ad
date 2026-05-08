@@ -1,7 +1,7 @@
 "use client";
 
 import type { Dayjs } from "dayjs";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   Col,
   DatePicker,
@@ -26,7 +26,7 @@ type StageOption = {
 export type ProjectReceivableNodeFormValues = {
   stage: SelectOptionSelectorValue;
   keyDeliverable: string;
-  expectedAmountTaxIncluded: number;
+  expectedAmountTaxIncluded?: number | null;
   expectedDate?: Dayjs;
   actualAmountTaxIncluded?: number;
   actualDate?: Dayjs;
@@ -45,6 +45,7 @@ type Props = {
   actualAmountTaxIncluded?: number | null;
   actualDate?: Dayjs | null;
   title?: string;
+  isExpectedAmountRequired?: boolean;
 };
 
 const ProjectReceivableNodeModal = ({
@@ -58,8 +59,10 @@ const ProjectReceivableNodeModal = ({
   actualAmountTaxIncluded = null,
   actualDate = null,
   title = "新增收款节点",
+  isExpectedAmountRequired = true,
 }: Props) => {
   const [form] = Form.useForm<ProjectReceivableNodeFormValues>();
+  const hasInitializedOpenFormRef = useRef(false);
   const mergedInitialValues = useMemo<Partial<ProjectReceivableNodeFormValues>>(
     () => ({
       remarkNeedsAttention: false,
@@ -74,7 +77,12 @@ const ProjectReceivableNodeModal = ({
     mergedInitialValues.actualDate !== undefined;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      hasInitializedOpenFormRef.current = false;
+      return;
+    }
+    if (hasInitializedOpenFormRef.current) return;
+    hasInitializedOpenFormRef.current = true;
     form.resetFields();
     form.setFieldsValue(mergedInitialValues);
   }, [form, mergedInitialValues, open]);
@@ -144,9 +152,13 @@ const ProjectReceivableNodeModal = ({
             <Form.Item
               label="预收金额（含税）"
               name="expectedAmountTaxIncluded"
-              rules={[{ required: true, message: "请输入预收金额" }]}
+              rules={
+                isExpectedAmountRequired
+                  ? [{ required: true, message: "请输入预收金额" }]
+                  : undefined
+              }
             >
-              <InputNumber precision={0} style={{ width: "100%" }} />
+              <InputNumber precision={2} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col span={12}>
@@ -162,7 +174,7 @@ const ProjectReceivableNodeModal = ({
                 label="实收金额（含税）"
                 name="actualAmountTaxIncluded"
               >
-                <InputNumber precision={0} style={{ width: "100%" }} />
+                <InputNumber precision={2} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={12}>

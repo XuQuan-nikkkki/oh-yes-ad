@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import { AUTH_SESSION_COOKIE, decodeAuthSession } from "@/lib/auth-session";
+import { toNullableDecimal } from "@/lib/toNullableDecimal";
 import { toNullableInt } from "@/lib/toNullableInt";
 import {
   getProjectOutsourceTotal,
@@ -306,7 +307,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         },
         version: nextVersion,
         estimatedDuration: normalizedEstimatedDuration,
-        contractAmount: toNullableInt(body.contractAmount),
+        contractAmount: toNullableDecimal(body.contractAmount),
         totalLaborCost,
         agencyFeeRate:
           toNullableNumber(body.agencyFeeRate ?? body.agencyFee) ?? 0,

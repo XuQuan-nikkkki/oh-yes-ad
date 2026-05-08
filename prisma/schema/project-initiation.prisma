@@ -10,7 +10,7 @@ model ProjectInitiation {
   version Int
 
   estimatedDuration      Int
-  contractAmount Int?
+  contractAmount Decimal?
 
   agencyFeeRate            Float? @default(0)
 

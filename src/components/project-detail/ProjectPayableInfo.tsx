@@ -539,7 +539,7 @@ const ProjectPayableInfo = forwardRef<
             values.contractAmount === undefined ||
             values.contractAmount === null
               ? null
-              : Math.trunc(values.contractAmount),
+              : values.contractAmount,
         };
 
         const contractRes = await fetch(
@@ -627,7 +627,7 @@ const ProjectPayableInfo = forwardRef<
             stageOptionId,
             paymentCondition: values.paymentCondition,
             expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
-            expectedDate: values.expectedDate?.toISOString(),
+            expectedDate: values.expectedDate?.toISOString() ?? null,
             remark: values.remark ?? null,
             remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
           }),
@@ -659,7 +659,7 @@ const ProjectPayableInfo = forwardRef<
           sortOrder: row.sortOrder,
           paymentCondition: values.paymentCondition,
           expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
-          expectedDate: values.expectedDate?.toISOString(),
+          expectedDate: values.expectedDate?.toISOString() ?? null,
           remark: values.remark?.trim() ? values.remark.trim() : null,
           remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
         };
@@ -703,7 +703,7 @@ const ProjectPayableInfo = forwardRef<
           body: JSON.stringify({
             payableNodeId: row.id,
             actualAmountTaxIncluded: values.actualAmountTaxIncluded,
-            actualDate: values.actualDate?.toISOString(),
+            actualDate: values.actualDate?.toISOString() ?? null,
             remark: values.remark?.trim() ? values.remark.trim() : null,
             remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
           }),
@@ -734,7 +734,7 @@ const ProjectPayableInfo = forwardRef<
             },
             body: JSON.stringify({
               actualAmountTaxIncluded: values.actualAmountTaxIncluded,
-              actualDate: values.actualDate?.toISOString(),
+              actualDate: values.actualDate?.toISOString() ?? null,
               remark: values.remark?.trim() ? values.remark.trim() : null,
               remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
             }),

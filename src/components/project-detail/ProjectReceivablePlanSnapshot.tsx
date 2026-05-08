@@ -86,11 +86,12 @@ export default function ProjectReceivablePlanSnapshot({
                 fontWeight: 600,
               },
             },
-            value:
-              taxAmount === null || taxAmount === undefined
-                ? "-"
-                : toYuanNumber(taxAmount).toLocaleString("zh-CN"),
+            value: taxAmount === null || taxAmount === undefined ? "-" : toYuanNumber(taxAmount),
             suffix: "元",
+            formatter: (value) =>
+              typeof value === "number"
+                ? value.toLocaleString("zh-CN")
+                : String(value ?? "-"),
           }}
         />
         <StatisticCard

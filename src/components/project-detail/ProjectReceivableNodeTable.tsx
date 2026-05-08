@@ -44,7 +44,7 @@ export type ProjectReceivableNodeRow = {
   } | null;
   sortOrder: number;
   keyDeliverable: string;
-  expectedAmountTaxIncluded: number;
+  expectedAmountTaxIncluded: number | null;
   expectedDate: string | null;
   expectedDateChangeCount: number;
   expectedDateHistories?: Array<{
@@ -130,13 +130,21 @@ const getActualAmountSum = (row: ProjectReceivableNodeRow) =>
     return Number.isFinite(value) ? sum + value : sum;
   }, 0);
 
+const toCentAmount = (value: number) => Math.round(value * 100);
+
+const isCollectionAmountMatched = (row: ProjectReceivableNodeRow) => {
+  const expectedAmount = Number(row.expectedAmountTaxIncluded ?? 0);
+  if (expectedAmount <= 0) return false;
+  return toCentAmount(getActualAmountSum(row)) === toCentAmount(expectedAmount);
+};
+
 const getCollectionProgressPercent = (row: ProjectReceivableNodeRow) => {
   const expectedAmount = Number(row.expectedAmountTaxIncluded ?? 0);
   const actualAmount = getActualAmountSum(row);
   if (expectedAmount <= 0) return 0;
   return Math.max(
     0,
-    Math.min(100, Math.round((actualAmount / expectedAmount) * 100)),
+    Math.min(100, (actualAmount / expectedAmount) * 100),
   );
 };
 
@@ -290,6 +298,7 @@ const ProjectReceivableNodeTable = ({
           const actualAmount = getActualAmountSum(row);
           const expectedAmount = Number(row.expectedAmountTaxIncluded ?? 0);
           const percent = getCollectionProgressPercent(row);
+          const isAmountMatched = isCollectionAmountMatched(row);
 
           return (
             <div style={{ minWidth: 140, lineHeight: 1.1 }}>
@@ -305,7 +314,7 @@ const ProjectReceivableNodeTable = ({
                 percent={percent}
                 showInfo={false}
                 size="small"
-                strokeColor={percent === 100 ? "#52c41a" : undefined}
+                strokeColor={isAmountMatched ? "#52c41a" : undefined}
               />
             </div>
           );
@@ -720,7 +729,7 @@ const ProjectReceivableNodeTable = ({
         toolBarRender={false}
         scroll={{ x: "max-content" }}
         rowClassName={(record) =>
-          getCollectionProgressPercent(record) === 100
+          isCollectionAmountMatched(record)
             ? "receivable-node-row-complete"
             : ""
         }

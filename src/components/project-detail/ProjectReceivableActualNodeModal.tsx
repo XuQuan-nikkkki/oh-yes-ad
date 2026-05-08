@@ -16,7 +16,7 @@ import {
 
 export type ProjectReceivableActualNodeFormValues = {
   actualAmountTaxIncluded: number;
-  actualDate: Dayjs;
+  actualDate?: Dayjs | null;
   remark?: string;
   remarkNeedsAttention?: boolean;
 };
@@ -115,7 +115,7 @@ const ProjectReceivableActualNodeModal = ({
               ]}
             >
               <InputNumber
-                precision={0}
+                precision={2}
                 min={0}
                 max={maxAmountTaxIncluded}
                 style={{ width: "100%" }}
@@ -123,11 +123,7 @@ const ProjectReceivableActualNodeModal = ({
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item
-              label="实收日期"
-              name="actualDate"
-              rules={[{ required: true, message: "请选择实收日期" }]}
-            >
+            <Form.Item label="实收日期" name="actualDate">
               <DatePicker style={{ width: "100%" }} />
             </Form.Item>
           </Col>

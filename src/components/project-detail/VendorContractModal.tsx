@@ -186,7 +186,7 @@ const VendorContractModal = ({
         contractAmount:
           values.contractAmount === undefined || values.contractAmount === null
             ? null
-            : Math.trunc(values.contractAmount),
+            : values.contractAmount,
       };
 
       const url = isEdit
@@ -274,7 +274,7 @@ const VendorContractModal = ({
           name="contractAmount"
           rules={[{ required: true, message: "请输入合同金额(含税)" }]}
         >
-          <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+          <InputNumber min={0} precision={2} style={{ width: "100%" }} />
         </Form.Item>
       </Form>
     </Modal>

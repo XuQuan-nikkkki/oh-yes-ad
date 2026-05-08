@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireReceivablePayableWritePermission } from "@/lib/api-permissions";
+import { toNullableDecimal } from "@/lib/toNullableDecimal";
 import { toNullableInt } from "@/lib/toNullableInt";
 
 const prisma = new PrismaClient({
@@ -69,27 +70,12 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const expectedAmountTaxIncluded = toNullableInt(body.expectedAmountTaxIncluded);
+  const expectedAmountTaxIncluded = toNullableDecimal(body.expectedAmountTaxIncluded);
   const expectedDate = toNullableDate(body.expectedDate);
-  const actualAmountTaxIncluded = toNullableInt(body.actualAmountTaxIncluded);
+  const actualAmountTaxIncluded = toNullableDecimal(body.actualAmountTaxIncluded);
   const actualDate = toNullableDate(body.actualDate);
   const remarkNeedsAttentionRaw = toNullableBool(body.remarkNeedsAttention);
 
-  if (
-    expectedAmountTaxIncluded === null
-  ) {
-    return new Response("expectedAmountTaxIncluded is invalid", {
-      status: 400,
-    });
-  }
-  const hasActualAmount = actualAmountTaxIncluded !== null;
-  const hasActualDate = actualDate !== null;
-  if (hasActualAmount !== hasActualDate) {
-    return new Response(
-      "actualAmountTaxIncluded and actualDate must be both provided or both empty",
-      { status: 400 },
-    );
-  }
   const remarkNeedsAttention = remarkNeedsAttentionRaw ?? false;
 
   const [plan, stageOption] = await Promise.all([
@@ -126,7 +112,7 @@ export async function POST(req: NextRequest) {
       include: includeDetail,
     });
 
-    if (actualAmountTaxIncluded !== null && actualDate !== null) {
+    if (actualAmountTaxIncluded !== null) {
       await tx.projectReceivableActualNode.create({
         data: {
           receivableNodeId: node.id,

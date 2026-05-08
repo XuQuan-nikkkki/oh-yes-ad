@@ -475,7 +475,9 @@ const ProjectPayableNodeTable = ({
             ? {
                 actualAmountTaxIncluded:
                   currentCollectRow.expectedAmountTaxIncluded,
-                actualDate: dayjs(currentCollectRow.expectedDate),
+                actualDate: currentCollectRow.expectedDate
+                  ? dayjs(currentCollectRow.expectedDate)
+                  : undefined,
               }
             : undefined
         }
@@ -516,7 +518,9 @@ const ProjectPayableNodeTable = ({
                   undefined,
                 paymentCondition: editingRow.paymentCondition,
                 expectedAmountTaxIncluded: editingRow.expectedAmountTaxIncluded,
-                expectedDate: dayjs(editingRow.expectedDate),
+                expectedDate: editingRow.expectedDate
+                  ? dayjs(editingRow.expectedDate)
+                  : undefined,
                 remark: editingRow.remark ?? undefined,
                 remarkNeedsAttention: editingRow.remarkNeedsAttention,
               }

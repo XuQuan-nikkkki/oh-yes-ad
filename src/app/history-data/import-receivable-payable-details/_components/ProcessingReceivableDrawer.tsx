@@ -656,11 +656,6 @@ export default function ProcessingReceivableDrawer({
       const hasActualAmount =
         values.actualAmountTaxIncluded !== undefined &&
         values.actualAmountTaxIncluded !== null;
-      const hasActualDate = Boolean(values.actualDate);
-      if (hasActualAmount !== hasActualDate) {
-        messageApi.error("请同时填写实收金额和实收日期，或同时留空");
-        return;
-      }
 
       setCreatingNode(true);
       try {
@@ -680,13 +675,11 @@ export default function ProcessingReceivableDrawer({
             stageOptionId,
             keyDeliverable: values.keyDeliverable,
             expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
-            expectedDate: values.expectedDate?.toISOString(),
+            expectedDate: values.expectedDate?.toISOString() ?? null,
             actualAmountTaxIncluded: hasActualAmount
               ? values.actualAmountTaxIncluded
               : undefined,
-            actualDate: hasActualDate
-              ? values.actualDate?.toISOString()
-              : undefined,
+            actualDate: values.actualDate?.toISOString() ?? null,
             remark: values.remark ?? null,
             remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
           }),
@@ -742,7 +735,7 @@ export default function ProcessingReceivableDrawer({
           stageOptionId,
           keyDeliverable: values.keyDeliverable,
           expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
-          expectedDate: values.expectedDate?.toISOString(),
+          expectedDate: values.expectedDate?.toISOString() ?? null,
           remark: values.remark ?? null,
           remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
         }),
@@ -833,7 +826,7 @@ export default function ProcessingReceivableDrawer({
         body: JSON.stringify({
           receivableNodeId: row.id,
           actualAmountTaxIncluded: values.actualAmountTaxIncluded,
-          actualDate: values.actualDate?.toISOString(),
+          actualDate: values.actualDate?.toISOString() ?? null,
           remark: values.remark ?? null,
           remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
         }),
@@ -863,7 +856,7 @@ export default function ProcessingReceivableDrawer({
           },
           body: JSON.stringify({
             actualAmountTaxIncluded: values.actualAmountTaxIncluded,
-            actualDate: values.actualDate?.toISOString(),
+            actualDate: values.actualDate?.toISOString() ?? null,
             remark: values.remark ?? null,
             remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
           }),
@@ -1324,6 +1317,7 @@ export default function ProcessingReceivableDrawer({
           color: item.color ?? undefined,
         }))}
         stageOptionsLoading={loadingStageOptions}
+        isExpectedAmountRequired={false}
         initialValues={
           targetNodeDraft
             ? {

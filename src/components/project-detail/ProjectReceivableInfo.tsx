@@ -608,7 +608,7 @@ const ProjectReceivableInfo = forwardRef<
             stageOptionId,
             keyDeliverable: values.keyDeliverable,
             expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
-            expectedDate: values.expectedDate?.toISOString(),
+            expectedDate: values.expectedDate?.toISOString() ?? null,
             remark: values.remark ?? null,
             remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
           }),
@@ -640,7 +640,7 @@ const ProjectReceivableInfo = forwardRef<
           sortOrder: row.sortOrder,
           keyDeliverable: values.keyDeliverable,
           expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
-          expectedDate: values.expectedDate?.toISOString(),
+          expectedDate: values.expectedDate?.toISOString() ?? null,
           remark: values.remark?.trim() ? values.remark.trim() : null,
           remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
         };
@@ -713,7 +713,7 @@ const ProjectReceivableInfo = forwardRef<
           body: JSON.stringify({
             receivableNodeId: row.id,
             actualAmountTaxIncluded: values.actualAmountTaxIncluded,
-            actualDate: values.actualDate?.toISOString(),
+            actualDate: values.actualDate?.toISOString() ?? null,
             remark: values.remark?.trim() ? values.remark.trim() : null,
             remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
           }),
@@ -744,7 +744,7 @@ const ProjectReceivableInfo = forwardRef<
             },
             body: JSON.stringify({
               actualAmountTaxIncluded: values.actualAmountTaxIncluded,
-              actualDate: values.actualDate?.toISOString(),
+              actualDate: values.actualDate?.toISOString() ?? null,
               remark: values.remark?.trim() ? values.remark.trim() : null,
               remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
             }),

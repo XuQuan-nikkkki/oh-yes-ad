@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
-import { toNullableInt } from "@/lib/toNullableInt";
+import { toNullableDecimal } from "@/lib/toNullableDecimal";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -116,7 +116,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
 
   if ("contractAmount" in body) {
-    const contractAmount = toNullableInt(body.contractAmount);
+    const contractAmount = toNullableDecimal(body.contractAmount);
     if (contractAmount === null || contractAmount < 0) {
       return new Response("contractAmount is invalid", { status: 400 });
     }
@@ -135,7 +135,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         serviceContent: "serviceContent" in body ? toNullableText(body.serviceContent) : undefined,
         contractAmount:
           "contractAmount" in body
-            ? (toNullableInt(body.contractAmount) as number)
+            ? (toNullableDecimal(body.contractAmount) as number)
             : undefined,
       },
       include: includeDetail,

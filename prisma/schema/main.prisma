@@ -436,7 +436,7 @@ model VendorContract {
   legalEntity   LegalEntity @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
 
   serviceContent String?
-  contractAmount Int
+  contractAmount Decimal
 
   payablePlans ProjectPayablePlan[]
 
@@ -466,7 +466,7 @@ model ProjectReceivablePlan {
   ownerEmployeeId String
   ownerEmployee   Employee @relation("ProjectReceivablePlanOwner", fields: [ownerEmployeeId], references: [id], onDelete: Restrict)
 
-  contractAmount       Int
+  contractAmount       Decimal
   hasVendorPayment    Boolean                     @default(false)
   serviceContent       String?
   remark               String?
@@ -498,7 +498,7 @@ model ProjectPayablePlan {
   ownerEmployeeId String
   ownerEmployee   Employee @relation("ProjectPayablePlanOwner", fields: [ownerEmployeeId], references: [id], onDelete: Restrict)
 
-  contractAmount       Int
+  contractAmount       Decimal
   hasCustomerCollection Boolean @default(false)
   remark               String?
   remarkNeedsAttention Boolean @default(false)
@@ -525,7 +525,7 @@ model ProjectReceivableNode {
   sortOrder      Int
   keyDeliverable String
 
-  expectedAmountTaxIncluded Int
+  expectedAmountTaxIncluded Decimal?
   expectedDate              DateTime?
   expectedDateChangeCount   Int      @default(0)
 
@@ -550,8 +550,8 @@ model ProjectReceivableActualNode {
   receivableNodeId String
   receivableNode   ProjectReceivableNode @relation(fields: [receivableNodeId], references: [id], onDelete: Cascade)
 
-  actualAmountTaxIncluded Int
-  actualDate              DateTime
+  actualAmountTaxIncluded Decimal
+  actualDate              DateTime?
   remark                  String?
   remarkNeedsAttention    Boolean  @default(false)
 
@@ -573,8 +573,8 @@ model ProjectPayableNode {
 
   sortOrder                 Int
   paymentCondition          String
-  expectedAmountTaxIncluded Int
-  expectedDate              DateTime
+  expectedAmountTaxIncluded Decimal
+  expectedDate              DateTime?
   remark                    String?
   remarkNeedsAttention      Boolean  @default(false)
 
@@ -595,8 +595,8 @@ model ProjectPayableActualNode {
   payableNodeId String
   payableNode   ProjectPayableNode @relation(fields: [payableNodeId], references: [id], onDelete: Cascade)
 
-  actualAmountTaxIncluded Int
-  actualDate              DateTime
+  actualAmountTaxIncluded Decimal
+  actualDate              DateTime?
   remark                  String?
   remarkNeedsAttention    Boolean  @default(false)
 

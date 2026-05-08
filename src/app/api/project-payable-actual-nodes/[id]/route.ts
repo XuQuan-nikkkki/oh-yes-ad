@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireReceivablePayableWritePermission } from "@/lib/api-permissions";
-import { toNullableInt } from "@/lib/toNullableInt";
+import { toNullableDecimal } from "@/lib/toNullableDecimal";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -56,7 +56,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const patchData: Record<string, unknown> = {};
 
   if ("actualAmountTaxIncluded" in body) {
-    const actualAmountTaxIncluded = toNullableInt(body.actualAmountTaxIncluded);
+    const actualAmountTaxIncluded = toNullableDecimal(body.actualAmountTaxIncluded);
     if (actualAmountTaxIncluded === null) {
       return new Response("actualAmountTaxIncluded is invalid", { status: 400 });
     }
@@ -65,9 +65,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   if ("actualDate" in body) {
     const actualDate = toNullableDate(body.actualDate);
-    if (actualDate === null) {
-      return new Response("actualDate is invalid", { status: 400 });
-    }
     patchData.actualDate = actualDate;
   }
 
