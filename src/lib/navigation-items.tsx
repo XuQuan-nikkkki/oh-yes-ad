@@ -42,6 +42,7 @@ const NAV_ROLE_GROUPS = {
   orgManagement: ["ADMIN", "PROJECT_MANAGER", "HR", "FINANCE"] as const,
   orgManagementWithoutFinance: ["ADMIN", "PROJECT_MANAGER", "HR"] as const,
   legalAndFinance: ["ADMIN", "HR", "FINANCE"] as const,
+  systemSettings: ["ADMIN", "HR", "FINANCE"] as const,
 } satisfies Record<string, readonly NavigationRoleCode[]>;
 
 export const NAVIGATION_ITEMS: NavigationItem[] = [
@@ -180,7 +181,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
         key: "/system-settings",
         icon: <SettingOutlined />,
         label: "系统参数",
-        roles: NAV_ROLE_GROUPS.adminOnly,
+        roles: NAV_ROLE_GROUPS.systemSettings,
       },
       {
         key: "/leave-calendar",

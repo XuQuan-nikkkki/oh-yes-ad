@@ -131,3 +131,24 @@ export const requireAdminPermission = async () => {
 
   return { response: null, employee };
 };
+
+export const requireSystemSettingsPermission = async () => {
+  const { employee, response } = await requireAuthenticatedEmployee();
+  if (response) {
+    return { response, employee: null };
+  }
+
+  const roleCodes = extractRoleCodes(employee);
+  if (
+    !roleCodes.includes("ADMIN") &&
+    !roleCodes.includes("HR") &&
+    !roleCodes.includes("FINANCE")
+  ) {
+    return {
+      response: new Response("Forbidden", { status: 403 }),
+      employee: null,
+    };
+  }
+
+  return { response: null, employee };
+};

@@ -55,7 +55,10 @@ const SystemSettingsPage = () => {
   const [form] = Form.useForm<SystemSettingFormValues>();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
-  const isAdmin = roleCodes.includes("ADMIN");
+  const canManageSystemSettings =
+    roleCodes.includes("ADMIN") ||
+    roleCodes.includes("HR") ||
+    roleCodes.includes("FINANCE");
   const records = useSystemSettingsStore((state) => state.records);
   const loading = useSystemSettingsStore((state) => state.loading);
   const fetchSystemSettings = useSystemSettingsStore(
@@ -76,7 +79,7 @@ const SystemSettingsPage = () => {
   const isEditMode = Boolean(editingRecord?.id);
 
   const fetchRecords = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!canManageSystemSettings) return;
     try {
       await fetchSystemSettings();
     } catch (error) {
@@ -85,7 +88,7 @@ const SystemSettingsPage = () => {
         error instanceof Error ? error.message : "获取系统参数失败",
       );
     }
-  }, [fetchSystemSettings, isAdmin, messageApi]);
+  }, [fetchSystemSettings, canManageSystemSettings, messageApi]);
 
   useEffect(() => {
     void fetchRecords();
@@ -235,12 +238,12 @@ const SystemSettingsPage = () => {
     [handleDelete],
   );
 
-  if (!isAdmin) {
+  if (!canManageSystemSettings) {
     return (
       <ListPageContainer>
         {contextHolder}
         <Typography.Text type="secondary">
-          仅管理员可查看系统参数。
+          仅管理员、HR、财务可查看系统参数。
         </Typography.Text>
       </ListPageContainer>
     );

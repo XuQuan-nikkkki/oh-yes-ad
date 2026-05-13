@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:seed": "prisma db seed",
+    "db:sync-prod-to-test": "bash scripts/sync-prod-to-test-db.sh",
     "sync:new-select-option-colors": "tsx scripts/sync-new-select-option-colors.ts",
     "seed:project-cost-estimation-options": "tsx scripts/seed-project-cost-estimation-options.ts"
   },

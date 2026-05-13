@@ -42,5 +42,9 @@ next-env.d.ts
 
 /src/generated/prisma
 /prisma/migrations
-.db-sync/
+
+# 数据库同步的本地密钥和备份文件
+.db-sync/*
+!.db-sync/.gitkeep
+!.db-sync/sync.env.example
 .

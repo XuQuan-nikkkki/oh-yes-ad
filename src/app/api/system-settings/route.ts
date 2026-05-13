@@ -1,8 +1,7 @@
 import { Prisma, SystemSettingValueType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
-  requireAdminPermission,
-  requireAuthenticatedEmployee,
+  requireSystemSettingsPermission,
 } from "@/lib/api-permissions";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 
@@ -26,7 +25,7 @@ const normalizeValueType = (value: unknown): SystemSettingValueType | null => {
 };
 
 export async function GET() {
-  const { response } = await requireAuthenticatedEmployee();
+  const { response } = await requireSystemSettingsPermission();
   if (response) return response;
 
   const items = await prisma.systemSetting.findMany({
@@ -42,7 +41,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { response, employee } = await requireAdminPermission();
+  const { response, employee } = await requireSystemSettingsPermission();
   if (response || !employee) return response;
 
   const body = await sanitizeRequestBody(req);
