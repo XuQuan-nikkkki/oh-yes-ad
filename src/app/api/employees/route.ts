@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { cookies } from "next/headers";
 
@@ -28,7 +28,7 @@ const ensureStaffRoleId = async () => {
   return staff.id;
 };
 
-const employeePublicSelect = {
+const employeePublicSelect: Prisma.EmployeeSelect = {
   id: true,
   name: true,
   phone: true,
@@ -117,7 +117,7 @@ const employeePublicSelect = {
     },
     orderBy: [{ effectiveDate: "asc" }, { changedAt: "asc" }],
   },
-} as const;
+};
 
 const employeeListSelect = {
   id: true,
