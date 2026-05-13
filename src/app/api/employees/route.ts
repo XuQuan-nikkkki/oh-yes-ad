@@ -105,6 +105,18 @@ const employeePublicSelect = {
       fullName: true,
     },
   },
+  compensationHistories: {
+    select: {
+      id: true,
+      salary: true,
+      socialSecurity: true,
+      providentFund: true,
+      workstationCost: true,
+      utilityCost: true,
+      effectiveDate: true,
+    },
+    orderBy: [{ effectiveDate: "asc" }, { changedAt: "asc" }],
+  },
 } as const;
 
 const employeeListSelect = {

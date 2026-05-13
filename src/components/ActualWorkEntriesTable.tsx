@@ -60,6 +60,13 @@ type Props = {
   canManageRow?: (row: ActualWorkEntryRow) => boolean;
   getDailyTotalHours?: (row: ActualWorkEntryRow) => number | undefined;
   workDayPrecision?: number;
+  pagination?:
+    | false
+    | {
+        defaultPageSize?: number;
+        showSizeChanger?: boolean;
+      };
+  tableScrollY?: number;
 };
 
 const ActualWorkEntriesTable = ({
@@ -85,6 +92,8 @@ const ActualWorkEntriesTable = ({
   canManageRow,
   getDailyTotalHours,
   workDayPrecision = 2,
+  pagination = { defaultPageSize: 10, showSizeChanger: true },
+  tableScrollY,
 }: Props) => {
   type TableRow = ActualWorkEntryRow & {
     __hours?: number;
@@ -370,9 +379,9 @@ const ActualWorkEntriesTable = ({
             }
           : undefined
       }
-      pagination={{ defaultPageSize: 10, showSizeChanger: true }}
       tableLayout="auto"
-      scroll={{ x: "max-content" }}
+      pagination={pagination}
+      scroll={{ x: "max-content", y: tableScrollY }}
       locale={{ emptyText: "暂无实际工时" }}
       toolBarRender={() => toolbarActions}
       params={{ refreshKey }}
