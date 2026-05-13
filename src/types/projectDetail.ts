@@ -226,6 +226,7 @@ export type Project = {
         providentFund?: string | number | null;
         workstationCost?: string | number | null;
         utilityCost?: string | number | null;
+        changeReason?: string | null;
         effectiveDate: string;
       }[];
       function?: string | null;

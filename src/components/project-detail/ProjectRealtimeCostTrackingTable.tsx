@@ -153,12 +153,14 @@ type CompensationHistoryLite = {
   providentFund?: string | number | null;
   workstationCost?: string | number | null;
   utilityCost?: string | number | null;
+  changeReason?: string | null;
 };
 
 type EmployeeCompSegment = {
   start: Date;
   end: Date;
   monthlyHumanCost: number;
+  reasonLabel?: string;
 };
 
 const getCompensationAtDate = (
@@ -201,13 +203,13 @@ const toNumber = (value: unknown) => {
 
 const formatAmount = (value: number) => {
   if (!Number.isFinite(value)) return "0";
-  return Number(value.toFixed(4)).toString();
+  return Number(value.toFixed(2)).toString();
 };
 
 const formatYuanText = (value: number) => {
   if (!Number.isFinite(value)) return "0";
-  const rounded = Number(value.toFixed(4));
-  return rounded.toLocaleString("zh-CN", { maximumFractionDigits: 4 });
+  const rounded = Number(value.toFixed(2));
+  return rounded.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 };
 
 const formatRatio = (value: number | null) =>
@@ -242,12 +244,84 @@ const addDays = (value: Date, days: number) => {
   return next;
 };
 
+const getMonthStart = (value: Date) =>
+  new Date(value.getFullYear(), value.getMonth(), 1);
+
+const getMonthEnd = (value: Date) =>
+  new Date(value.getFullYear(), value.getMonth() + 1, 0);
+
+const getMonthKey = (value: Date) =>
+  `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
+
+const splitDateRangeByMonth = (start: Date, end: Date) => {
+  const slices: Array<{ start: Date; end: Date }> = [];
+  let cursor = getStartOfDay(start);
+  const rangeEnd = getStartOfDay(end);
+  while (cursor <= rangeEnd) {
+    const monthEnd = getMonthEnd(cursor);
+    const sliceEnd = monthEnd < rangeEnd ? monthEnd : rangeEnd;
+    slices.push({ start: cursor, end: sliceEnd });
+    cursor = addDays(sliceEnd, 1);
+  }
+  return slices;
+};
+
 const formatSignedAmountText = (value?: number | null) => {
   if (value === null || value === undefined) return "-";
   if (!Number.isFinite(value)) return "-";
-  const rounded = normalizeNegativeZero(Math.round(value));
+  const rounded = normalizeNegativeZero(Number(value.toFixed(2)));
   const normalized = Object.is(rounded, -0) ? 0 : rounded;
-  return normalized.toLocaleString("zh-CN");
+  return normalized.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+};
+
+const renderCostRemark = (value: string) => {
+  const renderFormulaWithOperatorTags = (formula: string) => {
+    const parts = formula.split(/(\/|\*)/g);
+    return parts.map((part, index) => {
+      if (part === "/" || part === "*") {
+        return <span key={`op-${index}`}>{part === "/" ? "÷" : "x"}</span>;
+      }
+      return <span key={`txt-${index}`}>{part}</span>;
+    });
+  };
+
+  const text = (value || "").trim();
+  if (!text) return <div>-</div>;
+  const lines = text.split("\n").map((item) => item.trim()).filter(Boolean);
+  if (lines.length >= 2 && lines.length % 2 === 0) {
+    const groups: Array<{ stage: string; formula: string }> = [];
+    for (let index = 0; index < lines.length; index += 2) {
+      const stage = lines[index]?.replace(/：$/, "") ?? "";
+      const formula = lines[index + 1] ?? "";
+      if (!stage || !formula) {
+        return <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{text}</div>;
+      }
+      groups.push({ stage, formula });
+    }
+    return (
+      <div style={{ display: "grid", gap: 8 }}>
+        {groups.map((group) => (
+          <div key={`${group.stage}-${group.formula}`} style={{ display: "grid", gap: 6 }}>
+            <Tag
+              color="default"
+              style={{
+                marginInlineEnd: 0,
+                color: "rgba(0,0,0,0.65)",
+                display: "inline-flex",
+                width: "fit-content",
+              }}
+            >
+              {group.stage}
+            </Tag>
+            <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+              {renderFormulaWithOperatorTags(group.formula)}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{text}</div>;
 };
 
 const getEntryHours = (start: string, end: string) =>
@@ -256,6 +330,14 @@ const getEntryHours = (start: string, end: string) =>
 const getDateKey = (value: string) => value.slice(0, 10);
 const formatMonthDayText = (value: Date) =>
   `${String(value.getMonth() + 1).padStart(2, "0")}/${String(value.getDate()).padStart(2, "0")}`;
+
+const getHistoryReasonLabel = (
+  reason: string | null | undefined,
+  fallback: string,
+) => {
+  const trimmed = typeof reason === "string" ? reason.trim() : "";
+  return trimmed || fallback;
+};
 
 const calcEntryWorkdays = (hours: number, total: number) => {
   if (hours === 0) return 0;
@@ -296,6 +378,7 @@ const getEmployeeCompSegments = (
       return {
         effectiveDate: getStartOfDay(new Date(history.effectiveDate)),
         monthlyHumanCost: current,
+        reasonLabel: getHistoryReasonLabel(history.changeReason, "薪酬变动"),
         changed: !isSameMonthlyHumanCost(current, previous),
       };
     })
@@ -317,6 +400,7 @@ const getEmployeeCompSegments = (
         start,
         end,
         monthlyHumanCost: point.monthlyHumanCost,
+        reasonLabel: point.reasonLabel,
       };
     })
     .filter((item) => item.start <= item.end);
@@ -340,6 +424,7 @@ const getEmployeeRentSegments = (
       return {
         effectiveDate: getStartOfDay(new Date(history.effectiveDate)),
         monthlyRentCost: current,
+        reasonLabel: getHistoryReasonLabel(history.changeReason, "租金变动"),
         changed: !isSameMonthlyHumanCost(current, previous),
       };
     })
@@ -361,6 +446,7 @@ const getEmployeeRentSegments = (
         start,
         end,
         monthlyRentCost: point.monthlyRentCost,
+        reasonLabel: point.reasonLabel,
       };
     })
     .filter((item) => item.start <= item.end);
@@ -583,6 +669,18 @@ const ProjectRealtimeCostTrackingTable = ({
   const expectedWorkdays = latestInitiation?.estimatedDuration ?? 0;
 
   const laborBreakdown = useMemo(() => {
+    const monthlyBaseCache = new Map<string, number>();
+    const getRealMonthlyWorkdayBase = (date: Date) => {
+      const monthKey = getMonthKey(date);
+      const cached = monthlyBaseCache.get(monthKey);
+      if (cached !== undefined) return cached;
+      const monthStart = getMonthStart(date);
+      const monthEnd = getMonthEnd(date);
+      const realBase = calculateWorkdays(monthStart, monthEnd, workdayAdjustments);
+      const normalized = realBase > 0 ? realBase : monthlyWorkdayBase;
+      monthlyBaseCache.set(monthKey, normalized);
+      return normalized;
+    };
     const getFunctionMeta = (candidate: {
       function?: string | null;
       functionOption?: { value?: string | null; color?: string | null } | null;
@@ -662,7 +760,8 @@ const ProjectRealtimeCostTrackingTable = ({
         groupedHours.get(`${employee.id}__${getDateKey(entry.startDate)}`) ??
         hours;
       const entryWorkdays = calcEntryWorkdays(hours, total);
-      const cost = (monthlyHumanCost / monthlyWorkdayBase) * entryWorkdays;
+      const monthBase = getRealMonthlyWorkdayBase(new Date(entry.startDate));
+      const cost = monthBase > 0 ? (monthlyHumanCost / monthBase) * entryWorkdays : 0;
       const employeeName = employee.name?.trim() || "";
       const functionMeta =
         memberFunctionById.get(employee.id) ||
@@ -713,7 +812,7 @@ const ProjectRealtimeCostTrackingTable = ({
             ? getEmployeeCompSegments(value.employee, rangeStart, rangeEnd)
             : [];
         let remark = "-";
-        if (rangeStart && rangeEnd && changeSegments.length > 0) {
+        if (rangeStart && rangeEnd) {
           const segments: EmployeeCompSegment[] = [];
           const firstChangeStart = changeSegments[0]?.start;
           const beforeFirstChangeCost = firstChangeStart
@@ -732,37 +831,59 @@ const ProjectRealtimeCostTrackingTable = ({
               });
             }
           }
-          segments.push(...changeSegments);
-          const lines = segments
-            .map((segment, index) => {
-              const totals = value.entries.reduce(
-                (sum, item) => {
-                  if (item.date < segment.start || item.date > segment.end) {
-                    return sum;
-                  }
-                  return {
-                    workdays: sum.workdays + item.workdays,
-                    cost: sum.cost + item.cost,
-                  };
-                },
-                { workdays: 0, cost: 0 },
-              );
-              if (totals.workdays <= 0) return null;
-              const isFirstLine = index === 0;
-              const leftLabel = isFirstLine
-                ? "项目开始"
-                : formatMonthDayText(segment.start);
-              const rightLabel =
-                index === segments.length - 1
-                  ? "至今"
-                  : `${formatMonthDayText(segment.end)}`;
-              return `${leftLabel}-${rightLabel}：工时(${formatAmount(
-                totals.workdays,
-              )}d) * 人力成本(${formatYuanText(segment.monthlyHumanCost)}) = ${formatYuanText(
-                totals.cost,
-              )}元`;
-            })
-            .filter((line): line is string => Boolean(line));
+          if (changeSegments.length > 0) {
+            segments.push(...changeSegments);
+          } else {
+            const baseComp = getCompensationAtDate(value.employee, rangeStart);
+            segments.push({
+              start: rangeStart,
+              end: rangeEnd,
+              monthlyHumanCost:
+                baseComp.salary +
+                baseComp.socialSecurity +
+                baseComp.providentFund,
+            });
+          }
+          const lines = segments.flatMap((segment, index) => {
+            const monthSlices = splitDateRangeByMonth(segment.start, segment.end);
+            return monthSlices
+              .map((monthSlice, monthIndex) => {
+                const totals = value.entries.reduce(
+                  (sum, item) => {
+                    if (item.date < monthSlice.start || item.date > monthSlice.end) {
+                      return sum;
+                    }
+                    return {
+                      workdays: sum.workdays + item.workdays,
+                    };
+                  },
+                  { workdays: 0 },
+                );
+                if (totals.workdays <= 0) return null;
+                const isFirstLine = index === 0 && monthIndex === 0;
+                const leftLabel = isFirstLine
+                  ? segment.reasonLabel
+                    ? `${segment.reasonLabel}(${formatMonthDayText(monthSlice.start)})`
+                    : `项目开始(${formatMonthDayText(monthSlice.start)})`
+                  : `${segment.reasonLabel ?? "薪酬变动"}(${formatMonthDayText(monthSlice.start)})`;
+                const isLastLine =
+                  index === segments.length - 1 && monthIndex === monthSlices.length - 1;
+                const rightLabel = isLastLine
+                  ? `至今(${formatMonthDayText(monthSlice.end)})`
+                  : `${formatMonthDayText(monthSlice.end)}`;
+                const monthBase = getRealMonthlyWorkdayBase(monthSlice.start);
+                const lineCost =
+                  monthBase > 0
+                    ? (segment.monthlyHumanCost / monthBase) * totals.workdays
+                    : 0;
+                return `${leftLabel}-${rightLabel}\n¥${formatYuanText(
+                  segment.monthlyHumanCost,
+                )} / ${formatAmount(monthBase)}d * ${formatAmount(
+                  totals.workdays,
+                )}d = ¥${formatYuanText(lineCost)}`;
+              })
+              .filter((line): line is string => Boolean(line));
+          });
           if (lines.length > 0) {
             remark = lines.join("\n");
           }
@@ -787,7 +908,13 @@ const ProjectRealtimeCostTrackingTable = ({
       return (a.name || "").localeCompare(b.name || "", "zh-CN");
     });
     return rows;
-  }, [actualWorkEntries, latestInitiation?.members, members, monthlyWorkdayBase]);
+  }, [
+    actualWorkEntries,
+    latestInitiation?.members,
+    members,
+    monthlyWorkdayBase,
+    workdayAdjustments,
+  ]);
 
   const actualLaborCost = useMemo(
     () => laborBreakdown.reduce((sum, item) => sum + toNumber(item.cost), 0),
@@ -824,6 +951,18 @@ const ProjectRealtimeCostTrackingTable = ({
   }, [actualLaborCost, laborBreakdown]);
 
   const rentBreakdown = useMemo(() => {
+    const monthlyBaseCache = new Map<string, number>();
+    const getRealMonthlyWorkdayBase = (date: Date) => {
+      const monthKey = getMonthKey(date);
+      const cached = monthlyBaseCache.get(monthKey);
+      if (cached !== undefined) return cached;
+      const monthStart = getMonthStart(date);
+      const monthEnd = getMonthEnd(date);
+      const realBase = calculateWorkdays(monthStart, monthEnd, workdayAdjustments);
+      const normalized = realBase > 0 ? realBase : monthlyWorkdayBase;
+      monthlyBaseCache.set(monthKey, normalized);
+      return normalized;
+    };
     const groupedHours = new Map<string, number>();
     actualWorkEntries.forEach((entry) => {
       const employeeId = entry.employee?.id ?? "";
@@ -866,7 +1005,8 @@ const ProjectRealtimeCostTrackingTable = ({
         groupedHours.get(`${employee.id}__${getDateKey(entry.startDate)}`) ??
         hours;
       const entryWorkdays = calcEntryWorkdays(hours, total);
-      const cost = (monthlyRentCost / monthlyWorkdayBase) * entryWorkdays;
+      const monthBase = getRealMonthlyWorkdayBase(new Date(entry.startDate));
+      const cost = monthBase > 0 ? (monthlyRentCost / monthBase) * entryWorkdays : 0;
       const functionName = employee.functionOption?.value?.trim() || "未设置";
       const functionColor = employee.functionOption?.color?.trim() || undefined;
       const prev = byEmployee.get(employee.id) ?? {
@@ -903,8 +1043,13 @@ const ProjectRealtimeCostTrackingTable = ({
           ? getEmployeeRentSegments(value.employee, rangeStart, rangeEnd)
           : [];
       let remark = "-";
-      if (rangeStart && rangeEnd && changeSegments.length > 0) {
-        const segments: Array<{ start: Date; end: Date; monthlyRentCost: number }> = [];
+      if (rangeStart && rangeEnd) {
+        const segments: Array<{
+          start: Date;
+          end: Date;
+          monthlyRentCost: number;
+          reasonLabel?: string;
+        }> = [];
         const firstChangeStart = changeSegments[0]?.start;
         const beforeFirstChangeCost = firstChangeStart
           ? getCompensationAtDate(value.employee, addDays(firstChangeStart, -1))
@@ -918,32 +1063,59 @@ const ProjectRealtimeCostTrackingTable = ({
               monthlyRentCost:
                 beforeFirstChangeCost.workstationCost +
                 beforeFirstChangeCost.utilityCost,
+              reasonLabel: undefined,
             });
           }
         }
-        segments.push(...changeSegments);
-        const lines = segments
-          .map((segment, index) => {
-            const totals = value.entries.reduce(
-              (sum, item) => {
-                if (item.date < segment.start || item.date > segment.end) return sum;
-                return { workdays: sum.workdays + item.workdays, cost: sum.cost + item.cost };
-              },
-              { workdays: 0, cost: 0 },
-            );
-            if (totals.workdays <= 0) return null;
-            const leftLabel = index === 0 ? "项目开始" : formatMonthDayText(segment.start);
-            const rightLabel =
-              index === segments.length - 1
-                ? "至今"
-                : `${formatMonthDayText(segment.end)}`;
-            return `${leftLabel}-${rightLabel}：工时(${formatAmount(
-              totals.workdays,
-            )}d) * 租金成本(${formatYuanText(segment.monthlyRentCost)}) = ${formatYuanText(
-              totals.cost,
-            )}元`;
-          })
-          .filter((line): line is string => Boolean(line));
+        if (changeSegments.length > 0) {
+          segments.push(...changeSegments);
+        } else {
+          const baseComp = getCompensationAtDate(value.employee, rangeStart);
+          segments.push({
+            start: rangeStart,
+            end: rangeEnd,
+            monthlyRentCost: baseComp.workstationCost + baseComp.utilityCost,
+            reasonLabel: undefined,
+          });
+        }
+        const lines = segments.flatMap((segment, index) => {
+          const monthSlices = splitDateRangeByMonth(segment.start, segment.end);
+          return monthSlices
+            .map((monthSlice, monthIndex) => {
+              const totals = value.entries.reduce(
+                (sum, item) => {
+                  if (item.date < monthSlice.start || item.date > monthSlice.end) return sum;
+                  return { workdays: sum.workdays + item.workdays };
+                },
+                { workdays: 0 },
+              );
+              if (totals.workdays <= 0) return null;
+              const leftLabel =
+                index === 0 && monthIndex === 0
+                  ? segment.reasonLabel
+                    ? `${segment.reasonLabel}(${formatMonthDayText(monthSlice.start)})`
+                    : `项目开始(${formatMonthDayText(monthSlice.start)})`
+                  : `${segment.reasonLabel ?? "租金变动"}(${formatMonthDayText(
+                      monthSlice.start,
+                    )})`;
+              const isLastLine =
+                index === segments.length - 1 && monthIndex === monthSlices.length - 1;
+              const rightLabel = isLastLine
+                ? `至今(${formatMonthDayText(monthSlice.end)})`
+                : `${formatMonthDayText(monthSlice.end)}`;
+              const monthBase = getRealMonthlyWorkdayBase(monthSlice.start);
+              const lineCost =
+                monthBase > 0
+                  ? (segment.monthlyRentCost / monthBase) * totals.workdays
+                  : 0;
+              return `${leftLabel}-${rightLabel}\n¥${formatYuanText(
+                segment.monthlyRentCost,
+              )} / ${formatAmount(monthBase)}d * ${formatAmount(
+                totals.workdays,
+              )}d = ¥${formatYuanText(lineCost)}`;
+            })
+            .filter((line): line is string => Boolean(line));
+        });
         if (lines.length > 0) remark = lines.join("\n");
       }
       return {
@@ -958,7 +1130,7 @@ const ProjectRealtimeCostTrackingTable = ({
     });
     rows.sort((a, b) => (a.name || "").localeCompare(b.name || "", "zh-CN"));
     return rows;
-  }, [actualWorkEntries, monthlyWorkdayBase]);
+  }, [actualWorkEntries, monthlyWorkdayBase, workdayAdjustments]);
 
   const rentCost = useMemo(
     () => rentBreakdown.reduce((sum, item) => sum + toNumber(item.cost), 0),
@@ -1985,7 +2157,7 @@ const ProjectRealtimeCostTrackingTable = ({
         open={laborDetailOpen}
         onCancel={() => setLaborDetailOpen(false)}
         footer={null}
-        width={1200}
+        width={980}
         style={{ maxWidth: "95vw", top: 24 }}
         styles={{
           body: {
@@ -1999,7 +2171,6 @@ const ProjectRealtimeCostTrackingTable = ({
           size="small"
           pagination={false}
           dataSource={laborDetailRows}
-          scroll={{ x: 1080 }}
           rowClassName={(record) =>
             record.key === "summary" ? "labor-detail-summary-row" : ""
           }
@@ -2015,7 +2186,7 @@ const ProjectRealtimeCostTrackingTable = ({
               title: "姓名",
               dataIndex: "name",
               key: "name",
-              width: 140,
+              width: 80,
               render: (value: string) => (
                 <span
                   style={{
@@ -2032,6 +2203,7 @@ const ProjectRealtimeCostTrackingTable = ({
               title: "职能",
               dataIndex: "functionName",
               key: "functionName",
+              width: 80,
               render: (value: string, record: LaborDetailRow) =>
                 record.key === "summary" ? (
                   ""
@@ -2043,6 +2215,7 @@ const ProjectRealtimeCostTrackingTable = ({
               title: "工时（天）",
               dataIndex: "workdays",
               key: "workdays",
+              width: 80,
               align: "right",
               render: (value: number) => `${formatAmount(value)}d`,
             },
@@ -2050,19 +2223,15 @@ const ProjectRealtimeCostTrackingTable = ({
               title: "折合人力成本",
               dataIndex: "cost",
               key: "cost",
+              width: 140,
               align: "right",
               render: (value: number) => `¥${formatYuanText(value)}`,
             },
             {
-              title: "备注",
+              title: "计算公式：人力成本 ÷ 月工作日基数 * 工时(天)",
               dataIndex: "remark",
               key: "remark",
-              width: 520,
-              render: (value: string) => (
-                <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
-                  {value || "-"}
-                </div>
-              ),
+              render: (value: string) => renderCostRemark(value),
             },
           ]}
         />
@@ -2072,7 +2241,7 @@ const ProjectRealtimeCostTrackingTable = ({
         open={rentDetailOpen}
         onCancel={() => setRentDetailOpen(false)}
         footer={null}
-        width={1200}
+        width={980}
         style={{ maxWidth: "95vw", top: 24 }}
         styles={{
           body: {
@@ -2086,7 +2255,6 @@ const ProjectRealtimeCostTrackingTable = ({
           size="small"
           pagination={false}
           dataSource={rentDetailRows}
-          scroll={{ x: 1080 }}
           rowClassName={(record) =>
             record.key === "summary" ? "labor-detail-summary-row" : ""
           }
@@ -2102,7 +2270,7 @@ const ProjectRealtimeCostTrackingTable = ({
               title: "姓名",
               dataIndex: "name",
               key: "name",
-              width: 140,
+              width: 80,
               render: (value: string) => (
                 <span
                   style={{
@@ -2119,6 +2287,7 @@ const ProjectRealtimeCostTrackingTable = ({
               title: "职能",
               dataIndex: "functionName",
               key: "functionName",
+              width: 80,
               render: (value: string, record: RentDetailRow) =>
                 record.key === "summary" ? (
                   ""
@@ -2130,6 +2299,7 @@ const ProjectRealtimeCostTrackingTable = ({
               title: "工时（天）",
               dataIndex: "workdays",
               key: "workdays",
+              width: 80,
               align: "right",
               render: (value: number) => `${formatAmount(value)}d`,
             },
@@ -2137,19 +2307,15 @@ const ProjectRealtimeCostTrackingTable = ({
               title: "折合租金成本",
               dataIndex: "cost",
               key: "cost",
+              width: 140,
               align: "right",
               render: (value: number) => `¥${formatYuanText(value)}`,
             },
             {
-              title: "备注",
+              title: "计算公式：租金成本 ÷ 月工作日基数 * 工时(天)",
               dataIndex: "remark",
               key: "remark",
-              width: 520,
-              render: (value: string) => (
-                <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
-                  {value || "-"}
-                </div>
-              ),
+              render: (value: string) => renderCostRemark(value),
             },
           ]}
         />

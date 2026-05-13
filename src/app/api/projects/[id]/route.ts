@@ -613,6 +613,7 @@ export async function GET(req: Request) {
                   providentFund: true,
                   workstationCost: true,
                   utilityCost: true,
+                  changeReason: true,
                   effectiveDate: true,
                 },
                 orderBy: [{ effectiveDate: "asc" }, { changedAt: "asc" }],
