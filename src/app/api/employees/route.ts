@@ -172,13 +172,7 @@ type EmployeePayload = Record<string, unknown> & {
   employmentStatusOption?: OptionValue;
 };
 
-const serializeEmployee = (
-  employee: EmployeePayload,
-  employeeCostDefaults?: {
-    workstationCost: number;
-    utilityCost: number;
-  },
-) => ({
+const serializeEmployee = (employee: EmployeePayload) => ({
   ...employee,
   function: employee.functionOption?.value ?? null,
   position: employee.positionOption?.value ?? employee.position ?? null,
@@ -186,10 +180,6 @@ const serializeEmployee = (
   departmentLevel2: employee.departmentLevel2Option?.value ?? null,
   employmentType: employee.employmentTypeOption?.value ?? null,
   employmentStatus: employee.employmentStatusOption?.value ?? null,
-  workstationCost:
-    employeeCostDefaults?.workstationCost ?? employee.workstationCost ?? null,
-  utilityCost:
-    employeeCostDefaults?.utilityCost ?? employee.utilityCost ?? null,
 });
 
 export async function GET(req: Request) {
@@ -198,21 +188,11 @@ export async function GET(req: Request) {
 
   const select = list === "full" ? employeePublicSelect : employeeListSelect;
 
-  const [employees, systemSettings] = await Promise.all([
-    prisma.employee.findMany({
-      select,
-      orderBy: { name: "asc" },
-    }),
-    getNumericSystemSettings(),
-  ]);
-  return Response.json(
-    employees.map((employee) =>
-      serializeEmployee(employee, {
-        workstationCost: systemSettings.employeeDefaultWorkstationCost,
-        utilityCost: systemSettings.employeeDefaultUtilityCost,
-      }),
-    ),
-  );
+  const employees = await prisma.employee.findMany({
+    select,
+    orderBy: { name: "asc" },
+  });
+  return Response.json(employees.map((employee) => serializeEmployee(employee)));
 }
 
 export async function POST(req: Request) {
@@ -277,12 +257,7 @@ export async function POST(req: Request) {
       select: employeePublicSelect,
     });
 
-    return Response.json(
-      serializeEmployee(employee, {
-        workstationCost: systemSettings.employeeDefaultWorkstationCost,
-        utilityCost: systemSettings.employeeDefaultUtilityCost,
-      }),
-    );
+    return Response.json(serializeEmployee(employee));
   } catch (error: unknown) {
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
       return new Response("Phone already exists", { status: 400 });
@@ -324,7 +299,6 @@ export async function PUT(req: Request) {
     }
   }
 
-  const systemSettingsPromise = getNumericSystemSettings();
   const [
     functionOptionId,
     positionOptionId,
@@ -332,7 +306,6 @@ export async function PUT(req: Request) {
     departmentLevel2OptionId,
     employmentTypeOptionId,
     employmentStatusOptionId,
-    systemSettings,
   ] = await Promise.all([
     has("function")
       ? upsertSelectOption("employee.function", body.function)
@@ -352,7 +325,6 @@ export async function PUT(req: Request) {
     has("employmentStatus")
       ? upsertSelectOption("employee.employmentStatus", body.employmentStatus)
       : Promise.resolve(undefined),
-    systemSettingsPromise,
   ]);
 
   const toNullableNumber = (value: unknown) => {
@@ -390,10 +362,10 @@ export async function PUT(req: Request) {
   if (has("socialSecurity")) data.socialSecurity = toNullableNumber(body.socialSecurity);
   if (has("providentFund")) data.providentFund = toNullableNumber(body.providentFund);
   if (has("workstationCost")) {
-    data.workstationCost = systemSettings.employeeDefaultWorkstationCost;
+    data.workstationCost = toNullableNumber(body.workstationCost);
   }
   if (has("utilityCost")) {
-    data.utilityCost = systemSettings.employeeDefaultUtilityCost;
+    data.utilityCost = toNullableNumber(body.utilityCost);
   }
   if (has("bankAccountNumber")) data.bankAccountNumber = toStringOrNull(body.bankAccountNumber);
   if (has("bankName")) data.bankName = toStringOrNull(body.bankName);
@@ -428,12 +400,7 @@ export async function PUT(req: Request) {
       select: employeePublicSelect,
     });
 
-    return Response.json(
-      serializeEmployee(employee, {
-        workstationCost: systemSettings.employeeDefaultWorkstationCost,
-        utilityCost: systemSettings.employeeDefaultUtilityCost,
-      }),
-    );
+    return Response.json(serializeEmployee(employee));
   } catch (error: unknown) {
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
       return new Response("Phone already exists", { status: 400 });

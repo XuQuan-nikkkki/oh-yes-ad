@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   Form,
@@ -148,6 +148,8 @@ type ColorValueLike =
   | null
   | undefined;
 
+type CostFieldName = "workstationCost" | "utilityCost";
+
 const CREATABLE_CONFIG_MAP: Record<CreatableKey, CreatableConfig> = {
   function: {
     fieldName: "function",
@@ -214,6 +216,8 @@ const EmployeeFormModal = ({
 }: Props) => {
   const [form] = Form.useForm<FormValues>();
   const isEdit = !!initialValues?.id;
+  const formRef = useRef(form);
+  const initialValuesIdRef = useRef(initialValues?.id);
   const currentUser = useAuthStore((state) => state.currentUser);
   const currentRoleCodes = getRoleCodesFromUser(currentUser);
   const canManageRoles =
@@ -385,31 +389,86 @@ const EmployeeFormModal = ({
   );
 
   useEffect(() => {
+    formRef.current = form;
+    initialValuesIdRef.current = initialValues?.id;
+  });
+
+  useEffect(() => {
     if (!open) return;
     void fetchAllOptions();
   }, [open, fetchAllOptions]);
 
   useEffect(() => {
     if (!open) return;
-    void fetchSystemSettings();
+    void fetchSystemSettings(true).then((records) => {
+      if (initialValuesIdRef.current) return;
+      formRef.current.setFieldsValue({
+        workstationCost: String(
+          getSystemSettingNumberFromRecords(
+            records,
+            SYSTEM_SETTING_KEYS.employeeDefaultWorkstationCost,
+          ),
+        ),
+        utilityCost: String(
+          getSystemSettingNumberFromRecords(
+            records,
+            SYSTEM_SETTING_KEYS.employeeDefaultUtilityCost,
+          ),
+        ),
+      });
+    });
   }, [open, fetchSystemSettings]);
 
   useEffect(() => {
     if (!open) return;
-    const values = baseValues;
-    if (!(isEdit && viewMode === "position")) {
-      form.setFieldsValue(values);
-    }
-  }, [open, isEdit, viewMode, form, baseValues]);
+    form.resetFields();
+    form.setFieldsValue(baseValues);
+  }, [open, initialValues?.id, viewMode, form, baseValues]);
 
   const toSingleValue = (value?: string | null) => value ?? null;
 
-  const normalizeNumberText = (value?: string | null) => {
+  const normalizeNumberText = (value?: string | number | null) => {
     if (value === undefined || value === null) return null;
     const trimmed = String(value).trim();
     if (!trimmed) return null;
     const parsed = Number(trimmed);
     return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const workstationCostValue = Form.useWatch("workstationCost", form);
+  const utilityCostValue = Form.useWatch("utilityCost", form);
+
+  const renderDefaultCostLabel = ({
+    label,
+    fieldName,
+    currentValue,
+    defaultValue,
+    buttonText,
+  }: {
+    label: string;
+    fieldName: CostFieldName;
+    currentValue?: string | number | null;
+    defaultValue: number;
+    buttonText: string;
+  }) => {
+    const shouldShowButton = normalizeNumberText(currentValue) !== defaultValue;
+
+    return (
+      <Space size={8}>
+        <span>{label}</span>
+        {shouldShowButton ? (
+          <Button
+            size="small"
+            onClick={(event) => {
+              event.stopPropagation();
+              form.setFieldValue(fieldName, String(defaultValue));
+            }}
+          >
+            {buttonText}
+          </Button>
+        ) : null}
+      </Space>
+    );
   };
 
   const resolveCreatableValues = async (values: FormValues) => {
@@ -858,11 +917,29 @@ const EmployeeFormModal = ({
             <ProForm.Item label="公积金" name="providentFund">
               <Input placeholder="请输入公积金" />
             </ProForm.Item>
-            <ProForm.Item label="工位费" name="workstationCost">
-              <Input disabled />
+            <ProForm.Item
+              label={renderDefaultCostLabel({
+                label: "工位费",
+                fieldName: "workstationCost",
+                currentValue: workstationCostValue,
+                defaultValue: defaultWorkstationCost,
+                buttonText: "更新为默认值",
+              })}
+              name="workstationCost"
+            >
+              <Input placeholder="请输入工位费" />
             </ProForm.Item>
-            <ProForm.Item label="水电" name="utilityCost">
-              <Input disabled />
+            <ProForm.Item
+              label={renderDefaultCostLabel({
+                label: "水电",
+                fieldName: "utilityCost",
+                currentValue: utilityCostValue,
+                defaultValue: defaultUtilityCost,
+                buttonText: "更新为默认值",
+              })}
+              name="utilityCost"
+            >
+              <Input placeholder="请输入水电费" />
             </ProForm.Item>
           </StepsForm.StepForm>
 

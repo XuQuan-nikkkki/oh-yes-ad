@@ -6,7 +6,6 @@ import { cookies } from "next/headers";
 import { AUTH_SESSION_COOKIE, decodeAuthSession } from "@/lib/auth-session";
 import { prisma as sharedPrisma } from "@/lib/prisma";
 import { extractRoleCodes } from "@/lib/role-permissions";
-import { getNumericSystemSettings } from "@/lib/system-settings.server";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -41,13 +40,7 @@ type EmployeePayload = Record<string, unknown> & {
   legalEntity?: { id: string; name: string; fullName?: string | null } | null;
 };
 
-const serializeEmployee = (
-  employee: EmployeePayload,
-  employeeCostDefaults?: {
-    workstationCost: number;
-    utilityCost: number;
-  },
-) => ({
+const serializeEmployee = (employee: EmployeePayload) => ({
   ...employee,
   function: employee.functionOption?.value ?? null,
   position: employee.positionOption?.value ?? employee.position ?? null,
@@ -55,10 +48,6 @@ const serializeEmployee = (
   departmentLevel2: employee.departmentLevel2Option?.value ?? null,
   employmentType: employee.employmentTypeOption?.value ?? null,
   employmentStatus: employee.employmentStatusOption?.value ?? null,
-  workstationCost:
-    employeeCostDefaults?.workstationCost ?? employee.workstationCost ?? null,
-  utilityCost:
-    employeeCostDefaults?.utilityCost ?? employee.utilityCost ?? null,
   ownedProjects: (employee.ownedProjects ?? []).map((project) => ({
     ...project,
     type: project.typeOption?.value ?? null,
@@ -169,180 +158,172 @@ export async function GET(_req: Request, context: RouteContext) {
     return new Response("Missing ID", { status: 400 });
   }
 
-  const [employee, systemSettings] = await Promise.all([
-    prisma.employee.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        fullName: true,
-        roles: {
-          select: {
-            role: {
-              select: {
-                id: true,
-                code: true,
-                name: true,
-              },
+  const employee = await prisma.employee.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      fullName: true,
+      roles: {
+        select: {
+          role: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
             },
           },
-        },
-        functionOption: {
-          select: {
-            id: true,
-            value: true,
-            color: true,
-          },
-        },
-        position: true,
-        positionOption: {
-          select: {
-            id: true,
-            value: true,
-            color: true,
-          },
-        },
-        level: true,
-        departmentLevel1Option: {
-          select: {
-            id: true,
-            value: true,
-            color: true,
-          },
-        },
-        departmentLevel2Option: {
-          select: {
-            id: true,
-            value: true,
-            color: true,
-          },
-        },
-        employmentTypeOption: {
-          select: {
-            id: true,
-            value: true,
-            color: true,
-          },
-        },
-        employmentStatusOption: {
-          select: {
-            id: true,
-            value: true,
-            color: true,
-          },
-        },
-        entryDate: true,
-        leaveDate: true,
-        salary: true,
-        socialSecurity: true,
-        providentFund: true,
-        workstationCost: true,
-        utilityCost: true,
-        bankAccountNumber: true,
-        bankName: true,
-        bankBranch: true,
-        legalEntity: {
-          select: {
-            id: true,
-            name: true,
-            fullName: true,
-          },
-        },
-        ownedProjects: {
-          select: {
-            id: true,
-            name: true,
-            startDate: true,
-            endDate: true,
-            typeOption: {
-              select: { id: true, value: true, color: true },
-            },
-            statusOption: {
-              select: { id: true, value: true, color: true },
-            },
-            stageOption: {
-              select: { id: true, value: true, color: true },
-            },
-          },
-          orderBy: [
-            {
-              startDate: {
-                sort: "desc",
-                nulls: "last",
-              },
-            },
-            { name: "asc" },
-          ],
-        },
-        projects: {
-          select: {
-            id: true,
-            name: true,
-            startDate: true,
-            endDate: true,
-            typeOption: {
-              select: { id: true, value: true, color: true },
-            },
-            statusOption: {
-              select: { id: true, value: true, color: true },
-            },
-            stageOption: {
-              select: { id: true, value: true, color: true },
-            },
-          },
-          orderBy: [
-            {
-              startDate: {
-                sort: "desc",
-                nulls: "last",
-              },
-            },
-            { name: "asc" },
-          ],
-        },
-        leaveRecords: {
-          select: {
-            id: true,
-            typeOption: {
-              select: { id: true, value: true, color: true },
-            },
-            startAt: true,
-            endAt: true,
-            datePrecision: true,
-          },
-          orderBy: { startAt: "desc" },
-        },
-        actualWorkEntries: {
-          select: {
-            id: true,
-            title: true,
-            startDate: true,
-            endDate: true,
-            project: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-          orderBy: { startDate: "desc" },
         },
       },
-    }),
-    getNumericSystemSettings(),
-  ]);
+      functionOption: {
+        select: {
+          id: true,
+          value: true,
+          color: true,
+        },
+      },
+      position: true,
+      positionOption: {
+        select: {
+          id: true,
+          value: true,
+          color: true,
+        },
+      },
+      level: true,
+      departmentLevel1Option: {
+        select: {
+          id: true,
+          value: true,
+          color: true,
+        },
+      },
+      departmentLevel2Option: {
+        select: {
+          id: true,
+          value: true,
+          color: true,
+        },
+      },
+      employmentTypeOption: {
+        select: {
+          id: true,
+          value: true,
+          color: true,
+        },
+      },
+      employmentStatusOption: {
+        select: {
+          id: true,
+          value: true,
+          color: true,
+        },
+      },
+      entryDate: true,
+      leaveDate: true,
+      salary: true,
+      socialSecurity: true,
+      providentFund: true,
+      workstationCost: true,
+      utilityCost: true,
+      bankAccountNumber: true,
+      bankName: true,
+      bankBranch: true,
+      legalEntity: {
+        select: {
+          id: true,
+          name: true,
+          fullName: true,
+        },
+      },
+      ownedProjects: {
+        select: {
+          id: true,
+          name: true,
+          startDate: true,
+          endDate: true,
+          typeOption: {
+            select: { id: true, value: true, color: true },
+          },
+          statusOption: {
+            select: { id: true, value: true, color: true },
+          },
+          stageOption: {
+            select: { id: true, value: true, color: true },
+          },
+        },
+        orderBy: [
+          {
+            startDate: {
+              sort: "desc",
+              nulls: "last",
+            },
+          },
+          { name: "asc" },
+        ],
+      },
+      projects: {
+        select: {
+          id: true,
+          name: true,
+          startDate: true,
+          endDate: true,
+          typeOption: {
+            select: { id: true, value: true, color: true },
+          },
+          statusOption: {
+            select: { id: true, value: true, color: true },
+          },
+          stageOption: {
+            select: { id: true, value: true, color: true },
+          },
+        },
+        orderBy: [
+          {
+            startDate: {
+              sort: "desc",
+              nulls: "last",
+            },
+          },
+          { name: "asc" },
+        ],
+      },
+      leaveRecords: {
+        select: {
+          id: true,
+          typeOption: {
+            select: { id: true, value: true, color: true },
+          },
+          startAt: true,
+          endAt: true,
+          datePrecision: true,
+        },
+        orderBy: { startAt: "desc" },
+      },
+      actualWorkEntries: {
+        select: {
+          id: true,
+          title: true,
+          startDate: true,
+          endDate: true,
+          project: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: { startDate: "desc" },
+      },
+    },
+  });
 
   if (!employee) {
     return new Response("Not Found", { status: 404 });
   }
 
-  return Response.json(
-    serializeEmployee(employee, {
-      workstationCost: systemSettings.employeeDefaultWorkstationCost,
-      utilityCost: systemSettings.employeeDefaultUtilityCost,
-    }),
-  );
+  return Response.json(serializeEmployee(employee));
 }
 
 export async function PATCH(req: Request, context: RouteContext) {
