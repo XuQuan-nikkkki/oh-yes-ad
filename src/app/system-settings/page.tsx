@@ -2,17 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Button,
+  DatePicker,
   Form,
   Input,
-  InputNumber,
   Modal,
-  Select,
   Tag,
   Typography,
   message,
 } from "antd";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
+import dayjs from "dayjs";
 import ListPageContainer from "@/components/ListPageContainer";
 import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import TableActions from "@/components/TableActions";
@@ -24,14 +23,11 @@ import {
 } from "@/stores/systemSettingsStore";
 
 type SystemSettingFormValues = {
-  key: string;
   name: string;
-  group: string;
   value: string;
-  valueType: SystemSettingValueType;
   unit?: string;
   description?: string;
-  order?: number;
+  effectiveDate?: dayjs.Dayjs | null;
 };
 
 const VALUE_TYPE_LABELS: Record<SystemSettingValueType, string> = {
@@ -43,11 +39,17 @@ const VALUE_TYPE_LABELS: Record<SystemSettingValueType, string> = {
 };
 
 const formatSettingValue = (record: SystemSettingRecord) => {
-  const unitSuffix = record.unit ? ` ${record.unit}` : "";
   if (record.valueType === "boolean") {
-    return record.value === "true" ? `是${unitSuffix}` : `否${unitSuffix}`;
+    return record.value === "true" ? "是" : "否";
   }
-  return `${record.value}${unitSuffix}`;
+  return record.value;
+};
+
+const formatEffectiveDate = (record: SystemSettingRecord) => {
+  const effectiveDate = record.histories?.[0]?.effectiveDate;
+  if (!effectiveDate) return "-";
+  const parsed = dayjs(effectiveDate);
+  return parsed.isValid() ? parsed.format("YYYY-MM-DD") : "-";
 };
 
 const SystemSettingsPage = () => {
@@ -76,8 +78,6 @@ const SystemSettingsPage = () => {
     null,
   );
 
-  const isEditMode = Boolean(editingRecord?.id);
-
   const fetchRecords = useCallback(async () => {
     if (!canManageSystemSettings) return;
     try {
@@ -98,22 +98,13 @@ const SystemSettingsPage = () => {
     if (!modalOpen) return;
     if (editingRecord) {
       form.setFieldsValue({
-        key: editingRecord.key,
         name: editingRecord.name,
-        group: editingRecord.group,
         value: editingRecord.value,
-        valueType: editingRecord.valueType,
         unit: editingRecord.unit ?? "",
         description: editingRecord.description ?? "",
-        order: editingRecord.order ?? undefined,
+        effectiveDate: dayjs(),
       });
-      return;
     }
-    form.resetFields();
-    form.setFieldsValue({
-      group: "pricing",
-      valueType: "number",
-    });
   }, [editingRecord, form, modalOpen]);
 
   const openEditModal = (record: SystemSettingRecord) => {
@@ -128,31 +119,28 @@ const SystemSettingsPage = () => {
   };
 
   const handleSubmit = async () => {
+    if (!editingRecord) return;
+
     try {
       const values = await form.validateFields();
       setSubmitting(true);
 
       const payload = {
-        key: values.key.trim(),
+        key: editingRecord.key,
         name: values.name.trim(),
-        group: values.group.trim(),
+        group: editingRecord.group,
         value: values.value.trim(),
-        valueType: values.valueType,
+        valueType: editingRecord.valueType,
         unit: values.unit?.trim() || null,
         description: values.description?.trim() || null,
-        order:
-          typeof values.order === "number" && Number.isFinite(values.order)
-            ? Math.round(values.order)
-            : null,
+        order: editingRecord.order ?? null,
+        effectiveDate: values.effectiveDate
+          ? values.effectiveDate.startOf("day").toISOString()
+          : null,
       };
 
-      const endpoint = isEditMode
-        ? `/api/system-settings/${editingRecord?.id}`
-        : "/api/system-settings";
-      const method = isEditMode ? "PATCH" : "POST";
-
-      const res = await fetch(endpoint, {
-        method,
+      const res = await fetch(`/api/system-settings/${editingRecord.id}`, {
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
@@ -165,7 +153,7 @@ const SystemSettingsPage = () => {
       const saved = (await res.json()) as SystemSettingRecord;
       upsertSystemSetting(saved);
 
-      messageApi.success(isEditMode ? "系统参数已更新" : "系统参数已新增");
+      messageApi.success("系统参数已更新");
       closeModal();
     } catch (error) {
       if (error instanceof Error && error.message) {
@@ -208,6 +196,12 @@ const SystemSettingsPage = () => {
         render: (_value, record) => formatSettingValue(record),
       },
       {
+        title: "单位",
+        dataIndex: "unit",
+        width: 100,
+        render: (_value, record) => record.unit || "-",
+      },
+      {
         title: "类型",
         dataIndex: "valueType",
         width: 90,
@@ -221,6 +215,12 @@ const SystemSettingsPage = () => {
         ellipsis: true,
         width: 220,
         render: (_dom, record) => record.description || "-",
+      },
+      {
+        title: "生效日期",
+        key: "effectiveDate",
+        width: 120,
+        render: (_dom, record) => formatEffectiveDate(record),
       },
       {
         title: "操作",
@@ -262,22 +262,10 @@ const SystemSettingsPage = () => {
         columns={columns}
         pagination={{ pageSize: 20 }}
         scroll={{ x: "max-content" }}
-        toolBarRender={() => [
-          <Button
-            key="add-setting"
-            type="primary"
-            onClick={() => {
-              setEditingRecord(null);
-              setModalOpen(true);
-            }}
-          >
-            添加参数
-          </Button>,
-        ]}
       />
 
       <Modal
-        title={isEditMode ? "编辑系统参数" : "新增系统参数"}
+        title="编辑系统参数"
         open={modalOpen}
         onCancel={closeModal}
         onOk={handleSubmit}
@@ -289,61 +277,43 @@ const SystemSettingsPage = () => {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
               gap: 16,
             }}
           >
             <Form.Item
-              label="key"
-              name="key"
-              rules={[{ required: true, message: "请输入 key" }]}
-            >
-              <Input placeholder="例如 pricing.projectFundAmount" />
-            </Form.Item>
-            <Form.Item
-              label="name"
+              label="参数名称"
               name="name"
               rules={[{ required: true, message: "请输入参数名称" }]}
             >
               <Input placeholder="例如 成本基准线" />
             </Form.Item>
             <Form.Item
-              label="group"
-              name="group"
-              rules={[{ required: true, message: "请输入分组" }]}
-            >
-              <Input placeholder="例如 pricing" />
-            </Form.Item>
-            <Form.Item
-              label="value"
+              label="参数值"
               name="value"
               rules={[{ required: true, message: "请输入值" }]}
             >
               <Input placeholder="例如 53" />
             </Form.Item>
-            <Form.Item
-              label="type"
-              name="valueType"
-              rules={[{ required: true, message: "请选择值类型" }]}
-            >
-              <Select
-                options={Object.entries(VALUE_TYPE_LABELS).map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
-              />
-            </Form.Item>
-            <Form.Item label="unit" name="unit">
+            <Form.Item label="参数单位" name="unit">
               <Input placeholder="例如 % / 元 / 天" />
             </Form.Item>
-            <Form.Item label="description" name="description" style={{ gridColumn: "span 2" }}>
+            <Form.Item
+              label="生效日期"
+              name="effectiveDate"
+              rules={[{ required: true, message: "请选择生效日期" }]}
+            >
+              <DatePicker style={{ width: "100%" }} />
+            </Form.Item>
+            <Form.Item
+              label="说明"
+              name="description"
+              style={{ gridColumn: "span 2" }}
+            >
               <Input.TextArea
                 rows={3}
                 placeholder="例如 报价策略中用于判断成本是否超过基准线"
               />
-            </Form.Item>
-            <Form.Item label="order" name="order">
-              <InputNumber style={{ width: "100%" }} placeholder="例如 50" />
             </Form.Item>
           </div>
         </Form>

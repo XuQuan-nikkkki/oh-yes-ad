@@ -501,11 +501,14 @@ const EmployeeFormModal = ({
   };
 
   const saveEmployee = async (payload: Record<string, unknown>) => {
-    await fetch("/api/employees", {
+    const response = await fetch("/api/employees", {
       method: isEdit ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(isEdit ? { id: initialValues?.id, ...payload } : payload),
     });
+    if (!response.ok) {
+      throw new Error((await response.text()) || "保存成员失败");
+    }
     form.resetFields();
     onSuccess();
   };
@@ -923,7 +926,7 @@ const EmployeeFormModal = ({
                 fieldName: "workstationCost",
                 currentValue: workstationCostValue,
                 defaultValue: defaultWorkstationCost,
-                buttonText: "更新为默认值",
+                buttonText: "更新为员工默认工位费",
               })}
               name="workstationCost"
             >
@@ -931,11 +934,11 @@ const EmployeeFormModal = ({
             </ProForm.Item>
             <ProForm.Item
               label={renderDefaultCostLabel({
-                label: "水电",
+                label: "水电费",
                 fieldName: "utilityCost",
                 currentValue: utilityCostValue,
                 defaultValue: defaultUtilityCost,
-                buttonText: "更新为默认值",
+                buttonText: "更新为员工默认水电费",
               })}
               name="utilityCost"
             >

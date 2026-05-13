@@ -8,16 +8,16 @@ model ProjectFinancialStructure {
   initiation   ProjectInitiation? @relation(fields: [initiationId], references: [id], onDelete: Restrict)
 
   contractAmountTaxIncluded Float?
-  laborCost        Float
-  rentCost         Float
-  middleOfficeCost Float
-  executionCost    Float
-  agencyFeeRate    Float?
-  totalCost        Float
+  laborCost                 Float
+  rentCost                  Float
+  middleOfficeCost          Float
+  executionCost             Float
+  agencyFeeRate             Float?
+  totalCost                 Float
 
-  outsourceItems      ProjectOutsourceItem[]                    @relation("ProjectFinancialStructureOutsourceItems")
-  outsourceRemark     String?
-  executionCostItems  ProjectFinancialStructureExecutionCostItem[]
+  outsourceItems     ProjectOutsourceItem[]                       @relation("ProjectFinancialStructureOutsourceItems")
+  outsourceRemark    String?
+  executionCostItems ProjectFinancialStructureExecutionCostItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

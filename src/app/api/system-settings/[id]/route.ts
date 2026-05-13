@@ -12,6 +12,12 @@ const parseOrderValue = (value: unknown) => {
   return Number.isFinite(parsed) ? Math.round(parsed) : null;
 };
 
+const parseEffectiveDate = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 const normalizeValueType = (value: unknown): SystemSettingValueType | null => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -39,28 +45,91 @@ export async function PATCH(
   const unit = String(body.unit ?? "").trim() || null;
   const description = String(body.description ?? "").trim() || null;
   const order = parseOrderValue(body.order);
+  const effectiveDate = parseEffectiveDate(body.effectiveDate);
 
   if (!key || !name || !group || value === "" || !valueType) {
     return new Response("Missing required fields", { status: 400 });
   }
 
   try {
-    const updated = await prisma.systemSetting.update({
-      where: { id },
-      data: {
-        key,
-        name,
-        group,
-        value,
-        valueType,
-        unit,
-        description,
-        order,
-        updatedById: employee.id,
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const existing = await tx.systemSetting.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          key: true,
+          value: true,
+          valueType: true,
+        },
+      });
+
+      if (!existing) {
+        throw new Error("System setting not found");
+      }
+
+      if (existing.value !== value && !effectiveDate) {
+        throw new Error("Effective date is required when value changes");
+      }
+
+      const nextSetting = await tx.systemSetting.update({
+        where: { id },
+        data: {
+          key,
+          name,
+          group,
+          value,
+          valueType,
+          unit,
+          description,
+          order,
+          updatedById: employee.id,
+        },
+      });
+
+      if (existing.value !== value) {
+        await tx.systemSettingHistory.create({
+          data: {
+            systemSettingId: existing.id,
+            key,
+            oldValue: existing.value,
+            newValue: value,
+            valueType,
+            effectiveDate: effectiveDate!,
+            changedById: employee.id,
+          },
+        });
+      }
+
+      const latestHistory = await tx.systemSettingHistory.findFirst({
+        where: { systemSettingId: existing.id },
+        orderBy: [
+          { effectiveDate: "desc" },
+          { changedAt: "desc" },
+        ],
+        select: {
+          effectiveDate: true,
+          newValue: true,
+        },
+      });
+
+      return {
+        ...nextSetting,
+        histories: latestHistory ? [latestHistory] : [],
+      };
     });
     return Response.json(updated);
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "Effective date is required when value changes"
+    ) {
+      return new Response("Effective date is required when value changes", {
+        status: 400,
+      });
+    }
+    if (error instanceof Error && error.message === "System setting not found") {
+      return new Response("参数不存在", { status: 404 });
+    }
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"

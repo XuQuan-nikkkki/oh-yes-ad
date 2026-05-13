@@ -1,8 +1,11 @@
 import { PrismaClient } from "@prisma/client";
-import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { cookies } from "next/headers";
+
+import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import { getNumericSystemSettings } from "@/lib/system-settings.server";
+import { AUTH_SESSION_COOKIE, decodeAuthSession } from "@/lib/auth-session";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -182,6 +185,41 @@ const serializeEmployee = (employee: EmployeePayload) => ({
   employmentStatus: employee.employmentStatusOption?.value ?? null,
 });
 
+const toNullableNumber = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const toNullableDate = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const getCurrentEmployeeId = async () => {
+  const raw = (await cookies()).get(AUTH_SESSION_COOKIE)?.value;
+  if (!raw) return null;
+  const session = decodeAuthSession(raw);
+  if (!session?.employeeId) return null;
+
+  const employee = await prisma.employee.findUnique({
+    where: { id: session.employeeId },
+    select: { id: true },
+  });
+
+  return employee?.id ?? null;
+};
+
+const getTodayStart = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+};
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const list = searchParams.get("list");
@@ -229,32 +267,52 @@ export async function POST(req: Request) {
   ]);
 
   const systemSettings = await getNumericSystemSettings();
+  const changedById = await getCurrentEmployeeId();
+  const workstationCost = systemSettings.employeeDefaultWorkstationCost;
+  const utilityCost = systemSettings.employeeDefaultUtilityCost;
 
   try {
-    const employee = await prisma.employee.create({
-      data: {
-        name: body.name,
-        phone,
-        fullName: body.fullName || null,
-        password: body.password || undefined,
-        functionOptionId,
-        employmentStatusOptionId,
-        workstationCost: systemSettings.employeeDefaultWorkstationCost,
-        utilityCost: systemSettings.employeeDefaultUtilityCost,
-        roles: {
-          create:
-            roleIds.length > 0
-              ? roleIds.map((roleId) => ({
-                  role: { connect: { id: roleId } },
-                }))
-              : [
-                  {
-                    role: { connect: { id: staffRoleId } },
-                  },
-                ],
+    const employee = await prisma.$transaction(async (tx) => {
+      const created = await tx.employee.create({
+        data: {
+          name: body.name,
+          phone,
+          fullName: body.fullName || null,
+          password: body.password || undefined,
+          functionOptionId,
+          employmentStatusOptionId,
+          workstationCost,
+          utilityCost,
+          roles: {
+            create:
+              roleIds.length > 0
+                ? roleIds.map((roleId) => ({
+                    role: { connect: { id: roleId } },
+                  }))
+                : [
+                    {
+                      role: { connect: { id: staffRoleId } },
+                    },
+                  ],
+          },
         },
-      },
-      select: employeePublicSelect,
+        select: employeePublicSelect,
+      });
+
+      await tx.employeeCompensationHistory.create({
+        data: {
+          employeeId: created.id,
+          salary: null,
+          socialSecurity: null,
+          providentFund: null,
+          workstationCost,
+          utilityCost,
+          effectiveDate: getTodayStart(),
+          changedById,
+        },
+      });
+
+      return created;
     });
 
     return Response.json(serializeEmployee(employee));
@@ -326,22 +384,6 @@ export async function PUT(req: Request) {
       ? upsertSelectOption("employee.employmentStatus", body.employmentStatus)
       : Promise.resolve(undefined),
   ]);
-
-  const toNullableNumber = (value: unknown) => {
-    if (value === null || value === undefined || value === "") return null;
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-    if (typeof value === "string") {
-      const parsed = Number(value.trim());
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-    return null;
-  };
-
-  const toNullableDate = (value: unknown) => {
-    if (value === null || value === undefined || value === "") return null;
-    const parsed = new Date(String(value));
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  };
 
   const data: Record<string, unknown> = {
     name: body.name,

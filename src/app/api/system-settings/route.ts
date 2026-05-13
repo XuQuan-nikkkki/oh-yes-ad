@@ -14,6 +14,12 @@ const parseOrderValue = (value: unknown) => {
   return Number.isFinite(parsed) ? Math.round(parsed) : null;
 };
 
+const parseEffectiveDate = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 const normalizeValueType = (value: unknown): SystemSettingValueType | null => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -29,6 +35,18 @@ export async function GET() {
   if (response) return response;
 
   const items = await prisma.systemSetting.findMany({
+    include: {
+      histories: {
+        orderBy: [
+          { effectiveDate: "desc" },
+          { changedAt: "desc" },
+        ],
+        select: {
+          effectiveDate: true,
+          newValue: true,
+        },
+      },
+    },
     orderBy: [
       { group: "asc" },
       { order: "asc" },
@@ -53,24 +71,44 @@ export async function POST(req: Request) {
   const unit = String(body.unit ?? "").trim() || null;
   const description = String(body.description ?? "").trim() || null;
   const order = parseOrderValue(body.order);
+  const effectiveDate = parseEffectiveDate(body.effectiveDate);
 
-  if (!key || !name || !group || value === "" || !valueType) {
+  if (!key || !name || !group || value === "" || !valueType || !effectiveDate) {
     return new Response("Missing required fields", { status: 400 });
   }
 
   try {
-    const created = await prisma.systemSetting.create({
-      data: {
-        key,
-        name,
-        group,
-        value,
-        valueType,
-        unit,
-        description,
-        order,
-        updatedById: employee.id,
-      },
+    const created = await prisma.$transaction(async (tx) => {
+      const setting = await tx.systemSetting.create({
+        data: {
+          key,
+          name,
+          group,
+          value,
+          valueType,
+          unit,
+          description,
+          order,
+          updatedById: employee.id,
+        },
+      });
+
+      await tx.systemSettingHistory.create({
+        data: {
+          systemSettingId: setting.id,
+          key,
+          oldValue: null,
+          newValue: value,
+          valueType,
+          effectiveDate,
+          changedById: employee.id,
+        },
+      });
+
+      return {
+        ...setting,
+        histories: [{ effectiveDate, newValue: value }],
+      };
     });
     return Response.json(created);
   } catch (error) {

@@ -9,10 +9,6 @@ import ActualWorkEntriesTable, {
   type ActualWorkEntryRow,
 } from "@/components/ActualWorkEntriesTable";
 import {
-  getSystemSettingNumberFromRecords,
-  SYSTEM_SETTING_KEYS,
-} from "@/lib/system-settings";
-import {
   calculateActualWorkdays,
   getActualWorkEntryHours,
   getActualWorkdayGroupKey,
@@ -20,7 +16,6 @@ import {
 import ListPageContainer from "@/components/ListPageContainer";
 import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
-import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
 import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
 import type { WorkdayAdjustment } from "@/types/workdayAdjustment";
 
@@ -170,10 +165,6 @@ export default function WorkHoursAnalysisPage() {
   const [loading, setLoading] = useState(false);
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
-  const systemSettings = useSystemSettingsStore((state) => state.records);
-  const fetchSystemSettings = useSystemSettingsStore(
-    (state) => state.fetchSystemSettings,
-  );
   const workdayAdjustments = useWorkdayAdjustmentsStore(
     (state) => state.adjustments,
   );
@@ -265,25 +256,8 @@ export default function WorkHoursAnalysisPage() {
   }, []);
 
   useEffect(() => {
-    void fetchSystemSettings();
-  }, [fetchSystemSettings]);
-
-  useEffect(() => {
     void fetchAdjustmentsFromStore();
   }, [fetchAdjustmentsFromStore]);
-
-  const defaultMonthlyRentCost = useMemo(
-    () =>
-      getSystemSettingNumberFromRecords(
-        systemSettings,
-        SYSTEM_SETTING_KEYS.employeeDefaultWorkstationCost,
-      ) +
-      getSystemSettingNumberFromRecords(
-        systemSettings,
-        SYSTEM_SETTING_KEYS.employeeDefaultUtilityCost,
-      ),
-    [systemSettings],
-  );
 
   const projectMap = useMemo(() => {
     const map = new Map<
@@ -430,11 +404,12 @@ export default function WorkHoursAnalysisPage() {
         toNumber(employee.salary) +
         toNumber(employee.socialSecurity) +
         toNumber(employee.providentFund) +
-        defaultMonthlyRentCost;
+        toNumber(employee.workstationCost) +
+        toNumber(employee.utilityCost);
       map.set(employee.id, totalHumanCost);
     }
     return map;
-  }, [defaultMonthlyRentCost, employees]);
+  }, [employees]);
 
   const employeeOptions = useMemo(
     () =>

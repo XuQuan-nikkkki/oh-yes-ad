@@ -95,3 +95,17 @@ a {
   min-height: 20px;
   line-height: 20px;
 }
+
+.employee-compensation-timeline.ant-timeline-label .ant-timeline-item-label {
+  width: 96px;
+}
+
+.employee-compensation-timeline.ant-timeline-label .ant-timeline-item-tail,
+.employee-compensation-timeline.ant-timeline-label .ant-timeline-item-head {
+  inset-inline-start: 112px;
+}
+
+.employee-compensation-timeline.ant-timeline-label .ant-timeline-item-content {
+  inset-inline-start: 112px;
+  width: calc(100% - 112px);
+}

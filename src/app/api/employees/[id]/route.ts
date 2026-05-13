@@ -237,6 +237,22 @@ export async function GET(_req: Request, context: RouteContext) {
           fullName: true,
         },
       },
+      compensationHistories: {
+        select: {
+          id: true,
+          salary: true,
+          socialSecurity: true,
+          providentFund: true,
+          workstationCost: true,
+          utilityCost: true,
+          changeReason: true,
+          effectiveDate: true,
+        },
+        orderBy: [
+          { effectiveDate: "asc" },
+          { changedAt: "asc" },
+        ],
+      },
       ownedProjects: {
         select: {
           id: true,

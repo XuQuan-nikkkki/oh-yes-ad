@@ -20,6 +20,10 @@ export type SystemSettingRecord = {
   updatedById?: string | null;
   createdAt: string;
   updatedAt: string;
+  histories?: {
+    effectiveDate: string;
+    newValue?: string | null;
+  }[];
 };
 
 type SystemSettingsStore = {

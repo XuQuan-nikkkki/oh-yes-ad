@@ -11,6 +11,9 @@ export const DATE_FORMAT = "YYYY-MM-DD";
 /** 日期时间格式（含分钟） */
 export const DATETIME_FORMAT = "YYYY-MM-DD HH:mm";
 
+/** 系统上线日期，用于缺少真实历史起点时补齐基线记录 */
+export const SYSTEM_LAUNCH_DATE = "2026-04-01";
+
 export const PROJECT_TASK_STATUS_FIELD = "projectTask.status";
 
 export const DEFAULT_PROJECT_TASK_STATUS = "待推进";

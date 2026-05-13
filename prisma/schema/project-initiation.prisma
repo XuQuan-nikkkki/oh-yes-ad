@@ -9,18 +9,18 @@ model ProjectInitiation {
 
   version Int
 
-  estimatedDuration      Int
-  contractAmount Decimal?
+  estimatedDuration Int
+  contractAmount    Decimal?
 
-  agencyFeeRate            Float? @default(0)
+  agencyFeeRate Float? @default(0)
 
-  members            ProjectInitiationMember[]
-  totalLaborCost           Float  @default(0)
+  members        ProjectInitiationMember[]
+  totalLaborCost Float                     @default(0)
 
-  outsourceItems     ProjectOutsourceItem[]         @relation("ProjectInitiationOutsourceItems")
-  outsourceRemark          String?
+  outsourceItems  ProjectOutsourceItem[] @relation("ProjectInitiationOutsourceItems")
+  outsourceRemark String?
 
-  executionCostTypes SelectOption[]                 @relation("ProjectInitiationExecutionCostTypes")
+  executionCostTypes       SelectOption[] @relation("ProjectInitiationExecutionCostTypes")
   otherExecutionCostRemark String?
 
   financialStructure ProjectFinancialStructure?

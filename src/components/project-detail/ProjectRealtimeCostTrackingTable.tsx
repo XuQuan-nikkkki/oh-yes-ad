@@ -20,6 +20,7 @@ import {
 } from "@/lib/system-settings";
 import { calculateWorkdays } from "@/lib/workday";
 import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
+import type { SystemSettingRecord } from "@/stores/systemSettingsStore";
 import type { Project, WorkdayAdjustment } from "@/types/projectDetail";
 import ProjectDetailTableContainer from "@/components/project-detail/ProjectDetailTableContainer";
 import {
@@ -179,6 +180,56 @@ const formatSignedPercentText = (ratioValue?: number | null) => {
 const normalizeNegativeZero = (value: number) =>
   Object.is(value, -0) ? 0 : value;
 
+const getStartOfDay = (value: Date) =>
+  new Date(value.getFullYear(), value.getMonth(), value.getDate());
+
+const addDays = (value: Date, days: number) => {
+  const next = new Date(value);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const formatDateText = (value: Date) =>
+  `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(
+    value.getDate(),
+  ).padStart(2, "0")}`;
+
+const hasPositiveCostValue = (value: unknown) => {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string" && !value.trim()) return false;
+  if (typeof value === "number") return Number.isFinite(value) && value > 0;
+  if (typeof value === "string") {
+    const parsed = Number(value.trim().replaceAll(",", "").replaceAll("，", ""));
+    return Number.isFinite(parsed) && parsed > 0;
+  }
+  return false;
+};
+
+const findSystemSetting = (
+  settings: SystemSettingRecord[],
+  key: string,
+) => settings.find((item) => item.key === key);
+
+const getSettingValueAt = (
+  setting: SystemSettingRecord | undefined,
+  targetDate: Date,
+) => {
+  if (!setting) return 0;
+  const targetTime = getStartOfDay(targetDate).getTime();
+  const matched = [...(setting.histories ?? [])]
+    .filter((history) => {
+      const effectiveTime = getStartOfDay(new Date(history.effectiveDate)).getTime();
+      return Number.isFinite(effectiveTime) && effectiveTime <= targetTime;
+    })
+    .sort(
+      (left, right) =>
+        getStartOfDay(new Date(right.effectiveDate)).getTime() -
+        getStartOfDay(new Date(left.effectiveDate)).getTime(),
+    )[0];
+
+  return toNumber(matched?.newValue ?? setting.value);
+};
+
 const formatSignedAmountText = (value?: number | null) => {
   if (value === null || value === undefined) return "-";
   if (!Number.isFinite(value)) return "-";
@@ -253,7 +304,7 @@ const ProjectRealtimeCostTrackingTable = ({
   const mountedRef = useRef(false);
 
   useEffect(() => {
-    void fetchSystemSettings();
+    void fetchSystemSettings(true);
   }, [fetchSystemSettings]);
 
   useEffect(() => {
@@ -378,18 +429,6 @@ const ProjectRealtimeCostTrackingTable = ({
       getSystemSettingNumberFromRecords(
         systemSettings,
         SYSTEM_SETTING_KEYS.employeeMonthlyWorkdayBase,
-      ),
-    [systemSettings],
-  );
-  const defaultMonthlyRentCost = useMemo(
-    () =>
-      getSystemSettingNumberFromRecords(
-        systemSettings,
-        SYSTEM_SETTING_KEYS.employeeDefaultWorkstationCost,
-      ) +
-      getSystemSettingNumberFromRecords(
-        systemSettings,
-        SYSTEM_SETTING_KEYS.employeeDefaultUtilityCost,
       ),
     [systemSettings],
   );
@@ -571,14 +610,101 @@ const ProjectRealtimeCostTrackingTable = ({
     ];
   }, [actualLaborCost, laborBreakdown]);
 
-  const rentCost = useMemo(
+  const validRentMembers = useMemo(
     () =>
-      members.reduce(
-        (sum) =>
-          sum + (defaultMonthlyRentCost / monthlyWorkdayBase) * elapsedWorkdays,
-        0,
+      members.filter(
+        (member) =>
+          hasPositiveCostValue(member.workstationCost) &&
+          hasPositiveCostValue(member.utilityCost),
       ),
-    [defaultMonthlyRentCost, elapsedWorkdays, members, monthlyWorkdayBase],
+    [members],
+  );
+
+  const excludedRentMembers = useMemo(
+    () =>
+      members.filter(
+        (member) =>
+          !hasPositiveCostValue(member.workstationCost) ||
+          !hasPositiveCostValue(member.utilityCost),
+      ),
+    [members],
+  );
+
+  const rentCostSegments = useMemo(() => {
+    if (!startDate || monthlyWorkdayBase <= 0 || validRentMembers.length === 0) {
+      return [];
+    }
+
+    const projectStart = getStartOfDay(new Date(startDate));
+    const today = getStartOfDay(new Date());
+    if (Number.isNaN(projectStart.getTime()) || projectStart > today) return [];
+
+    const workstationSetting = findSystemSetting(
+      systemSettings,
+      SYSTEM_SETTING_KEYS.employeeDefaultWorkstationCost,
+    );
+    const utilitySetting = findSystemSetting(
+      systemSettings,
+      SYSTEM_SETTING_KEYS.employeeDefaultUtilityCost,
+    );
+
+    const changeTimes = new Set<number>();
+    for (const setting of [workstationSetting, utilitySetting]) {
+      for (const history of setting?.histories ?? []) {
+        const effectiveDate = getStartOfDay(new Date(history.effectiveDate));
+        if (
+          Number.isNaN(effectiveDate.getTime()) ||
+          effectiveDate <= projectStart ||
+          effectiveDate > today
+        ) {
+          continue;
+        }
+        changeTimes.add(effectiveDate.getTime());
+      }
+    }
+
+    const phaseStarts = [projectStart, ...Array.from(changeTimes).sort((a, b) => a - b).map((time) => new Date(time))];
+
+    return phaseStarts
+      .map((phaseStart, index) => {
+        const nextPhaseStart = phaseStarts[index + 1];
+        const phaseEnd = nextPhaseStart ? addDays(nextPhaseStart, -1) : today;
+        const workdays = calculateWorkdays(
+          phaseStart,
+          phaseEnd,
+          workdayAdjustments,
+        );
+        const workstationCost = getSettingValueAt(workstationSetting, phaseStart);
+        const utilityCost = getSettingValueAt(utilitySetting, phaseStart);
+        const monthlyRentCost = workstationCost + utilityCost;
+        const amount =
+          (monthlyRentCost / monthlyWorkdayBase) *
+          workdays *
+          validRentMembers.length;
+
+        return {
+          startDate: phaseStart,
+          endDate: phaseEnd,
+          workdays,
+          workstationCost,
+          utilityCost,
+          monthlyRentCost,
+          memberCount: validRentMembers.length,
+          amount,
+        };
+      })
+      .filter((segment) => segment.workdays > 0);
+  }, [
+    monthlyWorkdayBase,
+    startDate,
+    systemSettings,
+    validRentMembers.length,
+    workdayAdjustments,
+  ]);
+
+  const rentCost = useMemo(
+    () => rentCostSegments.reduce((sum, segment) => sum + segment.amount, 0),
+    [rentCostSegments],
   );
 
   const income = useMemo(
@@ -727,14 +853,43 @@ const ProjectRealtimeCostTrackingTable = ({
   );
   const rentRemarkText = useMemo(() => {
     if (monthlyWorkdayBase <= 0) return "-";
-    const memberCount = members.length;
-    return `(月工位费+月水电费) / 月工作日基数 * 实际工作日 * 成员数 = ${formatYuanText(
-      defaultMonthlyRentCost,
-    )} / ${formatAmount(monthlyWorkdayBase)} * ${elapsedWorkdays} * ${memberCount}`;
+    if (!startDate) return "-";
+    if (validRentMembers.length === 0) {
+      return "没有可参与租金成本计算的成员（工位费和水电费都需大于 0）";
+    }
+    if (!rentCostSegments.length) return "-";
+
+    const excludedText = excludedRentMembers.length
+      ? `有效成员数：${validRentMembers.length}；已排除工位费或水电费为空/为 0 的成员：${excludedRentMembers
+          .map((member) => member.name || "-")
+          .join("、")}`
+      : `有效成员数：${validRentMembers.length}`;
+    const segmentLines = rentCostSegments.map((segment) => {
+      const dateRange =
+        formatDateText(segment.startDate) === formatDateText(segment.endDate)
+          ? formatDateText(segment.startDate)
+          : `${formatDateText(segment.startDate)} 至 ${formatDateText(
+              segment.endDate,
+            )}`;
+      return `${dateRange}：(${formatYuanText(
+        segment.workstationCost,
+      )} + ${formatYuanText(segment.utilityCost)}) / ${formatAmount(
+        monthlyWorkdayBase,
+      )} * ${segment.workdays} * ${segment.memberCount} = ${formatYuanText(
+        segment.amount,
+      )}`;
+    });
+
+    return [
+      excludedText,
+      "按系统参数历史生效日期分段计算：(月工位费 + 月水电费) / 月工作日基数 * 阶段实际工作日 * 有效成员数",
+      ...segmentLines,
+    ].join("\n");
   }, [
-    defaultMonthlyRentCost,
-    elapsedWorkdays,
-    members.length,
+    excludedRentMembers,
+    rentCostSegments,
+    startDate,
+    validRentMembers.length,
     monthlyWorkdayBase,
   ]);
 
