@@ -605,6 +605,18 @@ export async function GET(req: Request) {
               providentFund: true,
               workstationCost: true,
               utilityCost: true,
+              compensationHistories: {
+                select: {
+                  id: true,
+                  salary: true,
+                  socialSecurity: true,
+                  providentFund: true,
+                  workstationCost: true,
+                  utilityCost: true,
+                  effectiveDate: true,
+                },
+                orderBy: [{ effectiveDate: "asc" }, { changedAt: "asc" }],
+              },
               functionOption: {
                 select: {
                   value: true,

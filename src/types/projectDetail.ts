@@ -219,6 +219,15 @@ export type Project = {
       providentFund?: string | number | null;
       workstationCost?: string | number | null;
       utilityCost?: string | number | null;
+      compensationHistories?: {
+        id: string;
+        salary?: string | number | null;
+        socialSecurity?: string | number | null;
+        providentFund?: string | number | null;
+        workstationCost?: string | number | null;
+        utilityCost?: string | number | null;
+        effectiveDate: string;
+      }[];
       function?: string | null;
       functionOption?: {
         id?: string;

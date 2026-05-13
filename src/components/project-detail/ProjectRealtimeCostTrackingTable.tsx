@@ -20,7 +20,6 @@ import {
 } from "@/lib/system-settings";
 import { calculateWorkdays } from "@/lib/workday";
 import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
-import type { SystemSettingRecord } from "@/stores/systemSettingsStore";
 import type { Project, WorkdayAdjustment } from "@/types/projectDetail";
 import ProjectDetailTableContainer from "@/components/project-detail/ProjectDetailTableContainer";
 import {
@@ -123,6 +122,18 @@ type LaborDetailRow = {
   functionColor?: string;
   workdays: number;
   cost: number;
+  remark: string;
+};
+
+type RentDetailRow = {
+  key: string;
+  indexLabel: string;
+  name: string;
+  functionName: string;
+  functionColor?: string;
+  workdays: number;
+  cost: number;
+  remark: string;
 };
 
 type ActualWorkEntryEmployeeWithFunction = NonNullable<
@@ -133,6 +144,48 @@ type ActualWorkEntryEmployeeWithFunction = NonNullable<
     value?: string | null;
     color?: string | null;
   } | null;
+};
+
+type CompensationHistoryLite = {
+  effectiveDate: string;
+  salary?: string | number | null;
+  socialSecurity?: string | number | null;
+  providentFund?: string | number | null;
+  workstationCost?: string | number | null;
+  utilityCost?: string | number | null;
+};
+
+type EmployeeCompSegment = {
+  start: Date;
+  end: Date;
+  monthlyHumanCost: number;
+};
+
+const getCompensationAtDate = (
+  employee: ActualWorkEntryEmployeeWithFunction,
+  targetDate: Date,
+) => {
+  const targetTime = getStartOfDay(targetDate).getTime();
+  const histories = (employee.compensationHistories ?? [])
+    .filter((history) => {
+      const effectiveTime = getStartOfDay(new Date(history.effectiveDate)).getTime();
+      return Number.isFinite(effectiveTime) && effectiveTime <= targetTime;
+    })
+    .sort((left, right) => {
+      const leftTime = getStartOfDay(new Date(left.effectiveDate)).getTime();
+      const rightTime = getStartOfDay(new Date(right.effectiveDate)).getTime();
+      return rightTime - leftTime;
+    });
+  const matched = histories[0] as CompensationHistoryLite | undefined;
+  return {
+    salary: toNumber(matched?.salary ?? employee.salary),
+    socialSecurity: toNumber(matched?.socialSecurity ?? employee.socialSecurity),
+    providentFund: toNumber(matched?.providentFund ?? employee.providentFund),
+    workstationCost: toNumber(
+      matched?.workstationCost ?? employee.workstationCost,
+    ),
+    utilityCost: toNumber(matched?.utilityCost ?? employee.utilityCost),
+  };
 };
 
 const toNumber = (value: unknown) => {
@@ -189,47 +242,6 @@ const addDays = (value: Date, days: number) => {
   return next;
 };
 
-const formatDateText = (value: Date) =>
-  `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(
-    value.getDate(),
-  ).padStart(2, "0")}`;
-
-const hasPositiveCostValue = (value: unknown) => {
-  if (value === null || value === undefined) return false;
-  if (typeof value === "string" && !value.trim()) return false;
-  if (typeof value === "number") return Number.isFinite(value) && value > 0;
-  if (typeof value === "string") {
-    const parsed = Number(value.trim().replaceAll(",", "").replaceAll("，", ""));
-    return Number.isFinite(parsed) && parsed > 0;
-  }
-  return false;
-};
-
-const findSystemSetting = (
-  settings: SystemSettingRecord[],
-  key: string,
-) => settings.find((item) => item.key === key);
-
-const getSettingValueAt = (
-  setting: SystemSettingRecord | undefined,
-  targetDate: Date,
-) => {
-  if (!setting) return 0;
-  const targetTime = getStartOfDay(targetDate).getTime();
-  const matched = [...(setting.histories ?? [])]
-    .filter((history) => {
-      const effectiveTime = getStartOfDay(new Date(history.effectiveDate)).getTime();
-      return Number.isFinite(effectiveTime) && effectiveTime <= targetTime;
-    })
-    .sort(
-      (left, right) =>
-        getStartOfDay(new Date(right.effectiveDate)).getTime() -
-        getStartOfDay(new Date(left.effectiveDate)).getTime(),
-    )[0];
-
-  return toNumber(matched?.newValue ?? setting.value);
-};
-
 const formatSignedAmountText = (value?: number | null) => {
   if (value === null || value === undefined) return "-";
   if (!Number.isFinite(value)) return "-";
@@ -242,10 +254,116 @@ const getEntryHours = (start: string, end: string) =>
   Math.max((new Date(end).getTime() - new Date(start).getTime()) / 36e5, 0);
 
 const getDateKey = (value: string) => value.slice(0, 10);
+const formatMonthDayText = (value: Date) =>
+  `${String(value.getMonth() + 1).padStart(2, "0")}/${String(value.getDate()).padStart(2, "0")}`;
 
 const calcEntryWorkdays = (hours: number, total: number) => {
   if (hours === 0) return 0;
   return total > 7.5 ? hours / total : hours / 7.5;
+};
+
+const getMonthlyHumanCost = (
+  snapshot: Pick<
+    CompensationHistoryLite,
+    "salary" | "socialSecurity" | "providentFund"
+  >,
+) =>
+  toNumber(snapshot.salary) +
+  toNumber(snapshot.socialSecurity) +
+  toNumber(snapshot.providentFund);
+
+const getMonthlyRentCost = (
+  snapshot: Pick<CompensationHistoryLite, "workstationCost" | "utilityCost">,
+) => toNumber(snapshot.workstationCost) + toNumber(snapshot.utilityCost);
+
+const isSameMonthlyHumanCost = (left: number, right: number) =>
+  Math.abs(left - right) < 0.0001;
+
+const getEmployeeCompSegments = (
+  employee: ActualWorkEntryEmployeeWithFunction,
+  rangeStart: Date,
+  rangeEnd: Date,
+) => {
+  const sortedHistories = [...(employee.compensationHistories ?? [])].sort(
+    (left, right) =>
+      getStartOfDay(new Date(left.effectiveDate)).getTime() -
+      getStartOfDay(new Date(right.effectiveDate)).getTime(),
+  );
+  const changePoints = sortedHistories
+    .map((history, index) => {
+      const current = getMonthlyHumanCost(history);
+      const previous = index > 0 ? getMonthlyHumanCost(sortedHistories[index - 1]) : current;
+      return {
+        effectiveDate: getStartOfDay(new Date(history.effectiveDate)),
+        monthlyHumanCost: current,
+        changed: !isSameMonthlyHumanCost(current, previous),
+      };
+    })
+    .filter(
+      (item) =>
+        item.changed &&
+        item.effectiveDate > rangeStart &&
+        item.effectiveDate <= rangeEnd,
+    );
+
+  if (changePoints.length === 0) return [];
+
+  return changePoints
+    .map((point, index) => {
+      const next = changePoints[index + 1];
+      const start = point.effectiveDate;
+      const end = next ? addDays(next.effectiveDate, -1) : rangeEnd;
+      return {
+        start,
+        end,
+        monthlyHumanCost: point.monthlyHumanCost,
+      };
+    })
+    .filter((item) => item.start <= item.end);
+};
+
+const getEmployeeRentSegments = (
+  employee: ActualWorkEntryEmployeeWithFunction,
+  rangeStart: Date,
+  rangeEnd: Date,
+) => {
+  const sortedHistories = [...(employee.compensationHistories ?? [])].sort(
+    (left, right) =>
+      getStartOfDay(new Date(left.effectiveDate)).getTime() -
+      getStartOfDay(new Date(right.effectiveDate)).getTime(),
+  );
+  const changePoints = sortedHistories
+    .map((history, index) => {
+      const current = getMonthlyRentCost(history);
+      const previous =
+        index > 0 ? getMonthlyRentCost(sortedHistories[index - 1]) : current;
+      return {
+        effectiveDate: getStartOfDay(new Date(history.effectiveDate)),
+        monthlyRentCost: current,
+        changed: !isSameMonthlyHumanCost(current, previous),
+      };
+    })
+    .filter(
+      (item) =>
+        item.changed &&
+        item.effectiveDate > rangeStart &&
+        item.effectiveDate <= rangeEnd,
+    );
+
+  if (changePoints.length === 0) return [];
+
+  return changePoints
+    .map((point, index) => {
+      const next = changePoints[index + 1];
+      const start = point.effectiveDate;
+      const end = next ? addDays(next.effectiveDate, -1) : rangeEnd;
+      return {
+        start,
+        end,
+        monthlyRentCost: point.monthlyRentCost,
+      };
+    })
+    .filter((item) => item.start <= item.end);
 };
 
 const getProjectLevel = (costRatio: number) => {
@@ -280,6 +398,7 @@ const ProjectRealtimeCostTrackingTable = ({
   const [messageApi, contextHolder] = message.useMessage();
   const downloadTableRef = useRef<(() => Promise<void>) | null>(null);
   const [laborDetailOpen, setLaborDetailOpen] = useState(false);
+  const [rentDetailOpen, setRentDetailOpen] = useState(false);
   const currentUser = useAuthStore((state) => state.currentUser);
   const canViewLaborDetail = useMemo(() => {
     const roleCodes = getRoleCodesFromUser(currentUser);
@@ -514,6 +633,14 @@ const ProjectRealtimeCostTrackingTable = ({
         functionColor?: string;
         workdays: number;
         cost: number;
+        remark: string;
+        entries: Array<{
+          date: Date;
+          workdays: number;
+          cost: number;
+          monthlyHumanCost: number;
+        }>;
+        employee: ActualWorkEntryEmployeeWithFunction;
       }
     >();
 
@@ -522,10 +649,14 @@ const ProjectRealtimeCostTrackingTable = ({
         | ActualWorkEntryEmployeeWithFunction
         | undefined;
       if (!employee?.id) return;
+      const compensation = getCompensationAtDate(
+        employee,
+        new Date(entry.startDate),
+      );
       const monthlyHumanCost =
-        toNumber(employee.salary) +
-        toNumber(employee.socialSecurity) +
-        toNumber(employee.providentFund);
+        compensation.salary +
+        compensation.socialSecurity +
+        compensation.providentFund;
       const hours = getEntryHours(entry.startDate, entry.endDate);
       const total =
         groupedHours.get(`${employee.id}__${getDateKey(entry.startDate)}`) ??
@@ -547,25 +678,105 @@ const ProjectRealtimeCostTrackingTable = ({
         functionColor: functionMeta?.functionColor ?? fallbackFunctionColor,
         workdays: 0,
         cost: 0,
+        remark: "-",
+        entries: [],
+        employee,
       };
+      prev.entries.push({
+        date: getStartOfDay(new Date(entry.startDate)),
+        workdays: entryWorkdays,
+        cost,
+        monthlyHumanCost,
+      });
       byEmployee.set(employee.id, {
         name: prev.name,
         functionName: prev.functionName,
         functionColor: prev.functionColor,
         workdays: prev.workdays + entryWorkdays,
         cost: prev.cost + cost,
+        remark: prev.remark,
+        entries: prev.entries,
+        employee: prev.employee,
       });
     });
 
     const rows = Array.from(byEmployee.entries()).map(
-      ([employeeId, value]) => ({
-        employeeId,
-        name: value.name,
-        functionName: value.functionName,
-        functionColor: value.functionColor,
-        workdays: value.workdays,
-        cost: value.cost,
-      }),
+      ([employeeId, value]) => {
+        const validDates = value.entries
+          .map((item) => item.date)
+          .filter((date) => Number.isFinite(date.getTime()))
+          .sort((left, right) => left.getTime() - right.getTime());
+        const rangeStart = validDates[0];
+        const rangeEnd = validDates[validDates.length - 1];
+        const changeSegments =
+          rangeStart && rangeEnd
+            ? getEmployeeCompSegments(value.employee, rangeStart, rangeEnd)
+            : [];
+        let remark = "-";
+        if (rangeStart && rangeEnd && changeSegments.length > 0) {
+          const segments: EmployeeCompSegment[] = [];
+          const firstChangeStart = changeSegments[0]?.start;
+          const beforeFirstChangeCost = firstChangeStart
+            ? getCompensationAtDate(value.employee, addDays(firstChangeStart, -1))
+            : null;
+          if (firstChangeStart && beforeFirstChangeCost) {
+            const beforeEnd = addDays(firstChangeStart, -1);
+            if (rangeStart <= beforeEnd) {
+              segments.push({
+                start: rangeStart,
+                end: beforeEnd,
+                monthlyHumanCost:
+                  beforeFirstChangeCost.salary +
+                  beforeFirstChangeCost.socialSecurity +
+                  beforeFirstChangeCost.providentFund,
+              });
+            }
+          }
+          segments.push(...changeSegments);
+          const lines = segments
+            .map((segment, index) => {
+              const totals = value.entries.reduce(
+                (sum, item) => {
+                  if (item.date < segment.start || item.date > segment.end) {
+                    return sum;
+                  }
+                  return {
+                    workdays: sum.workdays + item.workdays,
+                    cost: sum.cost + item.cost,
+                  };
+                },
+                { workdays: 0, cost: 0 },
+              );
+              if (totals.workdays <= 0) return null;
+              const isFirstLine = index === 0;
+              const leftLabel = isFirstLine
+                ? "项目开始"
+                : formatMonthDayText(segment.start);
+              const rightLabel =
+                index === segments.length - 1
+                  ? "至今"
+                  : `${formatMonthDayText(segment.end)}`;
+              return `${leftLabel}-${rightLabel}：工时(${formatAmount(
+                totals.workdays,
+              )}d) * 人力成本(${formatYuanText(segment.monthlyHumanCost)}) = ${formatYuanText(
+                totals.cost,
+              )}元`;
+            })
+            .filter((line): line is string => Boolean(line));
+          if (lines.length > 0) {
+            remark = lines.join("\n");
+          }
+        }
+        return {
+          employeeId,
+          name: value.name,
+          functionName: value.functionName,
+          functionColor: value.functionColor,
+          workdays: value.workdays,
+          cost: value.cost,
+          remark,
+        };
+      },
     );
     rows.sort((a, b) => {
       const functionCompare = (a.functionName || "").localeCompare(
@@ -595,6 +806,7 @@ const ProjectRealtimeCostTrackingTable = ({
       functionColor: item.functionColor,
       workdays: toNumber(item.workdays),
       cost: toNumber(item.cost),
+      remark: item.remark ?? "-",
     }));
     return [
       ...detailRows,
@@ -606,106 +818,182 @@ const ProjectRealtimeCostTrackingTable = ({
         functionColor: undefined,
         workdays: totalWorkdays,
         cost: actualLaborCost,
+        remark: "-",
       },
     ];
   }, [actualLaborCost, laborBreakdown]);
 
-  const validRentMembers = useMemo(
-    () =>
-      members.filter(
-        (member) =>
-          hasPositiveCostValue(member.workstationCost) &&
-          hasPositiveCostValue(member.utilityCost),
-      ),
-    [members],
-  );
-
-  const excludedRentMembers = useMemo(
-    () =>
-      members.filter(
-        (member) =>
-          !hasPositiveCostValue(member.workstationCost) ||
-          !hasPositiveCostValue(member.utilityCost),
-      ),
-    [members],
-  );
-
-  const rentCostSegments = useMemo(() => {
-    if (!startDate || monthlyWorkdayBase <= 0 || validRentMembers.length === 0) {
-      return [];
-    }
-
-    const projectStart = getStartOfDay(new Date(startDate));
-    const today = getStartOfDay(new Date());
-    if (Number.isNaN(projectStart.getTime()) || projectStart > today) return [];
-
-    const workstationSetting = findSystemSetting(
-      systemSettings,
-      SYSTEM_SETTING_KEYS.employeeDefaultWorkstationCost,
-    );
-    const utilitySetting = findSystemSetting(
-      systemSettings,
-      SYSTEM_SETTING_KEYS.employeeDefaultUtilityCost,
-    );
-
-    const changeTimes = new Set<number>();
-    for (const setting of [workstationSetting, utilitySetting]) {
-      for (const history of setting?.histories ?? []) {
-        const effectiveDate = getStartOfDay(new Date(history.effectiveDate));
-        if (
-          Number.isNaN(effectiveDate.getTime()) ||
-          effectiveDate <= projectStart ||
-          effectiveDate > today
-        ) {
-          continue;
-        }
-        changeTimes.add(effectiveDate.getTime());
+  const rentBreakdown = useMemo(() => {
+    const groupedHours = new Map<string, number>();
+    actualWorkEntries.forEach((entry) => {
+      const employeeId = entry.employee?.id ?? "";
+      if (!employeeId) return;
+      const key = `${employeeId}__${getDateKey(entry.startDate)}`;
+      groupedHours.set(
+        key,
+        (groupedHours.get(key) ?? 0) +
+          getEntryHours(entry.startDate, entry.endDate),
+      );
+    });
+    const byEmployee = new Map<
+      string,
+      {
+        name: string;
+        functionName: string;
+        functionColor?: string;
+        workdays: number;
+        cost: number;
+        remark: string;
+        entries: Array<{
+          date: Date;
+          workdays: number;
+          cost: number;
+          monthlyRentCost: number;
+        }>;
+        employee: ActualWorkEntryEmployeeWithFunction;
       }
+    >();
+    for (const entry of actualWorkEntries) {
+      const employee = entry.employee as
+        | ActualWorkEntryEmployeeWithFunction
+        | undefined;
+      if (!employee?.id) continue;
+      const compensation = getCompensationAtDate(employee, new Date(entry.startDate));
+      const monthlyRentCost = compensation.workstationCost + compensation.utilityCost;
+      if (monthlyRentCost <= 0) continue;
+      const hours = getEntryHours(entry.startDate, entry.endDate);
+      const total =
+        groupedHours.get(`${employee.id}__${getDateKey(entry.startDate)}`) ??
+        hours;
+      const entryWorkdays = calcEntryWorkdays(hours, total);
+      const cost = (monthlyRentCost / monthlyWorkdayBase) * entryWorkdays;
+      const functionName = employee.functionOption?.value?.trim() || "未设置";
+      const functionColor = employee.functionOption?.color?.trim() || undefined;
+      const prev = byEmployee.get(employee.id) ?? {
+        name: employee.name ?? "-",
+        functionName,
+        functionColor,
+        workdays: 0,
+        cost: 0,
+        remark: "-",
+        entries: [],
+        employee,
+      };
+      prev.entries.push({
+        date: getStartOfDay(new Date(entry.startDate)),
+        workdays: entryWorkdays,
+        cost,
+        monthlyRentCost,
+      });
+      byEmployee.set(employee.id, {
+        ...prev,
+        workdays: prev.workdays + entryWorkdays,
+        cost: prev.cost + cost,
+      });
     }
-
-    const phaseStarts = [projectStart, ...Array.from(changeTimes).sort((a, b) => a - b).map((time) => new Date(time))];
-
-    return phaseStarts
-      .map((phaseStart, index) => {
-        const nextPhaseStart = phaseStarts[index + 1];
-        const phaseEnd = nextPhaseStart ? addDays(nextPhaseStart, -1) : today;
-        const workdays = calculateWorkdays(
-          phaseStart,
-          phaseEnd,
-          workdayAdjustments,
-        );
-        const workstationCost = getSettingValueAt(workstationSetting, phaseStart);
-        const utilityCost = getSettingValueAt(utilitySetting, phaseStart);
-        const monthlyRentCost = workstationCost + utilityCost;
-        const amount =
-          (monthlyRentCost / monthlyWorkdayBase) *
-          workdays *
-          validRentMembers.length;
-
-        return {
-          startDate: phaseStart,
-          endDate: phaseEnd,
-          workdays,
-          workstationCost,
-          utilityCost,
-          monthlyRentCost,
-          memberCount: validRentMembers.length,
-          amount,
-        };
-      })
-      .filter((segment) => segment.workdays > 0);
-  }, [
-    monthlyWorkdayBase,
-    startDate,
-    systemSettings,
-    validRentMembers.length,
-    workdayAdjustments,
-  ]);
+    const rows = Array.from(byEmployee.entries()).map(([employeeId, value]) => {
+      const validDates = value.entries
+        .map((item) => item.date)
+        .filter((date) => Number.isFinite(date.getTime()))
+        .sort((left, right) => left.getTime() - right.getTime());
+      const rangeStart = validDates[0];
+      const rangeEnd = validDates[validDates.length - 1];
+      const changeSegments =
+        rangeStart && rangeEnd
+          ? getEmployeeRentSegments(value.employee, rangeStart, rangeEnd)
+          : [];
+      let remark = "-";
+      if (rangeStart && rangeEnd && changeSegments.length > 0) {
+        const segments: Array<{ start: Date; end: Date; monthlyRentCost: number }> = [];
+        const firstChangeStart = changeSegments[0]?.start;
+        const beforeFirstChangeCost = firstChangeStart
+          ? getCompensationAtDate(value.employee, addDays(firstChangeStart, -1))
+          : null;
+        if (firstChangeStart && beforeFirstChangeCost) {
+          const beforeEnd = addDays(firstChangeStart, -1);
+          if (rangeStart <= beforeEnd) {
+            segments.push({
+              start: rangeStart,
+              end: beforeEnd,
+              monthlyRentCost:
+                beforeFirstChangeCost.workstationCost +
+                beforeFirstChangeCost.utilityCost,
+            });
+          }
+        }
+        segments.push(...changeSegments);
+        const lines = segments
+          .map((segment, index) => {
+            const totals = value.entries.reduce(
+              (sum, item) => {
+                if (item.date < segment.start || item.date > segment.end) return sum;
+                return { workdays: sum.workdays + item.workdays, cost: sum.cost + item.cost };
+              },
+              { workdays: 0, cost: 0 },
+            );
+            if (totals.workdays <= 0) return null;
+            const leftLabel = index === 0 ? "项目开始" : formatMonthDayText(segment.start);
+            const rightLabel =
+              index === segments.length - 1
+                ? "至今"
+                : `${formatMonthDayText(segment.end)}`;
+            return `${leftLabel}-${rightLabel}：工时(${formatAmount(
+              totals.workdays,
+            )}d) * 租金成本(${formatYuanText(segment.monthlyRentCost)}) = ${formatYuanText(
+              totals.cost,
+            )}元`;
+          })
+          .filter((line): line is string => Boolean(line));
+        if (lines.length > 0) remark = lines.join("\n");
+      }
+      return {
+        employeeId,
+        name: value.name,
+        functionName: value.functionName,
+        functionColor: value.functionColor,
+        workdays: value.workdays,
+        cost: value.cost,
+        remark,
+      };
+    });
+    rows.sort((a, b) => (a.name || "").localeCompare(b.name || "", "zh-CN"));
+    return rows;
+  }, [actualWorkEntries, monthlyWorkdayBase]);
 
   const rentCost = useMemo(
-    () => rentCostSegments.reduce((sum, segment) => sum + segment.amount, 0),
-    [rentCostSegments],
+    () => rentBreakdown.reduce((sum, item) => sum + toNumber(item.cost), 0),
+    [rentBreakdown],
   );
+
+  const rentDetailRows = useMemo<RentDetailRow[]>(() => {
+    const totalWorkdays = rentBreakdown.reduce(
+      (sum, item) => sum + toNumber(item.workdays),
+      0,
+    );
+    const detailRows = rentBreakdown.map((item, index) => ({
+      key: item.employeeId,
+      indexLabel: String(index + 1),
+      name: item.name,
+      functionName: item.functionName,
+      functionColor: item.functionColor,
+      workdays: toNumber(item.workdays),
+      cost: toNumber(item.cost),
+      remark: item.remark ?? "-",
+    }));
+    return [
+      ...detailRows,
+      {
+        key: "summary",
+        indexLabel: "汇总",
+        name: "",
+        functionName: "",
+        functionColor: undefined,
+        workdays: totalWorkdays,
+        cost: rentCost,
+        remark: "-",
+      },
+    ];
+  }, [rentBreakdown, rentCost]);
 
   const income = useMemo(
     () =>
@@ -851,48 +1139,6 @@ const ProjectRealtimeCostTrackingTable = ({
     () => `中介费率 ${financialStructure?.agencyFeeRate ?? 0}%`,
     [financialStructure?.agencyFeeRate],
   );
-  const rentRemarkText = useMemo(() => {
-    if (monthlyWorkdayBase <= 0) return "-";
-    if (!startDate) return "-";
-    if (validRentMembers.length === 0) {
-      return "没有可参与租金成本计算的成员（工位费和水电费都需大于 0）";
-    }
-    if (!rentCostSegments.length) return "-";
-
-    const excludedText = excludedRentMembers.length
-      ? `有效成员数：${validRentMembers.length}；已排除工位费或水电费为空/为 0 的成员：${excludedRentMembers
-          .map((member) => member.name || "-")
-          .join("、")}`
-      : `有效成员数：${validRentMembers.length}`;
-    const segmentLines = rentCostSegments.map((segment) => {
-      const dateRange =
-        formatDateText(segment.startDate) === formatDateText(segment.endDate)
-          ? formatDateText(segment.startDate)
-          : `${formatDateText(segment.startDate)} 至 ${formatDateText(
-              segment.endDate,
-            )}`;
-      return `${dateRange}：(${formatYuanText(
-        segment.workstationCost,
-      )} + ${formatYuanText(segment.utilityCost)}) / ${formatAmount(
-        monthlyWorkdayBase,
-      )} * ${segment.workdays} * ${segment.memberCount} = ${formatYuanText(
-        segment.amount,
-      )}`;
-    });
-
-    return [
-      excludedText,
-      "按系统参数历史生效日期分段计算：(月工位费 + 月水电费) / 月工作日基数 * 阶段实际工作日 * 有效成员数",
-      ...segmentLines,
-    ].join("\n");
-  }, [
-    excludedRentMembers,
-    rentCostSegments,
-    startDate,
-    validRentMembers.length,
-    monthlyWorkdayBase,
-  ]);
-
   const middleOfficeRemarkText = useMemo(() => {
     if (middleOfficeBaseDays <= 0) return "-";
     return `中台均值 / 基准天数 * 实际工作日 = ${formatYuanText(
@@ -949,7 +1195,7 @@ const ProjectRealtimeCostTrackingTable = ({
         category: "租金成本",
         amount: formatAmount(rentCost),
         ratio: formatRatio(income > 0 ? rentCost / income : null),
-        remark: rentRemarkText,
+        remark: "-",
       },
       {
         key: "executionCost",
@@ -1145,7 +1391,7 @@ const ProjectRealtimeCostTrackingTable = ({
         tone: "neutral",
         bold: true,
         barColor: "#D15651",
-        remark: rentRemarkText,
+        remark: "-",
       },
       {
         key: "middleOfficeCost",
@@ -1249,8 +1495,7 @@ const ProjectRealtimeCostTrackingTable = ({
     tax,
     totalCost,
     projectFundAmount,
-    rentRemarkText,
-    middleOfficeRemarkText,
+      middleOfficeRemarkText,
     financialStructure?.agencyFeeRate,
   ]);
 
@@ -1512,6 +1757,24 @@ const ProjectRealtimeCostTrackingTable = ({
               </Button>
             );
           }
+          if (row.key === "rentCost") {
+            if (!canViewLaborDetail) return null;
+            return (
+              <Button
+                type="link"
+                size="small"
+                style={{
+                  padding: 0,
+                  height: "auto",
+                  color: "rgba(0,0,0,0.5)",
+                  textDecoration: "underline",
+                }}
+                onClick={() => setRentDetailOpen(true)}
+              >
+                查看详情
+              </Button>
+            );
+          }
           return (
             <span style={{ whiteSpace: "pre-line", color: "rgba(0,0,0,0.65)" }}>
               {value}
@@ -1525,6 +1788,7 @@ const ProjectRealtimeCostTrackingTable = ({
     executionCost,
     executionCostBudget,
     canViewLaborDetail,
+    setRentDetailOpen,
     projectLevel,
   ]);
 
@@ -1721,8 +1985,8 @@ const ProjectRealtimeCostTrackingTable = ({
         open={laborDetailOpen}
         onCancel={() => setLaborDetailOpen(false)}
         footer={null}
-        width="80vh"
-        style={{ maxWidth: "80vh", top: 24 }}
+        width={1200}
+        style={{ maxWidth: "95vw", top: 24 }}
         styles={{
           body: {
             maxHeight: "80vh",
@@ -1735,6 +1999,7 @@ const ProjectRealtimeCostTrackingTable = ({
           size="small"
           pagination={false}
           dataSource={laborDetailRows}
+          scroll={{ x: 1080 }}
           rowClassName={(record) =>
             record.key === "summary" ? "labor-detail-summary-row" : ""
           }
@@ -1750,6 +2015,18 @@ const ProjectRealtimeCostTrackingTable = ({
               title: "姓名",
               dataIndex: "name",
               key: "name",
+              width: 140,
+              render: (value: string) => (
+                <span
+                  style={{
+                    display: "inline-block",
+                    whiteSpace: "nowrap",
+                    wordBreak: "keep-all",
+                  }}
+                >
+                  {value || "-"}
+                </span>
+              ),
             },
             {
               title: "职能",
@@ -1775,6 +2052,104 @@ const ProjectRealtimeCostTrackingTable = ({
               key: "cost",
               align: "right",
               render: (value: number) => `¥${formatYuanText(value)}`,
+            },
+            {
+              title: "备注",
+              dataIndex: "remark",
+              key: "remark",
+              width: 520,
+              render: (value: string) => (
+                <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                  {value || "-"}
+                </div>
+              ),
+            },
+          ]}
+        />
+      </Modal>
+      <Modal
+        title="租金成本详情"
+        open={rentDetailOpen}
+        onCancel={() => setRentDetailOpen(false)}
+        footer={null}
+        width={1200}
+        style={{ maxWidth: "95vw", top: 24 }}
+        styles={{
+          body: {
+            maxHeight: "80vh",
+            overflowY: "auto",
+          },
+        }}
+      >
+        <Table<RentDetailRow>
+          rowKey="key"
+          size="small"
+          pagination={false}
+          dataSource={rentDetailRows}
+          scroll={{ x: 1080 }}
+          rowClassName={(record) =>
+            record.key === "summary" ? "labor-detail-summary-row" : ""
+          }
+          columns={[
+            {
+              title: "序号",
+              dataIndex: "indexLabel",
+              key: "indexLabel",
+              width: 80,
+              align: "center",
+            },
+            {
+              title: "姓名",
+              dataIndex: "name",
+              key: "name",
+              width: 140,
+              render: (value: string) => (
+                <span
+                  style={{
+                    display: "inline-block",
+                    whiteSpace: "nowrap",
+                    wordBreak: "keep-all",
+                  }}
+                >
+                  {value || "-"}
+                </span>
+              ),
+            },
+            {
+              title: "职能",
+              dataIndex: "functionName",
+              key: "functionName",
+              render: (value: string, record: RentDetailRow) =>
+                record.key === "summary" ? (
+                  ""
+                ) : (
+                  <Tag color={record.functionColor}>{value}</Tag>
+                ),
+            },
+            {
+              title: "工时（天）",
+              dataIndex: "workdays",
+              key: "workdays",
+              align: "right",
+              render: (value: number) => `${formatAmount(value)}d`,
+            },
+            {
+              title: "折合租金成本",
+              dataIndex: "cost",
+              key: "cost",
+              align: "right",
+              render: (value: number) => `¥${formatYuanText(value)}`,
+            },
+            {
+              title: "备注",
+              dataIndex: "remark",
+              key: "remark",
+              width: 520,
+              render: (value: string) => (
+                <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                  {value || "-"}
+                </div>
+              ),
             },
           ]}
         />
