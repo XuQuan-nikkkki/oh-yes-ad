@@ -295,3 +295,81 @@ export async function PUT(req: Request, context: RouteContext) {
 
   return Response.json(serializeEmployee(employee));
 }
+
+export async function PATCH(req: Request, context: RouteContext) {
+  const { id } = await context.params;
+  if (!id) {
+    return new Response("Missing ID", { status: 400 });
+  }
+
+  const body = await sanitizeRequestBody(req);
+  const historyId = typeof body.historyId === "string" ? body.historyId.trim() : "";
+  if (!historyId) {
+    return new Response("History ID is required", { status: 400 });
+  }
+
+  const effectiveDate = toNullableDate(
+    body.effectiveDate ?? body.compensationEffectiveDate,
+  );
+  if (!effectiveDate) {
+    return new Response("Effective date is required", { status: 400 });
+  }
+
+  const changeReason = toNullableText(body.changeReason);
+  const nextCompensation = {
+    salary: toNullableNumber(body.salary),
+    socialSecurity: toNullableNumber(body.socialSecurity),
+    providentFund: toNullableNumber(body.providentFund),
+    workstationCost: toNullableNumber(body.workstationCost),
+    utilityCost: toNullableNumber(body.utilityCost),
+  };
+
+  const employee = await prisma.$transaction(async (tx) => {
+    const existingHistory = await tx.employeeCompensationHistory.findUnique({
+      where: { id: historyId },
+      select: { id: true, employeeId: true },
+    });
+    if (!existingHistory || existingHistory.employeeId !== id) {
+      return null;
+    }
+
+    await tx.employeeCompensationHistory.update({
+      where: { id: historyId },
+      data: {
+        ...nextCompensation,
+        changeReason,
+        effectiveDate: getDateStart(effectiveDate),
+      },
+    });
+
+    const latestHistory = await tx.employeeCompensationHistory.findFirst({
+      where: { employeeId: id },
+      orderBy: [{ effectiveDate: "desc" }, { changedAt: "desc" }],
+      select: {
+        salary: true,
+        socialSecurity: true,
+        providentFund: true,
+        workstationCost: true,
+        utilityCost: true,
+      },
+    });
+
+    return tx.employee.update({
+      where: { id },
+      data: {
+        salary: latestHistory?.salary ?? null,
+        socialSecurity: latestHistory?.socialSecurity ?? null,
+        providentFund: latestHistory?.providentFund ?? null,
+        workstationCost: latestHistory?.workstationCost ?? null,
+        utilityCost: latestHistory?.utilityCost ?? null,
+      },
+      select: employeePublicSelect,
+    });
+  });
+
+  if (!employee) {
+    return new Response("Compensation history not found", { status: 404 });
+  }
+
+  return Response.json(serializeEmployee(employee));
+}

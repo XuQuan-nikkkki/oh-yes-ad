@@ -160,6 +160,16 @@ type CompensationChangeFormValues = {
   effectiveDate?: dayjs.Dayjs | null;
 };
 
+type CompensationHistoryEditFormValues = {
+  changeReason?: string;
+  effectiveDate?: dayjs.Dayjs | null;
+  salary?: string;
+  socialSecurity?: string;
+  providentFund?: string;
+  workstationCost?: string;
+  utilityCost?: string;
+};
+
 type CompensationField = {
   key: "salary" | "socialSecurity" | "providentFund" | "workstationCost" | "utilityCost";
   label: string;
@@ -197,10 +207,14 @@ const EmployeeDetailPage = () => {
 
   const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
   const [compensationForm] = Form.useForm<CompensationChangeFormValues>();
+  const [compensationHistoryEditForm] =
+    Form.useForm<CompensationHistoryEditFormValues>();
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [compensationModalOpen, setCompensationModalOpen] = useState(false);
   const [compensationSubmitting, setCompensationSubmitting] = useState(false);
+  const [editingHistory, setEditingHistory] = useState<CompensationHistory | null>(null);
+  const [historyEditSubmitting, setHistoryEditSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activeTabKey, setActiveTabKey] = useState("employee-info");
   const [actualWorkRefreshKey, setActualWorkRefreshKey] = useState(0);
@@ -564,11 +578,34 @@ const EmployeeDetailPage = () => {
                     }}
                     >
                     <div>变动原因：{history.changeReason?.trim() || "-"}</div>
-                    {totalDeltaTag ? (
-                      <div style={{ whiteSpace: "nowrap" }}>
-                        合计变动：{totalDeltaTag}
-                      </div>
-                    ) : null}
+                    <Space size={8}>
+                      {totalDeltaTag ? (
+                        <div style={{ whiteSpace: "nowrap" }}>
+                          合计变动：{totalDeltaTag}
+                        </div>
+                      ) : null}
+                      <Button
+                        type="link"
+                        size="small"
+                        style={{ padding: 0, height: "auto" }}
+                        onClick={() => {
+                          compensationHistoryEditForm.setFieldsValue({
+                            changeReason: history.changeReason ?? "",
+                            effectiveDate: history.effectiveDate
+                              ? dayjs(history.effectiveDate)
+                              : null,
+                            salary: toNumberText(history.salary),
+                            socialSecurity: toNumberText(history.socialSecurity),
+                            providentFund: toNumberText(history.providentFund),
+                            workstationCost: toNumberText(history.workstationCost),
+                            utilityCost: toNumberText(history.utilityCost),
+                          });
+                          setEditingHistory(history);
+                        }}
+                      >
+                        编辑
+                      </Button>
+                    </Space>
                   </div>
                   <div
                     style={{
@@ -629,6 +666,41 @@ const EmployeeDetailPage = () => {
         })}
       />
     );
+  };
+
+  const handleCompensationHistoryEditSubmit = async () => {
+    if (!editingHistory) return;
+    const values = await compensationHistoryEditForm.validateFields();
+    setHistoryEditSubmitting(true);
+    try {
+      const res = await fetch(`/api/employees/${id}/compensation`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          historyId: editingHistory.id,
+          salary: normalizeNumberText(values.salary),
+          socialSecurity: normalizeNumberText(values.socialSecurity),
+          providentFund: normalizeNumberText(values.providentFund),
+          workstationCost: normalizeNumberText(values.workstationCost),
+          utilityCost: normalizeNumberText(values.utilityCost),
+          changeReason: values.changeReason?.trim() || null,
+          effectiveDate: values.effectiveDate
+            ? values.effectiveDate.startOf("day").toISOString()
+            : null,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error((await res.text()) || "历史记录更新失败");
+      }
+      setEditingHistory(null);
+      compensationHistoryEditForm.resetFields();
+      await fetchEmployee();
+      messageApi.success("历史记录已更新");
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "历史记录更新失败");
+    } finally {
+      setHistoryEditSubmitting(false);
+    }
   };
 
   const formatLeaveTimeRange = (
@@ -1249,6 +1321,59 @@ const EmployeeDetailPage = () => {
             {compensationFields.map((field) => (
               <Col xs={24} md={12} key={field.key}>
                 {renderCompensationChangeField(field)}
+              </Col>
+            ))}
+          </Row>
+        </Form>
+      </Modal>
+      <Modal
+        title="编辑薪酬变动历史"
+        open={Boolean(editingHistory)}
+        onCancel={() => {
+          setEditingHistory(null);
+          compensationHistoryEditForm.resetFields();
+        }}
+        onOk={() => void handleCompensationHistoryEditSubmit()}
+        okText="确定"
+        cancelText="取消"
+        confirmLoading={historyEditSubmitting}
+        destroyOnHidden
+        forceRender
+        width={860}
+      >
+        <Form form={compensationHistoryEditForm} layout="vertical">
+          <Row gutter={16} style={{ marginBottom: 16 }}>
+            <Col xs={24} md={12}>
+              <Form.Item
+                label="变动原因"
+                name="changeReason"
+                rules={[{ required: true, message: "请输入变动原因" }]}
+                style={{ marginBottom: 0 }}
+              >
+                <Input placeholder="请输入变动原因" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item
+                label="生效日期"
+                name="effectiveDate"
+                rules={[{ required: true, message: "请选择生效日期" }]}
+                style={{ marginBottom: 0 }}
+              >
+                <DatePicker style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={[16, 8]}>
+            {compensationFields.map((field) => (
+              <Col xs={24} md={12} key={`history-${field.key}`}>
+                <Form.Item
+                  label={field.label}
+                  name={field.key}
+                  style={{ marginBottom: 12 }}
+                >
+                  <Input placeholder={`请输入${field.label}`} />
+                </Form.Item>
               </Col>
             ))}
           </Row>
