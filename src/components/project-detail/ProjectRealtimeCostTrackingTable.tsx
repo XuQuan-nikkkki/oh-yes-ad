@@ -288,36 +288,60 @@ const renderCostRemark = (value: string) => {
   const text = (value || "").trim();
   if (!text) return <div>-</div>;
   const lines = text.split("\n").map((item) => item.trim()).filter(Boolean);
-  if (lines.length >= 2 && lines.length % 2 === 0) {
-    const groups: Array<{ stage: string; formula: string }> = [];
-    for (let index = 0; index < lines.length; index += 2) {
-      const stage = lines[index]?.replace(/：$/, "") ?? "";
-      const formula = lines[index + 1] ?? "";
-      if (!stage || !formula) {
-        return <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{text}</div>;
-      }
-      groups.push({ stage, formula });
+  const monthHeaderPattern = /^\d+月：/;
+  const groups: Array<{ stage: string; formulas: string[] }> = [];
+  for (const line of lines) {
+    if (monthHeaderPattern.test(line)) {
+      groups.push({ stage: line, formulas: [] });
+      continue;
     }
+    const current = groups[groups.length - 1];
+    if (current) {
+      current.formulas.push(line);
+    } else {
+      return <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{text}</div>;
+    }
+  }
+  if (groups.length > 0) {
     return (
       <div style={{ display: "grid", gap: 8 }}>
-        {groups.map((group) => (
-          <div key={`${group.stage}-${group.formula}`} style={{ display: "grid", gap: 6 }}>
-            <Tag
-              color="default"
-              style={{
-                marginInlineEnd: 0,
-                color: "rgba(0,0,0,0.65)",
-                display: "inline-flex",
-                width: "fit-content",
-              }}
-            >
-              {group.stage}
-            </Tag>
-            <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
-              {renderFormulaWithOperatorTags(group.formula)}
+        {groups.map((group) => {
+          const [stageLabel, changeHint] = group.stage.split("@@");
+          return (
+          <div key={group.stage} style={{ display: "grid", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <Tag
+                color="orange"
+                style={{
+                  marginInlineEnd: 0,
+                  color: "rgba(0,0,0,0.65)",
+                  display: "inline-flex",
+                  width: "fit-content",
+                }}
+              >
+                {stageLabel}
+              </Tag>
+              {changeHint ? (
+                <Tag
+                  color="default"
+                  style={{
+                    marginInlineEnd: 0,
+                    display: "inline-flex",
+                    width: "fit-content",
+                    color: "rgba(0,0,0,0.65)",
+                  }}
+                >
+                  {changeHint}
+                </Tag>
+              ) : null}
             </div>
+            {group.formulas.map((formula) => (
+              <div key={`${group.stage}-${formula}`} style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                {renderFormulaWithOperatorTags(formula)}
+              </div>
+            ))}
           </div>
-        ))}
+        )})}
       </div>
     );
   }
@@ -330,6 +354,7 @@ const getEntryHours = (start: string, end: string) =>
 const getDateKey = (value: string) => value.slice(0, 10);
 const formatMonthDayText = (value: Date) =>
   `${String(value.getMonth() + 1).padStart(2, "0")}/${String(value.getDate()).padStart(2, "0")}`;
+const getTodayStartOfDay = () => getStartOfDay(new Date());
 
 const getHistoryReasonLabel = (
   reason: string | null | undefined,
@@ -669,6 +694,7 @@ const ProjectRealtimeCostTrackingTable = ({
   const expectedWorkdays = latestInitiation?.estimatedDuration ?? 0;
 
   const laborBreakdown = useMemo(() => {
+    const today = getTodayStartOfDay();
     const monthlyBaseCache = new Map<string, number>();
     const getRealMonthlyWorkdayBase = (date: Date) => {
       const monthKey = getMonthKey(date);
@@ -807,12 +833,21 @@ const ProjectRealtimeCostTrackingTable = ({
           .sort((left, right) => left.getTime() - right.getTime());
         const rangeStart = validDates[0];
         const rangeEnd = validDates[validDates.length - 1];
+        const parsedProjectStart = startDate ? getStartOfDay(new Date(startDate)) : null;
+        const projectRangeStart =
+          parsedProjectStart && Number.isFinite(parsedProjectStart.getTime())
+            ? parsedProjectStart
+            : null;
+        const effectiveRangeStart =
+          projectRangeStart && projectRangeStart <= rangeEnd
+            ? projectRangeStart
+            : rangeStart;
         const changeSegments =
-          rangeStart && rangeEnd
-            ? getEmployeeCompSegments(value.employee, rangeStart, rangeEnd)
+          effectiveRangeStart && rangeEnd
+            ? getEmployeeCompSegments(value.employee, effectiveRangeStart, rangeEnd)
             : [];
         let remark = "-";
-        if (rangeStart && rangeEnd) {
+        if (effectiveRangeStart && rangeEnd) {
           const segments: EmployeeCompSegment[] = [];
           const firstChangeStart = changeSegments[0]?.start;
           const beforeFirstChangeCost = firstChangeStart
@@ -820,9 +855,9 @@ const ProjectRealtimeCostTrackingTable = ({
             : null;
           if (firstChangeStart && beforeFirstChangeCost) {
             const beforeEnd = addDays(firstChangeStart, -1);
-            if (rangeStart <= beforeEnd) {
+            if (effectiveRangeStart <= beforeEnd) {
               segments.push({
-                start: rangeStart,
+                start: effectiveRangeStart,
                 end: beforeEnd,
                 monthlyHumanCost:
                   beforeFirstChangeCost.salary +
@@ -834,9 +869,9 @@ const ProjectRealtimeCostTrackingTable = ({
           if (changeSegments.length > 0) {
             segments.push(...changeSegments);
           } else {
-            const baseComp = getCompensationAtDate(value.employee, rangeStart);
+            const baseComp = getCompensationAtDate(value.employee, effectiveRangeStart);
             segments.push({
-              start: rangeStart,
+              start: effectiveRangeStart,
               end: rangeEnd,
               monthlyHumanCost:
                 baseComp.salary +
@@ -844,46 +879,93 @@ const ProjectRealtimeCostTrackingTable = ({
                 baseComp.providentFund,
             });
           }
-          const lines = segments.flatMap((segment, index) => {
-            const monthSlices = splitDateRangeByMonth(segment.start, segment.end);
-            return monthSlices
-              .map((monthSlice, monthIndex) => {
-                const totals = value.entries.reduce(
-                  (sum, item) => {
-                    if (item.date < monthSlice.start || item.date > monthSlice.end) {
-                      return sum;
-                    }
-                    return {
-                      workdays: sum.workdays + item.workdays,
-                    };
-                  },
-                  { workdays: 0 },
-                );
-                if (totals.workdays <= 0) return null;
-                const isFirstLine = index === 0 && monthIndex === 0;
-                const leftLabel = isFirstLine
-                  ? segment.reasonLabel
-                    ? `${segment.reasonLabel}(${formatMonthDayText(monthSlice.start)})`
-                    : `项目开始(${formatMonthDayText(monthSlice.start)})`
-                  : `${segment.reasonLabel ?? "薪酬变动"}(${formatMonthDayText(monthSlice.start)})`;
-                const isLastLine =
-                  index === segments.length - 1 && monthIndex === monthSlices.length - 1;
-                const rightLabel = isLastLine
-                  ? `至今(${formatMonthDayText(monthSlice.end)})`
-                  : `${formatMonthDayText(monthSlice.end)}`;
-                const monthBase = getRealMonthlyWorkdayBase(monthSlice.start);
-                const lineCost =
-                  monthBase > 0
-                    ? (segment.monthlyHumanCost / monthBase) * totals.workdays
-                    : 0;
-                return `${leftLabel}-${rightLabel}\n¥${formatYuanText(
-                  segment.monthlyHumanCost,
-                )} / ${formatAmount(monthBase)}d * ${formatAmount(
-                  totals.workdays,
-                )}d = ¥${formatYuanText(lineCost)}`;
-              })
-              .filter((line): line is string => Boolean(line));
-          });
+          const monthSlices = splitDateRangeByMonth(effectiveRangeStart, rangeEnd);
+          const lines = monthSlices
+            .map((monthSlice, monthIndex) => {
+              const monthBase = getRealMonthlyWorkdayBase(monthSlice.start);
+              const monthSegments = segments.reduce<
+                Array<{
+                  start: Date;
+                  end: Date;
+                  sourceStart: Date;
+                  monthlyCost: number;
+                  reasonLabel?: string;
+                }>
+              >((acc, segment) => {
+                const start =
+                  segment.start > monthSlice.start ? segment.start : monthSlice.start;
+                const end = segment.end < monthSlice.end ? segment.end : monthSlice.end;
+                if (start > end) return acc;
+                acc.push({
+                  start,
+                  end,
+                  sourceStart: segment.start,
+                  monthlyCost: segment.monthlyHumanCost,
+                  reasonLabel: segment.reasonLabel,
+                });
+                return acc;
+              }, []);
+              const formulas = monthSegments.reduce<
+                Array<{
+                  reasonLabel?: string;
+                  formula: string;
+                }>
+              >((acc, segment) => {
+                const workdays = value.entries.reduce((sum, item) => {
+                  if (item.date < segment.start || item.date > segment.end) return sum;
+                  return sum + item.workdays;
+                }, 0);
+                if (workdays <= 0) return acc;
+                const subtotal =
+                  monthBase > 0 ? (segment.monthlyCost / monthBase) * workdays : 0;
+                acc.push({
+                  reasonLabel: segment.reasonLabel,
+                  formula: `¥${formatYuanText(segment.monthlyCost)} / ${formatAmount(
+                    monthBase,
+                  )}d * ${formatAmount(workdays)}d = ¥${formatYuanText(subtotal)}`,
+                });
+                return acc;
+              }, []);
+              if (formulas.length === 0) return null;
+              const isFirstMonth = monthIndex === 0;
+              const isLastMonth = monthIndex === monthSlices.length - 1;
+              const startLabel =
+                isFirstMonth && monthSlice.start.getDate() !== 1
+                  ? `${formatMonthDayText(monthSlice.start)}(项目开始)`
+                  : formatMonthDayText(monthSlice.start);
+              const endLabel = isLastMonth
+                ? `${formatMonthDayText(today)}(至今)`
+                : formatMonthDayText(monthSlice.end);
+              const monthStartChangeHint =
+                formulas.length === 1 &&
+                monthSlice.start.getDate() === 1 &&
+                monthSegments[0]?.reasonLabel &&
+                monthSegments[0].sourceStart.getTime() === monthSlice.start.getTime()
+                  ? ` ${formatMonthDayText(monthSlice.start)} ${monthSegments[0].reasonLabel}`
+                  : "";
+              const changeHint =
+                formulas.length > 1
+                  ? ` ${formatMonthDayText(monthSegments[1]?.start ?? monthSlice.start)} ${
+                      formulas[1]?.reasonLabel ?? "变动"
+                    }`
+                  : monthStartChangeHint;
+              const header = `${monthSlice.start.getMonth() + 1}月：${startLabel}-${endLabel}${
+                changeHint ? `@@${changeHint.trim()}` : ""
+              }`;
+              if (formulas.length === 1) {
+                return `${header}\n${formulas[0]?.formula ?? "-"}`;
+              }
+              const firstChangeReason = formulas[1]?.reasonLabel ?? "变动";
+              const formulaLines = formulas.map((item, index) => {
+                const phaseLabel =
+                  index === 0
+                    ? `${firstChangeReason}前`
+                    : `${item.reasonLabel ?? "变动"}后`;
+                return `${phaseLabel}：${item.formula}`;
+              });
+              return `${header}\n${formulaLines.join("\n")}`;
+            })
+            .filter((line): line is string => Boolean(line));
           if (lines.length > 0) {
             remark = lines.join("\n");
           }
@@ -913,6 +995,7 @@ const ProjectRealtimeCostTrackingTable = ({
     latestInitiation?.members,
     members,
     monthlyWorkdayBase,
+    startDate,
     workdayAdjustments,
   ]);
 
@@ -951,6 +1034,7 @@ const ProjectRealtimeCostTrackingTable = ({
   }, [actualLaborCost, laborBreakdown]);
 
   const rentBreakdown = useMemo(() => {
+    const today = getTodayStartOfDay();
     const monthlyBaseCache = new Map<string, number>();
     const getRealMonthlyWorkdayBase = (date: Date) => {
       const monthKey = getMonthKey(date);
@@ -1038,12 +1122,21 @@ const ProjectRealtimeCostTrackingTable = ({
         .sort((left, right) => left.getTime() - right.getTime());
       const rangeStart = validDates[0];
       const rangeEnd = validDates[validDates.length - 1];
+      const parsedProjectStart = startDate ? getStartOfDay(new Date(startDate)) : null;
+      const projectRangeStart =
+        parsedProjectStart && Number.isFinite(parsedProjectStart.getTime())
+          ? parsedProjectStart
+          : null;
+      const effectiveRangeStart =
+        projectRangeStart && projectRangeStart <= rangeEnd
+          ? projectRangeStart
+          : rangeStart;
       const changeSegments =
-        rangeStart && rangeEnd
-          ? getEmployeeRentSegments(value.employee, rangeStart, rangeEnd)
+        effectiveRangeStart && rangeEnd
+          ? getEmployeeRentSegments(value.employee, effectiveRangeStart, rangeEnd)
           : [];
       let remark = "-";
-      if (rangeStart && rangeEnd) {
+      if (effectiveRangeStart && rangeEnd) {
         const segments: Array<{
           start: Date;
           end: Date;
@@ -1056,9 +1149,9 @@ const ProjectRealtimeCostTrackingTable = ({
           : null;
         if (firstChangeStart && beforeFirstChangeCost) {
           const beforeEnd = addDays(firstChangeStart, -1);
-          if (rangeStart <= beforeEnd) {
+          if (effectiveRangeStart <= beforeEnd) {
             segments.push({
-              start: rangeStart,
+              start: effectiveRangeStart,
               end: beforeEnd,
               monthlyRentCost:
                 beforeFirstChangeCost.workstationCost +
@@ -1070,53 +1163,102 @@ const ProjectRealtimeCostTrackingTable = ({
         if (changeSegments.length > 0) {
           segments.push(...changeSegments);
         } else {
-          const baseComp = getCompensationAtDate(value.employee, rangeStart);
+          const baseComp = getCompensationAtDate(value.employee, effectiveRangeStart);
           segments.push({
-            start: rangeStart,
+            start: effectiveRangeStart,
             end: rangeEnd,
             monthlyRentCost: baseComp.workstationCost + baseComp.utilityCost,
             reasonLabel: undefined,
           });
         }
-        const lines = segments.flatMap((segment, index) => {
-          const monthSlices = splitDateRangeByMonth(segment.start, segment.end);
-          return monthSlices
-            .map((monthSlice, monthIndex) => {
-              const totals = value.entries.reduce(
-                (sum, item) => {
-                  if (item.date < monthSlice.start || item.date > monthSlice.end) return sum;
-                  return { workdays: sum.workdays + item.workdays };
-                },
-                { workdays: 0 },
-              );
-              if (totals.workdays <= 0) return null;
-              const leftLabel =
-                index === 0 && monthIndex === 0
-                  ? segment.reasonLabel
-                    ? `${segment.reasonLabel}(${formatMonthDayText(monthSlice.start)})`
-                    : `项目开始(${formatMonthDayText(monthSlice.start)})`
-                  : `${segment.reasonLabel ?? "租金变动"}(${formatMonthDayText(
-                      monthSlice.start,
-                    )})`;
-              const isLastLine =
-                index === segments.length - 1 && monthIndex === monthSlices.length - 1;
-              const rightLabel = isLastLine
-                ? `至今(${formatMonthDayText(monthSlice.end)})`
-                : `${formatMonthDayText(monthSlice.end)}`;
-              const monthBase = getRealMonthlyWorkdayBase(monthSlice.start);
-              const lineCost =
-                monthBase > 0
-                  ? (segment.monthlyRentCost / monthBase) * totals.workdays
-                  : 0;
-              return `${leftLabel}-${rightLabel}\n¥${formatYuanText(
-                segment.monthlyRentCost,
-              )} / ${formatAmount(monthBase)}d * ${formatAmount(
-                totals.workdays,
-              )}d = ¥${formatYuanText(lineCost)}`;
-            })
-            .filter((line): line is string => Boolean(line));
-        });
-        if (lines.length > 0) remark = lines.join("\n");
+        const monthSlices = splitDateRangeByMonth(effectiveRangeStart, rangeEnd);
+        const lines = monthSlices
+          .map((monthSlice, monthIndex) => {
+            const monthBase = getRealMonthlyWorkdayBase(monthSlice.start);
+            const monthSegments = segments.reduce<
+              Array<{
+                start: Date;
+                end: Date;
+                sourceStart: Date;
+                monthlyCost: number;
+                reasonLabel?: string;
+              }>
+            >((acc, segment) => {
+              const start =
+                segment.start > monthSlice.start ? segment.start : monthSlice.start;
+              const end = segment.end < monthSlice.end ? segment.end : monthSlice.end;
+              if (start > end) return acc;
+              acc.push({
+                start,
+                end,
+                sourceStart: segment.start,
+                monthlyCost: segment.monthlyRentCost,
+                reasonLabel: segment.reasonLabel,
+              });
+              return acc;
+            }, []);
+            const formulas = monthSegments.reduce<
+              Array<{
+                reasonLabel?: string;
+                formula: string;
+              }>
+            >((acc, segment) => {
+              const workdays = value.entries.reduce((sum, item) => {
+                if (item.date < segment.start || item.date > segment.end) return sum;
+                return sum + item.workdays;
+              }, 0);
+              if (workdays <= 0) return acc;
+              const subtotal =
+                monthBase > 0 ? (segment.monthlyCost / monthBase) * workdays : 0;
+              acc.push({
+                reasonLabel: segment.reasonLabel,
+                formula: `¥${formatYuanText(segment.monthlyCost)} / ${formatAmount(
+                  monthBase,
+                )}d * ${formatAmount(workdays)}d = ¥${formatYuanText(subtotal)}`,
+              });
+              return acc;
+            }, []);
+            if (formulas.length === 0) return null;
+            const isFirstMonth = monthIndex === 0;
+            const isLastMonth = monthIndex === monthSlices.length - 1;
+            const startLabel =
+              isFirstMonth && monthSlice.start.getDate() !== 1
+                ? `${formatMonthDayText(monthSlice.start)}(项目开始)`
+                : formatMonthDayText(monthSlice.start);
+            const endLabel = isLastMonth
+              ? `${formatMonthDayText(today)}(至今)`
+              : formatMonthDayText(monthSlice.end);
+            const monthStartChangeHint =
+              formulas.length === 1 &&
+              monthSlice.start.getDate() === 1 &&
+              monthSegments[0]?.reasonLabel &&
+              monthSegments[0].sourceStart.getTime() === monthSlice.start.getTime()
+                ? ` ${formatMonthDayText(monthSlice.start)} ${monthSegments[0].reasonLabel}`
+                : "";
+            const changeHint =
+              formulas.length > 1
+                ? ` ${formatMonthDayText(monthSegments[1]?.start ?? monthSlice.start)} ${
+                    formulas[1]?.reasonLabel ?? "变动"
+                  }`
+                : monthStartChangeHint;
+            const header = `${monthSlice.start.getMonth() + 1}月：${startLabel}-${endLabel}${
+              changeHint ? `@@${changeHint.trim()}` : ""
+            }`;
+            if (formulas.length === 1) {
+              return `${header}\n${formulas[0]?.formula ?? "-"}`;
+            }
+            const firstChangeReason = formulas[1]?.reasonLabel ?? "变动";
+            const formulaLines = formulas.map((item, index) => {
+              const phaseLabel =
+                index === 0 ? `${firstChangeReason}前` : `${item.reasonLabel ?? "变动"}后`;
+              return `${phaseLabel}：${item.formula}`;
+            });
+            return `${header}\n${formulaLines.join("\n")}`;
+          })
+          .filter((line): line is string => Boolean(line));
+        if (lines.length > 0) {
+          remark = lines.join("\n");
+        }
       }
       return {
         employeeId,
@@ -1130,7 +1272,7 @@ const ProjectRealtimeCostTrackingTable = ({
     });
     rows.sort((a, b) => (a.name || "").localeCompare(b.name || "", "zh-CN"));
     return rows;
-  }, [actualWorkEntries, monthlyWorkdayBase, workdayAdjustments]);
+  }, [actualWorkEntries, monthlyWorkdayBase, startDate, workdayAdjustments]);
 
   const rentCost = useMemo(
     () => rentBreakdown.reduce((sum, item) => sum + toNumber(item.cost), 0),
