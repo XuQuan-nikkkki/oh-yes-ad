@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Modal,
   Form,
@@ -216,8 +216,6 @@ const EmployeeFormModal = ({
 }: Props) => {
   const [form] = Form.useForm<FormValues>();
   const isEdit = !!initialValues?.id;
-  const formRef = useRef(form);
-  const initialValuesIdRef = useRef(initialValues?.id);
   const currentUser = useAuthStore((state) => state.currentUser);
   const currentRoleCodes = getRoleCodesFromUser(currentUser);
   const canManageRoles =
@@ -375,11 +373,11 @@ const EmployeeFormModal = ({
           : String(initialValues.providentFund),
       workstationCost:
         initialValues?.workstationCost === null || initialValues?.workstationCost === undefined
-          ? String(defaultWorkstationCost)
+          ? undefined
           : String(initialValues.workstationCost),
       utilityCost:
         initialValues?.utilityCost === null || initialValues?.utilityCost === undefined
-          ? String(defaultUtilityCost)
+          ? undefined
           : String(initialValues.utilityCost),
       bankAccountNumber: initialValues?.bankAccountNumber ?? undefined,
       bankName: initialValues?.bankName ?? undefined,
@@ -389,35 +387,9 @@ const EmployeeFormModal = ({
   );
 
   useEffect(() => {
-    formRef.current = form;
-    initialValuesIdRef.current = initialValues?.id;
-  });
-
-  useEffect(() => {
     if (!open) return;
     void fetchAllOptions();
   }, [open, fetchAllOptions]);
-
-  useEffect(() => {
-    if (!open) return;
-    void fetchSystemSettings(true).then((records) => {
-      if (initialValuesIdRef.current) return;
-      formRef.current.setFieldsValue({
-        workstationCost: String(
-          getSystemSettingNumberFromRecords(
-            records,
-            SYSTEM_SETTING_KEYS.employeeDefaultWorkstationCost,
-          ),
-        ),
-        utilityCost: String(
-          getSystemSettingNumberFromRecords(
-            records,
-            SYSTEM_SETTING_KEYS.employeeDefaultUtilityCost,
-          ),
-        ),
-      });
-    });
-  }, [open, fetchSystemSettings]);
 
   useEffect(() => {
     if (!open) return;
