@@ -14,6 +14,7 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Popover,
   Progress,
   Row,
   Space,
@@ -378,13 +379,15 @@ const ProjectReceivableNodeTable = ({
         valueType: "option",
         fixed: "right",
         width: 220,
-        render: (_text, row) => (
-          <Space size={4} wrap={false}>
+        render: (_text, row) => {
+          const isCollectionCompleted =
+            getCollectionProgressPercent(row) >= 100;
+          const collectButton = (
             <Button
               variant="text"
               color="primary"
               style={{ paddingInline: 4 }}
-              disabled={!canManageProject}
+              disabled={!canManageProject || isCollectionCompleted}
               onClick={() => {
                 setCurrentCollectRow(row);
                 setActualModalOpen(true);
@@ -392,33 +395,47 @@ const ProjectReceivableNodeTable = ({
             >
               收款
             </Button>
-            <Button
-              variant="text"
-              color="primary"
-              style={{ paddingInline: 4 }}
-              disabled={!canManageProject}
-              onClick={() => {
-                setDelayTargetRow(row);
-                setDelayModalOpen(true);
-              }}
-            >
-              收款变动
-            </Button>
-            <TableActions
-              disabled={!canManageProject}
-              gap={0}
-              buttonStyle={{ paddingInline: 4 }}
-              showIcons={false}
-              onEdit={() => {
-                setEditingRow(row);
-                setEditModalOpen(true);
-              }}
-              onDelete={() => {
-                void onDeleteNode(row.id);
-              }}
-            />
-          </Space>
-        ),
+          );
+
+          return (
+            <Space size={4} wrap={false}>
+              {isCollectionCompleted ? (
+                <Popover content="该阶段已完成收款" trigger="hover">
+                  <span style={{ display: "inline-block" }}>
+                    {collectButton}
+                  </span>
+                </Popover>
+              ) : (
+                collectButton
+              )}
+              <Button
+                variant="text"
+                color="primary"
+                style={{ paddingInline: 4 }}
+                disabled={!canManageProject}
+                onClick={() => {
+                  setDelayTargetRow(row);
+                  setDelayModalOpen(true);
+                }}
+              >
+                收款变动
+              </Button>
+              <TableActions
+                disabled={!canManageProject}
+                gap={0}
+                buttonStyle={{ paddingInline: 4 }}
+                showIcons={false}
+                onEdit={() => {
+                  setEditingRow(row);
+                  setEditModalOpen(true);
+                }}
+                onDelete={() => {
+                  void onDeleteNode(row.id);
+                }}
+              />
+            </Space>
+          );
+        },
       },
     ],
     [onDeleteNode, canManageProject, stageOptions, stageValueEnum],

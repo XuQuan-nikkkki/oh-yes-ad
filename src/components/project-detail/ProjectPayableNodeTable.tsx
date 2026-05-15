@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { DragSortTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import { PayCircleOutlined } from "@ant-design/icons";
-import { Button, Progress, Space, Table, Typography } from "antd";
+import { Button, Popover, Progress, Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import EllipsisPopoverText from "@/components/EllipsisPopoverText";
 import SelectOptionTag from "@/components/SelectOptionTag";
@@ -256,13 +256,14 @@ const ProjectPayableNodeTable = ({
         valueType: "option",
         fixed: "right",
         width: 160,
-        render: (_text, row) => (
-          <Space size={4} wrap={false}>
+        render: (_text, row) => {
+          const isPaymentCompleted = getPaymentProgressPercent(row) >= 100;
+          const payButton = (
             <Button
               variant="text"
               color="primary"
               style={{ paddingInline: 4 }}
-              disabled={!canManageProject}
+              disabled={!canManageProject || isPaymentCompleted}
               icon={<PayCircleOutlined />}
               onClick={() => {
                 setCurrentCollectRow(row);
@@ -271,20 +272,32 @@ const ProjectPayableNodeTable = ({
             >
               付款
             </Button>
-            <TableActions
-              disabled={!canManageProject}
-              gap={0}
-              buttonStyle={{ paddingInline: 4 }}
-              onEdit={() => {
-                setEditingRow(row);
-                setEditModalOpen(true);
-              }}
-              onDelete={() => {
-                void onDeleteNode(row.id);
-              }}
-            />
-          </Space>
-        ),
+          );
+
+          return (
+            <Space size={4} wrap={false}>
+              {isPaymentCompleted ? (
+                <Popover content="该阶段已完成付款" trigger="hover">
+                  <span style={{ display: "inline-block" }}>{payButton}</span>
+                </Popover>
+              ) : (
+                payButton
+              )}
+              <TableActions
+                disabled={!canManageProject}
+                gap={0}
+                buttonStyle={{ paddingInline: 4 }}
+                onEdit={() => {
+                  setEditingRow(row);
+                  setEditModalOpen(true);
+                }}
+                onDelete={() => {
+                  void onDeleteNode(row.id);
+                }}
+              />
+            </Space>
+          );
+        },
       },
     ],
     [onDeleteNode, canManageProject, stageOptions, stageValueEnum],

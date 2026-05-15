@@ -9,9 +9,13 @@ import {
   forwardRef,
 } from "react";
 import {
+  Button,
+  Descriptions,
   Empty,
   message,
+  Space,
 } from "antd";
+import ClientContractModal from "@/components/project-detail/ClientContractModal";
 import ProjectReceivableNodeTable, {
   type ProjectReceivableNodeRow,
   type ReceivableNodeDelayFormValues,
@@ -43,6 +47,7 @@ type Props = {
 
 type ClientContract = {
   id: string;
+  projectId: string;
   legalEntityId: string;
   contractAmount?: number | string | null;
   taxAmount?: number | string | null;
@@ -127,6 +132,12 @@ const formatYuanNumber = (value: unknown) => {
   return Number.isFinite(num) ? num : 0;
 };
 
+const formatAmountWithUnit = (value: unknown) =>
+  `${formatYuanNumber(value).toLocaleString("zh-CN", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })} 元`;
+
 const isActiveMember = (member: { employmentStatus?: string | null }) =>
   (member.employmentStatus ?? "").includes("在职");
 
@@ -156,6 +167,7 @@ const ProjectReceivableInfo = forwardRef<
       "create" | "edit"
     >("create");
     const [internalNodeModalOpen, setInternalNodeModalOpen] = useState(false);
+    const [contractModalOpen, setContractModalOpen] = useState(false);
     const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
     const [nodeTargetPlanId, setNodeTargetPlanId] = useState<string | null>(
       null,
@@ -833,7 +845,43 @@ const ProjectReceivableInfo = forwardRef<
       <>
         {contextHolder}
         {plans.length === 0 ? (
-          <Empty description="暂无收款计划" />
+          defaultContract ? (
+            <div>
+              <Space
+                style={{
+                  width: "100%",
+                  justifyContent: "space-between",
+                  marginBottom: 12,
+                }}
+              >
+                <span style={{ fontWeight: 600 }}>客户合同</span>
+                <Button
+                  disabled={!canManageProject}
+                  onClick={() => setContractModalOpen(true)}
+                >
+                  修改客户合同
+                </Button>
+              </Space>
+              <Descriptions bordered column={3} size="small">
+                <Descriptions.Item label="签约主体">
+                  {defaultContract.legalEntity?.fullName ||
+                    defaultContract.legalEntity?.name ||
+                    "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="合同金额">
+                  {formatAmountWithUnit(defaultContract.contractAmount)}
+                </Descriptions.Item>
+                <Descriptions.Item label="税费金额">
+                  {formatAmountWithUnit(defaultContract.taxAmount)}
+                </Descriptions.Item>
+              </Descriptions>
+              <div style={{ marginTop: 16 }}>
+                <Empty description="暂无收款计划" />
+              </div>
+            </div>
+          ) : (
+            <Empty description="暂无收款计划" />
+          )
         ) : (
           (() => {
             const plan = plans[0];
@@ -904,6 +952,18 @@ const ProjectReceivableInfo = forwardRef<
             );
           })()
         )}
+
+        <ClientContractModal
+          open={contractModalOpen}
+          onCancel={() => setContractModalOpen(false)}
+          projectId={projectId}
+          projectName={projectName}
+          isClientProject={project.type === "CLIENT"}
+          contract={defaultContract}
+          onSaved={async () => {
+            await fetchContractsFromStore(projectId, { force: true });
+          }}
+        />
 
         <ProjectReceivablePlanModal
           open={planModalOpen}

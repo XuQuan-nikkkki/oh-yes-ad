@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, Empty, Progress } from "antd";
+import { Card, Empty, Progress, Tag } from "antd";
 import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import ProjectReceivableNodeTable, {
   type ProjectReceivableNodeRow,
@@ -109,6 +109,10 @@ export default function ReceivableProjectSection({
         )
       : 0;
   const hasReceivableAmount = expectedAmountTotal > 0;
+  const expectedContractDiff =
+    expectedAmountTotal - Number(contractAmountTotal ?? 0);
+  const hasExpectedContractDiff =
+    Math.round(expectedContractDiff * 100) !== 0;
   const isFullyCollected =
     hasReceivableAmount && actualAmountTotal >= expectedAmountTotal;
   const leftBorderColor = !hasReceivableAmount
@@ -185,8 +189,23 @@ export default function ReceivableProjectSection({
           }}
         >
           <span>
-            {Number(contractAmountTotal ?? 0).toLocaleString("zh-CN")} 元
+            合同：{Number(contractAmountTotal ?? 0).toLocaleString("zh-CN")} 元
           </span>
+          {hasExpectedContractDiff ? (
+            <>
+              <span style={{ color: "rgba(0,0,0,0.25)" }}>·</span>
+              <span>
+                预收：{expectedAmountTotal.toLocaleString("zh-CN")} 元
+              </span>
+              <Tag
+                color={expectedContractDiff > 0 ? "success" : "error"}
+                style={{ marginInlineEnd: 0 }}
+              >
+                {expectedContractDiff > 0 ? "↑" : "↓"}
+                {Math.abs(expectedContractDiff).toLocaleString("zh-CN")} 元
+              </Tag>
+            </>
+          ) : null}
           <span style={{ color: "rgba(0,0,0,0.25)" }}>·</span>
           <span>跟进：{ownerName?.trim() || "-"}</span>
           <span style={{ color: "rgba(0,0,0,0.25)" }}>·</span>
