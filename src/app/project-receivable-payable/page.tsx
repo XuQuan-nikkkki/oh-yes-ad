@@ -178,15 +178,15 @@ type ReceivableNodeTableViewRow = {
   } | null;
   stageName: string;
   keyDeliverable: string;
-  expectedAmountTaxIncluded: number;
-  expectedDate: string;
+  expectedAmountTaxIncluded: number | null;
+  expectedDate: string | null;
   actualAmountTaxIncluded: number | null;
   actualDate: string | null;
   nodeRemark: string;
 };
 type PayableNodeTableViewRow = {
   key: string;
-  nodeId: string;
+  nodeId: string | null;
   planId: string;
   planRowSpan: number;
   expectedRowSpan: number;
@@ -207,8 +207,8 @@ type PayableNodeTableViewRow = {
   } | null;
   stageName: string;
   paymentCondition: string;
-  expectedAmountTaxIncluded: number;
-  expectedDate: string;
+  expectedAmountTaxIncluded: number | null;
+  expectedDate: string | null;
   actualAmountTaxIncluded: number | null;
   actualDate: string | null;
   nodeRemark: string;
@@ -1150,6 +1150,34 @@ function ProjectReceivablePayablePageContent() {
         planActualAmountTotal >= planExpectedAmountTotal;
       const planRows: PayableNodeTableViewRow[] = [];
 
+      if (nodes.length === 0) {
+        planRows.push({
+          key: `${plan.id}-empty`,
+          nodeId: null,
+          planId: plan.id,
+          planRowSpan: 1,
+          expectedRowSpan: 1,
+          isPlanFullyPaid,
+          isNodeFullyPaid: false,
+          hasCustomerCollection: Boolean(plan.hasCustomerCollection),
+          planRemark,
+          signingCompanyName,
+          projectName,
+          vendorName,
+          vendorFullName,
+          ownerName,
+          contractAmountTaxIncluded,
+          stageOption: null,
+          stageName: "-",
+          paymentCondition: "-",
+          expectedAmountTaxIncluded: null,
+          expectedDate: null,
+          actualAmountTaxIncluded: null,
+          actualDate: null,
+          nodeRemark: "-",
+        });
+      }
+
       nodes.forEach((node) => {
         const actualNodes = Array.isArray(node.actualNodes)
           ? node.actualNodes
@@ -1277,7 +1305,6 @@ function ProjectReceivablePayablePageContent() {
         "remark" in plan && typeof plan.remark === "string"
           ? plan.remark.trim() || "-"
           : "-";
-      if (nodes.length === 0) return;
       const planExpectedAmountTotal = nodes.reduce(
         (sum, node) => sum + Number(node.expectedAmountTaxIncluded ?? 0),
         0,
@@ -1297,11 +1324,36 @@ function ProjectReceivablePayablePageContent() {
 
       const planRows: ReceivableNodeTableViewRow[] = [];
 
+      if (nodes.length === 0) {
+        planRows.push({
+          key: `${plan.id}-empty`,
+          planId: plan.id,
+          planRowSpan: 1,
+          expectedRowSpan: 1,
+          hasVendorPayment,
+          isPlanFullyCollected,
+          isNodeFullyCollected: false,
+          signingCompanyName,
+          projectName,
+          ownerName,
+          contractAmountTaxIncluded,
+          projectStatus,
+          planRemark,
+          stageOption: null,
+          stageName: "-",
+          keyDeliverable: "-",
+          expectedAmountTaxIncluded: null,
+          expectedDate: null,
+          actualAmountTaxIncluded: null,
+          actualDate: null,
+          nodeRemark: "-",
+        });
+      }
+
       nodes.forEach((node) => {
         const actualNodes = Array.isArray(node.actualNodes)
           ? node.actualNodes
           : [];
-        if (actualNodes.length === 0) return;
         const nodeExpectedAmount = Number(node.expectedAmountTaxIncluded ?? 0);
         const nodeActualAmount = actualNodes.reduce(
           (sum, actual) => sum + Number(actual.actualAmountTaxIncluded ?? 0),
@@ -1309,6 +1361,43 @@ function ProjectReceivablePayablePageContent() {
         );
         const isNodeFullyCollected =
           nodeExpectedAmount > 0 && nodeActualAmount >= nodeExpectedAmount;
+
+        if (actualNodes.length === 0) {
+          planRows.push({
+            key: `${plan.id}-${node.id}`,
+            planId: plan.id,
+            planRowSpan: 0,
+            expectedRowSpan: 1,
+            hasVendorPayment,
+            isPlanFullyCollected,
+            isNodeFullyCollected,
+            signingCompanyName,
+            projectName,
+            ownerName,
+            contractAmountTaxIncluded,
+            projectStatus,
+            planRemark,
+            stageOption: node.stageOption
+              ? {
+                  id: node.stageOption.id,
+                  value: node.stageOption.value,
+                  color: node.stageOption.color ?? null,
+                }
+              : null,
+            stageName: node.stageOption?.value?.trim() || "-",
+            keyDeliverable: node.keyDeliverable?.trim() || "-",
+            expectedAmountTaxIncluded: Number(
+              node.expectedAmountTaxIncluded ?? 0,
+            ),
+            expectedDate: node.expectedDate
+              ? dayjs(node.expectedDate).format("YYYY-MM-DD")
+              : null,
+            actualAmountTaxIncluded: null,
+            actualDate: null,
+            nodeRemark: node.remark?.trim() || "-",
+          });
+          return;
+        }
 
         actualNodes.forEach((actual, actualIndex) => {
           planRows.push({
@@ -2881,41 +2970,44 @@ function ProjectReceivablePayablePageContent() {
         title: "付款阶段",
         dataIndex: "stageName",
         width: 140,
-        render: (_value, record) => (
-          <SelectOptionQuickEditTag
-            field="projectPayable.stage"
-            option={
-              record.stageOption
-                ? {
-                    id: record.stageOption.id,
-                    value: record.stageOption.value,
-                    color: record.stageOption.color ?? undefined,
-                  }
-                : null
-            }
-            fallbackText={record.stageName}
-            modalTitle="修改付款阶段"
-            saveSuccessText="付款阶段已保存"
-            onSaveSelection={async (nextOption) => {
-              const response = await fetch(
-                `/api/project-payable-nodes/${record.nodeId}`,
-                {
-                  method: "PATCH",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    stageOptionId: nextOption.id,
-                  }),
-                },
-              );
-              if (!response.ok) {
-                throw new Error((await response.text()) || "修改付款阶段失败");
+        render: (_value, record) =>
+          record.nodeId ? (
+            <SelectOptionQuickEditTag
+              field="projectPayable.stage"
+              option={
+                record.stageOption
+                  ? {
+                      id: record.stageOption.id,
+                      value: record.stageOption.value,
+                      color: record.stageOption.color ?? undefined,
+                    }
+                  : null
               }
-            }}
-            onUpdated={fetchData}
-          />
-        ),
+              fallbackText={record.stageName}
+              modalTitle="修改付款阶段"
+              saveSuccessText="付款阶段已保存"
+              onSaveSelection={async (nextOption) => {
+                const response = await fetch(
+                  `/api/project-payable-nodes/${record.nodeId}`,
+                  {
+                    method: "PATCH",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      stageOptionId: nextOption.id,
+                    }),
+                  },
+                );
+                if (!response.ok) {
+                  throw new Error((await response.text()) || "修改付款阶段失败");
+                }
+              }}
+              onUpdated={fetchData}
+            />
+          ) : (
+            record.stageName
+          ),
         onCell: (record) => ({
           rowSpan: record.expectedRowSpan,
         }),
