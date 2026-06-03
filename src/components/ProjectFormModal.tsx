@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Col, DatePicker, Input, Modal, Row, Select, Switch } from "antd";
+import { Col, DatePicker, Input, Modal, Row, Select, Switch, message } from "antd";
 import type { DefaultOptionType } from "antd/es/select";
 import { ProForm, StepsForm } from "@ant-design/pro-components";
 import type { FormInstance } from "antd/es/form";
@@ -135,6 +135,7 @@ const ProjectFormModal = ({
   clientEditable = true,
 }: Props) => {
   const { submitting, runWithSubmitLock } = useSubmitLock();
+  const [messageApi, contextHolder] = message.useMessage();
   const [currentTypeCode, setCurrentTypeCode] = useState<string | null>(
     normalizeProjectTypeCode(initialValues?.type ?? projectType),
   );
@@ -325,12 +326,13 @@ const ProjectFormModal = ({
       });
       return result ?? false;
     } catch (error) {
-      const message =
+      const errorMessage =
         error instanceof Error && error.message ? error.message : "保存项目失败";
+      void messageApi.error(errorMessage);
       baseFormRef.current?.setFields([
         {
           name: "name",
-          errors: [message],
+          errors: [errorMessage],
         },
       ]);
       return false;
@@ -355,6 +357,7 @@ const ProjectFormModal = ({
       destroyOnHidden
       width={860}
     >
+      {contextHolder}
       <StepsForm<ProjectFormValues>
         onFinish={handleSubmit}
         stepsProps={{ size: "small" }}
