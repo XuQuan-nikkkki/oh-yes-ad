@@ -223,6 +223,10 @@ const ProjectDetailPage = () => {
     () => roleCodes.includes("ADMIN") || roleCodes.includes("FINANCE"),
     [roleCodes],
   );
+  const canManageReimbursements = useMemo(
+    () => roleCodes.includes("ADMIN") || roleCodes.includes("FINANCE"),
+    [roleCodes],
+  );
   const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
   const storeClients = useClientsStore((state) => state.clients);
   const fetchClientsFromStore = useClientsStore((state) => state.fetchClients);
@@ -1664,7 +1668,7 @@ const ProjectDetailPage = () => {
                             id: item.id,
                             name: item.name,
                           }))}
-                          canManageProject={canManageProject}
+                          canManageProject={canManageReimbursements}
                         />
                       </div>
                     ) : costTrackingTab === "realtime-cost" ? (
@@ -1718,7 +1722,7 @@ const ProjectDetailPage = () => {
                             id: item.id,
                             name: item.name,
                           }))}
-                          canManageProject={canManageProject}
+                          canManageProject={canManageReimbursements}
                         />
                       ),
                     },

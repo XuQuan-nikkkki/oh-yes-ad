@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { App, Empty, Popconfirm, Table, message } from "antd";
+import { App, Empty, Table, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import AppLink from "@/components/AppLink";
 import SelectOptionTag from "@/components/SelectOptionTag";
+import TableActions from "@/components/TableActions";
 import ProjectReimbursementFormModal, {
   type ProjectReimbursementFormValues,
 } from "@/components/project-detail/ProjectReimbursementFormModal";
@@ -264,25 +265,13 @@ const ProjectReimbursementRecordsContent = ({
         width: 140,
         render: (_value, record) =>
           canManageProject ? (
-            <div style={{ display: "flex", gap: 12 }}>
-              <a
-                onClick={() => {
-                  setEditingRecord(record);
-                }}
-              >
-                编辑
-              </a>
-              <Popconfirm
-                title="确定删除这条报销记录？"
-                onConfirm={() => {
-                  void handleDelete(record.id);
-                }}
-                okText="确定"
-                cancelText="取消"
-              >
-                <a style={{ color: "#ff4d4f" }}>删除</a>
-              </Popconfirm>
-            </div>
+            <TableActions
+              onEdit={() => setEditingRecord(record)}
+              onDelete={() => {
+                void handleDelete(record.id);
+              }}
+              deleteTitle="确定删除这条报销记录？"
+            />
           ) : (
             "-"
           ),
