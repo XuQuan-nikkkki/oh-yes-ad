@@ -3,6 +3,7 @@ import { requireProjectWritePermission } from "@/lib/api-permissions";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import { getProjectOutsourceTotal } from "@/lib/project-outsource";
 import { computeInitiationEstimatedAgencyFee } from "@/lib/prisma/project-initiation";
+import { toSerializableNumber } from "@/lib/toSerializableNumber";
 import type { NullableSelectOptionValue } from "@/types/selectOption";
 
 const ownerPublicSelect = {
@@ -321,6 +322,7 @@ const serializePlanningCostEstimation = (
 const serializeInitiation = (initiation: ProjectCostEstimationPayload) => ({
   ...initiation,
   type: "baseline" as const,
+  contractAmount: toSerializableNumber(initiation.contractAmount),
   estimatedAgencyFee: computeInitiationEstimatedAgencyFee(initiation),
   outsourceCost: getProjectOutsourceTotal(initiation.outsourceItems),
   owner: initiation.owner ? serializeEmployee(initiation.owner) : null,

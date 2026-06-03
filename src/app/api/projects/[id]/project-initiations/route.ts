@@ -8,6 +8,7 @@ import { DEFAULT_COLOR } from "@/lib/constants";
 import { AUTH_SESSION_COOKIE, decodeAuthSession } from "@/lib/auth-session";
 import { toNullableDecimal } from "@/lib/toNullableDecimal";
 import { toNullableInt } from "@/lib/toNullableInt";
+import { toSerializableNumber } from "@/lib/toSerializableNumber";
 import {
   getProjectOutsourceTotal,
   normalizeProjectOutsourceItems,
@@ -156,6 +157,7 @@ const serializeInitiation = (
 ) => ({
   ...initiation,
   type: "baseline",
+  contractAmount: toSerializableNumber(initiation.contractAmount),
   estimatedAgencyFee: computeInitiationEstimatedAgencyFee(initiation),
   outsourceCost: getProjectOutsourceTotal(
     "outsourceItems" in initiation ? (initiation.outsourceItems as never) : [],
@@ -216,10 +218,6 @@ export async function POST(req: NextRequest, context: RouteContext) {
   const normalizedEstimatedDuration = Math.round(estimatedDuration);
 
   const members = normalizeMembers(body.members);
-  if (members.length === 0) {
-    return new Response("At least one member is required", { status: 400 });
-  }
-
   const memberEmployeeIds = Array.from(new Set(members.map((item) => item.employeeId)));
   const [employeeRows, systemSettings] = await Promise.all([
     prisma.employee.findMany({

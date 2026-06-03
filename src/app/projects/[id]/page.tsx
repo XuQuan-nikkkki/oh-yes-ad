@@ -1696,6 +1696,7 @@ const ProjectDetailPage = () => {
                           projectId={projectId}
                           projectName={project.name ?? ""}
                           startDate={project.startDate}
+                          endDate={project.endDate}
                           latestInitiation={
                             project.latestInitiation
                           }

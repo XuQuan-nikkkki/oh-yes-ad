@@ -31,6 +31,7 @@ type Props = {
   projectId: string;
   projectName: string;
   startDate?: string | null;
+  endDate?: string | null;
   latestInitiation?: Project["latestInitiation"];
   members?: Project["members"];
   actualWorkEntries?: Project["actualWorkEntries"];
@@ -499,6 +500,7 @@ const ProjectRealtimeCostTrackingTable = ({
   projectId,
   projectName,
   startDate,
+  endDate,
   latestInitiation,
   members = [],
   actualWorkEntries = [],
@@ -647,12 +649,13 @@ const ProjectRealtimeCostTrackingTable = ({
 
   const elapsedWorkdays = useMemo(() => {
     if (!startDate) return 0;
+    const effectiveEndDate = endDate ? new Date(endDate) : new Date();
     return calculateWorkdays(
       new Date(startDate),
-      new Date(),
+      effectiveEndDate,
       workdayAdjustments,
     );
-  }, [startDate, workdayAdjustments]);
+  }, [endDate, startDate, workdayAdjustments]);
 
   const monthlyWorkdayBase = useMemo(
     () =>
