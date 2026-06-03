@@ -324,7 +324,15 @@ const ProjectFormModal = ({
         return true;
       });
       return result ?? false;
-    } catch {
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message ? error.message : "保存项目失败";
+      baseFormRef.current?.setFields([
+        {
+          name: "name",
+          errors: [message],
+        },
+      ]);
       return false;
     }
   };

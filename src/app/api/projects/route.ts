@@ -43,6 +43,20 @@ const toProjectTypeCode = (value?: string | null) => {
   return value;
 };
 
+const normalizeProjectName = (value: unknown) => {
+  return typeof value === "string" ? value.trim() : "";
+};
+
+const findProjectByName = async (name: string, excludeId?: string | null) => {
+  return prisma.project.findFirst({
+    where: {
+      name,
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+    select: { id: true },
+  });
+};
+
 const parseSelectOptionInput = (value: unknown) => {
   if (typeof value === "string") {
     const normalized = value.trim();
@@ -174,6 +188,15 @@ export async function POST(req: Request) {
   if (denied) return denied;
 
   const body = await sanitizeRequestBody(req);
+  const name = normalizeProjectName(body.name);
+  if (!name) {
+    return new Response("项目名称不能为空", { status: 400 });
+  }
+  const existingProject = await findProjectByName(name);
+  if (existingProject) {
+    return new Response("项目名称已存在", { status: 409 });
+  }
+
   const [typeOptionId, statusOptionId, stageOptionId] = await Promise.all([
     upsertSelectOption("project.type", toProjectTypeValue(body.type)),
     upsertSelectOption("project.status", body.status ?? null),
@@ -182,7 +205,7 @@ export async function POST(req: Request) {
 
   const project = await prisma.project.create({
     data: {
-      name: body.name,
+      name,
       typeOptionId,
       isArchived: Boolean(body.isArchived),
       statusOptionId,
@@ -212,6 +235,19 @@ export async function PUT(req: Request) {
   if (denied) return denied;
 
   const body = await sanitizeRequestBody(req);
+  const id = typeof body.id === "string" ? body.id.trim() : "";
+  const name = normalizeProjectName(body.name);
+  if (!id) {
+    return new Response("Missing project ID", { status: 400 });
+  }
+  if (!name) {
+    return new Response("项目名称不能为空", { status: 400 });
+  }
+  const existingProject = await findProjectByName(name, id);
+  if (existingProject) {
+    return new Response("项目名称已存在", { status: 409 });
+  }
+
   const [typeOptionId, statusOptionId, stageOptionId] = await Promise.all([
     upsertSelectOption("project.type", toProjectTypeValue(body.type)),
     upsertSelectOption("project.status", body.status ?? null),
@@ -220,10 +256,10 @@ export async function PUT(req: Request) {
 
   const project = await prisma.project.update({
     where: {
-      id: body.id,
+      id,
     },
     data: {
-      name: body.name,
+      name,
       typeOptionId,
       isArchived: Boolean(body.isArchived),
       statusOptionId,
