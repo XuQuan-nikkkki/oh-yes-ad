@@ -18,18 +18,20 @@ import {
   Progress,
   Row,
   Space,
-  Table,
   Timeline,
   Typography,
 } from "antd";
-import type { ColumnsType } from "antd/es/table";
 import type { Dayjs } from "dayjs";
+import { formatBadDebtSignedAmount } from "@/lib/format-bad-debt-amount";
 import EllipsisPopoverText from "@/components/EllipsisPopoverText";
 import SelectOptionTag from "@/components/SelectOptionTag";
 import TableActions from "@/components/TableActions";
 import ProjectReceivableActualNodeModal, {
   type ProjectReceivableActualNodeFormValues,
 } from "@/components/project-detail/ProjectReceivableActualNodeModal";
+import ProjectReceivableBadDebtRecordModal, {
+  type ProjectReceivableBadDebtRecordFormValues,
+} from "@/components/project-detail/ProjectReceivableBadDebtRecordModal";
 import ProjectReceivableNodeModal, {
   type ProjectReceivableNodeFormValues,
 } from "@/components/project-detail/ProjectReceivableNodeModal";
@@ -69,6 +71,28 @@ export type ProjectReceivableNodeRow = {
     remark?: string | null;
     remarkNeedsAttention?: boolean;
   }>;
+  badDebtRecords?: Array<{
+    id: string;
+    type: "WRITE_OFF" | "RECOVERY";
+    amountTaxIncluded?: number | string | null;
+    occurredAt?: string | null;
+    reason?: string | null;
+    remark?: string | null;
+    createdByEmployee?: {
+      id: string;
+      name: string;
+    } | null;
+    createdAt?: string;
+  }>;
+  receivableAmountTaxIncluded?: number;
+  actualAmountTotal?: number;
+  badDebtWriteOffAmountTotal?: number;
+  badDebtRecoveryAmountTotal?: number;
+  badDebtAmountTotal?: number;
+  actualBadDebtAmount?: number;
+  pendingAmount?: number;
+  collectionProgressPercent?: number;
+  isCollectionAmountMatched?: boolean;
 };
 
 type StageOption = {
@@ -100,6 +124,7 @@ type Props = {
   rows: ProjectReceivableNodeRow[];
   stageOptions: StageOption[];
   canManageProject: boolean;
+  canManageBadDebtRecords?: boolean;
   onAddNode: () => void;
   onDeleteNode: (nodeId: string) => void | Promise<void>;
   onEditNode: (
@@ -122,31 +147,31 @@ type Props = {
     row: ProjectReceivableNodeRow,
     values: ReceivableNodeDelayFormValues,
   ) => void | Promise<void>;
+  onCreateBadDebtRecord?: (
+    row: ProjectReceivableNodeRow,
+    values: ProjectReceivableBadDebtRecordFormValues,
+  ) => void | Promise<void>;
+  onEditBadDebtRecord?: (
+    badDebtRecordId: string,
+    values: ProjectReceivableBadDebtRecordFormValues,
+  ) => void | Promise<void>;
+  onDeleteBadDebtRecord?: (badDebtRecordId: string) => void | Promise<void>;
   onHistoryChanged?: () => void | Promise<void>;
 };
 
-const getActualAmountSum = (row: ProjectReceivableNodeRow) =>
-  (row.actualNodes ?? []).reduce((sum, item) => {
-    const value = Number(item.actualAmountTaxIncluded ?? 0);
-    return Number.isFinite(value) ? sum + value : sum;
-  }, 0);
-
-const toCentAmount = (value: number) => Math.round(value * 100);
-
-const isCollectionAmountMatched = (row: ProjectReceivableNodeRow) => {
-  const expectedAmount = Number(row.expectedAmountTaxIncluded ?? 0);
-  if (expectedAmount <= 0) return false;
-  return toCentAmount(getActualAmountSum(row)) === toCentAmount(expectedAmount);
+const toAmountNumber = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 };
 
-const getCollectionProgressPercent = (row: ProjectReceivableNodeRow) => {
-  const expectedAmount = Number(row.expectedAmountTaxIncluded ?? 0);
-  const actualAmount = getActualAmountSum(row);
-  if (expectedAmount <= 0) return 0;
-  return Math.max(
-    0,
-    Math.min(100, (actualAmount / expectedAmount) * 100),
-  );
+const toPercentNumber = (value: unknown) => {
+  const amount = toAmountNumber(value);
+  if (amount === null) return 0;
+  return Math.max(0, Math.min(100, amount));
 };
 
 const formatAmount = (value?: number | null) => {
@@ -167,6 +192,7 @@ const ProjectReceivableNodeTable = ({
   rows,
   stageOptions,
   canManageProject,
+  canManageBadDebtRecords = false,
   onAddNode,
   onDeleteNode,
   onEditNode,
@@ -174,6 +200,9 @@ const ProjectReceivableNodeTable = ({
   onEditActualNode,
   onDeleteActualNode,
   onDelayNode,
+  onCreateBadDebtRecord,
+  onEditBadDebtRecord,
+  onDeleteBadDebtRecord,
   onHistoryChanged,
 }: Props) => {
   const [actualModalOpen, setActualModalOpen] = useState(false);
@@ -193,6 +222,13 @@ const ProjectReceivableNodeTable = ({
   const [delayTargetRow, setDelayTargetRow] =
     useState<ProjectReceivableNodeRow | null>(null);
   const [delayForm] = Form.useForm<ReceivableNodeDelayFormValues>();
+  const [badDebtModalOpen, setBadDebtModalOpen] = useState(false);
+  const [badDebtSubmitting, setBadDebtSubmitting] = useState(false);
+  const [badDebtTargetRow, setBadDebtTargetRow] =
+    useState<ProjectReceivableNodeRow | null>(null);
+  const [editingBadDebtRecord, setEditingBadDebtRecord] = useState<
+    NonNullable<ProjectReceivableNodeRow["badDebtRecords"]>[number] | null
+  >(null);
   const [historyEditModalOpen, setHistoryEditModalOpen] = useState(false);
   const [historyEditSubmitting, setHistoryEditSubmitting] = useState(false);
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
@@ -296,10 +332,16 @@ const ProjectReceivableNodeTable = ({
         width: 160,
         editable: false,
         render: (_dom, row) => {
-          const actualAmount = getActualAmountSum(row);
-          const expectedAmount = Number(row.expectedAmountTaxIncluded ?? 0);
-          const percent = getCollectionProgressPercent(row);
-          const isAmountMatched = isCollectionAmountMatched(row);
+          const actualAmount = toAmountNumber(row.actualAmountTotal) ?? 0;
+          const expectedAmount =
+            toAmountNumber(row.expectedAmountTaxIncluded) ?? 0;
+          const percent = toPercentNumber(row.collectionProgressPercent);
+          const isAmountMatched = Boolean(row.isCollectionAmountMatched);
+          const writeOffAmount =
+            toAmountNumber(row.badDebtWriteOffAmountTotal) ?? 0;
+          const recoveryAmount =
+            toAmountNumber(row.badDebtRecoveryAmountTotal) ?? 0;
+          const pendingAmount = toAmountNumber(row.pendingAmount) ?? 0;
 
           return (
             <div style={{ minWidth: 140, lineHeight: 1.1 }}>
@@ -317,6 +359,27 @@ const ProjectReceivableNodeTable = ({
                 size="small"
                 strokeColor={isAmountMatched ? "#52c41a" : undefined}
               />
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "2px 8px",
+                  marginTop: 2,
+                  fontSize: 11,
+                  lineHeight: 1.4,
+                  color: "rgba(0,0,0,0.45)",
+                }}
+              >
+                <span style={{ color: "#BE2E2C" }}>
+                  坏账核销{" "}
+                  {formatBadDebtSignedAmount("WRITE_OFF", writeOffAmount)}
+                </span>
+                <span style={{ color: "#387E22" }}>
+                  坏账收回{" "}
+                  {formatBadDebtSignedAmount("RECOVERY", recoveryAmount)}
+                </span>
+                <span>待处理 {pendingAmount.toLocaleString("zh-CN")}</span>
+              </div>
             </div>
           );
         },
@@ -381,7 +444,7 @@ const ProjectReceivableNodeTable = ({
         width: 220,
         render: (_text, row) => {
           const isCollectionCompleted =
-            getCollectionProgressPercent(row) >= 100;
+            toPercentNumber(row.collectionProgressPercent) >= 100;
           const collectButton = (
             <Button
               variant="text"
@@ -420,6 +483,18 @@ const ProjectReceivableNodeTable = ({
               >
                 收款变动
               </Button>
+              <Button
+                variant="text"
+                color="primary"
+                style={{ paddingInline: 4 }}
+                disabled={!canManageBadDebtRecords}
+                onClick={() => {
+                  setBadDebtTargetRow(row);
+                  setBadDebtModalOpen(true);
+                }}
+              >
+                坏账
+              </Button>
               <TableActions
                 disabled={!canManageProject}
                 gap={0}
@@ -441,90 +516,240 @@ const ProjectReceivableNodeTable = ({
     [onDeleteNode, canManageProject, stageOptions, stageValueEnum],
   );
 
-  const actualColumns = useMemo<ColumnsType<ActualNodeRow>>(
-    () => [
-      {
-        title: (
-          <span
-            style={{
-              display: "inline-flex",
-              flexDirection: "column",
-              lineHeight: 1.2,
-            }}
-          >
-            <span>实收金额</span>
-            <span>（含税）</span>
-          </span>
-        ),
-        dataIndex: "actualAmountTaxIncluded",
-        width: 130,
-        render: (_dom, row) => formatAmount(row.actualAmountTaxIncluded),
-      },
-      {
-        title: "实收日期",
-        dataIndex: "actualDate",
-        width: 140,
-        render: (_dom, row) =>
-          row.actualDate ? dayjs(row.actualDate).format("YYYY-MM-DD") : "-",
-      },
-      {
-        title: "备注",
-        dataIndex: "remark",
-        width: 180,
-        render: (_dom, row) => {
-          const value = row.remark?.trim() ?? "";
-          if (!value) return <span>-</span>;
-          return (
-            <span
-              style={
-                Boolean(row.remarkNeedsAttention)
-                  ? { color: "#ff4d4f" }
-                  : undefined
-              }
-            >
-              {value}
-            </span>
-          );
-        },
-      },
-      {
-        title: "操作",
-        key: "actions",
-        width: 180,
-        render: (_dom, row) => (
-          <TableActions
-            disabled={!canManageProject}
-            editText="修改"
-            gap={10}
-            buttonStyle={{ paddingInline: 4 }}
-            onEdit={() => {
-              setEditingActualNode(row);
-              setActualModalOpen(true);
-            }}
-            onDelete={() => {
-              void onDeleteActualNode?.(row.id);
-            }}
-          />
-        ),
-      },
-    ],
-    [canManageProject, onDeleteActualNode],
-  );
-
   const renderActualNodesTable = (record: ProjectReceivableNodeRow) => (
     <div>
-      <div style={{ fontSize: 14, fontWeight: 600 }}>实收记录</div>
+      <div style={{ marginBottom: 8, fontSize: 14, fontWeight: 600 }}>
+        实收记录
+      </div>
       <Divider style={{ margin: "8px 0" }} />
-      <Table
-        rowKey="id"
-        size="small"
-        pagination={false}
-        columns={actualColumns}
-        dataSource={record.actualNodes ?? []}
-        onRow={() => ({
-          onClick: (event) => {
-            event.stopPropagation();
-          },
+      <Timeline
+        style={{ marginTop: 2 }}
+        items={(record.actualNodes ?? []).map((actualNode) => {
+          const actualDate = dayjs(actualNode.actualDate).isValid()
+            ? dayjs(actualNode.actualDate).format("YYYY-MM-DD")
+            : "-";
+          const amount = formatAmount(actualNode.actualAmountTaxIncluded);
+          const remark = String(actualNode.remark ?? "").trim();
+
+          return {
+            key: actualNode.id,
+            content: (
+              <div style={{ lineHeight: 1.45 }}>
+                <div style={{ marginBottom: 4 }}>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      color: "rgba(0,0,0,0.65)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {actualDate}
+                  </span>
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      fontSize: 13,
+                      color: "#1677ff",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {amount}
+                  </span>
+                </div>
+                {remark ? (
+                  <div
+                    style={{
+                      marginBottom: 2,
+                      fontSize: 13,
+                      color: Boolean(actualNode.remarkNeedsAttention)
+                        ? "#ff4d4f"
+                        : "rgba(0,0,0,0.65)",
+                    }}
+                  >{`备注：${remark}`}</div>
+                ) : null}
+                <div style={{ fontSize: 12, color: "rgba(0,0,0,0.45)" }}>
+                  <Space size={8}>
+                    <Button
+                      type="link"
+                      size="small"
+                      style={{
+                        paddingInline: 0,
+                        fontSize: 12,
+                        height: "auto",
+                        lineHeight: 1,
+                      }}
+                      disabled={!canManageProject}
+                      onClick={() => {
+                        setEditingActualNode(actualNode);
+                        setActualModalOpen(true);
+                      }}
+                    >
+                      修改
+                    </Button>
+                    <Popconfirm
+                      title="确认删除该条实收记录吗？"
+                      okText="删除"
+                      cancelText="取消"
+                      okButtonProps={{ danger: true }}
+                      disabled={!canManageProject}
+                      onConfirm={() => {
+                        void onDeleteActualNode?.(actualNode.id);
+                      }}
+                    >
+                      <Button
+                        type="link"
+                        size="small"
+                        danger
+                        style={{
+                          paddingInline: 0,
+                          height: "auto",
+                          lineHeight: 1,
+                          fontSize: 12,
+                        }}
+                        disabled={!canManageProject}
+                      >
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                </div>
+              </div>
+            ),
+          };
+        })}
+      />
+    </div>
+  );
+
+  const renderBadDebtRecordsTimeline = (record: ProjectReceivableNodeRow) => (
+    <div>
+      <div style={{ marginBottom: 8, fontSize: 14, fontWeight: 600 }}>
+        坏账记录
+      </div>
+      <Divider style={{ margin: "8px 0" }} />
+      <Timeline
+        style={{ marginTop: 2 }}
+        items={(record.badDebtRecords ?? []).map((badDebtRecord) => {
+          const occurredAt = dayjs(badDebtRecord.occurredAt).isValid()
+            ? dayjs(badDebtRecord.occurredAt).format("YYYY-MM-DD")
+            : "-";
+          const isRecovery = badDebtRecord.type === "RECOVERY";
+          const typeText = isRecovery ? "坏账收回" : "坏账核销";
+          const reason = String(badDebtRecord.reason ?? "").trim();
+          const remark = String(badDebtRecord.remark ?? "").trim();
+          const createdAt = dayjs(badDebtRecord.createdAt).isValid()
+            ? dayjs(badDebtRecord.createdAt).format("YYYY-MM-DD")
+            : "-";
+          const createdBy =
+            badDebtRecord.createdByEmployee?.name?.trim() || "-";
+
+          return {
+            key: badDebtRecord.id,
+            color: isRecovery ? "green" : "red",
+            content: (
+              <div style={{ lineHeight: 1.45 }}>
+                <div style={{ marginBottom: 4 }}>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      color: "rgba(0,0,0,0.65)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {occurredAt}
+                  </span>
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      fontSize: 13,
+                      color: isRecovery ? "#387E22" : "#BE2E2C",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {typeText}
+                  </span>
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      fontSize: 13,
+                      color: isRecovery ? "#387E22" : "#BE2E2C",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {`${formatBadDebtSignedAmount(
+                      badDebtRecord.type,
+                      badDebtRecord.amountTaxIncluded,
+                    )} 元`}
+                  </span>
+                </div>
+                {reason ? (
+                  <div
+                    style={{
+                      marginBottom: 2,
+                      fontSize: 13,
+                      color: "rgba(0,0,0,0.65)",
+                    }}
+                  >{`原因：${reason}`}</div>
+                ) : null}
+                {remark ? (
+                  <div
+                    style={{
+                      marginBottom: 2,
+                      fontSize: 13,
+                      color: "rgba(0,0,0,0.65)",
+                    }}
+                  >{`备注：${remark}`}</div>
+                ) : null}
+                <div style={{ fontSize: 12, color: "rgba(0,0,0,0.45)" }}>
+                  <span>{`${createdAt} · ${createdBy}`}</span>
+                  <Space size={8} style={{ marginLeft: 8 }}>
+                    <Button
+                      type="link"
+                      size="small"
+                      style={{
+                        paddingInline: 0,
+                        fontSize: 12,
+                        height: "auto",
+                        lineHeight: 1,
+                      }}
+                      disabled={!canManageBadDebtRecords}
+                      onClick={() => {
+                        setEditingBadDebtRecord(badDebtRecord);
+                        setBadDebtModalOpen(true);
+                      }}
+                    >
+                      编辑
+                    </Button>
+                    <Popconfirm
+                      title="确认删除该条坏账记录吗？"
+                      okText="删除"
+                      cancelText="取消"
+                      okButtonProps={{ danger: true }}
+                      disabled={!canManageBadDebtRecords}
+                      onConfirm={() => {
+                        void onDeleteBadDebtRecord?.(badDebtRecord.id);
+                      }}
+                    >
+                      <Button
+                        type="link"
+                        size="small"
+                        danger
+                        style={{
+                          paddingInline: 0,
+                          height: "auto",
+                          lineHeight: 1,
+                          fontSize: 12,
+                        }}
+                        disabled={!canManageBadDebtRecords}
+                      >
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                </div>
+              </div>
+            ),
+          };
         })}
       />
     </div>
@@ -727,7 +952,7 @@ const ProjectReceivableNodeTable = ({
   return (
     <>
       <ProTable<ProjectReceivableNodeRow>
-        style={{ marginTop: 0 }}
+        style={{ marginTop: 1 }}
         rowKey="id"
         columns={
           title
@@ -746,7 +971,7 @@ const ProjectReceivableNodeTable = ({
         toolBarRender={false}
         scroll={{ x: "max-content" }}
         rowClassName={(record) =>
-          isCollectionAmountMatched(record)
+          Boolean(record.isCollectionAmountMatched)
             ? "receivable-node-row-complete"
             : ""
         }
@@ -759,7 +984,8 @@ const ProjectReceivableNodeTable = ({
           },
           rowExpandable: (record) =>
             (record.actualNodes?.length ?? 0) > 0 ||
-            (record.expectedDateHistories?.length ?? 0) > 0,
+            (record.expectedDateHistories?.length ?? 0) > 0 ||
+            (record.badDebtRecords?.length ?? 0) > 0,
           expandedRowRender: (record) => (
             <div
               style={{ paddingLeft: 32 }}
@@ -771,34 +997,44 @@ const ProjectReceivableNodeTable = ({
                 const hasActualNodes = (record.actualNodes?.length ?? 0) > 0;
                 const hasExpectedDateHistories =
                   (record.expectedDateHistories?.length ?? 0) > 0;
+                const hasBadDebtRecords =
+                  (record.badDebtRecords?.length ?? 0) > 0;
+                if (
+                  !hasActualNodes &&
+                  !hasExpectedDateHistories &&
+                  !hasBadDebtRecords
+                ) {
+                  return null;
+                }
 
-                if (hasActualNodes && !hasExpectedDateHistories) {
-                  return renderActualNodesTable(record);
-                }
-                if (!hasActualNodes && hasExpectedDateHistories) {
-                  return renderExpectedDateHistoryTimeline(record);
-                }
-                if (hasActualNodes && hasExpectedDateHistories) {
-                  return (
+                return (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                      columnGap: 16,
+                      alignItems: "stretch",
+                    }}
+                  >
+                    <div>{renderActualNodesTable(record)}</div>
                     <div
                       style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "minmax(0, 1fr) auto minmax(0, 1fr)",
-                        columnGap: 16,
-                        alignItems: "stretch",
+                        borderLeft: "1px solid #f0f0f0",
+                        paddingLeft: 16,
                       }}
                     >
-                      <div>{renderActualNodesTable(record)}</div>
-                      <Divider
-                        orientation="vertical"
-                        style={{ height: "100%", margin: 0 }}
-                      />
-                      <div>{renderExpectedDateHistoryTimeline(record)}</div>
+                      {renderExpectedDateHistoryTimeline(record)}
                     </div>
-                  );
-                }
-                return null;
+                    <div
+                      style={{
+                        borderLeft: "1px solid #f0f0f0",
+                        paddingLeft: 16,
+                      }}
+                    >
+                      {renderBadDebtRecordsTimeline(record)}
+                    </div>
+                  </div>
+                );
               })()}
             </div>
           ),
@@ -830,7 +1066,7 @@ const ProjectReceivableNodeTable = ({
             ? undefined
             : Math.max(
                 Number(currentCollectRow.expectedAmountTaxIncluded ?? 0) -
-                  getActualAmountSum(currentCollectRow),
+                  (toAmountNumber(currentCollectRow.actualAmountTotal) ?? 0),
                 0,
               )
         }
@@ -874,7 +1110,8 @@ const ProjectReceivableNodeTable = ({
                   actualAmountTaxIncluded:
                     Math.max(
                       Number(currentCollectRow.expectedAmountTaxIncluded ?? 0) -
-                        getActualAmountSum(currentCollectRow),
+                        (toAmountNumber(currentCollectRow.actualAmountTotal) ??
+                          0),
                       0,
                     ),
                   actualDate: currentCollectRow.expectedDate
@@ -882,6 +1119,56 @@ const ProjectReceivableNodeTable = ({
                     : undefined,
                 }
               : undefined
+        }
+      />
+      <ProjectReceivableBadDebtRecordModal
+        open={badDebtModalOpen}
+        loading={badDebtSubmitting}
+        onCancel={() => {
+          setBadDebtModalOpen(false);
+          setBadDebtTargetRow(null);
+          setEditingBadDebtRecord(null);
+        }}
+        onSubmit={async (values) => {
+          if (
+            editingBadDebtRecord &&
+            onEditBadDebtRecord
+          ) {
+            try {
+              setBadDebtSubmitting(true);
+              await onEditBadDebtRecord(editingBadDebtRecord.id, values);
+              setBadDebtModalOpen(false);
+              setEditingBadDebtRecord(null);
+            } finally {
+              setBadDebtSubmitting(false);
+            }
+            return;
+          }
+          if (!badDebtTargetRow || !onCreateBadDebtRecord) return;
+          try {
+            setBadDebtSubmitting(true);
+            await onCreateBadDebtRecord(badDebtTargetRow, values);
+            setBadDebtModalOpen(false);
+            setBadDebtTargetRow(null);
+          } finally {
+            setBadDebtSubmitting(false);
+          }
+        }}
+        title={editingBadDebtRecord ? "编辑坏账记录" : "坏账记录"}
+        initialValues={
+          editingBadDebtRecord
+            ? {
+                type: editingBadDebtRecord.type,
+                amountTaxIncluded:
+                  toAmountNumber(editingBadDebtRecord.amountTaxIncluded) ??
+                  undefined,
+                occurredAt: editingBadDebtRecord.occurredAt
+                  ? dayjs(editingBadDebtRecord.occurredAt)
+                  : undefined,
+                reason: editingBadDebtRecord.reason ?? undefined,
+                remark: editingBadDebtRecord.remark ?? undefined,
+              }
+            : undefined
         }
       />
 

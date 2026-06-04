@@ -1,13 +1,9 @@
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireReceivablePayableWritePermission } from "@/lib/api-permissions";
+import { prisma } from "@/lib/prisma";
+import { enrichReceivablePlan } from "@/lib/prisma/project-receivable";
 import { toNullableDecimal } from "@/lib/toNullableDecimal";
-
-const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
-});
 
 const includeDetail = {
   project: {
@@ -81,6 +77,17 @@ const includeDetail = {
       actualNodes: {
         orderBy: [{ actualDate: "asc" as const }, { createdAt: "asc" as const }],
       },
+      badDebtRecords: {
+        include: {
+          createdByEmployee: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: [{ occurredAt: "asc" as const }, { createdAt: "asc" as const }],
+      },
     },
     orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
   },
@@ -106,7 +113,7 @@ export async function GET(req: NextRequest) {
     orderBy: [{ updatedAt: "desc" }],
   });
 
-  return Response.json(rows);
+  return Response.json(rows.map((row) => enrichReceivablePlan(row)));
 }
 
 export async function POST(req: NextRequest) {
@@ -207,5 +214,5 @@ export async function POST(req: NextRequest) {
     include: includeDetail,
   });
 
-  return Response.json(created);
+  return Response.json(enrichReceivablePlan(created));
 }

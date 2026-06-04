@@ -28,6 +28,11 @@ enum ProjectReceivablePlanStatus {
   ARCHIVED
 }
 
+enum ProjectReceivableBadDebtRecordType {
+  WRITE_OFF
+  RECOVERY
+}
+
 enum SystemSettingValueType {
   number
   percent
@@ -311,6 +316,7 @@ model Employee {
   ownedProjectPayablePlans     ProjectPayablePlan[]                       @relation("ProjectPayablePlanOwner")
   projectReimbursements        ProjectReimbursement[]                     @relation("ProjectReimbursementApplicant")
   receivableExpectedDateEdits  ProjectReceivableNodeExpectedDateHistory[]
+  receivableBadDebtRecords     ProjectReceivableBadDebtRecord[]           @relation("ProjectReceivableBadDebtRecordCreatedBy")
   systemSettingHistories       SystemSettingHistory[]
   compensationHistories        EmployeeCompensationHistory[]              @relation("EmployeeCompensationSubject")
   changedCompensationHistories EmployeeCompensationHistory[]              @relation("EmployeeCompensationChangedBy")
@@ -580,6 +586,7 @@ model ProjectReceivableNode {
 
   expectedDateHistories ProjectReceivableNodeExpectedDateHistory[]
   actualNodes           ProjectReceivableActualNode[]
+  badDebtRecords        ProjectReceivableBadDebtRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -604,8 +611,37 @@ model ProjectReceivableActualNode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  badDebtRecord ProjectReceivableBadDebtRecord? @relation("BadDebtRecoveryActualNode")
+
   @@index([receivableNodeId])
   @@index([receivableNodeId, actualDate])
+}
+
+model ProjectReceivableBadDebtRecord {
+  id String @id @default(uuid())
+
+  receivableNodeId String
+  receivableNode   ProjectReceivableNode @relation(fields: [receivableNodeId], references: [id], onDelete: Cascade)
+
+  type              ProjectReceivableBadDebtRecordType
+  amountTaxIncluded Decimal
+  occurredAt        DateTime
+
+  reason String?
+  remark String?
+
+  actualNodeId String?                      @unique
+  actualNode   ProjectReceivableActualNode? @relation("BadDebtRecoveryActualNode", fields: [actualNodeId], references: [id], onDelete: SetNull)
+
+  createdByEmployeeId String
+  createdByEmployee   Employee @relation("ProjectReceivableBadDebtRecordCreatedBy", fields: [createdByEmployeeId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([receivableNodeId])
+  @@index([receivableNodeId, occurredAt])
+  @@index([createdByEmployeeId])
 }
 
 model ProjectPayableNode {

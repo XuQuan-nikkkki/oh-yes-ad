@@ -65,6 +65,11 @@ type ReceivablePlan = {
 type PayablePlan = {
   id: string;
   contractAmount?: number | null;
+  nodes?: Array<{
+    actualNodes?: Array<{
+      actualAmountTaxIncluded?: number | string | null;
+    }>;
+  }>;
   vendorContract?: {
     serviceContent?: string | null;
     vendor?: {
@@ -201,6 +206,18 @@ const toNumber = (value: unknown) => {
   }
   return 0;
 };
+
+const getPayablePlanActualAmount = (plan: PayablePlan) =>
+  (plan.nodes ?? []).reduce(
+    (nodeSum, node) =>
+      nodeSum +
+      (node.actualNodes ?? []).reduce(
+        (actualSum, actual) =>
+          actualSum + toNumber(actual.actualAmountTaxIncluded),
+        0,
+      ),
+    0,
+  );
 
 const formatAmount = (value: number) => {
   if (!Number.isFinite(value)) return "0";
@@ -1353,7 +1370,7 @@ const ProjectRealtimeCostTrackingTable = ({
   const outsourceCost = useMemo(
     () =>
       (payablePlans ?? []).reduce(
-        (sum, plan) => sum + toNumber(plan.contractAmount),
+        (sum, plan) => sum + getPayablePlanActualAmount(plan),
         0,
       ),
     [payablePlans],
@@ -1450,7 +1467,7 @@ const ProjectRealtimeCostTrackingTable = ({
         const amount = toNumber(plan.contractAmount);
         return `${vendorName}-${content}(${formatYuanText(amount)} 元)`;
       })
-      .join(" + ");
+      .join("\n");
   }, [payablePlans]);
   const agencyFeeRemarkText = useMemo(
     () => `中介费率 ${financialStructure?.agencyFeeRate ?? 0}%`,

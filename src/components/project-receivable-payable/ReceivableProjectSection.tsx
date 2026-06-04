@@ -91,13 +91,10 @@ export default function ReceivableProjectSection({
     (sum, row) => sum + Number(row.expectedAmountTaxIncluded ?? 0),
     0,
   );
-  const actualAmountTotal = rows.reduce((sum, row) => {
-    const rowActual = (row.actualNodes ?? []).reduce(
-      (rowSum, actual) => rowSum + Number(actual.actualAmountTaxIncluded ?? 0),
-      0,
-    );
-    return sum + rowActual;
-  }, 0);
+  const actualAmountTotal = rows.reduce(
+    (sum, row) => sum + Number(row.actualAmountTotal ?? 0),
+    0,
+  );
   const progressPercent =
     expectedAmountTotal > 0
       ? Math.max(

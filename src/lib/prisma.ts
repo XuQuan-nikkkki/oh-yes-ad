@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { estimationExtension } from "@/lib/prisma/project-cost-estimation";
 import { initiationExtension } from "@/lib/prisma/project-initiation";
 import { pricingStrategyExtension } from "@/lib/prisma/project-pricing-strategy";
+import { receivableExtension } from "@/lib/prisma/project-receivable";
 
 function createPrismaClient() {
   const adapter = new PrismaPg({
@@ -12,6 +13,7 @@ function createPrismaClient() {
   return new PrismaClient({ adapter })
     .$extends(estimationExtension)
     .$extends(initiationExtension)
+    .$extends(receivableExtension)
     .$extends(pricingStrategyExtension);
 }
 

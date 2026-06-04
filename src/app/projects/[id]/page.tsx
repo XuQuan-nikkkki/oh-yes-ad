@@ -1808,6 +1808,7 @@ const ProjectDetailPage = () => {
                         projectId={projectId}
                         project={project}
                         canManageProject={canManageProject}
+                        canManageBadDebtRecords={canManageReimbursements}
                         planModalOpen={receivablePlanModalOpen}
                         planModalMode={receivablePlanModalMode}
                         onPlanModalOpenChange={setReceivablePlanModalOpen}

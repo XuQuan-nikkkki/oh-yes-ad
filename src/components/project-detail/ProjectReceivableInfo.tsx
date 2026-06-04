@@ -28,6 +28,7 @@ import ProjectReceivableNodeModal, {
   type ProjectReceivableNodeFormValues,
 } from "@/components/project-detail/ProjectReceivableNodeModal";
 import type { ProjectReceivableActualNodeFormValues } from "@/components/project-detail/ProjectReceivableActualNodeModal";
+import type { ProjectReceivableBadDebtRecordFormValues } from "@/components/project-detail/ProjectReceivableBadDebtRecordModal";
 import type { Project } from "@/types/projectDetail";
 import { useClientContractsStore } from "@/stores/clientContractsStore";
 import { useLegalEntitiesStore } from "@/stores/legalEntitiesStore";
@@ -36,6 +37,7 @@ type Props = {
   projectId: string;
   project: Project;
   canManageProject: boolean;
+  canManageBadDebtRecords?: boolean;
   planModalOpen?: boolean;
   planModalMode?: "create" | "edit";
   onPlanModalOpenChange?: (open: boolean) => void;
@@ -91,6 +93,28 @@ type ReceivableNode = {
     remark?: string | null;
     remarkNeedsAttention: boolean;
   }>;
+  badDebtRecords?: Array<{
+    id: string;
+    type: "WRITE_OFF" | "RECOVERY";
+    amountTaxIncluded?: number | string | null;
+    occurredAt?: string | null;
+    reason?: string | null;
+    remark?: string | null;
+    createdByEmployee?: {
+      id: string;
+      name: string;
+    } | null;
+    createdAt?: string;
+  }>;
+  receivableAmountTaxIncluded?: number;
+  actualAmountTotal?: number;
+  badDebtWriteOffAmountTotal?: number;
+  badDebtRecoveryAmountTotal?: number;
+  badDebtAmountTotal?: number;
+  actualBadDebtAmount?: number;
+  pendingAmount?: number;
+  collectionProgressPercent?: number;
+  isCollectionAmountMatched?: boolean;
 };
 
 type ReceivablePlan = {
@@ -124,6 +148,17 @@ type ReceivablePlan = {
     name: string;
   } | null;
   nodes?: ReceivableNode[];
+  expectedAmountTotal?: number;
+  receivableAmountTotal?: number;
+  actualExpectedAmountTotal?: number;
+  actualAmountTotal?: number;
+  badDebtWriteOffAmountTotal?: number;
+  badDebtRecoveryAmountTotal?: number;
+  badDebtAmountTotal?: number;
+  actualBadDebtAmountTotal?: number;
+  pendingAmountTotal?: number;
+  collectionProgressPercent?: number;
+  isFullyCollected?: boolean;
 };
 
 const formatYuanNumber = (value: unknown) => {
@@ -150,6 +185,7 @@ const ProjectReceivableInfo = forwardRef<
       projectId,
       project,
       canManageProject,
+      canManageBadDebtRecords = false,
       planModalOpen: externalPlanModalOpen,
       planModalMode: externalPlanModalMode,
       onPlanModalOpenChange,
@@ -260,32 +296,6 @@ const ProjectReceivableInfo = forwardRef<
           : null) ?? defaultContract,
       [contracts, defaultContract],
     );
-    const getPlanSummary = useCallback((plan: ReceivablePlan) => {
-      const nodes = plan.nodes ?? [];
-      const expectedAmountTotal = nodes.reduce(
-        (sum, node) => sum + Number(node.expectedAmountTaxIncluded ?? 0),
-        0,
-      );
-      const actualAmountTotal = nodes.reduce((sum, node) => {
-        const nodeActual = (node.actualNodes ?? []).reduce(
-          (nodeSum, actual) =>
-            nodeSum + Number(actual.actualAmountTaxIncluded ?? 0),
-          0,
-        );
-        return sum + nodeActual;
-      }, 0);
-      const percent =
-        expectedAmountTotal > 0
-          ? Math.max(
-              0,
-              Math.min(
-                100,
-                Math.round((actualAmountTotal / expectedAmountTotal) * 100),
-              ),
-            )
-          : 0;
-      return { expectedAmountTotal, actualAmountTotal, percent };
-    }, []);
     const editingPlan = useMemo(
       () =>
         editingPlanId
@@ -742,6 +752,98 @@ const ProjectReceivableInfo = forwardRef<
       [fetchPlans, messageApi],
     );
 
+    const handleCreateBadDebtRecord = useCallback(
+      async (
+        row: ReceivableNode,
+        values: ProjectReceivableBadDebtRecordFormValues,
+      ) => {
+        const res = await fetch("/api/project-receivable-bad-debt-records", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            receivableNodeId: row.id,
+            type: values.type,
+            amountTaxIncluded: values.amountTaxIncluded,
+            occurredAt: values.occurredAt?.toISOString(),
+            reason: values.reason?.trim() ? values.reason.trim() : null,
+            remark: values.remark?.trim() ? values.remark.trim() : null,
+          }),
+        });
+
+        if (!res.ok) {
+          messageApi.error((await res.text()) || "新增坏账记录失败");
+          return;
+        }
+
+        messageApi.success(
+          values.type === "RECOVERY"
+            ? "新增坏账收回成功，已自动生成实收记录"
+            : "新增坏账记录成功",
+        );
+        await fetchPlans();
+      },
+      [fetchPlans, messageApi],
+    );
+
+    const handleEditBadDebtRecord = useCallback(
+      async (
+        badDebtRecordId: string,
+        values: ProjectReceivableBadDebtRecordFormValues,
+      ) => {
+        const res = await fetch(
+          `/api/project-receivable-bad-debt-records/${badDebtRecordId}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              type: values.type,
+              amountTaxIncluded: values.amountTaxIncluded,
+              occurredAt: values.occurredAt?.toISOString(),
+              reason: values.reason?.trim() ? values.reason.trim() : null,
+              remark: values.remark?.trim() ? values.remark.trim() : null,
+            }),
+          },
+        );
+
+        if (!res.ok) {
+          messageApi.error((await res.text()) || "修改坏账记录失败");
+          return;
+        }
+
+        messageApi.success(
+          values.type === "RECOVERY"
+            ? "修改坏账收回成功，已同步实收记录"
+            : "修改坏账记录成功",
+        );
+        await fetchPlans();
+      },
+      [fetchPlans, messageApi],
+    );
+
+    const handleDeleteBadDebtRecord = useCallback(
+      async (badDebtRecordId: string) => {
+        const res = await fetch(
+          `/api/project-receivable-bad-debt-records/${badDebtRecordId}`,
+          {
+            method: "DELETE",
+          },
+        );
+
+        if (!res.ok) {
+          messageApi.error("删除坏账记录失败");
+          return;
+        }
+
+        messageApi.success("删除坏账记录成功");
+        await fetchPlans();
+      },
+      [fetchPlans, messageApi],
+    );
+
     const handleEditActualNode = useCallback(
       async (
         actualNodeId: string,
@@ -886,14 +988,13 @@ const ProjectReceivableInfo = forwardRef<
           (() => {
             const plan = plans[0];
             const contract = getContractForPlan(plan);
-            const summary = getPlanSummary(plan);
             const contractAmount = formatYuanNumber(
               contract?.contractAmount ?? plan.contractAmount,
             );
             const expectedAmountTotal = formatYuanNumber(
-              summary.expectedAmountTotal,
+              plan.actualExpectedAmountTotal,
             );
-            const actualAmountTotal = formatYuanNumber(summary.actualAmountTotal);
+            const actualAmountTotal = formatYuanNumber(plan.actualAmountTotal);
 
             return (
               <div>
@@ -902,6 +1003,10 @@ const ProjectReceivableInfo = forwardRef<
                   taxAmount={contract?.taxAmount}
                   expectedAmountTotal={expectedAmountTotal}
                   actualAmountTotal={actualAmountTotal}
+                  badDebtAmountTotal={plan.actualBadDebtAmountTotal}
+                  badDebtWriteOffAmountTotal={plan.badDebtWriteOffAmountTotal}
+                  badDebtRecoveryAmountTotal={plan.badDebtRecoveryAmountTotal}
+                  collectionProgressPercent={plan.collectionProgressPercent}
                   legalEntityName={
                     contract?.legalEntity?.name || plan.legalEntity?.name
                   }
@@ -925,6 +1030,7 @@ const ProjectReceivableInfo = forwardRef<
                       value: item.value,
                     }))}
                     canManageProject={canManageProject}
+                    canManageBadDebtRecords={canManageBadDebtRecords}
                     onAddNode={() => {
                       setNodeTargetPlanId(plan.id);
                       setNodeModalOpen(true);
@@ -945,6 +1051,14 @@ const ProjectReceivableInfo = forwardRef<
                     onEditActualNode={handleEditActualNode}
                     onDeleteActualNode={handleDeleteActualNode}
                     onDelayNode={handleDelayNode}
+                    onCreateBadDebtRecord={async (row, values) => {
+                      await handleCreateBadDebtRecord(
+                        row as ReceivableNode,
+                        values,
+                      );
+                    }}
+                    onEditBadDebtRecord={handleEditBadDebtRecord}
+                    onDeleteBadDebtRecord={handleDeleteBadDebtRecord}
                     onHistoryChanged={fetchPlans}
                   />
                 </div>

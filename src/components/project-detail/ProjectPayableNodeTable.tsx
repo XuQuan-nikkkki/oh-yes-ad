@@ -376,7 +376,7 @@ const ProjectPayableNodeTable = ({
   return (
     <>
       <DragSortTable<ProjectPayableNodeRow>
-        style={{ marginTop: 12 }}
+        style={{ marginTop: 1 }}
         rowKey="id"
         columns={
           title

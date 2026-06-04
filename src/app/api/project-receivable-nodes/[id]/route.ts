@@ -1,16 +1,12 @@
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireReceivablePayableWritePermission } from "@/lib/api-permissions";
 import { AUTH_SESSION_COOKIE, decodeAuthSession } from "@/lib/auth-session";
+import { prisma } from "@/lib/prisma";
+import { enrichReceivableNode } from "@/lib/prisma/project-receivable";
 import { toNullableDecimal } from "@/lib/toNullableDecimal";
 import { toNullableInt } from "@/lib/toNullableInt";
-
-const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
-});
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -27,6 +23,17 @@ const includeDetail = {
   },
   actualNodes: {
     orderBy: [{ actualDate: "asc" as const }, { createdAt: "asc" as const }],
+  },
+  badDebtRecords: {
+    include: {
+      createdByEmployee: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: [{ occurredAt: "asc" as const }, { createdAt: "asc" as const }],
   },
 };
 
@@ -175,7 +182,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     });
   });
 
-  return Response.json(updated);
+  return Response.json(enrichReceivableNode(updated));
 }
 
 export async function DELETE(_req: NextRequest, context: RouteContext) {
