@@ -20,8 +20,6 @@ import {
   CalculatorOutlined,
   CreditCardOutlined,
   SettingOutlined,
-  InboxOutlined,
-  DatabaseOutlined,
 } from "@ant-design/icons";
 import type { AppRoleCode } from "@/lib/role-permissions";
 
@@ -232,19 +230,6 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
       },
     ],
   },
-  {
-    key: "history-data",
-    icon: <DatabaseOutlined />,
-    label: "历史数据",
-    roles: NAV_ROLE_GROUPS.adminAndProjectManager,
-    children: [
-      {
-        key: "/history-data/import-receivable-payable-details",
-        icon: <InboxOutlined />,
-        label: "导入收付款明细",
-      },
-    ],
-  },
 ];
 
 export const NAVIGATION_PATH_PREFIXES = [
@@ -264,7 +249,6 @@ export const NAVIGATION_PATH_PREFIXES = [
   "/clients",
   "/vendors",
   "/company-account-balances",
-  "/history-data/import-receivable-payable-details",
   "/legal-entities",
   "/roles",
   "/select-options",
