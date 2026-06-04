@@ -3,11 +3,13 @@ import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { cookies } from "next/headers";
-import { requireProjectWritePermission } from "@/lib/api-permissions";
+import {
+  requireFinanceOrAdminPermission,
+  requireProjectWritePermission,
+} from "@/lib/api-permissions";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import { AUTH_SESSION_COOKIE, decodeAuthSession } from "@/lib/auth-session";
 import { toNullableDecimal } from "@/lib/toNullableDecimal";
-import { toNullableInt } from "@/lib/toNullableInt";
 import { toSerializableNumber } from "@/lib/toSerializableNumber";
 import {
   getProjectOutsourceTotal,
@@ -216,6 +218,11 @@ export async function POST(req: NextRequest, context: RouteContext) {
     return new Response("Invalid estimatedDuration", { status: 400 });
   }
   const normalizedEstimatedDuration = Math.round(estimatedDuration);
+  const financialStructureId = String(body.financialStructureId ?? "").trim();
+  if (financialStructureId) {
+    const financeDenied = await requireFinanceOrAdminPermission();
+    if (financeDenied) return financeDenied;
+  }
 
   const members = normalizeMembers(body.members);
   const memberEmployeeIds = Array.from(new Set(members.map((item) => item.employeeId)));
@@ -284,58 +291,102 @@ export async function POST(req: NextRequest, context: RouteContext) {
     Array.isArray(body.outsourceItems) ? body.outsourceItems : [],
   );
 
-  const maxVersion = await prisma.projectInitiation.aggregate({
-    where: { projectId },
-    _max: { version: true },
-  });
+  const [maxVersion, financialStructure, existingInitiationCount] =
+    await Promise.all([
+      prisma.projectInitiation.aggregate({
+        where: { projectId },
+        _max: { version: true },
+      }),
+      financialStructureId
+        ? prisma.projectFinancialStructure.findUnique({
+            where: { id: financialStructureId },
+            select: { id: true, projectId: true, initiationId: true },
+          })
+        : Promise.resolve(null),
+      financialStructureId
+        ? prisma.projectInitiation.count({ where: { projectId } })
+        : Promise.resolve(0),
+    ]);
+  if (financialStructureId) {
+    if (!financialStructure) {
+      return new Response("Project financial structure not found", {
+        status: 404,
+      });
+    }
+    if (financialStructure.projectId !== projectId) {
+      return new Response(
+        "financialStructureId does not belong to projectId",
+        { status: 400 },
+      );
+    }
+    if (financialStructure.initiationId) {
+      return new Response("Project financial structure already linked", {
+        status: 409,
+      });
+    }
+    if (existingInitiationCount > 0) {
+      return new Response("Project initiation already exists", { status: 409 });
+    }
+  }
   const nextVersion = (maxVersion._max.version ?? 0) + 1;
 
-  const created = await prisma.projectInitiation.create({
-    data: {
-      project: {
-        connect: {
-          id: projectId,
+  const created = await prisma.$transaction(async (tx) => {
+    const createdInitiation = await tx.projectInitiation.create({
+      data: {
+        project: {
+          connect: {
+            id: projectId,
+          },
         },
-      },
-      owner: {
-        connect: {
-          id: session.employeeId,
+        owner: {
+          connect: {
+            id: session.employeeId,
+          },
         },
-      },
-      version: nextVersion,
-      estimatedDuration: normalizedEstimatedDuration,
-      contractAmount: toNullableDecimal(body.contractAmount),
-      totalLaborCost,
-      agencyFeeRate:
-        toNullableNumber(body.agencyFeeRate ?? body.agencyFee) ?? 0,
-      outsourceRemark: toNullableString(body.outsourceRemark),
-      otherExecutionCostRemark: toNullableString(body.otherExecutionCostRemark),
-      outsourceItems: {
-        create: outsourceItems.map((item) => ({
-          type: item.type,
-          amount: item.amount ?? 0,
-        })),
-      },
-      executionCostTypes: {
-        connect: executionCostTypeOptionIds.map((id) => ({ id })),
-      },
-      members: {
-        create: memberCreateData.map(
-          ({
-            employeeId,
-            allocationPercent,
-            laborCostSnapshot,
-            rentCostSnapshot,
-          }) => ({
-            employeeId,
-            allocationPercent,
-            laborCostSnapshot,
-            rentCostSnapshot,
-          }),
-        ),
-      },
-    } as never,
-    include: includeDetail,
+        version: nextVersion,
+        estimatedDuration: normalizedEstimatedDuration,
+        contractAmount: toNullableDecimal(body.contractAmount),
+        totalLaborCost,
+        agencyFeeRate:
+          toNullableNumber(body.agencyFeeRate ?? body.agencyFee) ?? 0,
+        outsourceRemark: toNullableString(body.outsourceRemark),
+        otherExecutionCostRemark: toNullableString(body.otherExecutionCostRemark),
+        outsourceItems: {
+          create: outsourceItems.map((item) => ({
+            type: item.type,
+            amount: item.amount ?? 0,
+          })),
+        },
+        executionCostTypes: {
+          connect: executionCostTypeOptionIds.map((id) => ({ id })),
+        },
+        members: {
+          create: memberCreateData.map(
+            ({
+              employeeId,
+              allocationPercent,
+              laborCostSnapshot,
+              rentCostSnapshot,
+            }) => ({
+              employeeId,
+              allocationPercent,
+              laborCostSnapshot,
+              rentCostSnapshot,
+            }),
+          ),
+        },
+      } as never,
+      include: includeDetail,
+    });
+
+    if (financialStructureId) {
+      await tx.projectFinancialStructure.update({
+        where: { id: financialStructureId },
+        data: { initiationId: createdInitiation.id },
+      });
+    }
+
+    return createdInitiation;
   });
 
   return Response.json(

@@ -146,6 +146,14 @@ const ProjectsTable = ({
         .filter((value): value is string => Boolean(value)),
     ),
   ).map((value) => ({ text: value, value }));
+  const ownerFilters = Array.from(
+    projects.reduce((filters, project) => {
+      if (project.owner?.id && project.owner.name) {
+        filters.set(project.owner.id, project.owner.name);
+      }
+      return filters;
+    }, new Map<string, string>()),
+  ).map(([value, text]) => ({ text, value }));
 
   const allColumns = {
     name: {
@@ -275,6 +283,10 @@ const ProjectsTable = ({
     owner: {
       title: "项目负责人",
       dataIndex: ["owner", "name"],
+      filters: ownerFilters,
+      filterSearch: true,
+      onFilter: (value: string | number | boolean, record: Project) =>
+        record.owner?.id === String(value),
       render: (_value: string, record: Project) =>
         record.owner ? (
           <AppLink href={`/employees/${record.owner.id}`}>{record.owner.name}</AppLink>
