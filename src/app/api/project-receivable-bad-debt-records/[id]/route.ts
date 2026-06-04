@@ -49,6 +49,8 @@ const toNullableString = (value: unknown) => {
   return trimmed ? trimmed : null;
 };
 
+const toBoolean = (value: unknown) => value === true;
+
 const normalizeRecordType = (value: unknown): BadDebtRecordType | null => {
   const normalized = typeof value === "string" ? value.trim() : "";
   return BAD_DEBT_RECORD_TYPES.includes(normalized as BadDebtRecordType)
@@ -83,6 +85,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   let nextType: BadDebtRecordType = existing.type;
   let nextAmount: Prisma.Decimal | number = existing.amountTaxIncluded;
   let nextOccurredAt = existing.occurredAt;
+  let shouldCreateActualNode =
+    existing.type === "RECOVERY" && Boolean(existing.actualNodeId);
 
   if ("type" in body) {
     const type = normalizeRecordType(body.type);
@@ -107,6 +111,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     nextOccurredAt = occurredAt;
   }
 
+  if ("createActualNode" in body) {
+    shouldCreateActualNode = toBoolean(body.createActualNode);
+  }
+
   if ("reason" in body) {
     patchData.reason = toNullableString(body.reason);
   }
@@ -116,14 +124,14 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
-    if (nextType === "RECOVERY") {
+    if (nextType === "RECOVERY" && shouldCreateActualNode) {
       const actualNode = existing.actualNodeId
         ? await tx.projectReceivableActualNode.update({
             where: { id: existing.actualNodeId },
             data: {
               actualAmountTaxIncluded: nextAmount,
               actualDate: nextOccurredAt,
-              remark: "坏账收回自动生成实收记录",
+              remark: "坏账收回",
               remarkNeedsAttention: false,
             },
             select: { id: true },
@@ -133,7 +141,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
               receivableNodeId: existing.receivableNodeId,
               actualAmountTaxIncluded: nextAmount,
               actualDate: nextOccurredAt,
-              remark: "坏账收回自动生成实收记录",
+              remark: "坏账收回",
               remarkNeedsAttention: false,
             },
             select: { id: true },

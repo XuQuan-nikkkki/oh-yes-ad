@@ -38,6 +38,7 @@ export type ProjectReceivableActivityRow = {
   }>;
   badDebtRecords?: Array<{
     id: string;
+    actualNodeId?: string | null;
     type: "WRITE_OFF" | "RECOVERY";
     amountTaxIncluded?: number | string | null;
     occurredAt?: string | null;

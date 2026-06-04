@@ -110,6 +110,7 @@ type ActualNode = {
 
 type ReceivableBadDebtRecord = {
   id: string;
+  actualNodeId?: string | null;
   type: "WRITE_OFF" | "RECOVERY";
   amountTaxIncluded?: number | null;
   occurredAt?: string | null;
@@ -252,6 +253,7 @@ const mapReceivableNodeToRow = (
   })),
   badDebtRecords: (node.badDebtRecords ?? []).map((record) => ({
     id: record.id,
+    actualNodeId: record.actualNodeId ?? null,
     type: record.type,
     amountTaxIncluded:
       record.amountTaxIncluded === null || record.amountTaxIncluded === undefined
@@ -353,7 +355,11 @@ type SummaryProjectRow = {
   hasReceivablePlan: boolean;
   hasPayablePlan: boolean;
   receivableContractAmountTotal: number;
+  receivableNodeExpectedAmountTotal: number;
   receivableExpectedAmountTotal: number;
+  receivableBadDebtWriteOffAmountTotal: number;
+  receivableBadDebtRecoveryAmountTotal: number;
+  receivableBadDebtAmountTotal: number;
   receivableActualAmountTotal: number;
   receivableProgressPercent: number;
   payableContractAmountTotal: number;
@@ -477,7 +483,7 @@ const renderAmountTrend = ({
   return (
     <Space size={4} wrap={false}>
       <span>{formatAmountWithYen(amount)}</span>
-      <Tooltip title={tooltipTitle}>
+      <Tooltip title={tooltipTitle} overlayInnerStyle={{ paddingRight: 16 }}>
         <Icon style={{ color: isIncrease ? "#52c41a" : "#ff4d4f" }} />
       </Tooltip>
     </Space>
@@ -2202,6 +2208,7 @@ function ProjectReceivablePayablePageContent() {
           type: values.type,
           amountTaxIncluded: values.amountTaxIncluded,
           occurredAt: values.occurredAt?.toISOString() ?? null,
+          createActualNode: Boolean(values.createActualNode),
           reason: values.reason?.trim() ? values.reason.trim() : null,
           remark: values.remark?.trim() ? values.remark.trim() : null,
         }),
@@ -2210,7 +2217,11 @@ function ProjectReceivablePayablePageContent() {
         messageApi.error((await response.text()) || "新增坏账记录失败");
         return;
       }
-      messageApi.success("新增坏账记录成功");
+      messageApi.success(
+        values.type === "RECOVERY" && values.createActualNode
+          ? "新增坏账收回成功，已自动生成实收记录"
+          : "新增坏账记录成功",
+      );
       await fetchData();
     },
     [fetchData, messageApi],
@@ -2232,6 +2243,7 @@ function ProjectReceivablePayablePageContent() {
             type: values.type,
             amountTaxIncluded: values.amountTaxIncluded,
             occurredAt: values.occurredAt?.toISOString() ?? null,
+            createActualNode: Boolean(values.createActualNode),
             reason: values.reason?.trim() ? values.reason.trim() : null,
             remark: values.remark?.trim() ? values.remark.trim() : null,
           }),
@@ -2241,7 +2253,11 @@ function ProjectReceivablePayablePageContent() {
         messageApi.error((await response.text()) || "修改坏账记录失败");
         return;
       }
-      messageApi.success("修改坏账记录成功");
+      messageApi.success(
+        values.type === "RECOVERY" && values.createActualNode
+          ? "修改坏账收回成功，已同步实收记录"
+          : "修改坏账记录成功",
+      );
       await fetchData();
     },
     [fetchData, messageApi],
@@ -2321,8 +2337,28 @@ function ProjectReceivablePayablePageContent() {
         ? `project-${projectId}`
         : `receivable-plan-${plan.id}`;
       const existing = projectMap.get(key);
-      const receivableExpectedAmountTotal = (plan.nodes ?? []).reduce(
+      const receivableNodeExpectedAmountTotal = (plan.nodes ?? []).reduce(
         (sum, node) => sum + Number(node.expectedAmountTaxIncluded ?? 0),
+        0,
+      );
+      const receivableExpectedAmountTotal = (plan.nodes ?? []).reduce(
+        (sum, node) =>
+          sum +
+          Number(
+            node.receivableAmountTaxIncluded ?? node.expectedAmountTaxIncluded ?? 0,
+          ),
+        0,
+      );
+      const receivableBadDebtWriteOffAmountTotal = (plan.nodes ?? []).reduce(
+        (sum, node) => sum + Number(node.badDebtWriteOffAmountTotal ?? 0),
+        0,
+      );
+      const receivableBadDebtRecoveryAmountTotal = (plan.nodes ?? []).reduce(
+        (sum, node) => sum + Number(node.badDebtRecoveryAmountTotal ?? 0),
+        0,
+      );
+      const receivableBadDebtAmountTotal = (plan.nodes ?? []).reduce(
+        (sum, node) => sum + Number(node.badDebtAmountTotal ?? 0),
         0,
       );
       const receivableContractAmount = toMoneyNumber(
@@ -2341,7 +2377,14 @@ function ProjectReceivablePayablePageContent() {
       if (existing) {
         existing.hasReceivablePlan = true;
         existing.receivableContractAmountTotal += receivableContractAmount;
+        existing.receivableNodeExpectedAmountTotal +=
+          receivableNodeExpectedAmountTotal;
         existing.receivableExpectedAmountTotal += receivableExpectedAmountTotal;
+        existing.receivableBadDebtWriteOffAmountTotal +=
+          receivableBadDebtWriteOffAmountTotal;
+        existing.receivableBadDebtRecoveryAmountTotal +=
+          receivableBadDebtRecoveryAmountTotal;
+        existing.receivableBadDebtAmountTotal += receivableBadDebtAmountTotal;
         existing.receivableActualAmountTotal += receivableActualAmountTotal;
         if (
           signingCompanyName &&
@@ -2382,7 +2425,11 @@ function ProjectReceivablePayablePageContent() {
         hasReceivablePlan: true,
         hasPayablePlan: false,
         receivableContractAmountTotal: receivableContractAmount,
+        receivableNodeExpectedAmountTotal,
         receivableExpectedAmountTotal,
+        receivableBadDebtWriteOffAmountTotal,
+        receivableBadDebtRecoveryAmountTotal,
+        receivableBadDebtAmountTotal,
         receivableActualAmountTotal,
         receivableProgressPercent: 0,
         payableContractAmountTotal: 0,
@@ -2476,7 +2523,11 @@ function ProjectReceivablePayablePageContent() {
         hasReceivablePlan: false,
         hasPayablePlan: true,
         receivableContractAmountTotal: 0,
+        receivableNodeExpectedAmountTotal: 0,
         receivableExpectedAmountTotal: 0,
+        receivableBadDebtWriteOffAmountTotal: 0,
+        receivableBadDebtRecoveryAmountTotal: 0,
+        receivableBadDebtAmountTotal: 0,
         receivableActualAmountTotal: 0,
         receivableProgressPercent: 0,
         payableContractAmountTotal: payableContractAmount,
@@ -2563,17 +2614,31 @@ function ProjectReceivablePayablePageContent() {
               if (!row.hasReceivablePlan) return "-";
               const amount = toMoneyNumber(value as number);
               const contractAmount = row.receivableContractAmountTotal;
-              const diff = amount - contractAmount;
+              const nodeExpectedAmount = row.receivableNodeExpectedAmountTotal;
+              const badDebtWriteOffAmount =
+                row.receivableBadDebtWriteOffAmountTotal;
+              const badDebtRecoveryAmount =
+                row.receivableBadDebtRecoveryAmountTotal;
+              const hasBadDebtWriteOff = toCentAmount(badDebtWriteOffAmount) > 0;
+              const hasBadDebtRecovery = toCentAmount(badDebtRecoveryAmount) > 0;
+              const diffAmount = amount - contractAmount;
+              const isIncrease = toCentAmount(diffAmount) > 0;
               return renderAmountTrend({
                 amount,
                 baselineAmount: contractAmount,
                 tooltipTitle: (
                   <div style={{ whiteSpace: "nowrap" }}>
                     <div>合同金额：{formatAmount(contractAmount)}</div>
-                    <div>预收金额合计：{formatAmount(amount)}</div>
+                    <div>预收节点合计：{formatAmount(nodeExpectedAmount)}</div>
+                    {hasBadDebtWriteOff ? (
+                      <div>坏账核销：{formatAmount(badDebtWriteOffAmount)}</div>
+                    ) : null}
+                    {hasBadDebtRecovery ? (
+                      <div>坏账收回：{formatAmount(badDebtRecoveryAmount)}</div>
+                    ) : null}
                     <div>
-                      {diff >= 0 ? "增加" : "减少"}：
-                      {formatAmount(Math.abs(diff))}
+                      共计{isIncrease ? "增加" : "减少"}：
+                      {formatAmount(Math.abs(diffAmount))}
                     </div>
                   </div>
                 ),

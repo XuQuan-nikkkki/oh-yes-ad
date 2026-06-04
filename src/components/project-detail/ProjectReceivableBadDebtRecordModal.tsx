@@ -1,8 +1,20 @@
 "use client";
 
+import { InfoCircleOutlined } from "@ant-design/icons";
 import type { Dayjs } from "dayjs";
 import { useEffect } from "react";
-import { Alert, Col, DatePicker, Form, Input, InputNumber, Modal, Row, Select } from "antd";
+import {
+  Col,
+  DatePicker,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Radio,
+  Row,
+  Select,
+  Tooltip,
+} from "antd";
 
 export type ProjectReceivableBadDebtRecordType = "WRITE_OFF" | "RECOVERY";
 
@@ -10,6 +22,7 @@ export type ProjectReceivableBadDebtRecordFormValues = {
   type: ProjectReceivableBadDebtRecordType;
   amountTaxIncluded: number;
   occurredAt: Dayjs;
+  createActualNode?: boolean;
   reason?: string;
   remark?: string;
 };
@@ -41,6 +54,7 @@ const ProjectReceivableBadDebtRecordModal = ({
     form.resetFields();
     form.setFieldsValue({
       type: "WRITE_OFF",
+      createActualNode: false,
       ...initialValues,
     });
   }, [form, initialValues, open]);
@@ -105,21 +119,47 @@ const ProjectReceivableBadDebtRecordModal = ({
             </Form.Item>
           </Col>
         </Row>
-        <Form.Item
-          label="发生日期"
-          name="occurredAt"
-          rules={[{ required: true, message: "请选择发生日期" }]}
-        >
-          <DatePicker style={{ width: "100%" }} />
-        </Form.Item>
-        {type === "RECOVERY" ? (
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message="保存坏账收回后，系统会自动创建同金额、同日期的实收记录。"
-          />
-        ) : null}
+        <Row gutter={16}>
+          <Col span={type === "RECOVERY" ? 12 : 24}>
+            <Form.Item
+              label="发生日期"
+              name="occurredAt"
+              rules={[{ required: true, message: "请选择发生日期" }]}
+            >
+              <DatePicker style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          {type === "RECOVERY" ? (
+            <Col span={12}>
+              <Form.Item
+                label={
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span>创建实收节点</span>
+                    <Tooltip title="勾选后，保存坏账收回时才会自动创建同金额、同日期的实收记录。">
+                      <InfoCircleOutlined
+                        style={{ color: "rgba(0, 0, 0, 0.45)", cursor: "pointer" }}
+                      />
+                    </Tooltip>
+                  </div>
+                }
+              >
+                <Form.Item
+                  name="createActualNode"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Radio.Group
+                    optionType="button"
+                    // buttonStyle="solid"
+                    options={[
+                      { label: "创建", value: true },
+                      { label: "不创建", value: false },
+                    ]}
+                  />
+                </Form.Item>
+              </Form.Item>
+            </Col>
+          ) : null}
+        </Row>
         <Form.Item label="原因" name="reason">
           <Input placeholder="请输入原因" />
         </Form.Item>

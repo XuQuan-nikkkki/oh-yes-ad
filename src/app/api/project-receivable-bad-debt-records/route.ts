@@ -44,6 +44,8 @@ const toNullableString = (value: unknown) => {
   return trimmed ? trimmed : null;
 };
 
+const toBoolean = (value: unknown) => value === true;
+
 type BadDebtRecordType = (typeof BAD_DEBT_RECORD_TYPES)[number];
 
 const normalizeRecordType = (value: unknown): BadDebtRecordType | null => {
@@ -96,6 +98,7 @@ export async function POST(req: NextRequest) {
   const type = normalizeRecordType(body.type);
   const amountTaxIncluded = toNullableDecimal(body.amountTaxIncluded);
   const occurredAt = toDate(body.occurredAt);
+  const createActualNode = toBoolean(body.createActualNode);
 
   if (!receivableNodeId) {
     return new Response("receivableNodeId is required", { status: 400 });
@@ -118,13 +121,13 @@ export async function POST(req: NextRequest) {
 
   const created = await prisma.$transaction(async (tx) => {
     const actualNode =
-      type === "RECOVERY"
+      type === "RECOVERY" && createActualNode
         ? await tx.projectReceivableActualNode.create({
             data: {
               receivableNodeId,
               actualAmountTaxIncluded: amountTaxIncluded,
               actualDate: occurredAt,
-              remark: "坏账收回自动生成实收记录",
+              remark: "坏账收回",
               remarkNeedsAttention: false,
             },
             select: { id: true },

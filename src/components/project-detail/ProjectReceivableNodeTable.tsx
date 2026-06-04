@@ -76,6 +76,7 @@ export type ProjectReceivableNodeRow = {
   }>;
   badDebtRecords?: Array<{
     id: string;
+    actualNodeId?: string | null;
     type: "WRITE_OFF" | "RECOVERY";
     amountTaxIncluded?: number | string | null;
     occurredAt?: string | null;
@@ -771,6 +772,7 @@ const ProjectReceivableNodeTable = ({
         initialValues={
           editingBadDebtRecord
             ? {
+                createActualNode: Boolean(editingBadDebtRecord.actualNodeId),
                 type: editingBadDebtRecord.type,
                 amountTaxIncluded:
                   toAmountNumber(editingBadDebtRecord.amountTaxIncluded) ??

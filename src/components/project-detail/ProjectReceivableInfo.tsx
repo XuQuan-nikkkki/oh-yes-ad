@@ -14,10 +14,9 @@ import {
   Descriptions,
   Empty,
   message,
-  Modal,
   Space,
 } from "antd";
-import ProjectReceivableActivity from "@/components/project-detail/ProjectReceivableActivity";
+import ProjectReceivableActivityModal from "@/components/project-detail/ProjectReceivableActivityModal";
 import ClientContractModal from "@/components/project-detail/ClientContractModal";
 import ProjectReceivableNodeTable, {
   type ProjectReceivableNodeRow,
@@ -98,6 +97,7 @@ type ReceivableNode = {
   }>;
   badDebtRecords?: Array<{
     id: string;
+    actualNodeId?: string | null;
     type: "WRITE_OFF" | "RECOVERY";
     amountTaxIncluded?: number | string | null;
     occurredAt?: string | null;
@@ -773,6 +773,7 @@ const ProjectReceivableInfo = forwardRef<
             type: values.type,
             amountTaxIncluded: values.amountTaxIncluded,
             occurredAt: values.occurredAt?.toISOString(),
+            createActualNode: Boolean(values.createActualNode),
             reason: values.reason?.trim() ? values.reason.trim() : null,
             remark: values.remark?.trim() ? values.remark.trim() : null,
           }),
@@ -784,7 +785,7 @@ const ProjectReceivableInfo = forwardRef<
         }
 
         messageApi.success(
-          values.type === "RECOVERY"
+          values.type === "RECOVERY" && values.createActualNode
             ? "新增坏账收回成功，已自动生成实收记录"
             : "新增坏账记录成功",
         );
@@ -809,6 +810,7 @@ const ProjectReceivableInfo = forwardRef<
               type: values.type,
               amountTaxIncluded: values.amountTaxIncluded,
               occurredAt: values.occurredAt?.toISOString(),
+              createActualNode: Boolean(values.createActualNode),
               reason: values.reason?.trim() ? values.reason.trim() : null,
               remark: values.remark?.trim() ? values.remark.trim() : null,
             }),
@@ -821,7 +823,7 @@ const ProjectReceivableInfo = forwardRef<
         }
 
         messageApi.success(
-          values.type === "RECOVERY"
+          values.type === "RECOVERY" && values.createActualNode
             ? "修改坏账收回成功，已同步实收记录"
             : "修改坏账记录成功",
         );
@@ -1090,51 +1092,32 @@ const ProjectReceivableInfo = forwardRef<
             await fetchContractsFromStore(projectId, { force: true });
           }}
         />
-        <Modal
-          title="收款动态"
+        <ProjectReceivableActivityModal
           open={activityModalOpen}
-          width="90vw"
-          destroyOnHidden
-          footer={null}
+          rows={
+            (plans[0]?.nodes ?? []).map((node) => ({
+              ...node,
+              expectedDate: node.expectedDate,
+            })) as ProjectReceivableNodeRow[]
+          }
+          stageOptions={stageOptions}
+          initialSelectedStageOptionIds={activityTargetStageOptionIds}
           onCancel={() => {
             setActivityModalOpen(false);
             setActivityTargetStageOptionIds([]);
           }}
-          styles={{
-            body: {
-              padding: 0,
-              maxHeight: "calc(80vh - 55px)",
-              overflowY: "auto",
-            },
+          canManageProject={canManageProject}
+          canManageBadDebtRecords={canManageBadDebtRecords}
+          onEditNode={async (row, values) => {
+            await handleEditNode(row as ReceivableNode, values);
           }}
-        >
-          <ProjectReceivableActivity
-            rows={
-              (plans[0]?.nodes ?? []).map((node) => ({
-                ...node,
-                expectedDate: node.expectedDate,
-              })) as ProjectReceivableNodeRow[]
-            }
-            stageOptions={stageOptions.map((item) => ({
-              id: item.id,
-              value: item.value,
-              color: item.color ?? undefined,
-            }))}
-            initialSelectedStageOptionIds={activityTargetStageOptionIds}
-            initialSelectedEventFilters={[]}
-            canManageProject={canManageProject}
-            canManageBadDebtRecords={canManageBadDebtRecords}
-            onEditNode={async (row, values) => {
-              await handleEditNode(row as ReceivableNode, values);
-            }}
-            onDeleteNode={handleDeleteNode}
-            onEditActualNode={handleEditActualNode}
-            onDeleteActualNode={handleDeleteActualNode}
-            onEditBadDebtRecord={handleEditBadDebtRecord}
-            onDeleteBadDebtRecord={handleDeleteBadDebtRecord}
-            onHistoryChanged={fetchPlans}
-          />
-        </Modal>
+          onDeleteNode={handleDeleteNode}
+          onEditActualNode={handleEditActualNode}
+          onDeleteActualNode={handleDeleteActualNode}
+          onEditBadDebtRecord={handleEditBadDebtRecord}
+          onDeleteBadDebtRecord={handleDeleteBadDebtRecord}
+          onHistoryChanged={fetchPlans}
+        />
 
         <ProjectReceivablePlanModal
           open={planModalOpen}

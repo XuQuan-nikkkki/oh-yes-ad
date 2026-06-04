@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Card, Empty, Modal, Progress, Tag } from "antd";
-import ProjectReceivableActivity from "@/components/project-detail/ProjectReceivableActivity";
+import { Card, Empty, Progress, Tag, Tooltip } from "antd";
+import ProjectReceivableActivityModal from "@/components/project-detail/ProjectReceivableActivityModal";
 import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import ProjectReceivableNodeTable, {
   type ProjectReceivableNodeRow,
@@ -108,8 +108,23 @@ export default function ReceivableProjectSection({
   const [activityModalOpen, setActivityModalOpen] = useState(false);
   const [activityTargetStageOptionIds, setActivityTargetStageOptionIds] =
     useState<string[]>([]);
+  const formatAmount = (value: number) => `${value.toLocaleString("zh-CN")} 元`;
   const expectedAmountTotal = rows.reduce(
     (sum, row) => sum + Number(row.expectedAmountTaxIncluded ?? 0),
+    0,
+  );
+  const receivableAmountTotal = rows.reduce(
+    (sum, row) =>
+      sum +
+      Number(row.receivableAmountTaxIncluded ?? row.expectedAmountTaxIncluded ?? 0),
+    0,
+  );
+  const badDebtWriteOffAmountTotal = rows.reduce(
+    (sum, row) => sum + Number(row.badDebtWriteOffAmountTotal ?? 0),
+    0,
+  );
+  const badDebtRecoveryAmountTotal = rows.reduce(
+    (sum, row) => sum + Number(row.badDebtRecoveryAmountTotal ?? 0),
     0,
   );
   const actualAmountTotal = rows.reduce(
@@ -128,9 +143,12 @@ export default function ReceivableProjectSection({
       : 0;
   const hasReceivableAmount = expectedAmountTotal > 0;
   const expectedContractDiff =
-    expectedAmountTotal - Number(contractAmountTotal ?? 0);
+    receivableAmountTotal - Number(contractAmountTotal ?? 0);
   const hasExpectedContractDiff =
     Math.round(expectedContractDiff * 100) !== 0;
+  const hasBadDebtWriteOff = Math.round(badDebtWriteOffAmountTotal * 100) > 0;
+  const hasBadDebtRecovery = Math.round(badDebtRecoveryAmountTotal * 100) > 0;
+  const isDiffIncrease = Math.round(expectedContractDiff * 100) > 0;
   const isFullyCollected =
     hasReceivableAmount && actualAmountTotal >= expectedAmountTotal;
   const leftBorderColor = !hasReceivableAmount
@@ -211,17 +229,33 @@ export default function ReceivableProjectSection({
           </span>
           {hasExpectedContractDiff ? (
             <>
-              <span style={{ color: "rgba(0,0,0,0.25)" }}>·</span>
-              <span>
-                预收：{expectedAmountTotal.toLocaleString("zh-CN")} 元
-              </span>
-              <Tag
-                color={expectedContractDiff > 0 ? "success" : "error"}
-                style={{ marginInlineEnd: 0 }}
+              <Tooltip
+                overlayInnerStyle={{ paddingRight: 16 }}
+                title={
+                  <div style={{ whiteSpace: "nowrap" }}>
+                    <div>合同金额：{formatAmount(Number(contractAmountTotal ?? 0))}</div>
+                    <div>预收节点合计：{formatAmount(expectedAmountTotal)}</div>
+                    {hasBadDebtWriteOff ? (
+                      <div>坏账核销：{formatAmount(badDebtWriteOffAmountTotal)}</div>
+                    ) : null}
+                    {hasBadDebtRecovery ? (
+                      <div>坏账收回：{formatAmount(badDebtRecoveryAmountTotal)}</div>
+                    ) : null}
+                    <div>
+                      共计{isDiffIncrease ? "增加" : "减少"}：
+                      {formatAmount(Math.abs(expectedContractDiff))}
+                    </div>
+                  </div>
+                }
               >
-                {expectedContractDiff > 0 ? "↑" : "↓"}
-                {Math.abs(expectedContractDiff).toLocaleString("zh-CN")} 元
-              </Tag>
+                <Tag
+                  color={expectedContractDiff > 0 ? "success" : "error"}
+                  style={{ marginInlineStart: -2, marginInlineEnd: 0 }}
+                >
+                  {expectedContractDiff > 0 ? "↑" : "↓"}
+                  {Math.abs(expectedContractDiff).toLocaleString("zh-CN")} 元
+                </Tag>
+              </Tooltip>
             </>
           ) : null}
           <span style={{ color: "rgba(0,0,0,0.25)" }}>·</span>
@@ -301,46 +335,27 @@ export default function ReceivableProjectSection({
           remarkNeedsAttention: false,
         }}
       />
-      <Modal
-        title="收款动态"
+      <ProjectReceivableActivityModal
         open={activityModalOpen}
-        width="90vw"
-        destroyOnHidden
-        footer={null}
+        rows={rows}
+        stageOptions={stageOptions}
+        initialSelectedStageOptionIds={activityTargetStageOptionIds}
         onCancel={() => {
           setActivityModalOpen(false);
           setActivityTargetStageOptionIds([]);
         }}
-        styles={{
-          body: {
-            padding: 0,
-            maxHeight: "calc(80vh - 55px)",
-            overflowY: "auto",
-          },
+        canManageProject={canManageProject}
+        canManageBadDebtRecords={canManageBadDebtRecords}
+        onEditNode={async (row, values) => {
+          await onEditNode(row as ProjectReceivableNodeRow, values);
         }}
-      >
-        <ProjectReceivableActivity
-          rows={rows}
-          stageOptions={stageOptions.map((item) => ({
-            id: item.id,
-            value: item.value,
-            color: item.color ?? undefined,
-          }))}
-          initialSelectedStageOptionIds={activityTargetStageOptionIds}
-          initialSelectedEventFilters={[]}
-          canManageProject={canManageProject}
-          canManageBadDebtRecords={canManageBadDebtRecords}
-          onEditNode={async (row, values) => {
-            await onEditNode(row as ProjectReceivableNodeRow, values);
-          }}
-          onDeleteNode={onDeleteNode}
-          onEditActualNode={onEditActualNode}
-          onDeleteActualNode={onDeleteActualNode}
-          onEditBadDebtRecord={onEditBadDebtRecord}
-          onDeleteBadDebtRecord={onDeleteBadDebtRecord}
-          onHistoryChanged={onHistoryChanged}
-        />
-      </Modal>
+        onDeleteNode={onDeleteNode}
+        onEditActualNode={onEditActualNode}
+        onDeleteActualNode={onDeleteActualNode}
+        onEditBadDebtRecord={onEditBadDebtRecord}
+        onDeleteBadDebtRecord={onDeleteBadDebtRecord}
+        onHistoryChanged={onHistoryChanged}
+      />
     </Card>
   );
 }

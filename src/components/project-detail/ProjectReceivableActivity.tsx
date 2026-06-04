@@ -309,6 +309,7 @@ export default function ProjectReceivableActivity({
       {
         title: "事件详情",
         dataIndex: "detailText",
+        width: 260,
         render: (value: string, record) => {
           if (
             record.eventType === "EXPECTED_DATE_CHANGE" &&
@@ -648,6 +649,7 @@ export default function ProjectReceivableActivity({
         initialValues={
           editingBadDebtRow
             ? {
+                createActualNode: Boolean(editingBadDebtRow.actualNodeId),
                 type: editingBadDebtRow.type,
                 amountTaxIncluded: Number(editingBadDebtRow.amountTaxIncluded ?? 0),
                 occurredAt: editingBadDebtRow.occurredAt
