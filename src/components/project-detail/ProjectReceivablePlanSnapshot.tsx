@@ -1,6 +1,5 @@
 "use client";
 
-import { Progress } from "antd";
 import {
   AccountBookTwoTone,
   FileTextTwoTone,
@@ -41,6 +40,17 @@ const statisticCardStyle = {
 };
 
 const badDebtTextColor = "#BE2E2C";
+const progressPercentColumnWidth = 42;
+const progressMetaTextStyle = {
+  fontSize: 11,
+  color: "rgba(0,0,0,0.45)",
+  fontWeight: 500,
+};
+
+const formatPercentText = (value: number) => {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+};
 
 export default function ProjectReceivablePlanSnapshot({
   contractAmount,
@@ -50,7 +60,6 @@ export default function ProjectReceivablePlanSnapshot({
   badDebtAmountTotal,
   badDebtWriteOffAmountTotal,
   badDebtRecoveryAmountTotal,
-  collectionProgressPercent,
   legalEntityName,
   serviceContent,
   ownerName,
@@ -60,18 +69,33 @@ export default function ProjectReceivablePlanSnapshot({
 }: ProjectReceivablePlanSnapshotProps) {
   const expectedAmount = toYuanNumber(expectedAmountTotal);
   const actualAmount = toYuanNumber(actualAmountTotal);
+  const badDebtAmount = toYuanNumber(badDebtAmountTotal);
   const expectedContractDiff = expectedAmount - toYuanNumber(contractAmount);
-  const receivableBalance = expectedAmount - actualAmount;
-  const percent = Math.max(
+  const receivableBalance = expectedAmount - badDebtAmount - actualAmount;
+  const actualPercent =
+    expectedAmount > 0 ? (actualAmount / expectedAmount) * 100 : 0;
+  const badDebtPercent =
+    expectedAmount > 0 ? (badDebtAmount / expectedAmount) * 100 : 0;
+  const receivableBalancePercent =
+    expectedAmount > 0
+      ? (receivableBalance / expectedAmount) * 100
+      : 0;
+  const actualBarPercent = Math.max(0, Math.min(100, actualPercent));
+  const badDebtBarPercent = Math.max(
     0,
-    Math.min(
-      100,
-      collectionProgressPercent ??
-        (expectedAmount > 0
-          ? Math.round((actualAmount / expectedAmount) * 100)
-          : 0),
-    ),
+    Math.min(100 - actualBarPercent, badDebtPercent),
   );
+  const combinedBarPercent = actualBarPercent + badDebtBarPercent;
+  const completedAmount = actualAmount + badDebtAmount;
+  const progressPercentTextColor =
+    combinedBarPercent >= 100 ? "#52c41a" : "#1677ff";
+  const actualBarColor =
+    combinedBarPercent >= 100 && badDebtAmount <= 0 ? "#52c41a" : "#1677ff";
+  const progressSummaryText = `${
+    badDebtAmount > 0 ? "已收+已核销" : "已收"
+  }：${completedAmount.toLocaleString("zh-CN")} / 预收：${expectedAmount.toLocaleString(
+    "zh-CN",
+  )} 元`;
 
   return (
     <ProCard split="horizontal" bordered>
@@ -206,30 +230,177 @@ export default function ProjectReceivablePlanSnapshot({
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            gap: 12,
-            fontSize: 12,
-            color: "rgba(0,0,0,0.65)",
-            fontWeight: 600,
+            flexDirection: "column",
+            alignItems: "stretch",
+            gap: 8,
           }}
         >
-          <span style={{ minWidth: 30 }}>{percent.toFixed(0)}%</span>
-          <Progress
-            percent={percent}
-            showInfo={false}
-            strokeColor={percent === 100 ? "#52c41a" : "#1677ff"}
-            style={{ flex: 1, marginBottom: 0 }}
-          />
-          <span
+          <div
             style={{
-              color: "rgba(0,0,0,0.45)",
-              fontWeight: 500,
-              whiteSpace: "nowrap",
+              display: "grid",
+              gridTemplateColumns: `${progressPercentColumnWidth}px minmax(0, 1fr) auto`,
+              alignItems: "center",
+              gap: 12,
+              fontSize: 12,
+              color: "rgba(0,0,0,0.65)",
+              fontWeight: 600,
+            }}
+            >
+              <span
+                style={{
+                  minWidth: progressPercentColumnWidth,
+                  color: progressPercentTextColor,
+                  fontSize: 14,
+                  fontWeight: 700,
+                }}
+              >
+              {formatPercentText(combinedBarPercent)}%
+            </span>
+            <div
+              style={{
+                position: "relative",
+                flex: 1,
+                height: 8,
+                borderRadius: 999,
+                overflow: "hidden",
+                background: "rgba(0,0,0,0.06)",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: `${actualBarPercent}%`,
+                  background: actualBarColor,
+                  borderRadius:
+                    badDebtBarPercent > 0 ? "999px 0 0 999px" : "999px",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  left: `${actualBarPercent}%`,
+                  width: `${badDebtBarPercent}%`,
+                  background: badDebtTextColor,
+                  borderRadius:
+                    actualBarPercent > 0 ? "0 999px 999px 0" : "999px",
+                }}
+              />
+            </div>
+            <span
+              style={{
+                ...progressMetaTextStyle,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {progressSummaryText}
+            </span>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: `${progressPercentColumnWidth}px minmax(0, 1fr) auto`,
+              alignItems: "flex-start",
+              gap: 12,
+              width: "100%",
+              ...progressMetaTextStyle,
             }}
           >
-            实收 {actualAmount.toLocaleString("zh-CN")} / 预收{" "}
-            {expectedAmount.toLocaleString("zh-CN")} 元
-          </span>
+            <span />
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 16,
+                width: "100%",
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  flex: 1,
+                  minWidth: 0,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: actualBarColor,
+                  }}
+                />
+                <span>
+                  已收 {actualAmount.toLocaleString("zh-CN")} 元（{formatPercentText(actualPercent)}%）
+                </span>
+              </span>
+              {badDebtAmount > 0 ? (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    flex: 1,
+                    minWidth: 0,
+                    justifyContent: "center",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: badDebtTextColor,
+                    }}
+                  />
+                  <span>
+                    坏账 {formatBadDebtSignedAmount("WRITE_OFF", badDebtAmount)} 元（
+                    {formatPercentText(badDebtPercent)}%）
+                  </span>
+                </span>
+              ) : null}
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  flex: 1,
+                  minWidth: 0,
+                  justifyContent: "flex-end",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "rgba(0,0,0,0.25)",
+                  }}
+                />
+                <span>
+                  待收 {receivableBalance.toLocaleString("zh-CN")} 元（
+                  {formatPercentText(receivableBalancePercent)}%）
+                </span>
+              </span>
+            </div>
+            <span
+              style={{
+                ...progressMetaTextStyle,
+                whiteSpace: "nowrap",
+                visibility: "hidden",
+              }}
+            >
+              {progressSummaryText}
+            </span>
+          </div>
         </div>
       </ProCard>
       <ProCard split="vertical">

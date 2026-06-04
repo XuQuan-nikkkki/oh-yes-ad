@@ -992,7 +992,7 @@ const ProjectReceivableInfo = forwardRef<
               contract?.contractAmount ?? plan.contractAmount,
             );
             const expectedAmountTotal = formatYuanNumber(
-              plan.actualExpectedAmountTotal,
+              plan.expectedAmountTotal,
             );
             const actualAmountTotal = formatYuanNumber(plan.actualAmountTotal);
 

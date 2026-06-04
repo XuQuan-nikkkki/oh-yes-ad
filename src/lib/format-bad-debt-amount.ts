@@ -23,6 +23,7 @@ export const getBadDebtSignedAmount = (
   amount: unknown,
 ) => {
   const normalizedAmount = Math.abs(toAmountNumber(amount));
+  if (normalizedAmount === 0) return 0;
   return type === "WRITE_OFF" ? -normalizedAmount : normalizedAmount;
 };
 
