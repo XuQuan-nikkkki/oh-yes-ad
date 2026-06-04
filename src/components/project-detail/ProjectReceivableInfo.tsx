@@ -10,11 +10,14 @@ import {
 } from "react";
 import {
   Button,
+  Card,
   Descriptions,
   Empty,
   message,
+  Modal,
   Space,
 } from "antd";
+import ProjectReceivableActivity from "@/components/project-detail/ProjectReceivableActivity";
 import ClientContractModal from "@/components/project-detail/ClientContractModal";
 import ProjectReceivableNodeTable, {
   type ProjectReceivableNodeRow,
@@ -229,6 +232,9 @@ const ProjectReceivableInfo = forwardRef<
     const [creatingNode, setCreatingNode] = useState(false);
     const [stageOptions, setStageOptions] = useState<StageOption[]>([]);
     const [loadingStageOptions, setLoadingStageOptions] = useState(false);
+    const [activityModalOpen, setActivityModalOpen] = useState(false);
+    const [activityTargetStageOptionIds, setActivityTargetStageOptionIds] =
+      useState<string[]>([]);
     const legalEntities = useLegalEntitiesStore((state) => state.legalEntities);
     const legalEntitiesLoaded = useLegalEntitiesStore((state) => state.loaded);
     const legalEntitiesLoading = useLegalEntitiesStore(
@@ -256,7 +262,6 @@ const ProjectReceivableInfo = forwardRef<
       () => (contractsByProjectId[projectId] ?? []) as ClientContract[],
       [contractsByProjectId, projectId],
     );
-
     const activeProjectMemberOptions = useMemo(() => {
       const members = (project.members ?? []).filter(isActiveMember);
       return members
@@ -663,6 +668,7 @@ const ProjectReceivableInfo = forwardRef<
           keyDeliverable: values.keyDeliverable,
           expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
           expectedDate: values.expectedDate?.toISOString() ?? null,
+          skipExpectedDateHistory: true,
           remark: values.remark?.trim() ? values.remark.trim() : null,
           remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
         };
@@ -1060,6 +1066,12 @@ const ProjectReceivableInfo = forwardRef<
                     onEditBadDebtRecord={handleEditBadDebtRecord}
                     onDeleteBadDebtRecord={handleDeleteBadDebtRecord}
                     onHistoryChanged={fetchPlans}
+                    onViewDetails={(row) => {
+                      setActivityTargetStageOptionIds(
+                        row.stageOptionId ? [row.stageOptionId] : [],
+                      );
+                      setActivityModalOpen(true);
+                    }}
                   />
                 </div>
               </div>
@@ -1078,6 +1090,51 @@ const ProjectReceivableInfo = forwardRef<
             await fetchContractsFromStore(projectId, { force: true });
           }}
         />
+        <Modal
+          title="收款动态"
+          open={activityModalOpen}
+          width="90vw"
+          destroyOnHidden
+          footer={null}
+          onCancel={() => {
+            setActivityModalOpen(false);
+            setActivityTargetStageOptionIds([]);
+          }}
+          styles={{
+            body: {
+              padding: 0,
+              maxHeight: "calc(80vh - 55px)",
+              overflowY: "auto",
+            },
+          }}
+        >
+          <ProjectReceivableActivity
+            rows={
+              (plans[0]?.nodes ?? []).map((node) => ({
+                ...node,
+                expectedDate: node.expectedDate,
+              })) as ProjectReceivableNodeRow[]
+            }
+            stageOptions={stageOptions.map((item) => ({
+              id: item.id,
+              value: item.value,
+              color: item.color ?? undefined,
+            }))}
+            initialSelectedStageOptionIds={activityTargetStageOptionIds}
+            initialSelectedEventFilters={[]}
+            canManageProject={canManageProject}
+            canManageBadDebtRecords={canManageBadDebtRecords}
+            onEditNode={async (row, values) => {
+              await handleEditNode(row as ReceivableNode, values);
+            }}
+            onDeleteNode={handleDeleteNode}
+            onEditActualNode={handleEditActualNode}
+            onDeleteActualNode={handleDeleteActualNode}
+            onEditBadDebtRecord={handleEditBadDebtRecord}
+            onDeleteBadDebtRecord={handleDeleteBadDebtRecord}
+            onHistoryChanged={fetchPlans}
+          />
+        </Modal>
 
         <ProjectReceivablePlanModal
           open={planModalOpen}

@@ -40,6 +40,7 @@ import type {
 } from "@/components/project-detail/ProjectReceivableNodeTable";
 import type { ProjectReceivableNodeFormValues } from "@/components/project-detail/ProjectReceivableNodeModal";
 import type { ProjectReceivableActualNodeFormValues } from "@/components/project-detail/ProjectReceivableActualNodeModal";
+import type { ProjectReceivableBadDebtRecordFormValues } from "@/components/project-detail/ProjectReceivableBadDebtRecordModal";
 import type { ProjectPayableNodeRow } from "@/components/project-detail/ProjectPayableNodeTable";
 import type { ProjectPayableNodeFormValues } from "@/components/project-detail/ProjectPayableNodeModal";
 import type { ProjectPayableActualNodeFormValues } from "@/components/project-detail/ProjectPayableActualNodeModal";
@@ -107,6 +108,20 @@ type ActualNode = {
   remarkNeedsAttention?: boolean;
 };
 
+type ReceivableBadDebtRecord = {
+  id: string;
+  type: "WRITE_OFF" | "RECOVERY";
+  amountTaxIncluded?: number | null;
+  occurredAt?: string | null;
+  reason?: string | null;
+  remark?: string | null;
+  createdAt?: string;
+  createdByEmployee?: {
+    id: string;
+    name: string;
+  } | null;
+};
+
 type ReceivableNode = {
   id: string;
   stageOptionId: string;
@@ -124,6 +139,16 @@ type ReceivableNode = {
   remark?: string | null;
   remarkNeedsAttention: boolean;
   actualNodes?: ActualNode[];
+  badDebtRecords?: ReceivableBadDebtRecord[];
+  receivableAmountTaxIncluded?: number;
+  actualAmountTotal?: number;
+  badDebtWriteOffAmountTotal?: number;
+  badDebtRecoveryAmountTotal?: number;
+  badDebtAmountTotal?: number;
+  actualBadDebtAmount?: number;
+  pendingAmount?: number;
+  collectionProgressPercent?: number;
+  isCollectionAmountMatched?: boolean;
 };
 
 type ReceivablePlan = {
@@ -184,6 +209,70 @@ type ReceivableNodeTableViewRow = {
   actualDate: string | null;
   nodeRemark: string;
 };
+
+const mapReceivableNodeToRow = (
+  planId: string,
+  node: ReceivableNode,
+  index: number,
+): ProjectReceivableNodeRow => ({
+  id: node.id,
+  planId,
+  stageOptionId: node.stageOptionId ?? "",
+  stageOption: node.stageOption
+    ? {
+        id: node.stageOption.id,
+        value: node.stageOption.value,
+        color: node.stageOption.color ?? null,
+      }
+    : null,
+  sortOrder: index,
+  keyDeliverable: node.keyDeliverable ?? "",
+  expectedAmountTaxIncluded: Number(node.expectedAmountTaxIncluded ?? 0),
+  expectedDate: node.expectedDate ?? "",
+  expectedDateChangeCount: 0,
+  expectedDateHistories: (node.expectedDateHistories ?? []).map((history) => ({
+    id: history.id,
+    fromExpectedDate: history.fromExpectedDate,
+    toExpectedDate: history.toExpectedDate,
+    reason: history.reason ?? null,
+    changedAt: history.changedAt,
+  })),
+  remark: node.remark ?? null,
+  remarkNeedsAttention: Boolean(node.remarkNeedsAttention),
+  actualNodes: (node.actualNodes ?? []).map((actual) => ({
+    id: actual.id,
+    actualAmountTaxIncluded:
+      actual.actualAmountTaxIncluded === null ||
+      actual.actualAmountTaxIncluded === undefined
+        ? null
+        : Number(actual.actualAmountTaxIncluded),
+    actualDate: actual.actualDate ?? null,
+    remark: actual.remark ?? null,
+    remarkNeedsAttention: Boolean(actual.remarkNeedsAttention),
+  })),
+  badDebtRecords: (node.badDebtRecords ?? []).map((record) => ({
+    id: record.id,
+    type: record.type,
+    amountTaxIncluded:
+      record.amountTaxIncluded === null || record.amountTaxIncluded === undefined
+        ? null
+        : Number(record.amountTaxIncluded),
+    occurredAt: record.occurredAt ?? null,
+    reason: record.reason ?? null,
+    remark: record.remark ?? null,
+    createdAt: record.createdAt,
+    createdByEmployee: record.createdByEmployee ?? null,
+  })),
+  receivableAmountTaxIncluded: Number(node.receivableAmountTaxIncluded ?? 0),
+  actualAmountTotal: Number(node.actualAmountTotal ?? 0),
+  badDebtWriteOffAmountTotal: Number(node.badDebtWriteOffAmountTotal ?? 0),
+  badDebtRecoveryAmountTotal: Number(node.badDebtRecoveryAmountTotal ?? 0),
+  badDebtAmountTotal: Number(node.badDebtAmountTotal ?? 0),
+  actualBadDebtAmount: Number(node.actualBadDebtAmount ?? 0),
+  pendingAmount: Number(node.pendingAmount ?? 0),
+  collectionProgressPercent: Number(node.collectionProgressPercent ?? 0),
+  isCollectionAmountMatched: Boolean(node.isCollectionAmountMatched),
+});
 type PayableNodeTableViewRow = {
   key: string;
   nodeId: string | null;
@@ -500,6 +589,10 @@ function ProjectReceivablePayablePageContent() {
     RECEIVABLE_PAYABLE_WRITE_ROLE_CODES.includes(
       roleCode as (typeof RECEIVABLE_PAYABLE_WRITE_ROLE_CODES)[number],
     ),
+  );
+  const canManageBadDebtRecords = useMemo(
+    () => roleCodes.includes("ADMIN") || roleCodes.includes("FINANCE"),
+    [roleCodes],
   );
   const hasProjectWriteAccess = roleCodes.some((roleCode) =>
     PROJECT_WRITE_ROLE_CODES.includes(
@@ -1575,47 +1668,9 @@ function ProjectReceivablePayablePageContent() {
           projectStatusOption: plan.project?.statusOption ?? null,
           planCount: 1,
           primaryPlanId: plan.id,
-          rows: (plan.nodes ?? []).map((node, index) => ({
-            id: node.id,
-            planId: plan.id,
-            stageOptionId: node.stageOptionId ?? "",
-            stageOption: node.stageOption
-              ? {
-                  id: node.stageOption.id,
-                  value: node.stageOption.value,
-                  color: node.stageOption.color ?? null,
-                }
-              : null,
-            sortOrder: index,
-            keyDeliverable: node.keyDeliverable ?? "",
-            expectedAmountTaxIncluded: Number(
-              node.expectedAmountTaxIncluded ?? 0,
-            ),
-            expectedDate: node.expectedDate ?? "",
-            expectedDateChangeCount: 0,
-            expectedDateHistories: (node.expectedDateHistories ?? []).map(
-              (history) => ({
-                id: history.id,
-                fromExpectedDate: history.fromExpectedDate,
-                toExpectedDate: history.toExpectedDate,
-                reason: history.reason ?? null,
-                changedAt: history.changedAt,
-              }),
-            ),
-            remark: node.remark ?? null,
-            remarkNeedsAttention: Boolean(node.remarkNeedsAttention),
-            actualNodes: (node.actualNodes ?? []).map((actual) => ({
-              id: actual.id,
-              actualAmountTaxIncluded:
-                actual.actualAmountTaxIncluded === null ||
-                actual.actualAmountTaxIncluded === undefined
-                  ? null
-                  : Number(actual.actualAmountTaxIncluded),
-              actualDate: actual.actualDate ?? null,
-              remark: actual.remark ?? null,
-              remarkNeedsAttention: Boolean(actual.remarkNeedsAttention),
-            })),
-          })),
+          rows: (plan.nodes ?? []).map((node, index) =>
+            mapReceivableNodeToRow(plan.id, node, index),
+          ),
           stageOptionMap: new Map(
             (plan.nodes ?? [])
               .filter((node) =>
@@ -1655,47 +1710,9 @@ function ProjectReceivablePayablePageContent() {
         current.signingCompanyName = signingCompanyName;
       }
       current.rows.push(
-        ...(plan.nodes ?? []).map((node, index) => ({
-          id: node.id,
-          planId: plan.id,
-          stageOptionId: node.stageOptionId ?? "",
-          stageOption: node.stageOption
-            ? {
-                id: node.stageOption.id,
-                value: node.stageOption.value,
-                color: node.stageOption.color ?? null,
-              }
-            : null,
-          sortOrder: index,
-          keyDeliverable: node.keyDeliverable ?? "",
-          expectedAmountTaxIncluded: Number(
-            node.expectedAmountTaxIncluded ?? 0,
-          ),
-          expectedDate: node.expectedDate ?? "",
-          expectedDateChangeCount: 0,
-          expectedDateHistories: (node.expectedDateHistories ?? []).map(
-            (history) => ({
-              id: history.id,
-              fromExpectedDate: history.fromExpectedDate,
-              toExpectedDate: history.toExpectedDate,
-              reason: history.reason ?? null,
-              changedAt: history.changedAt,
-            }),
-          ),
-          remark: node.remark ?? null,
-          remarkNeedsAttention: Boolean(node.remarkNeedsAttention),
-          actualNodes: (node.actualNodes ?? []).map((actual) => ({
-            id: actual.id,
-            actualAmountTaxIncluded:
-              actual.actualAmountTaxIncluded === null ||
-              actual.actualAmountTaxIncluded === undefined
-                ? null
-                : Number(actual.actualAmountTaxIncluded),
-            actualDate: actual.actualDate ?? null,
-            remark: actual.remark ?? null,
-            remarkNeedsAttention: Boolean(actual.remarkNeedsAttention),
-          })),
-        })),
+        ...(plan.nodes ?? []).map((node, index) =>
+          mapReceivableNodeToRow(plan.id, node, index),
+        ),
       );
       (plan.nodes ?? []).forEach((node) => {
         if (!node.stageOption?.id || !node.stageOption?.value) return;
@@ -2165,6 +2182,84 @@ function ProjectReceivablePayablePageContent() {
         return;
       }
       messageApi.success("删除实收成功");
+      await fetchData();
+    },
+    [fetchData, messageApi],
+  );
+
+  const handleCreateReceivableBadDebtRecord = useCallback(
+    async (
+      row: ProjectReceivableNodeRow,
+      values: ProjectReceivableBadDebtRecordFormValues,
+    ) => {
+      const response = await fetch("/api/project-receivable-bad-debt-records", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          receivableNodeId: row.id,
+          type: values.type,
+          amountTaxIncluded: values.amountTaxIncluded,
+          occurredAt: values.occurredAt?.toISOString() ?? null,
+          reason: values.reason?.trim() ? values.reason.trim() : null,
+          remark: values.remark?.trim() ? values.remark.trim() : null,
+        }),
+      });
+      if (!response.ok) {
+        messageApi.error((await response.text()) || "新增坏账记录失败");
+        return;
+      }
+      messageApi.success("新增坏账记录成功");
+      await fetchData();
+    },
+    [fetchData, messageApi],
+  );
+
+  const handleEditReceivableBadDebtRecord = useCallback(
+    async (
+      badDebtRecordId: string,
+      values: ProjectReceivableBadDebtRecordFormValues,
+    ) => {
+      const response = await fetch(
+        `/api/project-receivable-bad-debt-records/${badDebtRecordId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            type: values.type,
+            amountTaxIncluded: values.amountTaxIncluded,
+            occurredAt: values.occurredAt?.toISOString() ?? null,
+            reason: values.reason?.trim() ? values.reason.trim() : null,
+            remark: values.remark?.trim() ? values.remark.trim() : null,
+          }),
+        },
+      );
+      if (!response.ok) {
+        messageApi.error((await response.text()) || "修改坏账记录失败");
+        return;
+      }
+      messageApi.success("修改坏账记录成功");
+      await fetchData();
+    },
+    [fetchData, messageApi],
+  );
+
+  const handleDeleteReceivableBadDebtRecord = useCallback(
+    async (badDebtRecordId: string) => {
+      const response = await fetch(
+        `/api/project-receivable-bad-debt-records/${badDebtRecordId}`,
+        {
+          method: "DELETE",
+        },
+      );
+      if (!response.ok) {
+        messageApi.error((await response.text()) || "删除坏账记录失败");
+        return;
+      }
+      messageApi.success("删除坏账记录成功");
       await fetchData();
     },
     [fetchData, messageApi],
@@ -3795,6 +3890,7 @@ function ProjectReceivablePayablePageContent() {
                     }
                     canManageProject={hasWriteAccess}
                     canManageProjectStatus={hasProjectWriteAccess}
+                    canManageBadDebtRecords={canManageBadDebtRecords}
                     onCreateNode={handleCreateReceivableNode}
                     onDeleteNode={handleDeleteReceivableNode}
                     onEditNode={handleEditReceivableNode}
@@ -3802,6 +3898,9 @@ function ProjectReceivablePayablePageContent() {
                     onCollectNode={handleCollectReceivableNode}
                     onEditActualNode={handleEditReceivableActualNode}
                     onDeleteActualNode={handleDeleteReceivableActualNode}
+                    onCreateBadDebtRecord={handleCreateReceivableBadDebtRecord}
+                    onEditBadDebtRecord={handleEditReceivableBadDebtRecord}
+                    onDeleteBadDebtRecord={handleDeleteReceivableBadDebtRecord}
                     onDelayNode={handleDelayReceivableNode}
                     onHistoryChanged={fetchData}
                   />

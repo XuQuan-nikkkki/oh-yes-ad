@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Card, Empty, Progress, Tag } from "antd";
+import { Card, Empty, Modal, Progress, Tag } from "antd";
+import ProjectReceivableActivity from "@/components/project-detail/ProjectReceivableActivity";
 import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import ProjectReceivableNodeTable, {
   type ProjectReceivableNodeRow,
@@ -11,6 +12,7 @@ import ProjectReceivableNodeModal, {
   type ProjectReceivableNodeFormValues,
 } from "@/components/project-detail/ProjectReceivableNodeModal";
 import type { ProjectReceivableActualNodeFormValues } from "@/components/project-detail/ProjectReceivableActualNodeModal";
+import type { ProjectReceivableBadDebtRecordFormValues } from "@/components/project-detail/ProjectReceivableBadDebtRecordModal";
 import AppLink from "../AppLink";
 
 type ReceivableProjectSectionProps = {
@@ -55,6 +57,18 @@ type ReceivableProjectSectionProps = {
     values: ProjectReceivableActualNodeFormValues,
   ) => void | Promise<void>;
   onDeleteActualNode?: (actualNodeId: string) => void | Promise<void>;
+  canManageBadDebtRecords?: boolean;
+  onCreateBadDebtRecord?: (
+    row: ProjectReceivableNodeRow,
+    values: ProjectReceivableBadDebtRecordFormValues,
+  ) => void | Promise<void>;
+  onEditBadDebtRecord?: (
+    badDebtRecordId: string,
+    values: ProjectReceivableBadDebtRecordFormValues,
+  ) => void | Promise<void>;
+  onDeleteBadDebtRecord?: (
+    badDebtRecordId: string,
+  ) => void | Promise<void>;
   onDelayNode?: (
     row: ProjectReceivableNodeRow,
     values: ReceivableNodeDelayFormValues,
@@ -82,11 +96,18 @@ export default function ReceivableProjectSection({
   onCollectNode,
   onEditActualNode,
   onDeleteActualNode,
+  canManageBadDebtRecords = false,
+  onCreateBadDebtRecord,
+  onEditBadDebtRecord,
+  onDeleteBadDebtRecord,
   onDelayNode,
   onHistoryChanged,
 }: ReceivableProjectSectionProps) {
   const [nodeModalOpen, setNodeModalOpen] = useState(false);
   const [creatingNode, setCreatingNode] = useState(false);
+  const [activityModalOpen, setActivityModalOpen] = useState(false);
+  const [activityTargetStageOptionIds, setActivityTargetStageOptionIds] =
+    useState<string[]>([]);
   const expectedAmountTotal = rows.reduce(
     (sum, row) => sum + Number(row.expectedAmountTaxIncluded ?? 0),
     0,
@@ -228,6 +249,7 @@ export default function ReceivableProjectSection({
           rows={rows}
           stageOptions={stageOptions}
           canManageProject={canManageProject}
+          canManageBadDebtRecords={canManageBadDebtRecords}
           onAddNode={() => {
             if (!primaryPlanId) return;
             setNodeModalOpen(true);
@@ -238,8 +260,17 @@ export default function ReceivableProjectSection({
           onCollectNode={onCollectNode}
           onEditActualNode={onEditActualNode}
           onDeleteActualNode={onDeleteActualNode}
+          onCreateBadDebtRecord={onCreateBadDebtRecord}
+          onEditBadDebtRecord={onEditBadDebtRecord}
+          onDeleteBadDebtRecord={onDeleteBadDebtRecord}
           onDelayNode={onDelayNode}
           onHistoryChanged={onHistoryChanged}
+          onViewDetails={(row) => {
+            setActivityTargetStageOptionIds(
+              row.stageOptionId ? [row.stageOptionId] : [],
+            );
+            setActivityModalOpen(true);
+          }}
         />
       ) : (
         <div style={{ padding: 16 }}>
@@ -270,6 +301,46 @@ export default function ReceivableProjectSection({
           remarkNeedsAttention: false,
         }}
       />
+      <Modal
+        title="收款动态"
+        open={activityModalOpen}
+        width="90vw"
+        destroyOnHidden
+        footer={null}
+        onCancel={() => {
+          setActivityModalOpen(false);
+          setActivityTargetStageOptionIds([]);
+        }}
+        styles={{
+          body: {
+            padding: 0,
+            maxHeight: "calc(80vh - 55px)",
+            overflowY: "auto",
+          },
+        }}
+      >
+        <ProjectReceivableActivity
+          rows={rows}
+          stageOptions={stageOptions.map((item) => ({
+            id: item.id,
+            value: item.value,
+            color: item.color ?? undefined,
+          }))}
+          initialSelectedStageOptionIds={activityTargetStageOptionIds}
+          initialSelectedEventFilters={[]}
+          canManageProject={canManageProject}
+          canManageBadDebtRecords={canManageBadDebtRecords}
+          onEditNode={async (row, values) => {
+            await onEditNode(row as ProjectReceivableNodeRow, values);
+          }}
+          onDeleteNode={onDeleteNode}
+          onEditActualNode={onEditActualNode}
+          onDeleteActualNode={onDeleteActualNode}
+          onEditBadDebtRecord={onEditBadDebtRecord}
+          onDeleteBadDebtRecord={onDeleteBadDebtRecord}
+          onHistoryChanged={onHistoryChanged}
+        />
+      </Modal>
     </Card>
   );
 }

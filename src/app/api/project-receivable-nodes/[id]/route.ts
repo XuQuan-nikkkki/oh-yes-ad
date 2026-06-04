@@ -146,14 +146,25 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       (existing.expectedDate !== null &&
         nextExpectedDate !== null &&
         existing.expectedDate.valueOf() !== nextExpectedDate.valueOf()));
+  const shouldSkipExpectedDateHistory =
+    body.skipExpectedDateHistory === true;
 
   const changedByEmployeeId = await getCurrentEmployeeId();
-  if (expectedDateChanged && !changedByEmployeeId) {
+  if (
+    expectedDateChanged &&
+    !shouldSkipExpectedDateHistory &&
+    !changedByEmployeeId
+  ) {
     return new Response("Unauthorized", { status: 401 });
   }
 
   const updated = await prisma.$transaction(async (tx) => {
-    if (expectedDateChanged && nextExpectedDate !== null && existing.expectedDate !== null) {
+    if (
+      expectedDateChanged &&
+      !shouldSkipExpectedDateHistory &&
+      nextExpectedDate !== null &&
+      existing.expectedDate !== null
+    ) {
       await tx.projectReceivableNodeExpectedDateHistory.create({
         data: {
           nodeId: id,
