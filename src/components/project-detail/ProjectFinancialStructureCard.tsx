@@ -20,6 +20,7 @@ import ProjectFinancialStructureModal, {
   type ImportedFinancialStructurePrefill,
 } from "@/components/project-detail/ProjectFinancialStructureModal";
 import ProjectDetailTitledTableCard from "@/components/project-detail/ProjectDetailTitledTableCard";
+import SupplementEstimatedDurationModal from "@/components/project-detail/SupplementEstimatedDurationModal";
 import { getProjectOutsourceTotal } from "@/lib/project-outsource";
 import {
   getSystemSettingNumberFromRecords,
@@ -84,6 +85,12 @@ type ProjectFinancialStructure = {
       value?: string | null;
     } | null;
   }>;
+};
+
+type ProjectInitiationResponse = {
+  project?: {
+    latestInitiation?: Project["latestInitiation"] | null;
+  };
 };
 
 type FinancialStructurePreviewRow = {
@@ -333,7 +340,9 @@ const ProjectFinancialStructureCard = ({
   const app = App.useApp();
   const [messageApi, contextHolder] = message.useMessage();
   const [modalOpen, setModalOpen] = useState(false);
+  const [supplementModalOpen, setSupplementModalOpen] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [supplementSubmitting, setSupplementSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [importedPrefill, setImportedPrefill] =
@@ -963,6 +972,61 @@ const ProjectFinancialStructureCard = ({
     [],
   );
 
+  const handleSupplementEstimatedDuration = useCallback(
+    async (estimatedDuration: number) => {
+      if (!financialStructure) return;
+
+      setSupplementSubmitting(true);
+      try {
+        const res = await fetch(
+          `/api/projects/${projectId}/project-initiations`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              estimatedDuration,
+              financialStructureId: financialStructure.id,
+            }),
+          },
+        );
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const payload = (await res.json()) as ProjectInitiationResponse;
+        if (!payload.project?.latestInitiation?.id) {
+          throw new Error("Missing created project initiation");
+        }
+
+        setSupplementModalOpen(false);
+        await fetchFinancialStructure();
+        await onSaved?.();
+        if (typeof app?.message?.success === "function") {
+          app.message.success("补充预计时长成功");
+        } else {
+          void messageApi.success("补充预计时长成功");
+        }
+      } catch (error) {
+        console.error(error);
+        if (typeof app?.message?.error === "function") {
+          app.message.error("补充预计时长失败");
+        } else {
+          void messageApi.error("补充预计时长失败");
+        }
+      } finally {
+        setSupplementSubmitting(false);
+      }
+    },
+    [
+      app,
+      fetchFinancialStructure,
+      financialStructure,
+      messageApi,
+      onSaved,
+      projectId,
+    ],
+  );
+
   const handleFinancialStructureImport = useCallback(
     async (file: File) => {
       setImporting(true);
@@ -1037,6 +1101,14 @@ const ProjectFinancialStructureCard = ({
 
   const actionsNode = canManageFinancialStructureActions ? (
     <Space>
+      {financialStructure && !latestInitiation ? (
+        <Button
+          onClick={() => setSupplementModalOpen(true)}
+          disabled={!canCreateFinancialStructure}
+        >
+          补充预计时长
+        </Button>
+      ) : null}
       {!financialStructure ? (
         <Button
           onClick={() => importFileInputRef.current?.click()}
@@ -1374,6 +1446,14 @@ const ProjectFinancialStructureCard = ({
             await fetchFinancialStructure();
             await onSaved?.();
           }}
+        />
+      ) : null}
+      {mode !== "content" ? (
+        <SupplementEstimatedDurationModal
+          open={supplementModalOpen}
+          loading={supplementSubmitting}
+          onCancel={() => setSupplementModalOpen(false)}
+          onSubmit={handleSupplementEstimatedDuration}
         />
       ) : null}
     </>
