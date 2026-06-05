@@ -1200,6 +1200,9 @@ export default function ProcessingReceivableDrawer({
                       )}
                       taxAmount={existingPlan.clientContract?.taxAmount}
                       expectedAmountTotal={existingPlanSummary.expectedAmountTotal}
+                      actualExpectedAmountTotal={
+                        existingPlanSummary.expectedAmountTotal
+                      }
                       actualAmountTotal={existingPlanSummary.actualAmountTotal}
                       legalEntityName={
                         existingPlan.clientContract?.legalEntity?.name ||

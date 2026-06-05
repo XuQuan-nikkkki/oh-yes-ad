@@ -73,6 +73,7 @@ type PayablePlan = {
   id: string;
   contractAmount?: number | null;
   nodes?: Array<{
+    payableAmountTaxIncluded?: number | string | null;
     actualNodes?: Array<{
       actualAmountTaxIncluded?: number | string | null;
     }>;
@@ -223,6 +224,13 @@ const getPayablePlanActualAmount = (plan: PayablePlan) =>
           actualSum + toNumber(actual.actualAmountTaxIncluded),
         0,
       ),
+    0,
+  );
+
+const getPayablePlanPayableAmount = (plan: PayablePlan) =>
+  (plan.nodes ?? []).reduce(
+    (nodeSum, node) =>
+      nodeSum + toNumber(node.payableAmountTaxIncluded),
     0,
   );
 
@@ -1520,7 +1528,7 @@ const ProjectRealtimeCostTrackingTable = ({
           "未选择供应商";
         const content =
           plan.vendorContract?.serviceContent?.trim() || "未填写服务内容";
-        const amount = toNumber(plan.contractAmount);
+        const amount = getPayablePlanPayableAmount(plan);
         return `${vendorName}-${content}(${formatYuanText(amount)} 元)`;
       })
       .join("\n");
