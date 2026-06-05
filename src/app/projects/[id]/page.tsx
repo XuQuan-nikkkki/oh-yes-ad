@@ -31,6 +31,7 @@ import ProjectCostEstimationCard from "@/components/project-detail/ProjectCostEs
 import ProjectInitiationCard from "@/components/project-detail/ProjectInitiationCard";
 import ProjectPricingStrategyCard from "@/components/project-detail/ProjectPricingStrategyCard";
 import ProjectFinancialStructureCard from "@/components/project-detail/ProjectFinancialStructureCard";
+import ProjectManualCostModal from "@/components/project-detail/ProjectManualCostModal";
 import ProjectRealtimeCostTrackingTable from "@/components/project-detail/ProjectRealtimeCostTrackingTable";
 import ProjectReimbursementRecordsContent from "@/components/project-detail/ProjectReimbursementRecordsContent";
 import ProjectReimbursementCreateAction from "@/components/project-detail/ProjectReimbursementCreateAction";
@@ -160,6 +161,8 @@ const ProjectDetailPage = () => {
   const [realtimeCostDownload, setRealtimeCostDownload] = useState<
     (() => void) | null
   >(null);
+  const [manualCostModalOpen, setManualCostModalOpen] = useState(false);
+  const [deletingManualCost, setDeletingManualCost] = useState(false);
   const [financialStructureExists, setFinancialStructureExists] = useState<
     boolean | null
   >(null);
@@ -227,6 +230,14 @@ const ProjectDetailPage = () => {
     () => roleCodes.includes("ADMIN") || roleCodes.includes("FINANCE"),
     [roleCodes],
   );
+  const hasManualCost = useMemo(() => {
+    if (!project?.manualCost) return false;
+    return Object.values(project.manualCost).some((value) => {
+      if (typeof value === "number") return Number.isFinite(value);
+      if (typeof value === "string") return value.trim().length > 0;
+      return false;
+    });
+  }, [project?.manualCost]);
   const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
   const storeClients = useClientsStore((state) => state.clients);
   const fetchClientsFromStore = useClientsStore((state) => state.fetchClients);
@@ -374,6 +385,48 @@ const ProjectDetailPage = () => {
     setFinancialStructureRefreshKey((prev) => prev + 1);
     await Promise.all([fetchProject(), fetchFinancialStructureExists()]);
   }, [fetchFinancialStructureExists, fetchProject]);
+
+  const handleManualCostSaved = useCallback(
+    (savedProject: Project) => {
+      setProject((prev) => {
+        const nextProject = prev ? { ...prev, ...savedProject } : savedProject;
+        upsertProjects([nextProject]);
+        return nextProject;
+      });
+      setManualCostModalOpen(false);
+    },
+    [upsertProjects],
+  );
+
+  const handleDeleteManualCost = useCallback(async () => {
+    if (!projectId) return;
+    setDeletingManualCost(true);
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          costSourceMode: "AUTO",
+          manualCost: null,
+        }),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const savedProject = (await response.json()) as Project;
+      setProject((prev) => {
+        const nextProject = prev ? { ...prev, ...savedProject } : savedProject;
+        upsertProjects([nextProject]);
+        return nextProject;
+      });
+    } finally {
+      setDeletingManualCost(false);
+    }
+  }, [projectId, upsertProjects]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -1652,7 +1705,7 @@ const ProjectDetailPage = () => {
           {stepParam === 4 &&
             (financialStructureExists === null ? (
               <Card style={{ marginTop: 4 }} loading />
-            ) : financialStructureExists ? (
+            ) : (
               <ProCard
                 style={{ marginTop: 4 }}
                 tabs={{
@@ -1671,18 +1724,59 @@ const ProjectDetailPage = () => {
                           canManageProject={canManageReimbursements}
                         />
                       </div>
-                    ) : costTrackingTab === "realtime-cost" ? (
-                      <div style={{ paddingRight: 16 }}>
-                        {canViewRealtimeCostDownload ? (
-                          <Button
-                            onClick={() => {
-                              realtimeCostDownload?.();
-                            }}
-                            disabled={!realtimeCostDownload}
-                          >
-                            下载数据
-                          </Button>
-                        ) : null}
+	                    ) : costTrackingTab === "realtime-cost" ? (
+	                      <div style={{ paddingRight: 16 }}>
+	                        <Space>
+	                          {canManageReimbursements ? (
+	                            project.costSourceMode === "MANUAL" &&
+	                            hasManualCost ? (
+	                              <>
+	                                <Button
+	                                  onClick={() => {
+	                                    setManualCostModalOpen(true);
+	                                  }}
+	                                >
+	                                  编辑成本
+	                                </Button>
+	                                <Popconfirm
+	                                  title="确认删除补充成本？"
+	                                  description="删除后将清空人工录入成本，并把成本口径切回自动计算。"
+	                                  okText="删除"
+	                                  cancelText="取消"
+	                                  okButtonProps={{
+	                                    danger: true,
+	                                    loading: deletingManualCost,
+	                                  }}
+	                                  onConfirm={() => {
+	                                    void handleDeleteManualCost();
+	                                  }}
+	                                >
+	                                  <Button danger loading={deletingManualCost}>
+	                                    删除成本
+	                                  </Button>
+	                                </Popconfirm>
+	                              </>
+	                            ) : (
+	                              <Button
+	                                onClick={() => {
+	                                  setManualCostModalOpen(true);
+	                                }}
+	                              >
+	                                补充成本
+	                              </Button>
+	                            )
+	                          ) : null}
+	                          {canViewRealtimeCostDownload ? (
+                            <Button
+                              onClick={() => {
+                                realtimeCostDownload?.();
+                              }}
+                              disabled={!realtimeCostDownload}
+                            >
+                              下载数据
+                            </Button>
+                          ) : null}
+                        </Space>
                       </div>
                     ) : null,
                   onChange: (key) => {
@@ -1701,6 +1795,8 @@ const ProjectDetailPage = () => {
                           projectName={project.name ?? ""}
                           startDate={project.startDate}
                           endDate={project.endDate}
+                          costSourceMode={project.costSourceMode}
+                          manualCost={project.manualCost}
                           latestInitiation={
                             project.latestInitiation
                           }
@@ -1729,8 +1825,6 @@ const ProjectDetailPage = () => {
                   ],
                 }}
               />
-            ) : (
-              <Card style={{ marginTop: 4 }}>当前项目暂无财务结构。</Card>
             ))}
 
           {stepParam === 3 && (
@@ -1960,6 +2054,15 @@ const ProjectDetailPage = () => {
         }}
         clients={clients}
         employees={employees}
+      />
+      <ProjectManualCostModal
+        open={manualCostModalOpen}
+        projectId={projectId}
+        initialValues={project?.manualCost}
+        onCancel={() => {
+          setManualCostModalOpen(false);
+        }}
+        onSaved={handleManualCostSaved}
       />
     </DetailPageContainer>
   );

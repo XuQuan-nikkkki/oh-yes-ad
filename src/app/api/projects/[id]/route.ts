@@ -1,9 +1,11 @@
+import { PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import { getProjectOutsourceTotal } from "@/lib/project-outsource";
 import { computeInitiationEstimatedAgencyFee } from "@/lib/prisma/project-initiation";
 import { toSerializableNumber } from "@/lib/toSerializableNumber";
+import { toNullableDecimal } from "@/lib/toNullableDecimal";
 import type { NullableSelectOptionValue } from "@/types/selectOption";
 
 const ownerPublicSelect = {
@@ -161,7 +163,22 @@ type ProjectCostEstimationPayload = {
   executionCostTypes?: NullableSelectOptionValue[];
   members?: ProjectCostEstimationMemberPayload[];
 } & Record<string, unknown>;
+type ProjectManualCostPayload = {
+  agencyFeeAmount?: number | string | null;
+  agencyFeeRemark?: string | null;
+  outsourceAmount?: number | string | null;
+  outsourceRemark?: string | null;
+  laborAmount?: number | string | null;
+  laborRemark?: string | null;
+  rentAmount?: number | string | null;
+  rentRemark?: string | null;
+  middleOfficeAmount?: number | string | null;
+  middleOfficeRemark?: string | null;
+  executionAmount?: number | string | null;
+  executionRemark?: string | null;
+} & Record<string, unknown>;
 type ProjectPayload = {
+  costSourceMode?: "AUTO" | "MANUAL";
   typeOption?: NullableSelectOptionValue;
   statusOption?: NullableSelectOptionValue;
   stageOption?: NullableSelectOptionValue;
@@ -172,7 +189,69 @@ type ProjectPayload = {
   documents?: ProjectDocumentPayload[];
   costEstimations?: ProjectCostEstimationPayload[];
   initiations?: ProjectCostEstimationPayload[];
+  manualCost?: ProjectManualCostPayload | null;
 } & Record<string, unknown>;
+
+const normalizeNullableRemark = (value: unknown) => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+};
+
+const MANUAL_COST_FIELDS = [
+  "agencyFee",
+  "outsource",
+  "labor",
+  "rent",
+  "middleOffice",
+  "execution",
+] as const;
+
+const serializeManualCost = (manualCost: ProjectManualCostPayload | null | undefined) => {
+  if (!manualCost) return null;
+  return {
+    agencyFeeAmount: toSerializableNumber(manualCost.agencyFeeAmount),
+    agencyFeeRemark: manualCost.agencyFeeRemark ?? null,
+    outsourceAmount: toSerializableNumber(manualCost.outsourceAmount),
+    outsourceRemark: manualCost.outsourceRemark ?? null,
+    laborAmount: toSerializableNumber(manualCost.laborAmount),
+    laborRemark: manualCost.laborRemark ?? null,
+    rentAmount: toSerializableNumber(manualCost.rentAmount),
+    rentRemark: manualCost.rentRemark ?? null,
+    middleOfficeAmount: toSerializableNumber(manualCost.middleOfficeAmount),
+    middleOfficeRemark: manualCost.middleOfficeRemark ?? null,
+    executionAmount: toSerializableNumber(manualCost.executionAmount),
+    executionRemark: manualCost.executionRemark ?? null,
+  };
+};
+
+const toManualCostData = (value: unknown) => {
+  if (!value || typeof value !== "object") return null;
+
+  const manualCost = value as Record<string, unknown>;
+  const data = {
+    agencyFeeAmount: toNullableDecimal(manualCost.agencyFeeAmount),
+    agencyFeeRemark: normalizeNullableRemark(manualCost.agencyFeeRemark),
+    outsourceAmount: toNullableDecimal(manualCost.outsourceAmount),
+    outsourceRemark: normalizeNullableRemark(manualCost.outsourceRemark),
+    laborAmount: toNullableDecimal(manualCost.laborAmount),
+    laborRemark: normalizeNullableRemark(manualCost.laborRemark),
+    rentAmount: toNullableDecimal(manualCost.rentAmount),
+    rentRemark: normalizeNullableRemark(manualCost.rentRemark),
+    middleOfficeAmount: toNullableDecimal(manualCost.middleOfficeAmount),
+    middleOfficeRemark: normalizeNullableRemark(manualCost.middleOfficeRemark),
+    executionAmount: toNullableDecimal(manualCost.executionAmount),
+    executionRemark: normalizeNullableRemark(manualCost.executionRemark),
+  };
+
+  const hasValue = MANUAL_COST_FIELDS.some((field) => {
+    const amount = data[`${field}Amount` as keyof typeof data];
+    const remark = data[`${field}Remark` as keyof typeof data];
+    return amount !== null || remark !== null;
+  });
+
+  return hasValue ? data : null;
+};
 
 const projectCostEstimationSelect = {
   id: true,
@@ -395,6 +474,8 @@ const serializeProject = (project: ProjectPayload) => {
           ...document,
         }))
       : [],
+    costSourceMode: baseProject.costSourceMode ?? "AUTO",
+    manualCost: serializeManualCost(baseProject.manualCost),
     latestCostEstimation: Array.isArray(costEstimations)
       ? costEstimations[0]
         ? serializePlanningCostEstimation(costEstimations[0])
@@ -411,39 +492,69 @@ const serializeProject = (project: ProjectPayload) => {
   };
 };
 
-export async function GET(req: Request) {
-  const { pathname } = new URL(req.url);
-  const id = pathname.split("/").pop();
-
-  if (!id) {
-    return new Response("Missing ID", { status: 400 });
-  }
-
-  const project = await prisma.project.findUnique({
-    where: { id },
-    include: {
-      client: true,
-      typeOption: true,
-      statusOption: true,
-      stageOption: true,
-      owner: {
-        select: ownerPublicSelect,
-      },
-      vendors: {
+const projectDetailInclude = {
+  client: true,
+  typeOption: true,
+  statusOption: true,
+  stageOption: true,
+  owner: {
+    select: ownerPublicSelect,
+  },
+  vendors: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
+  members: {
+    select: {
+      id: true,
+      name: true,
+      salary: true,
+      socialSecurity: true,
+      providentFund: true,
+      workstationCost: true,
+      utilityCost: true,
+      functionOption: {
         select: {
-          id: true,
-          name: true,
+          value: true,
+          color: true,
         },
       },
-      members: {
+      employmentStatusOption: {
+        select: {
+          value: true,
+          color: true,
+        },
+      },
+    },
+  },
+  milestones: {
+    select: {
+      id: true,
+      name: true,
+      typeOption: {
+        select: {
+          id: true,
+          value: true,
+          color: true,
+        },
+      },
+      startAt: true,
+      endAt: true,
+      datePrecision: true,
+      location: true,
+      detail: true,
+      methodOption: {
+        select: {
+          value: true,
+          color: true,
+        },
+      },
+      internalParticipants: {
         select: {
           id: true,
           name: true,
-          salary: true,
-          socialSecurity: true,
-          providentFund: true,
-          workstationCost: true,
-          utilityCost: true,
           functionOption: {
             select: {
               value: true,
@@ -458,29 +569,55 @@ export async function GET(req: Request) {
           },
         },
       },
-      milestones: {
+      vendorParticipants: {
         select: {
           id: true,
           name: true,
-          typeOption: {
+          contactName: true,
+        },
+      },
+      clientParticipants: {
+        select: {
+          id: true,
+          name: true,
+          title: true,
+        },
+      },
+    },
+    orderBy: { startAt: "asc" as const },
+  },
+  segments: {
+    select: {
+      id: true,
+      name: true,
+      statusOption: {
+        select: {
+          id: true,
+          value: true,
+          color: true,
+        },
+      },
+      startDate: true,
+      endDate: true,
+      owner: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      projectTasks: {
+        select: {
+          id: true,
+          name: true,
+          statusOption: {
             select: {
               id: true,
               value: true,
               color: true,
             },
           },
-          startAt: true,
-          endAt: true,
-          datePrecision: true,
-          location: true,
-          detail: true,
-          methodOption: {
-            select: {
-              value: true,
-              color: true,
-            },
-          },
-          internalParticipants: {
+          segmentId: true,
+          owner: {
             select: {
               id: true,
               name: true,
@@ -498,165 +635,112 @@ export async function GET(req: Request) {
               },
             },
           },
-          vendorParticipants: {
+          dueDate: true,
+          plannedWorkEntries: {
             select: {
               id: true,
-              name: true,
-              contactName: true,
-            },
-          },
-          clientParticipants: {
-            select: {
-              id: true,
-              name: true,
-              title: true,
+              yearOption: {
+                select: {
+                  value: true,
+                },
+              },
+              weekNumberOption: {
+                select: {
+                  value: true,
+                },
+              },
+              plannedDays: true,
+              monday: true,
+              tuesday: true,
+              wednesday: true,
+              thursday: true,
+              friday: true,
+              saturday: true,
+              sunday: true,
             },
           },
         },
-        orderBy: { startAt: "asc" },
       },
-      segments: {
+    },
+  },
+  actualWorkEntries: {
+    select: {
+      id: true,
+      title: true,
+      startDate: true,
+      endDate: true,
+      employee: {
         select: {
           id: true,
           name: true,
-          statusOption: {
+          salary: true,
+          socialSecurity: true,
+          providentFund: true,
+          workstationCost: true,
+          utilityCost: true,
+          compensationHistories: {
             select: {
               id: true,
-              value: true,
-              color: true,
-            },
-          },
-          startDate: true,
-          endDate: true,
-          owner: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          projectTasks: {
-            select: {
-              id: true,
-              name: true,
-              statusOption: {
-                select: {
-                  id: true,
-                  value: true,
-                  color: true,
-                },
-              },
-              segmentId: true,
-              owner: {
-                select: {
-                  id: true,
-                  name: true,
-                  functionOption: {
-                    select: {
-                      value: true,
-                      color: true,
-                    },
-                  },
-                  employmentStatusOption: {
-                    select: {
-                      value: true,
-                      color: true,
-                    },
-                  },
-                },
-              },
-              dueDate: true,
-              plannedWorkEntries: {
-                select: {
-                  id: true,
-                  yearOption: {
-                    select: {
-                      value: true,
-                    },
-                  },
-                  weekNumberOption: {
-                    select: {
-                      value: true,
-                    },
-                  },
-                  plannedDays: true,
-                  monday: true,
-                  tuesday: true,
-                  wednesday: true,
-                  thursday: true,
-                  friday: true,
-                  saturday: true,
-                  sunday: true,
-                },
-              },
-            },
-          },
-        },
-      },
-      actualWorkEntries: {
-        select: {
-          id: true,
-          title: true,
-          startDate: true,
-          endDate: true,
-          employee: {
-            select: {
-              id: true,
-              name: true,
               salary: true,
               socialSecurity: true,
               providentFund: true,
               workstationCost: true,
               utilityCost: true,
-              compensationHistories: {
-                select: {
-                  id: true,
-                  salary: true,
-                  socialSecurity: true,
-                  providentFund: true,
-                  workstationCost: true,
-                  utilityCost: true,
-                  changeReason: true,
-                  effectiveDate: true,
-                },
-                orderBy: [{ effectiveDate: "asc" }, { changedAt: "asc" }],
-              },
-              functionOption: {
-                select: {
-                  value: true,
-                  color: true,
-                },
-              },
+              changeReason: true,
+              effectiveDate: true,
             },
+            orderBy: [{ effectiveDate: "asc" as const }, { changedAt: "asc" as const }],
           },
-        },
-        orderBy: { startDate: "desc" },
-      },
-      documents: {
-        select: {
-          id: true,
-          name: true,
-          typeOption: {
+          functionOption: {
             select: {
               value: true,
               color: true,
             },
           },
-          date: true,
-          isFinal: true,
-          internalLink: true,
         },
-        orderBy: { date: "desc" },
-      },
-      costEstimations: {
-        select: projectCostEstimationSelect,
-        orderBy: { version: "desc" },
-        take: 1,
-      },
-      initiations: {
-        select: projectInitiationSelect,
-        orderBy: { version: "desc" },
       },
     },
+    orderBy: { startDate: "desc" as const },
+  },
+  documents: {
+    select: {
+      id: true,
+      name: true,
+      typeOption: {
+        select: {
+          value: true,
+          color: true,
+        },
+      },
+      date: true,
+      isFinal: true,
+      internalLink: true,
+    },
+    orderBy: { date: "desc" as const },
+  },
+  manualCost: true,
+  costEstimations: {
+    select: projectCostEstimationSelect,
+    orderBy: { version: "desc" as const },
+    take: 1,
+  },
+  initiations: {
+    select: projectInitiationSelect,
+    orderBy: { version: "desc" as const },
+  },
+} as const;
+
+export async function GET(req: Request) {
+  const { pathname } = new URL(req.url);
+  const id = pathname.split("/").pop();
+
+  if (!id) {
+    return new Response("Missing ID", { status: 400 });
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { id },
+    include: projectDetailInclude as never,
   });
 
   if (!project) {
@@ -690,23 +774,54 @@ export async function PATCH(req: Request) {
       ? upsertSelectOption("project.stage", body.stage ?? null)
       : Promise.resolve(undefined),
   ]);
+  const manualCostData = has("manualCost")
+    ? toManualCostData(body.manualCost)
+    : undefined;
 
-  const project = await prisma.project.update({
-    where: { id },
-    data: {
+  const project = await prisma.$transaction(async (tx) => {
+    if (has("manualCost") && manualCostData === null) {
+      const txClient = tx as unknown as PrismaClient;
+      await txClient.projectManualCost.deleteMany({
+        where: { projectId: id },
+      });
+    }
+
+    const projectData = {
       ...(has("type") ? { typeOptionId: typeOptionId ?? null } : {}),
       ...(has("status") ? { statusOptionId: statusOptionId ?? null } : {}),
       ...(has("stage") ? { stageOptionId: stageOptionId ?? null } : {}),
-    },
-    include: {
-      client: true,
-      typeOption: true,
-      statusOption: true,
-      stageOption: true,
-      owner: {
-        select: ownerPublicSelect,
-      },
-    },
+      ...(has("costSourceMode")
+        ? {
+            costSourceMode:
+              body.costSourceMode === "MANUAL" ? "MANUAL" : "AUTO",
+          }
+        : {}),
+      ...(manualCostData
+        ? {
+            manualCost: {
+              upsert: {
+                create: manualCostData,
+                update: manualCostData,
+              },
+            },
+          }
+        : {}),
+    };
+
+    return tx.project.update({
+      where: { id },
+      data: projectData as never,
+      include: {
+        client: true,
+        typeOption: true,
+        statusOption: true,
+        stageOption: true,
+        manualCost: true,
+        owner: {
+          select: ownerPublicSelect,
+        },
+      } as never,
+    });
   });
 
   return Response.json(serializeProject(project as ProjectPayload));

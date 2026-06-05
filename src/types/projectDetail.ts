@@ -10,6 +10,23 @@ export type PeriodInfo = {
   display: string;
 };
 
+export type ProjectCostSourceMode = "AUTO" | "MANUAL";
+
+export type ProjectManualCost = {
+  agencyFeeAmount?: number | null;
+  agencyFeeRemark?: string | null;
+  outsourceAmount?: number | null;
+  outsourceRemark?: string | null;
+  laborAmount?: number | null;
+  laborRemark?: string | null;
+  rentAmount?: number | null;
+  rentRemark?: string | null;
+  middleOfficeAmount?: number | null;
+  middleOfficeRemark?: string | null;
+  executionAmount?: number | null;
+  executionRemark?: string | null;
+} | null;
+
 export type ProjectCostEstimationSummary = {
   id: string;
   projectId: string;
@@ -82,6 +99,7 @@ export type ProjectCostEstimationSummary = {
 export type Project = {
   id: string;
   name: string;
+  costSourceMode?: ProjectCostSourceMode;
   type: string;
   status?: string | null;
   stage?: string | null;
@@ -250,6 +268,7 @@ export type Project = {
     internalLink?: string | null;
     milestone?: { id: string; name: string } | null;
   }[];
+  manualCost?: ProjectManualCost;
   latestCostEstimation?: ProjectCostEstimationSummary | null;
   latestInitiation?: ProjectCostEstimationSummary | null;
   initiations?: ProjectCostEstimationSummary[];

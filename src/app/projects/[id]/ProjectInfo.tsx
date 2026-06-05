@@ -17,9 +17,15 @@ type Props = {
 
 const titleStyle = { fontSize: "14px", fontWeight: 500 } as const;
 const sectionStyle = { marginBottom: "24px" } as const;
+const COST_SOURCE_LABEL_MAP = {
+  AUTO: "自动计算",
+  MANUAL: "手动录入",
+} as const;
 
 const ProjectInfo = ({ project, workdayAdjustments, onProjectUpdated }: Props) => {
   const isInternalProject = project.type === "INTERNAL";
+  const costSourceLabel =
+    COST_SOURCE_LABEL_MAP[project.costSourceMode ?? "AUTO"] ?? "自动计算";
 
   return (
     <>
@@ -52,6 +58,7 @@ const ProjectInfo = ({ project, workdayAdjustments, onProjectUpdated }: Props) =
             "-"
           )}
         </Descriptions.Item>
+        <Descriptions.Item label="成本口径">{costSourceLabel}</Descriptions.Item>
       </Descriptions>
 
       {isInternalProject ? (

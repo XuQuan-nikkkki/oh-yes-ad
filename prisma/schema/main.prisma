@@ -33,6 +33,11 @@ enum ProjectReceivableBadDebtRecordType {
   RECOVERY
 }
 
+enum ProjectCostSourceMode {
+  AUTO
+  MANUAL
+}
+
 enum ProjectPayableAdjustmentRecordType {
   REDUCTION
   INCREASE
@@ -415,6 +420,7 @@ model Project {
 
   // 基础字段
   name           String
+  costSourceMode ProjectCostSourceMode @default(AUTO)
   typeOptionId   String?
   typeOption     SelectOption? @relation("ProjectType", fields: [typeOptionId], references: [id])
   statusOptionId String?
@@ -451,12 +457,38 @@ model Project {
   initiations         ProjectInitiation[]
   pricingStrategies   ProjectPricingStrategy[]
   financialStructures ProjectFinancialStructure[]
+  manualCost          ProjectManualCost?
   reimbursements      ProjectReimbursement[]
   clientContracts     ClientContract[]
   vendorContracts     VendorContract[]
   actualWorkEntries   ActualWorkEntry[]
   receivablePlans     ProjectReceivablePlan[]
   payablePlans        ProjectPayablePlan[]
+}
+
+model ProjectManualCost {
+  id String @id @default(uuid())
+
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  agencyFeeAmount       Decimal?
+  agencyFeeRemark       String?
+  outsourceAmount       Decimal?
+  outsourceRemark       String?
+  laborAmount           Decimal?
+  laborRemark           String?
+  rentAmount            Decimal?
+  rentRemark            String?
+  middleOfficeAmount    Decimal?
+  middleOfficeRemark    String?
+  executionAmount       Decimal?
+  executionRemark       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
 }
 
 model ClientContract {

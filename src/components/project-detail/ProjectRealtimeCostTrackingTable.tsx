@@ -32,6 +32,8 @@ type Props = {
   projectName: string;
   startDate?: string | null;
   endDate?: string | null;
+  costSourceMode?: Project["costSourceMode"];
+  manualCost?: Project["manualCost"];
   latestInitiation?: Project["latestInitiation"];
   members?: Project["members"];
   actualWorkEntries?: Project["actualWorkEntries"];
@@ -535,6 +537,8 @@ const ProjectRealtimeCostTrackingTable = ({
   projectName,
   startDate,
   endDate,
+  costSourceMode,
+  manualCost,
   latestInitiation,
   members = [],
   actualWorkEntries = [],
@@ -562,6 +566,7 @@ const ProjectRealtimeCostTrackingTable = ({
   const [reimbursementRows, setReimbursementRows] = useState<
     ReimbursementRow[]
   >([]);
+  const isManualCostMode = costSourceMode === "MANUAL";
   const systemSettings = useSystemSettingsStore((state) => state.records);
   const fetchSystemSettings = useSystemSettingsStore(
     (state) => state.fetchSystemSettings,
@@ -1380,11 +1385,11 @@ const ProjectRealtimeCostTrackingTable = ({
   }, [income, receivablePlans, taxTotal]);
   const tax = taxTotal;
   const netIncome = income - tax;
-  const agencyFee =
+  const autoAgencyFee =
     income > 0
       ? (income * toNumber(financialStructure?.agencyFeeRate)) / 100
       : 0;
-  const outsourceCost = useMemo(
+  const autoOutsourceCost = useMemo(
     () =>
       (payablePlans ?? []).reduce(
         (sum, plan) => sum + getPayablePlanActualAmount(plan),
@@ -1392,7 +1397,7 @@ const ProjectRealtimeCostTrackingTable = ({
       ),
     [payablePlans],
   );
-  const executionRemark = useMemo(() => {
+  const autoExecutionRemark = useMemo(() => {
     const groups = new Map<string, number>();
 
     reimbursementRows.forEach((item) => {
@@ -1409,7 +1414,7 @@ const ProjectRealtimeCostTrackingTable = ({
 
     return lines.length ? lines.join("\n") : "-";
   }, [reimbursementRows]);
-  const executionCost = useMemo(
+  const autoExecutionCost = useMemo(
     () =>
       reimbursementRows.reduce((sum, item) => sum + toNumber(item.amount), 0),
     [reimbursementRows],
@@ -1418,12 +1423,30 @@ const ProjectRealtimeCostTrackingTable = ({
     () => toNumber(financialStructure?.executionCost),
     [financialStructure?.executionCost],
   );
-  const middleOfficeCost = middleOfficeDailyCost * elapsedWorkdays;
+  const autoMiddleOfficeCost = middleOfficeDailyCost * elapsedWorkdays;
+  const agencyFee = isManualCostMode
+    ? toNumber(manualCost?.agencyFeeAmount)
+    : autoAgencyFee;
+  const outsourceCost = isManualCostMode
+    ? toNumber(manualCost?.outsourceAmount)
+    : autoOutsourceCost;
+  const laborCost = isManualCostMode
+    ? toNumber(manualCost?.laborAmount)
+    : actualLaborCost;
+  const effectiveRentCost = isManualCostMode
+    ? toNumber(manualCost?.rentAmount)
+    : rentCost;
+  const executionCost = isManualCostMode
+    ? toNumber(manualCost?.executionAmount)
+    : autoExecutionCost;
+  const middleOfficeCost = isManualCostMode
+    ? toNumber(manualCost?.middleOfficeAmount)
+    : autoMiddleOfficeCost;
   const totalCost =
     agencyFee +
     outsourceCost +
-    actualLaborCost +
-    rentCost +
+    laborCost +
+    effectiveRentCost +
     executionCost +
     middleOfficeCost;
   const projectProfit = income - totalCost;
@@ -1473,6 +1496,9 @@ const ProjectRealtimeCostTrackingTable = ({
   }, [receivablePlans, tax, taxBreakdown]);
 
   const outsourceRemarkText = useMemo(() => {
+    if (isManualCostMode) {
+      return manualCost?.outsourceRemark?.trim() || "-";
+    }
     const plans = payablePlans ?? [];
     if (!plans.length) return "-";
     return plans
@@ -1487,17 +1513,42 @@ const ProjectRealtimeCostTrackingTable = ({
         return `${vendorName}-${content}(${formatYuanText(amount)} 元)`;
       })
       .join("\n");
-  }, [payablePlans]);
+  }, [isManualCostMode, manualCost?.outsourceRemark, payablePlans]);
   const agencyFeeRemarkText = useMemo(
-    () => `中介费率 ${financialStructure?.agencyFeeRate ?? 0}%`,
-    [financialStructure?.agencyFeeRate],
+    () =>
+      isManualCostMode
+        ? manualCost?.agencyFeeRemark?.trim() || "-"
+        : `中介费率 ${financialStructure?.agencyFeeRate ?? 0}%`,
+    [
+      financialStructure?.agencyFeeRate,
+      isManualCostMode,
+      manualCost?.agencyFeeRemark,
+    ],
   );
   const middleOfficeRemarkText = useMemo(() => {
+    if (isManualCostMode) {
+      return manualCost?.middleOfficeRemark?.trim() || "-";
+    }
     if (middleOfficeBaseDays <= 0) return "-";
     return `中台均值 / 基准天数 * 实际工作日 = ${formatYuanText(
       middleOfficeMonthlyCost,
     )} / ${formatAmount(middleOfficeBaseDays)} * ${elapsedWorkdays}`;
-  }, [elapsedWorkdays, middleOfficeBaseDays, middleOfficeMonthlyCost]);
+  }, [
+    elapsedWorkdays,
+    isManualCostMode,
+    manualCost?.middleOfficeRemark,
+    middleOfficeBaseDays,
+    middleOfficeMonthlyCost,
+  ]);
+  const laborRemarkText = isManualCostMode
+    ? manualCost?.laborRemark?.trim() || "-"
+    : "-";
+  const rentRemarkText = isManualCostMode
+    ? manualCost?.rentRemark?.trim() || "-"
+    : "-";
+  const executionRemarkText = isManualCostMode
+    ? manualCost?.executionRemark?.trim() || "-"
+    : autoExecutionRemark || "-";
 
   const rows = useMemo<CostRow[]>(
     () => [
@@ -1539,23 +1590,23 @@ const ProjectRealtimeCostTrackingTable = ({
       {
         key: "laborCost",
         category: "人力成本",
-        amount: formatAmount(actualLaborCost),
-        ratio: formatRatio(income > 0 ? actualLaborCost / income : null),
-        remark: "-",
+        amount: formatAmount(laborCost),
+        ratio: formatRatio(income > 0 ? laborCost / income : null),
+        remark: laborRemarkText,
       },
       {
         key: "rentCost",
         category: "租金成本",
-        amount: formatAmount(rentCost),
-        ratio: formatRatio(income > 0 ? rentCost / income : null),
-        remark: "-",
+        amount: formatAmount(effectiveRentCost),
+        ratio: formatRatio(income > 0 ? effectiveRentCost / income : null),
+        remark: rentRemarkText,
       },
       {
         key: "executionCost",
         category: "执行费用成本",
         amount: formatAmount(executionCost),
         ratio: formatRatio(income > 0 ? executionCost / income : null),
-        remark: executionRemark || "-",
+        remark: executionRemarkText,
       },
       {
         key: "middleOfficeCost",
@@ -1616,21 +1667,23 @@ const ProjectRealtimeCostTrackingTable = ({
       },
     ],
     [
-      actualLaborCost,
       agencyFee,
       bonusRatio,
+      laborCost,
       executionCost,
-      executionRemark,
+      executionRemarkText,
+      effectiveRentCost,
       finalProfit,
       financialStructure?.agencyFeeRate,
       income,
+      laborRemarkText,
       middleOfficeCost,
       netIncome,
       outsourceCost,
       projectBonus,
       projectLevel,
       projectProfit,
-      rentCost,
+      rentRemarkText,
       tax,
       totalCost,
       totalCostRatio,
@@ -1644,7 +1697,7 @@ const ProjectRealtimeCostTrackingTable = ({
     const incomeRemark = incomeRemarkText;
     const taxRemark = taxRemarkText;
     const outsourceRemark = outsourceRemarkText;
-    const agencyFeeRemark = `中介费率 ${financialStructure?.agencyFeeRate ?? 0}%`;
+    const agencyFeeRemark = agencyFeeRemarkText;
     const bonusRemark = `级别：${projectLevel} · 奖金比例：${Math.round(
       bonusRatio * 100,
     )}%`;
@@ -1694,8 +1747,8 @@ const ProjectRealtimeCostTrackingTable = ({
       },
       {
         key: "cost-detail-section",
-        label: "成本明细",
-        note: "成本明细",
+        label: `成本明细（${isManualCostMode ? "人工录入" : "系统自动计算"}）`,
+        note: `成本明细（${isManualCostMode ? "人工录入" : "系统自动计算"}）`,
         isSection: true,
       },
       {
@@ -1727,24 +1780,24 @@ const ProjectRealtimeCostTrackingTable = ({
         label: "人力成本",
         indent: 1,
         isCostDetail: true,
-        amountValue: -actualLaborCost,
-        ratioValue: buildRatio(-actualLaborCost),
+        amountValue: -laborCost,
+        ratioValue: buildRatio(-laborCost),
         tone: "neutral",
         bold: true,
         barColor: "#D15651",
-        remark: "-",
+        remark: laborRemarkText,
       },
       {
         key: "rentCost",
         label: "租金成本",
         indent: 1,
         isCostDetail: true,
-        amountValue: -rentCost,
-        ratioValue: buildRatio(-rentCost),
+        amountValue: -effectiveRentCost,
+        ratioValue: buildRatio(-effectiveRentCost),
         tone: "neutral",
         bold: true,
         barColor: "#D15651",
-        remark: "-",
+        remark: rentRemarkText,
       },
       {
         key: "middleOfficeCost",
@@ -1768,7 +1821,7 @@ const ProjectRealtimeCostTrackingTable = ({
         tone: "neutral",
         bold: true,
         barColor: "#D15651",
-        remark: executionRemark?.trim() ? executionRemark : "-",
+        remark: executionRemarkText,
       },
       {
         key: "totalCost",
@@ -1832,23 +1885,27 @@ const ProjectRealtimeCostTrackingTable = ({
 
     return rows;
   }, [
-    actualLaborCost,
     agencyFee,
+    agencyFeeRemarkText,
     bonusRatio,
     executionCost,
+    executionRemarkText,
+    effectiveRentCost,
     finalProfit,
     income,
+    laborCost,
+    laborRemarkText,
     middleOfficeCost,
     netIncome,
     outsourceCost,
     projectBonus,
     projectLevel,
     projectProfit,
-    rentCost,
+    rentRemarkText,
     tax,
     totalCost,
     projectFundAmount,
-      middleOfficeRemarkText,
+    middleOfficeRemarkText,
     financialStructure?.agencyFeeRate,
   ]);
 
@@ -2058,7 +2115,7 @@ const ProjectRealtimeCostTrackingTable = ({
             return null;
           }
           if (!value) return <span>-</span>;
-          if (row.key === "executionCost") {
+          if (row.key === "executionCost" && !isManualCostMode) {
             const detailLines = value
               .split("\n")
               .map((item) => item.trim())
@@ -2093,7 +2150,13 @@ const ProjectRealtimeCostTrackingTable = ({
             );
           }
           if (row.key === "laborCost") {
-            if (!canViewLaborDetail) return null;
+            if (!canViewLaborDetail || isManualCostMode) {
+              return (
+                <span style={{ whiteSpace: "pre-line", color: "rgba(0,0,0,0.65)" }}>
+                  {value}
+                </span>
+              );
+            }
             return (
               <Button
                 type="link"
@@ -2111,7 +2174,13 @@ const ProjectRealtimeCostTrackingTable = ({
             );
           }
           if (row.key === "rentCost") {
-            if (!canViewLaborDetail) return null;
+            if (!canViewLaborDetail || isManualCostMode) {
+              return (
+                <span style={{ whiteSpace: "pre-line", color: "rgba(0,0,0,0.65)" }}>
+                  {value}
+                </span>
+              );
+            }
             return (
               <Button
                 type="link"
@@ -2141,6 +2210,7 @@ const ProjectRealtimeCostTrackingTable = ({
     executionCost,
     executionCostBudget,
     canViewLaborDetail,
+    isManualCostMode,
     setRentDetailOpen,
     projectLevel,
   ]);
@@ -2216,12 +2286,9 @@ const ProjectRealtimeCostTrackingTable = ({
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("项目成本追踪");
 
-      const omitRemarkKeys = new Set([
-        "income",
-        "tax",
-        "rentCost",
-        "middleOfficeCost",
-      ]);
+      const omitRemarkKeys = isManualCostMode
+        ? new Set(["income", "tax"])
+        : new Set(["income", "tax", "rentCost", "middleOfficeCost"]);
       const exportRows = rows.map((row) =>
         omitRemarkKeys.has(row.key) ? { ...row, remark: "" } : row,
       );
@@ -2304,7 +2371,7 @@ const ProjectRealtimeCostTrackingTable = ({
         void messageApi.error("下载失败，请稍后重试");
       }
     }
-  }, [app, messageApi, projectName, rows, tableTitleText]);
+  }, [app, isManualCostMode, messageApi, projectName, rows, tableTitleText]);
 
   useEffect(() => {
     downloadTableRef.current = downloadTable;
