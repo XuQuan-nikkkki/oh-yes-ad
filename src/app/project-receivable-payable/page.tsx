@@ -2748,12 +2748,6 @@ function ProjectReceivablePayablePageContent() {
               const amount = toMoneyNumber(value as number);
               const contractAmount = row.receivableContractAmountTotal;
               const nodeExpectedAmount = row.receivableNodeExpectedAmountTotal;
-              const badDebtWriteOffAmount =
-                row.receivableBadDebtWriteOffAmountTotal;
-              const badDebtRecoveryAmount =
-                row.receivableBadDebtRecoveryAmountTotal;
-              const hasBadDebtWriteOff = toCentAmount(badDebtWriteOffAmount) > 0;
-              const hasBadDebtRecovery = toCentAmount(badDebtRecoveryAmount) > 0;
               const diffAmount = amount - contractAmount;
               const isIncrease = toCentAmount(diffAmount) > 0;
               return renderAmountTrend({
@@ -2763,12 +2757,6 @@ function ProjectReceivablePayablePageContent() {
                   <div style={{ whiteSpace: "nowrap" }}>
                     <div>合同金额：{formatAmount(contractAmount)}</div>
                     <div>预收节点合计：{formatAmount(nodeExpectedAmount)}</div>
-                    {hasBadDebtWriteOff ? (
-                      <div>坏账核销：{formatAmount(badDebtWriteOffAmount)}</div>
-                    ) : null}
-                    {hasBadDebtRecovery ? (
-                      <div>坏账收回：{formatAmount(badDebtRecoveryAmount)}</div>
-                    ) : null}
                     <div>
                       共计{isIncrease ? "增加" : "减少"}：
                       {formatAmount(Math.abs(diffAmount))}
