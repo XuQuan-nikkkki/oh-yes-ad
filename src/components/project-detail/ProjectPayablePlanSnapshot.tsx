@@ -3,11 +3,9 @@
 import { Progress } from "antd";
 import {
   AccountBookTwoTone,
-  BankTwoTone,
   CreditCardTwoTone,
   FileTextTwoTone,
   FlagTwoTone,
-  WalletTwoTone,
 } from "@ant-design/icons";
 import { ProCard, StatisticCard } from "@ant-design/pro-components";
 import BooleanTag from "@/components/BooleanTag";
@@ -17,6 +15,8 @@ export type ProjectPayablePlanSnapshotProps = {
   vendorName?: string | null;
   contractAmount: number;
   expectedAmountTotal: number;
+  payableAmountTotal?: number;
+  adjustmentAmountTotal?: number;
   actualAmountTotal: number;
   legalEntityName?: string | null;
   serviceContent?: string | null;
@@ -30,6 +30,8 @@ export default function ProjectPayablePlanSnapshot({
   vendorName,
   contractAmount,
   expectedAmountTotal,
+  payableAmountTotal,
+  adjustmentAmountTotal = 0,
   actualAmountTotal,
   legalEntityName,
   serviceContent,
@@ -38,13 +40,20 @@ export default function ProjectPayablePlanSnapshot({
   remark,
   remarkNeedsAttention = false,
 }: ProjectPayablePlanSnapshotProps) {
+  const summaryCardStyle = {
+    background: "var(--ant-colorFillAlter, #fafafa)",
+    height: "100%",
+  } as const;
+  const progressAmountTotal = payableAmountTotal ?? expectedAmountTotal;
+  const hasPositiveAdjustment = adjustmentAmountTotal > 0;
+  const hasNegativeAdjustment = adjustmentAmountTotal < 0;
   const percent =
-    expectedAmountTotal > 0
+    progressAmountTotal > 0
       ? Math.max(
           0,
           Math.min(
             100,
-            Math.round((actualAmountTotal / expectedAmountTotal) * 100),
+            Math.round((actualAmountTotal / progressAmountTotal) * 100),
           ),
         )
       : 0;
@@ -53,7 +62,7 @@ export default function ProjectPayablePlanSnapshot({
     <ProCard split="horizontal" style={{ borderTop: "1px solid #F0F0F0" }}>
       <ProCard split="vertical">
         <StatisticCard
-          style={{ background: "var(--ant-colorFillAlter, #fafafa)" }}
+          style={summaryCardStyle}
           statistic={{
             title: "供应商",
             value: String(vendorName || "-"),
@@ -68,7 +77,7 @@ export default function ProjectPayablePlanSnapshot({
           }}
         />
         <StatisticCard
-          style={{ background: "var(--ant-colorFillAlter, #fafafa)" }}
+          style={summaryCardStyle}
           statistic={{
             title: "合同金额（含税）",
             icon: <FileTextTwoTone />,
@@ -85,10 +94,10 @@ export default function ProjectPayablePlanSnapshot({
           }}
         />
         <StatisticCard
-          style={{ background: "var(--ant-colorFillAlter, #fafafa)" }}
+          style={summaryCardStyle}
           statistic={{
             title: "预付金额总计",
-            value: expectedAmountTotal,
+            value: progressAmountTotal,
             icon: <CreditCardTwoTone />,
             suffix: "元",
             styles: {
@@ -98,11 +107,31 @@ export default function ProjectPayablePlanSnapshot({
                 fontWeight: 600,
               },
             },
+            description:
+              adjustmentAmountTotal !== 0 ? (
+                <div
+                  style={{
+                    marginTop: 2,
+                    fontSize: 11,
+                    lineHeight: 1.4,
+                    color: hasNegativeAdjustment
+                      ? "#BE2E2C"
+                      : hasPositiveAdjustment
+                        ? "#387E22"
+                        : undefined,
+                    fontWeight: 600,
+                  }}
+                >
+                  {`应付调整 ${
+                    hasPositiveAdjustment ? "+" : ""
+                  }${Number(adjustmentAmountTotal).toLocaleString("zh-CN")} 元`}
+                </div>
+              ) : null,
             formatter: (value) => Number(value ?? 0).toLocaleString("zh-CN"),
           }}
         />
         <StatisticCard
-          style={{ background: "var(--ant-colorFillAlter, #fafafa)" }}
+          style={summaryCardStyle}
           statistic={{
             title: "实付金额总计",
             value: actualAmountTotal,
@@ -145,7 +174,7 @@ export default function ProjectPayablePlanSnapshot({
             }}
           >
             实付 {Number(actualAmountTotal ?? 0).toLocaleString("zh-CN")} / 预付{" "}
-            {Number(expectedAmountTotal ?? 0).toLocaleString("zh-CN")} 元
+            {Number(progressAmountTotal ?? 0).toLocaleString("zh-CN")} 元
           </span>
         </div>
       </ProCard>

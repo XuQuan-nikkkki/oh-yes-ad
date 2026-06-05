@@ -16,11 +16,15 @@ import ProjectPayablePlanSnapshot from "@/components/project-detail/ProjectPayab
 import ProjectPayablePlanModal, {
   type ProjectPayablePlanFormValues,
 } from "@/components/project-detail/ProjectPayablePlanModal";
+import type { ProjectPayableAdjustmentRecordFormValues } from "@/components/project-detail/ProjectPayableAdjustmentRecordModal";
+import ProjectPayableActivityModal from "@/components/project-detail/ProjectPayableActivityModal";
 import ProjectPayableNodeModal, {
   type ProjectPayableNodeFormValues,
 } from "@/components/project-detail/ProjectPayableNodeModal";
 import type { ProjectPayableActualNodeFormValues } from "@/components/project-detail/ProjectPayableActualNodeModal";
 import type { Project } from "@/types/projectDetail";
+import { buildPlanOwnerOptions } from "@/lib/build-plan-owner-options";
+import { useEmployeesStore } from "@/stores/employeesStore";
 import { useVendorsStore } from "@/stores/vendorsStore";
 
 type Props = {
@@ -85,7 +89,24 @@ type PayableNode = {
     actualDate: string;
     remark?: string | null;
     remarkNeedsAttention: boolean;
+    createdAt?: string | null;
   }>;
+  adjustmentRecords?: Array<{
+    id: string;
+    type: "REDUCTION" | "INCREASE" | "REDUCTION_REVERSAL";
+    amountTaxIncluded: number;
+    occurredAt: string;
+    reason?: string | null;
+    remark?: string | null;
+    createdAt?: string | null;
+    createdByEmployee?: {
+      id: string;
+      name: string;
+    } | null;
+  }>;
+  payableAmountTaxIncluded?: number | string | null;
+  actualAmountTotal?: number | string | null;
+  paymentProgressPercent?: number | string | null;
 };
 
 type PayablePlan = {
@@ -107,6 +128,11 @@ type PayablePlan = {
   } | null;
   vendorContract?: VendorContract | null;
   nodes?: PayableNode[];
+  expectedAmountTotal?: number | string | null;
+  payableAmountTotal?: number | string | null;
+  adjustmentAmountTotal?: number | string | null;
+  actualAmountTotal?: number | string | null;
+  paymentProgressPercent?: number | string | null;
 };
 
 const toYuanNumber = (value: unknown) => {
@@ -114,9 +140,6 @@ const toYuanNumber = (value: unknown) => {
     typeof value === "number" ? value : Number(String(value ?? "").trim());
   return Number.isFinite(num) ? num : 0;
 };
-
-const isActiveMember = (member: { employmentStatus?: string | null }) =>
-  (member.employmentStatus ?? "").includes("在职");
 
 const ProjectPayableInfo = forwardRef<
   { handleDeletePlan: () => Promise<void> },
@@ -150,12 +173,23 @@ const ProjectPayableInfo = forwardRef<
     );
     const [creatingPlan, setCreatingPlan] = useState(false);
     const [creatingNode, setCreatingNode] = useState(false);
+    const [activityModalOpen, setActivityModalOpen] = useState(false);
+    const [activityRows, setActivityRows] = useState<ProjectPayableNodeRow[]>(
+      [],
+    );
+    const [activityTargetStageOptionIds, setActivityTargetStageOptionIds] =
+      useState<string[]>([]);
     const [stageOptions, setStageOptions] = useState<StageOption[]>([]);
     const [loadingStageOptions, setLoadingStageOptions] = useState(false);
     const [vendorContracts, setVendorContracts] = useState<VendorContract[]>(
       [],
     );
     const [vendorContractsLoading, setVendorContractsLoading] = useState(false);
+    const employeesFull = useEmployeesStore((state) => state.employeesFull);
+    const employeesLoadedFull = useEmployeesStore((state) => state.loadedFull);
+    const fetchEmployeesFromStore = useEmployeesStore(
+      (state) => state.fetchEmployees,
+    );
     const vendors = useVendorsStore((state) => state.vendors);
     const vendorsLoaded = useVendorsStore((state) => state.loaded);
     const vendorsLoading = useVendorsStore((state) => state.loading);
@@ -228,14 +262,11 @@ const ProjectPayableInfo = forwardRef<
     );
 
     const activeProjectMemberOptions = useMemo(() => {
-      const members = (project.members ?? []).filter(isActiveMember);
-      return members
-        .map((member) => ({
-          label: member.name,
-          value: member.id,
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label, "zh-CN"));
-    }, [project.members]);
+      return buildPlanOwnerOptions({
+        allEmployees: employeesFull,
+        projectMembers: project.members ?? [],
+      });
+    }, [employeesFull, project.members]);
 
     const vendorOptions = useMemo(
       () =>
@@ -249,32 +280,71 @@ const ProjectPayableInfo = forwardRef<
     );
 
     const getPayableSummary = useCallback((plan: PayablePlan) => {
+      const computedExpectedAmountTotal = Number(plan.expectedAmountTotal);
+      const computedPayableAmountTotal = Number(plan.payableAmountTotal);
+      const computedAdjustmentAmountTotal = Number(plan.adjustmentAmountTotal);
+      const computedActualAmountTotal = Number(plan.actualAmountTotal);
+      const computedPercent = Number(plan.paymentProgressPercent);
+
       const nodes = plan.nodes ?? [];
-      const expectedAmountTotal = nodes.reduce(
-        (sum, node) => sum + Number(node.expectedAmountTaxIncluded ?? 0),
-        0,
-      );
-      const actualAmountTotal = nodes.reduce((sum, node) => {
-        const nodeActual = (node.actualNodes ?? []).reduce(
-          (nodeSum, actual) =>
-            nodeSum + Number(actual.actualAmountTaxIncluded ?? 0),
-          0,
-        );
-        return sum + nodeActual;
-      }, 0);
-      const percent =
-        expectedAmountTotal > 0
+      const expectedAmountTotal = Number.isFinite(computedExpectedAmountTotal)
+        ? computedExpectedAmountTotal
+        : nodes.reduce(
+            (sum, node) => sum + Number(node.expectedAmountTaxIncluded ?? 0),
+            0,
+          );
+      const payableAmountTotal = Number.isFinite(computedPayableAmountTotal)
+        ? computedPayableAmountTotal
+        : nodes.reduce(
+            (sum, node) =>
+              sum +
+              toYuanNumber(
+                node.payableAmountTaxIncluded ?? node.expectedAmountTaxIncluded,
+              ),
+            0,
+          );
+      const actualAmountTotal = Number.isFinite(computedActualAmountTotal)
+        ? computedActualAmountTotal
+        : nodes.reduce((sum, node) => {
+            const nodeActual = (node.actualNodes ?? []).reduce(
+              (nodeSum, actual) =>
+                nodeSum + Number(actual.actualAmountTaxIncluded ?? 0),
+              0,
+            );
+            return sum + nodeActual;
+          }, 0);
+      const adjustmentAmountTotal = Number.isFinite(
+        computedAdjustmentAmountTotal,
+      )
+        ? computedAdjustmentAmountTotal
+        : nodes.reduce((sum, node) => {
+            const nodeAdjustmentAmount = (node.adjustmentRecords ?? []).reduce(
+              (nodeSum, record) => {
+                const amount = Number(record.amountTaxIncluded ?? 0);
+                if (!Number.isFinite(amount)) return nodeSum;
+                if (record.type === "REDUCTION") return nodeSum - amount;
+                return nodeSum + amount;
+              },
+              0,
+            );
+            return sum + nodeAdjustmentAmount;
+          }, 0);
+      const percent = Number.isFinite(computedPercent)
+        ? computedPercent
+        : payableAmountTotal > 0
           ? Math.max(
               0,
               Math.min(
                 100,
-                Math.round((actualAmountTotal / expectedAmountTotal) * 100),
+                Math.round((actualAmountTotal / payableAmountTotal) * 100),
               ),
             )
           : 0;
 
       return {
         expectedAmountTotal,
+        payableAmountTotal,
+        adjustmentAmountTotal,
         actualAmountTotal,
         percent,
       };
@@ -321,6 +391,11 @@ const ProjectPayableInfo = forwardRef<
         setVendorContractsLoading(false);
       }
     }, [projectId]);
+
+    useEffect(() => {
+      if (employeesLoadedFull) return;
+      void fetchEmployeesFromStore({ full: true });
+    }, [employeesLoadedFull, fetchEmployeesFromStore]);
 
     const fetchLegalEntities = useCallback(async () => {
       setLegalEntityLoading(true);
@@ -752,6 +827,90 @@ const ProjectPayableInfo = forwardRef<
       [fetchPlans, messageApi],
     );
 
+    const handleCreateAdjustmentRecord = useCallback(
+      async (
+        row: PayableNode,
+        values: ProjectPayableAdjustmentRecordFormValues,
+      ) => {
+        const res = await fetch("/api/project-payable-adjustment-records", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            payableNodeId: row.id,
+            type: values.type,
+            amountTaxIncluded: values.amountTaxIncluded,
+            occurredAt: values.occurredAt?.toISOString() ?? null,
+            reason: values.reason?.trim() ? values.reason.trim() : null,
+            remark: values.remark?.trim() ? values.remark.trim() : null,
+          }),
+        });
+
+        if (!res.ok) {
+          messageApi.error("新增应付调整失败");
+          return;
+        }
+
+        messageApi.success("新增应付调整成功");
+        await fetchPlans();
+      },
+      [fetchPlans, messageApi],
+    );
+
+    const handleEditAdjustmentRecord = useCallback(
+      async (
+        adjustmentRecordId: string,
+        values: ProjectPayableAdjustmentRecordFormValues,
+      ) => {
+        const res = await fetch(
+          `/api/project-payable-adjustment-records/${adjustmentRecordId}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              type: values.type,
+              amountTaxIncluded: values.amountTaxIncluded,
+              occurredAt: values.occurredAt?.toISOString() ?? null,
+              reason: values.reason?.trim() ? values.reason.trim() : null,
+              remark: values.remark?.trim() ? values.remark.trim() : null,
+            }),
+          },
+        );
+
+        if (!res.ok) {
+          messageApi.error("修改应付调整失败");
+          return;
+        }
+
+        messageApi.success("修改应付调整成功");
+        await fetchPlans();
+      },
+      [fetchPlans, messageApi],
+    );
+
+    const handleDeleteAdjustmentRecord = useCallback(
+      async (adjustmentRecordId: string) => {
+        const res = await fetch(
+          `/api/project-payable-adjustment-records/${adjustmentRecordId}`,
+          {
+            method: "DELETE",
+          },
+        );
+
+        if (!res.ok) {
+          messageApi.error("删除应付调整失败");
+          return;
+        }
+
+        messageApi.success("删除应付调整成功");
+        await fetchPlans();
+      },
+      [fetchPlans, messageApi],
+    );
+
     const handleDeleteActualNode = useCallback(
       async (actualNodeId: string) => {
         const res = await fetch(
@@ -907,6 +1066,12 @@ const ProjectPayableInfo = forwardRef<
                     expectedAmountTotal={toYuanNumber(
                       payableSummary.expectedAmountTotal,
                     )}
+                    payableAmountTotal={toYuanNumber(
+                      payableSummary.payableAmountTotal,
+                    )}
+                    adjustmentAmountTotal={toYuanNumber(
+                      payableSummary.adjustmentAmountTotal,
+                    )}
                     actualAmountTotal={toYuanNumber(
                       payableSummary.actualAmountTotal,
                     )}
@@ -950,6 +1115,24 @@ const ProjectPayableInfo = forwardRef<
                     }}
                     onPayNode={async (row, values) => {
                       await handlePayNode(row as PayableNode, values);
+                    }}
+                    onCreateAdjustmentRecord={async (row, values) => {
+                      await handleCreateAdjustmentRecord(
+                        row as PayableNode,
+                        values,
+                      );
+                    }}
+                    onViewDetails={(row) => {
+                      setActivityRows(
+                        ((plan.nodes ?? []).map((node) => ({
+                          ...node,
+                          expectedDate: node.expectedDate,
+                        })) as ProjectPayableNodeRow[]),
+                      );
+                      setActivityTargetStageOptionIds(
+                        row.stageOptionId ? [row.stageOptionId] : [],
+                      );
+                      setActivityModalOpen(true);
                     }}
                     onEditActualNode={handleEditActualNode}
                     onDeleteActualNode={handleDeleteActualNode}
@@ -997,6 +1180,26 @@ const ProjectPayableInfo = forwardRef<
           initialValues={{
             remarkNeedsAttention: false,
           }}
+        />
+        <ProjectPayableActivityModal
+          open={activityModalOpen}
+          rows={activityRows}
+          stageOptions={stageOptions}
+          initialSelectedStageOptionIds={activityTargetStageOptionIds}
+          onCancel={() => {
+            setActivityModalOpen(false);
+            setActivityRows([]);
+            setActivityTargetStageOptionIds([]);
+          }}
+          canManageProject={canManageProject}
+          onEditNode={async (row, values) => {
+            await handleEditNode(row as PayableNode, values);
+          }}
+          onDeleteNode={handleDeleteNode}
+          onEditActualNode={handleEditActualNode}
+          onDeleteActualNode={handleDeleteActualNode}
+          onEditAdjustmentRecord={handleEditAdjustmentRecord}
+          onDeleteAdjustmentRecord={handleDeleteAdjustmentRecord}
         />
       </>
     );

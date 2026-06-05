@@ -60,6 +60,11 @@ type ReceivablePlan = {
   id: string;
   contractAmount?: number | null;
   serviceContent?: string | null;
+  nodes?: Array<{
+    actualNodes?: Array<{
+      actualAmountTaxIncluded?: number | string | null;
+    }>;
+  }>;
 };
 
 type PayablePlan = {
@@ -208,6 +213,18 @@ const toNumber = (value: unknown) => {
 };
 
 const getPayablePlanActualAmount = (plan: PayablePlan) =>
+  (plan.nodes ?? []).reduce(
+    (nodeSum, node) =>
+      nodeSum +
+      (node.actualNodes ?? []).reduce(
+        (actualSum, actual) =>
+          actualSum + toNumber(actual.actualAmountTaxIncluded),
+        0,
+      ),
+    0,
+  );
+
+const getReceivablePlanActualAmount = (plan: ReceivablePlan) =>
   (plan.nodes ?? []).reduce(
     (nodeSum, node) =>
       nodeSum +
@@ -1332,7 +1349,7 @@ const ProjectRealtimeCostTrackingTable = ({
   const income = useMemo(
     () =>
       (receivablePlans ?? []).reduce(
-        (sum, plan) => sum + toNumber(plan.contractAmount),
+        (sum, plan) => sum + getReceivablePlanActualAmount(plan),
         0,
       ),
     [receivablePlans],
@@ -1347,17 +1364,17 @@ const ProjectRealtimeCostTrackingTable = ({
         id: plan.id,
         serviceContent: plan.serviceContent,
         tax: 0,
-        contractAmount: toNumber(plan.contractAmount),
+        actualAmount: getReceivablePlanActualAmount(plan),
       }));
     }
     return plans.map((plan) => {
-      const contractAmount = toNumber(plan.contractAmount);
-      const ratio = contractAmount > 0 ? contractAmount / total : 0;
+      const actualAmount = getReceivablePlanActualAmount(plan);
+      const ratio = actualAmount > 0 ? actualAmount / total : 0;
       return {
         id: plan.id,
         serviceContent: plan.serviceContent,
         tax: taxTotal * ratio,
-        contractAmount,
+        actualAmount,
       };
     });
   }, [income, receivablePlans, taxTotal]);
@@ -1421,17 +1438,19 @@ const ProjectRealtimeCostTrackingTable = ({
     if (!plans.length) return "-";
     if (
       plans.length === 1 &&
-      Math.abs(toNumber(plans[0]?.contractAmount) - income) < 0.0001
+      Math.abs(getReceivablePlanActualAmount(plans[0]) - income) < 0.0001
     ) {
       return "-";
     }
-    return plans
+    const remarkLines = plans
       .map((plan) => {
         const content = plan.serviceContent?.trim() || "未填写服务内容";
-        const amount = toNumber(plan.contractAmount);
+        const amount = getReceivablePlanActualAmount(plan);
         return `${content}(${formatYuanText(amount)} 元)`;
       })
-      .join(" + ");
+      .filter((item) => !item.endsWith("(0 元)"));
+    if (remarkLines.length === 0) return "-";
+    return remarkLines.join(" + ");
   }, [income, receivablePlans]);
 
   const taxRemarkText = useMemo(() => {

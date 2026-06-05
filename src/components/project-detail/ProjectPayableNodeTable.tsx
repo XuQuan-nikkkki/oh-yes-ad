@@ -2,17 +2,30 @@
 
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
-import { DragSortTable } from "@ant-design/pro-components";
+import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { PayCircleOutlined } from "@ant-design/icons";
-import { Button, Popover, Progress, Space, Table, Typography } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import {
+  DeleteOutlined,
+  DiffOutlined,
+  EditOutlined,
+  PayCircleOutlined,
+} from "@ant-design/icons";
+import {
+  Button,
+  Dropdown,
+  Modal,
+  Progress,
+  Space,
+  Typography,
+} from "antd";
 import EllipsisPopoverText from "@/components/EllipsisPopoverText";
 import SelectOptionTag from "@/components/SelectOptionTag";
-import TableActions from "@/components/TableActions";
 import ProjectPayableActualNodeModal, {
   type ProjectPayableActualNodeFormValues,
 } from "@/components/project-detail/ProjectPayableActualNodeModal";
+import ProjectPayableAdjustmentRecordModal, {
+  type ProjectPayableAdjustmentRecordFormValues,
+} from "@/components/project-detail/ProjectPayableAdjustmentRecordModal";
 import ProjectPayableNodeModal, {
   type ProjectPayableNodeFormValues,
 } from "@/components/project-detail/ProjectPayableNodeModal";
@@ -38,7 +51,24 @@ export type ProjectPayableNodeRow = {
     actualDate?: string | null;
     remark?: string | null;
     remarkNeedsAttention?: boolean;
+    createdAt?: string | null;
   }>;
+  adjustmentRecords?: Array<{
+    id: string;
+    type: "REDUCTION" | "INCREASE" | "REDUCTION_REVERSAL";
+    amountTaxIncluded?: number | null;
+    occurredAt?: string | null;
+    reason?: string | null;
+    remark?: string | null;
+    createdAt?: string | null;
+    createdByEmployee?: {
+      id: string;
+      name: string;
+    } | null;
+  }>;
+  payableAmountTaxIncluded?: number | string | null;
+  actualAmountTotal?: number | string | null;
+  paymentProgressPercent?: number | string | null;
 };
 
 type StageOption = {
@@ -67,6 +97,11 @@ type Props = {
     row: ProjectPayableNodeRow,
     values: ProjectPayableActualNodeFormValues,
   ) => void | Promise<void>;
+  onCreateAdjustmentRecord?: (
+    row: ProjectPayableNodeRow,
+    values: ProjectPayableAdjustmentRecordFormValues,
+  ) => void | Promise<void>;
+  onViewDetails?: (row: ProjectPayableNodeRow) => void;
   onEditActualNode?: (
     actualNodeId: string,
     values: ProjectPayableActualNodeFormValues,
@@ -74,14 +109,28 @@ type Props = {
   onDeleteActualNode?: (actualNodeId: string) => void | Promise<void>;
 };
 
-const getActualAmountSum = (row: ProjectPayableNodeRow) =>
-  (row.actualNodes ?? []).reduce((sum, item) => {
+const getActualAmountSum = (row: ProjectPayableNodeRow) => {
+  const computedAmount = Number(row.actualAmountTotal);
+  if (Number.isFinite(computedAmount)) return computedAmount;
+
+  return (row.actualNodes ?? []).reduce((sum, item) => {
     const value = Number(item.actualAmountTaxIncluded ?? 0);
     return Number.isFinite(value) ? sum + value : sum;
   }, 0);
+};
+
+const getPayableAmount = (row: ProjectPayableNodeRow) => {
+  const payableAmount = Number(row.payableAmountTaxIncluded);
+  if (Number.isFinite(payableAmount)) return payableAmount;
+  const expectedAmount = Number(row.expectedAmountTaxIncluded ?? 0);
+  return Number.isFinite(expectedAmount) ? expectedAmount : 0;
+};
 
 const getPaymentProgressPercent = (row: ProjectPayableNodeRow) => {
-  const expectedAmount = Number(row.expectedAmountTaxIncluded ?? 0);
+  const computedPercent = Number(row.paymentProgressPercent);
+  if (Number.isFinite(computedPercent)) return computedPercent;
+
+  const expectedAmount = getPayableAmount(row);
   const actualAmount = getActualAmountSum(row);
   if (expectedAmount === 0) return 0;
   const rawPercent = (actualAmount / expectedAmount) * 100;
@@ -89,9 +138,22 @@ const getPaymentProgressPercent = (row: ProjectPayableNodeRow) => {
   return Math.min(100, Math.round(Math.abs(rawPercent)));
 };
 
-const formatAmount = (value?: number | null) => {
-  if (value === null || value === undefined) return "-";
-  return `${value.toLocaleString("zh-CN")} 元`;
+const getSignedAdjustmentAmount = (row: ProjectPayableNodeRow) =>
+  (row.adjustmentRecords ?? []).reduce((sum, record) => {
+    const amount = Number(record.amountTaxIncluded ?? 0);
+    if (!Number.isFinite(amount)) return sum;
+    if (record.type === "REDUCTION") return sum - amount;
+    if (record.type === "INCREASE") return sum + amount;
+    if (record.type === "REDUCTION_REVERSAL") return sum + amount;
+    return sum;
+  }, 0);
+
+const getExpectedDateTs = (value: string | null | undefined) => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return Number.POSITIVE_INFINITY;
+  const parsed = dayjs(raw);
+  if (!parsed.isValid()) return Number.POSITIVE_INFINITY;
+  return parsed.valueOf();
 };
 
 const ProjectPayableNodeTable = ({
@@ -102,10 +164,10 @@ const ProjectPayableNodeTable = ({
   onAddNode,
   onDeleteNode,
   onEditNode,
-  onDragSortNodes,
   onPayNode,
+  onCreateAdjustmentRecord,
+  onViewDetails,
   onEditActualNode,
-  onDeleteActualNode,
 }: Props) => {
   const [actualModalOpen, setActualModalOpen] = useState(false);
   const [collecting, setCollecting] = useState(false);
@@ -115,6 +177,10 @@ const ProjectPayableNodeTable = ({
     null,
   );
   const [currentCollectRow, setCurrentCollectRow] =
+    useState<ProjectPayableNodeRow | null>(null);
+  const [adjustmentModalOpen, setAdjustmentModalOpen] = useState(false);
+  const [adjusting, setAdjusting] = useState(false);
+  const [currentAdjustmentRow, setCurrentAdjustmentRow] =
     useState<ProjectPayableNodeRow | null>(null);
   const [editingActualNode, setEditingActualNode] =
     useState<ActualNodeRow | null>(null);
@@ -129,27 +195,26 @@ const ProjectPayableNodeTable = ({
     );
   }, [stageOptions]);
 
+  const sortedRows = useMemo(() => {
+    return [...rows].sort((left, right) => {
+      const dateDiff =
+        getExpectedDateTs(left.expectedDate) -
+        getExpectedDateTs(right.expectedDate);
+      if (dateDiff !== 0) return dateDiff;
+      return left.sortOrder - right.sortOrder;
+    });
+  }, [rows]);
+
   const columns = useMemo<ProColumns<ProjectPayableNodeRow>[]>(
     () => [
-      {
-        title: "",
-        dataIndex: "sortOrder",
-        width: 28,
-        fixed: "left",
-        editable: false,
-        render: () => null,
-        onHeaderCell: () => ({
-          style: { paddingInline: 4 },
-        }),
-        onCell: () => ({
-          style: { paddingInline: 4 },
-        }),
-      },
       {
         title: "付款阶段",
         dataIndex: "stageOptionId",
         fixed: "left",
         width: 120,
+        onHeaderCell: () => ({
+          style: { paddingLeft: 24 },
+        }),
         valueType: "select",
         valueEnum: stageValueEnum,
         fieldProps: {
@@ -168,19 +233,21 @@ const ProjectPayableNodeTable = ({
             (item) => item.id === row.stageOptionId,
           );
           return (
-            <SelectOptionTag
-              option={
-                row.stageOption
-                  ? {
-                      id: row.stageOption.id,
-                      value: row.stageOption.value,
-                      color: row.stageOption.color ?? undefined,
-                    }
-                  : matched
-                    ? { id: matched.id, value: matched.value }
-                    : null
-              }
-            />
+            <div style={{ paddingLeft: 24 }}>
+              <SelectOptionTag
+                option={
+                  row.stageOption
+                    ? {
+                        id: row.stageOption.id,
+                        value: row.stageOption.value,
+                        color: row.stageOption.color ?? undefined,
+                      }
+                    : matched
+                      ? { id: matched.id, value: matched.value }
+                      : null
+                }
+              />
+            </div>
           );
         },
       },
@@ -204,19 +271,41 @@ const ProjectPayableNodeTable = ({
       {
         title: "付款进度",
         dataIndex: "collectionProgress",
-        width: 160,
+        width: 240,
         editable: false,
         render: (_dom, row) => {
           const actualAmount = getActualAmountSum(row);
-          const expectedAmount = Number(row.expectedAmountTaxIncluded ?? 0);
+          const expectedAmount = getPayableAmount(row);
           const percent = getPaymentProgressPercent(row);
+          const adjustmentAmount = getSignedAdjustmentAmount(row);
+          const hasPositiveAdjustment = adjustmentAmount > 0;
+          const hasNegativeAdjustment = adjustmentAmount < 0;
 
           return (
             <div style={{ minWidth: 140, lineHeight: 1.1 }}>
               <Typography.Text
                 style={{ display: "block", marginBottom: 0, fontSize: 12, lineHeight: 1.1 }}
-              >{`${actualAmount.toLocaleString("zh-CN")} / ${expectedAmount.toLocaleString("zh-CN")}`}</Typography.Text>
+              >{`实付 ${actualAmount.toLocaleString("zh-CN")} / 预付 ${expectedAmount.toLocaleString("zh-CN")} 元`}</Typography.Text>
               <Progress percent={percent} showInfo={false} size="small" />
+              {adjustmentAmount !== 0 ? (
+                <div
+                  style={{
+                    marginTop: 2,
+                    fontSize: 11,
+                    lineHeight: 1.4,
+                    color: hasNegativeAdjustment
+                      ? "#BE2E2C"
+                      : hasPositiveAdjustment
+                        ? "#387E22"
+                        : undefined,
+                    fontWeight: 600,
+                  }}
+                >
+                  {`应付调整 ${
+                    hasPositiveAdjustment ? "+" : ""
+                  }${adjustmentAmount.toLocaleString("zh-CN")} 元`}
+                </div>
+              ) : null}
             </div>
           );
         },
@@ -255,127 +344,108 @@ const ProjectPayableNodeTable = ({
         title: "操作",
         valueType: "option",
         fixed: "right",
-        width: 160,
+        width: 180,
         render: (_text, row) => {
           const isPaymentCompleted = getPaymentProgressPercent(row) >= 100;
-          const payButton = (
-            <Button
-              variant="text"
-              color="primary"
-              style={{ paddingInline: 4 }}
-              disabled={!canManageProject || isPaymentCompleted}
-              icon={<PayCircleOutlined />}
-              onClick={() => {
-                setCurrentCollectRow(row);
-                setActualModalOpen(true);
-              }}
-            >
-              付款
-            </Button>
-          );
 
           return (
             <Space size={4} wrap={false}>
-              {isPaymentCompleted ? (
-                <Popover content="该阶段已完成付款" trigger="hover">
-                  <span style={{ display: "inline-block" }}>{payButton}</span>
-                </Popover>
-              ) : (
-                payButton
-              )}
-              <TableActions
-                disabled={!canManageProject}
-                gap={0}
-                buttonStyle={{ paddingInline: 4 }}
-                onEdit={() => {
-                  setEditingRow(row);
-                  setEditModalOpen(true);
+              <Button
+                variant="text"
+                color="primary"
+                style={{ paddingInline: 4 }}
+                onClick={() => {
+                  onViewDetails?.(row);
                 }}
-                onDelete={() => {
-                  void onDeleteNode(row.id);
+              >
+                查看详情
+              </Button>
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: "pay",
+                      label: "新增付款",
+                      icon: <PayCircleOutlined />,
+                      disabled: !canManageProject || isPaymentCompleted,
+                    },
+                    {
+                      key: "adjustment",
+                      label: "应付调整",
+                      icon: <DiffOutlined />,
+                      disabled: !canManageProject,
+                    },
+                    {
+                      type: "divider",
+                    },
+                    {
+                      key: "edit",
+                      label: "编辑节点",
+                      icon: <EditOutlined />,
+                      disabled: !canManageProject,
+                    },
+                    {
+                      type: "divider",
+                    },
+                    {
+                      key: "delete",
+                      label: "删除节点",
+                      icon: <DeleteOutlined />,
+                      disabled: !canManageProject,
+                      danger: true,
+                    },
+                  ],
+                  onClick: ({ key }) => {
+                    if (key === "pay") {
+                      setCurrentCollectRow(row);
+                      setActualModalOpen(true);
+                      return;
+                    }
+                    if (key === "adjustment") {
+                      setCurrentAdjustmentRow(row);
+                      setAdjustmentModalOpen(true);
+                      return;
+                    }
+                    if (key === "edit") {
+                      setEditingRow(row);
+                      setEditModalOpen(true);
+                      return;
+                    }
+                    if (key === "delete") {
+                      Modal.confirm({
+                        title: "确定删除该记录？",
+                        okText: "确认",
+                        cancelText: "取消",
+                        okButtonProps: { danger: true },
+                        onOk: async () => {
+                          await onDeleteNode(row.id);
+                        },
+                      });
+                    }
+                  },
                 }}
-              />
+                trigger={["click"]}
+              >
+                <Button
+                  variant="text"
+                  color="primary"
+                  style={{ paddingInline: 4 }}
+                  disabled={!canManageProject}
+                >
+                  更多操作
+                </Button>
+              </Dropdown>
             </Space>
           );
         },
       },
     ],
-    [onDeleteNode, canManageProject, stageOptions, stageValueEnum],
-  );
-
-  const actualColumns = useMemo<ColumnsType<ActualNodeRow>>(
-    () => [
-      {
-        title: (
-          <span
-            style={{
-              display: "inline-flex",
-              flexDirection: "column",
-              lineHeight: 1.2,
-            }}
-          >
-            <span>实付金额</span>
-            <span>（含税）</span>
-          </span>
-        ),
-        dataIndex: "actualAmountTaxIncluded",
-        width: 130,
-        render: (_dom, row) => formatAmount(row.actualAmountTaxIncluded),
-      },
-      {
-        title: "实付日期",
-        dataIndex: "actualDate",
-        width: 140,
-        render: (_dom, row) =>
-          row.actualDate ? dayjs(row.actualDate).format("YYYY-MM-DD") : "-",
-      },
-      {
-        title: "备注",
-        dataIndex: "remark",
-        width: 180,
-        render: (_dom, row) => {
-          const value = row.remark?.trim() ?? "";
-          if (!value) return <span>-</span>;
-          return (
-            <span
-              style={
-                Boolean(row.remarkNeedsAttention)
-                  ? { color: "#ff4d4f" }
-                  : undefined
-              }
-            >
-              {value}
-            </span>
-          );
-        },
-      },
-      {
-        title: "操作",
-        key: "actions",
-        width: 180,
-        render: (_dom, row) => (
-          <TableActions
-            disabled={!canManageProject}
-            editText="修改"
-            gap={10}
-            buttonStyle={{ paddingInline: 4 }}
-            onEdit={() => {
-              setEditingActualNode(row);
-              setActualModalOpen(true);
-            }}
-            onDelete={() => {
-              void onDeleteActualNode?.(row.id);
-            }}
-          />
-        ),
-      },
-    ],
-    [canManageProject, onDeleteActualNode],
+    [onDeleteNode, canManageProject, onViewDetails, stageOptions, stageValueEnum],
   );
 
   return (
     <>
-      <DragSortTable<ProjectPayableNodeRow>
+      <ProTable<ProjectPayableNodeRow>
         style={{ marginTop: 1 }}
         rowKey="id"
         columns={
@@ -388,52 +458,23 @@ const ProjectPayableNodeTable = ({
               ] as ProColumns<ProjectPayableNodeRow>[])
             : columns
         }
-        dragSortKey="sortOrder"
-        dataSource={rows}
-        onDragSortEnd={(
-          _beforeIndex: number,
-          _afterIndex: number,
-          nextRows: ProjectPayableNodeRow[],
-        ) => {
-          void onDragSortNodes(nextRows);
-        }}
+        dataSource={sortedRows}
         search={false}
         options={false}
         pagination={false}
         toolBarRender={false}
         scroll={{ x: "max-content" }}
-        expandable={{
-          columnWidth: 28,
-          expandRowByClick: false,
-          rowExpandable: (record) => (record.actualNodes?.length ?? 0) > 0,
-          expandedRowRender: (record) => (
-            <div
-              onClick={(event) => {
-                event.stopPropagation();
-              }}
-            >
-              <Table
-                rowKey="id"
-                size="small"
-                pagination={false}
-                columns={actualColumns}
-                dataSource={record.actualNodes ?? []}
-                onRow={() => ({
-                  onClick: (event) => {
-                    event.stopPropagation();
-                  },
-                })}
-              />
-            </div>
-          ),
-        }}
-        onRow={(record) => ({
-          style:
-            getPaymentProgressPercent(record) === 100
-              ? { background: "#f5f5f5" }
-              : undefined,
-        })}
+        rowClassName={(record) =>
+          getPaymentProgressPercent(record) === 100
+            ? "payable-node-row-complete"
+            : ""
+        }
       />
+      <style jsx global>{`
+        .payable-node-row-complete > td.ant-table-cell {
+          background: #eff6e6 !important;
+        }
+      `}</style>
 
       <div style={{ marginTop: 12, textAlign: "right" }}>
         <Button
@@ -486,8 +527,7 @@ const ProjectPayableNodeTable = ({
               }
             : currentCollectRow
             ? {
-                actualAmountTaxIncluded:
-                  currentCollectRow.expectedAmountTaxIncluded,
+                actualAmountTaxIncluded: getPayableAmount(currentCollectRow),
                 actualDate: currentCollectRow.expectedDate
                   ? dayjs(currentCollectRow.expectedDate)
                   : undefined,
@@ -539,6 +579,26 @@ const ProjectPayableNodeTable = ({
               }
             : undefined
         }
+      />
+
+      <ProjectPayableAdjustmentRecordModal
+        open={adjustmentModalOpen}
+        loading={adjusting}
+        onCancel={() => {
+          setAdjustmentModalOpen(false);
+          setCurrentAdjustmentRow(null);
+        }}
+        onSubmit={async (values) => {
+          if (!currentAdjustmentRow || !onCreateAdjustmentRecord) return;
+          setAdjusting(true);
+          try {
+            await onCreateAdjustmentRecord(currentAdjustmentRow, values);
+            setAdjustmentModalOpen(false);
+            setCurrentAdjustmentRow(null);
+          } finally {
+            setAdjusting(false);
+          }
+        }}
       />
     </>
   );

@@ -44,6 +44,7 @@ import type { ProjectReceivableBadDebtRecordFormValues } from "@/components/proj
 import type { ProjectPayableNodeRow } from "@/components/project-detail/ProjectPayableNodeTable";
 import type { ProjectPayableNodeFormValues } from "@/components/project-detail/ProjectPayableNodeModal";
 import type { ProjectPayableActualNodeFormValues } from "@/components/project-detail/ProjectPayableActualNodeModal";
+import type { ProjectPayableAdjustmentRecordFormValues } from "@/components/project-detail/ProjectPayableAdjustmentRecordModal";
 import { getSigningCompanyTagColor } from "@/lib/constants";
 import type { Vendor } from "@/types/vendor";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
@@ -369,6 +370,7 @@ type SummaryProjectRow = {
     planContent: string;
     contractAmount: number;
     expectedAmountTotal: number;
+    adjustedAmountTotal: number;
   }>;
   payableExpectedAmountTotal: number;
   payableActualAmountTotal: number;
@@ -1977,6 +1979,84 @@ function ProjectReceivablePayablePageContent() {
     [fetchData, messageApi],
   );
 
+  const handleCreatePayableAdjustmentRecord = useCallback(
+    async (
+      row: ProjectPayableNodeRow,
+      values: ProjectPayableAdjustmentRecordFormValues,
+    ) => {
+      const response = await fetch("/api/project-payable-adjustment-records", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          payableNodeId: row.id,
+          type: values.type,
+          amountTaxIncluded: values.amountTaxIncluded,
+          occurredAt: values.occurredAt?.toISOString() ?? null,
+          reason: values.reason?.trim() ? values.reason.trim() : null,
+          remark: values.remark?.trim() ? values.remark.trim() : null,
+        }),
+      });
+      if (!response.ok) {
+        messageApi.error("新增应付调整失败");
+        return;
+      }
+      messageApi.success("新增应付调整成功");
+      await fetchData();
+    },
+    [fetchData, messageApi],
+  );
+
+  const handleEditPayableAdjustmentRecord = useCallback(
+    async (
+      adjustmentRecordId: string,
+      values: ProjectPayableAdjustmentRecordFormValues,
+    ) => {
+      const response = await fetch(
+        `/api/project-payable-adjustment-records/${adjustmentRecordId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            type: values.type,
+            amountTaxIncluded: values.amountTaxIncluded,
+            occurredAt: values.occurredAt?.toISOString() ?? null,
+            reason: values.reason?.trim() ? values.reason.trim() : null,
+            remark: values.remark?.trim() ? values.remark.trim() : null,
+          }),
+        },
+      );
+      if (!response.ok) {
+        messageApi.error("修改应付调整失败");
+        return;
+      }
+      messageApi.success("修改应付调整成功");
+      await fetchData();
+    },
+    [fetchData, messageApi],
+  );
+
+  const handleDeletePayableAdjustmentRecord = useCallback(
+    async (adjustmentRecordId: string) => {
+      const response = await fetch(
+        `/api/project-payable-adjustment-records/${adjustmentRecordId}`,
+        {
+          method: "DELETE",
+        },
+      );
+      if (!response.ok) {
+        messageApi.error("删除应付调整失败");
+        return;
+      }
+      messageApi.success("删除应付调整成功");
+      await fetchData();
+    },
+    [fetchData, messageApi],
+  );
+
   const handleDragSortPayableNodes = useCallback(
     async (nextRows: ProjectPayableNodeRow[]) => {
       const planSortCounter = new Map<string, number>();
@@ -2455,6 +2535,14 @@ function ProjectReceivablePayablePageContent() {
         (sum, node) => sum + Number(node.expectedAmountTaxIncluded ?? 0),
         0,
       );
+      const payableAdjustedAmountTotal = (plan.nodes ?? []).reduce(
+        (sum, node) =>
+          sum +
+          Number(
+            node.payableAmountTaxIncluded ?? node.expectedAmountTaxIncluded ?? 0,
+          ),
+        0,
+      );
       const payableContractAmount = toMoneyNumber(
         plan.vendorContract?.contractAmount ?? plan.contractAmount,
       );
@@ -2467,6 +2555,7 @@ function ProjectReceivablePayablePageContent() {
         planContent: plan.vendorContract?.serviceContent?.trim() || "-",
         contractAmount: payableContractAmount,
         expectedAmountTotal: payableExpectedAmountTotal,
+        adjustedAmountTotal: payableAdjustedAmountTotal,
       };
       const payableActualAmountTotal = (plan.nodes ?? []).reduce(
         (sum, node) =>
@@ -2482,7 +2571,7 @@ function ProjectReceivablePayablePageContent() {
         existing.hasPayablePlan = true;
         existing.payableContractAmountTotal += payableContractAmount;
         existing.payableContractDetails.push(payableContractDetail);
-        existing.payableExpectedAmountTotal += payableExpectedAmountTotal;
+        existing.payableExpectedAmountTotal += payableAdjustedAmountTotal;
         existing.payableActualAmountTotal += payableActualAmountTotal;
         if (
           signingCompanyName &&
@@ -2532,7 +2621,7 @@ function ProjectReceivablePayablePageContent() {
         receivableProgressPercent: 0,
         payableContractAmountTotal: payableContractAmount,
         payableContractDetails: [payableContractDetail],
-        payableExpectedAmountTotal,
+        payableExpectedAmountTotal: payableAdjustedAmountTotal,
         payableActualAmountTotal,
         payableProgressPercent: 0,
       });
@@ -2684,7 +2773,7 @@ function ProjectReceivablePayablePageContent() {
               let changedDetailCount = 0;
               const payableContractDetails = row.payableContractDetails.map(
                 (detail) => {
-                  const diff = detail.expectedAmountTotal - detail.contractAmount;
+                  const diff = detail.adjustedAmountTotal - detail.contractAmount;
                   const hasDiff = toCentAmount(diff) !== 0;
                   const changedIndex = hasDiff ? changedDetailCount : -1;
                   if (hasDiff) changedDetailCount += 1;
@@ -2714,12 +2803,14 @@ function ProjectReceivablePayablePageContent() {
                           <div>合同金额：{formatAmount(detail.contractAmount)}</div>
                           <div>
                             预付金额合计：
-                            {formatAmount(detail.expectedAmountTotal)}
+                            {formatAmount(detail.adjustedAmountTotal)}
                           </div>
-                          <div>
-                            {detail.diff >= 0 ? "增加" : "减少"}：
-                            {formatAmount(Math.abs(detail.diff))}
-                          </div>
+                          {detail.hasDiff ? (
+                            <div>
+                              {detail.diff >= 0 ? "增加" : "减少"}：
+                              {formatAmount(Math.abs(detail.diff))}
+                            </div>
+                          ) : null}
                         </div>
                       );
                     })}
@@ -4183,8 +4274,15 @@ function ProjectReceivablePayablePageContent() {
                     onEditNode={handleEditPayableNode}
                     onDragSortNodes={handleDragSortPayableNodes}
                     onPayNode={handlePayPayableNode}
+                    onCreateAdjustmentRecord={
+                      handleCreatePayableAdjustmentRecord
+                    }
                     onEditActualNode={handleEditPayableActualNode}
                     onDeleteActualNode={handleDeletePayableActualNode}
+                    onEditAdjustmentRecord={handleEditPayableAdjustmentRecord}
+                    onDeleteAdjustmentRecord={
+                      handleDeletePayableAdjustmentRecord
+                    }
                     onProjectStatusUpdated={fetchData}
                   />
                 ))

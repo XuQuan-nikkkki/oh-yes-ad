@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { estimationExtension } from "@/lib/prisma/project-cost-estimation";
 import { initiationExtension } from "@/lib/prisma/project-initiation";
+import { payableExtension } from "@/lib/prisma/project-payable";
 import { pricingStrategyExtension } from "@/lib/prisma/project-pricing-strategy";
 import { receivableExtension } from "@/lib/prisma/project-receivable";
 
@@ -13,6 +14,7 @@ function createPrismaClient() {
   return new PrismaClient({ adapter })
     .$extends(estimationExtension)
     .$extends(initiationExtension)
+    .$extends(payableExtension)
     .$extends(receivableExtension)
     .$extends(pricingStrategyExtension);
 }

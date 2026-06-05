@@ -11,6 +11,7 @@ import {
   Steps,
   Switch,
 } from "antd";
+import type { DefaultOptionType } from "antd/es/select";
 import { useEffect, useMemo, useState } from "react";
 
 export type ProjectReceivablePlanFormValues = {
@@ -24,11 +25,6 @@ export type ProjectReceivablePlanFormValues = {
   remarkNeedsAttention?: boolean;
 };
 
-type Option = {
-  label: string;
-  value: string;
-};
-
 type Props = {
   open: boolean;
   mode: "create" | "edit";
@@ -38,9 +34,9 @@ type Props = {
   initialValues: Partial<ProjectReceivablePlanFormValues>;
   projectId: string;
   projectName: string;
-  legalEntityOptions: Option[];
+  legalEntityOptions: DefaultOptionType[];
   legalEntityLoading?: boolean;
-  ownerOptions: Option[];
+  ownerOptions: DefaultOptionType[];
 };
 
 const MODAL_FORM_MAX_HEIGHT = "calc(100vh - 220px)";

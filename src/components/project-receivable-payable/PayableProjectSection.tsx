@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Card, Empty, Progress } from "antd";
+import ProjectPayableActivityModal from "@/components/project-detail/ProjectPayableActivityModal";
+import type { ProjectPayableAdjustmentRecordFormValues } from "@/components/project-detail/ProjectPayableAdjustmentRecordModal";
 import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import ProjectPayableNodeTable, {
   type ProjectPayableNodeRow,
@@ -47,11 +49,22 @@ type PayableProjectSectionProps = {
     row: ProjectPayableNodeRow,
     values: ProjectPayableActualNodeFormValues,
   ) => void | Promise<void>;
+  onCreateAdjustmentRecord?: (
+    row: ProjectPayableNodeRow,
+    values: ProjectPayableAdjustmentRecordFormValues,
+  ) => void | Promise<void>;
   onEditActualNode?: (
     actualNodeId: string,
     values: ProjectPayableActualNodeFormValues,
   ) => void | Promise<void>;
   onDeleteActualNode?: (actualNodeId: string) => void | Promise<void>;
+  onEditAdjustmentRecord?: (
+    adjustmentRecordId: string,
+    values: ProjectPayableAdjustmentRecordFormValues,
+  ) => void | Promise<void>;
+  onDeleteAdjustmentRecord?: (
+    adjustmentRecordId: string,
+  ) => void | Promise<void>;
 };
 
 export default function PayableProjectSection({
@@ -72,11 +85,17 @@ export default function PayableProjectSection({
   onEditNode,
   onDragSortNodes,
   onPayNode,
+  onCreateAdjustmentRecord,
   onEditActualNode,
   onDeleteActualNode,
+  onEditAdjustmentRecord,
+  onDeleteAdjustmentRecord,
 }: PayableProjectSectionProps) {
   const [nodeModalOpen, setNodeModalOpen] = useState(false);
   const [creatingNode, setCreatingNode] = useState(false);
+  const [activityModalOpen, setActivityModalOpen] = useState(false);
+  const [activityTargetStageOptionIds, setActivityTargetStageOptionIds] =
+    useState<string[]>([]);
   const expectedAmountTotal = rows.reduce(
     (sum, row) => sum + Number(row.expectedAmountTaxIncluded ?? 0),
     0,
@@ -210,6 +229,13 @@ export default function PayableProjectSection({
           onEditNode={onEditNode}
           onDragSortNodes={onDragSortNodes}
           onPayNode={onPayNode}
+          onCreateAdjustmentRecord={onCreateAdjustmentRecord}
+          onViewDetails={(row) => {
+            setActivityTargetStageOptionIds(
+              row.stageOptionId ? [row.stageOptionId] : [],
+            );
+            setActivityModalOpen(true);
+          }}
           onEditActualNode={onEditActualNode}
           onDeleteActualNode={onDeleteActualNode}
         />
@@ -242,6 +268,23 @@ export default function PayableProjectSection({
         initialValues={{
           remarkNeedsAttention: false,
         }}
+      />
+      <ProjectPayableActivityModal
+        open={activityModalOpen}
+        rows={rows}
+        stageOptions={stageOptions}
+        initialSelectedStageOptionIds={activityTargetStageOptionIds}
+        onCancel={() => {
+          setActivityModalOpen(false);
+          setActivityTargetStageOptionIds([]);
+        }}
+        canManageProject={canManageProject}
+        onEditNode={onEditNode}
+        onDeleteNode={onDeleteNode}
+        onEditActualNode={onEditActualNode}
+        onDeleteActualNode={onDeleteActualNode}
+        onEditAdjustmentRecord={onEditAdjustmentRecord}
+        onDeleteAdjustmentRecord={onDeleteAdjustmentRecord}
       />
     </Card>
   );

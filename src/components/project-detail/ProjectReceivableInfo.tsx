@@ -32,7 +32,9 @@ import ProjectReceivableNodeModal, {
 import type { ProjectReceivableActualNodeFormValues } from "@/components/project-detail/ProjectReceivableActualNodeModal";
 import type { ProjectReceivableBadDebtRecordFormValues } from "@/components/project-detail/ProjectReceivableBadDebtRecordModal";
 import type { Project } from "@/types/projectDetail";
+import { buildPlanOwnerOptions } from "@/lib/build-plan-owner-options";
 import { useClientContractsStore } from "@/stores/clientContractsStore";
+import { useEmployeesStore } from "@/stores/employeesStore";
 import { useLegalEntitiesStore } from "@/stores/legalEntitiesStore";
 
 type Props = {
@@ -176,9 +178,6 @@ const formatAmountWithUnit = (value: unknown) =>
     maximumFractionDigits: 2,
   })} 元`;
 
-const isActiveMember = (member: { employmentStatus?: string | null }) =>
-  (member.employmentStatus ?? "").includes("在职");
-
 const ProjectReceivableInfo = forwardRef<
   { handleDeletePlan: () => Promise<void> },
   Props
@@ -235,6 +234,11 @@ const ProjectReceivableInfo = forwardRef<
     const [activityModalOpen, setActivityModalOpen] = useState(false);
     const [activityTargetStageOptionIds, setActivityTargetStageOptionIds] =
       useState<string[]>([]);
+    const employeesFull = useEmployeesStore((state) => state.employeesFull);
+    const employeesLoadedFull = useEmployeesStore((state) => state.loadedFull);
+    const fetchEmployeesFromStore = useEmployeesStore(
+      (state) => state.fetchEmployees,
+    );
     const legalEntities = useLegalEntitiesStore((state) => state.legalEntities);
     const legalEntitiesLoaded = useLegalEntitiesStore((state) => state.loaded);
     const legalEntitiesLoading = useLegalEntitiesStore(
@@ -263,19 +267,20 @@ const ProjectReceivableInfo = forwardRef<
       [contractsByProjectId, projectId],
     );
     const activeProjectMemberOptions = useMemo(() => {
-      const members = (project.members ?? []).filter(isActiveMember);
-      return members
-        .map((member) => ({
-          label: member.name,
-          value: member.id,
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label, "zh-CN"));
-    }, [project.members]);
+      return buildPlanOwnerOptions({
+        allEmployees: employeesFull,
+        projectMembers: project.members ?? [],
+      });
+    }, [employeesFull, project.members]);
 
     const defaultOwnerFromProject = useMemo(() => {
       const ownerId = project.owner?.id ?? "";
       if (!ownerId) return undefined;
-      return activeProjectMemberOptions.some((item) => item.value === ownerId)
+      return activeProjectMemberOptions.some((group) =>
+        Array.isArray(group.options)
+          ? group.options.some((item) => item.value === ownerId)
+          : group.value === ownerId,
+      )
         ? ownerId
         : undefined;
     }, [activeProjectMemberOptions, project.owner?.id]);
@@ -329,6 +334,11 @@ const ProjectReceivableInfo = forwardRef<
         setPlans([]);
       }
     }, [projectId]);
+
+    useEffect(() => {
+      if (employeesLoadedFull) return;
+      void fetchEmployeesFromStore({ full: true });
+    }, [employeesLoadedFull, fetchEmployeesFromStore]);
 
     const fetchStageOptions = useCallback(async () => {
       setLoadingStageOptions(true);
@@ -999,6 +1009,9 @@ const ProjectReceivableInfo = forwardRef<
             const contractAmount = formatYuanNumber(
               contract?.contractAmount ?? plan.contractAmount,
             );
+            const actualExpectedAmountTotal = formatYuanNumber(
+              plan.actualExpectedAmountTotal,
+            );
             const expectedAmountTotal = formatYuanNumber(
               plan.expectedAmountTotal,
             );
@@ -1010,6 +1023,7 @@ const ProjectReceivableInfo = forwardRef<
                   contractAmount={contractAmount}
                   taxAmount={contract?.taxAmount}
                   expectedAmountTotal={expectedAmountTotal}
+                  actualExpectedAmountTotal={actualExpectedAmountTotal}
                   actualAmountTotal={actualAmountTotal}
                   badDebtAmountTotal={plan.actualBadDebtAmountTotal}
                   badDebtWriteOffAmountTotal={plan.badDebtWriteOffAmountTotal}

@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { requireReceivablePayableWritePermission } from "@/lib/api-permissions";
+import { enrichPayablePlan } from "@/lib/prisma/project-payable";
 import { toNullableDecimal } from "@/lib/toNullableDecimal";
 
 const prisma = new PrismaClient({
@@ -57,6 +58,17 @@ const includeDetail = {
       actualNodes: {
         orderBy: [{ actualDate: "asc" as const }, { createdAt: "asc" as const }],
       },
+      adjustmentRecords: {
+        include: {
+          createdByEmployee: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: [{ occurredAt: "asc" as const }, { createdAt: "asc" as const }],
+      },
     },
     orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
   },
@@ -82,7 +94,7 @@ export async function GET(req: NextRequest) {
     orderBy: [{ createdAt: "asc" }],
   });
 
-  return Response.json(rows);
+  return Response.json(rows.map((row) => enrichPayablePlan(row)));
 }
 
 export async function POST(req: NextRequest) {
@@ -161,5 +173,5 @@ export async function POST(req: NextRequest) {
     include: includeDetail,
   });
 
-  return Response.json(created);
+  return Response.json(enrichPayablePlan(created));
 }

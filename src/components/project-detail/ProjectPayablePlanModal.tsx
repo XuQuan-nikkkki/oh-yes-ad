@@ -12,6 +12,7 @@ import {
   Steps,
   Switch,
 } from "antd";
+import type { DefaultOptionType } from "antd/es/select";
 
 export type ProjectPayablePlanFormValues = {
   vendorId?: string;
@@ -24,11 +25,6 @@ export type ProjectPayablePlanFormValues = {
   remarkNeedsAttention?: boolean;
 };
 
-type Option = {
-  label: string;
-  value: string;
-};
-
 type Props = {
   open: boolean;
   mode: "create" | "edit";
@@ -38,11 +34,11 @@ type Props = {
   initialValues: Partial<ProjectPayablePlanFormValues>;
   projectId: string;
   projectName: string;
-  vendorOptions: Option[];
+  vendorOptions: DefaultOptionType[];
   vendorLoading?: boolean;
-  legalEntityOptions: Option[];
+  legalEntityOptions: DefaultOptionType[];
   legalEntityLoading?: boolean;
-  ownerOptions: Option[];
+  ownerOptions: DefaultOptionType[];
 };
 
 const MODAL_FORM_MAX_HEIGHT = "calc(100vh - 220px)";

@@ -15,6 +15,7 @@ export type ProjectReceivablePlanSnapshotProps = {
   contractAmount: number;
   taxAmount?: number | string | null;
   expectedAmountTotal: number;
+  actualExpectedAmountTotal: number;
   actualAmountTotal: number;
   badDebtAmountTotal?: number | string | null;
   badDebtWriteOffAmountTotal?: number | string | null;
@@ -56,6 +57,7 @@ export default function ProjectReceivablePlanSnapshot({
   contractAmount,
   taxAmount,
   expectedAmountTotal,
+  actualExpectedAmountTotal,
   actualAmountTotal,
   badDebtAmountTotal,
   badDebtWriteOffAmountTotal,
@@ -68,18 +70,18 @@ export default function ProjectReceivablePlanSnapshot({
   remarkNeedsAttention = false,
 }: ProjectReceivablePlanSnapshotProps) {
   const expectedAmount = toYuanNumber(expectedAmountTotal);
+  const actualExpectedAmount = toYuanNumber(actualExpectedAmountTotal);
   const actualAmount = toYuanNumber(actualAmountTotal);
   const badDebtAmount = toYuanNumber(badDebtAmountTotal);
-  const expectedContractDiff = expectedAmount - toYuanNumber(contractAmount);
-  const receivableBalance = expectedAmount - badDebtAmount - actualAmount;
+  const expectedContractDiff =
+    actualExpectedAmount - toYuanNumber(contractAmount);
+  const receivableBalance = actualExpectedAmount - actualAmount;
   const actualPercent =
     expectedAmount > 0 ? (actualAmount / expectedAmount) * 100 : 0;
   const badDebtPercent =
     expectedAmount > 0 ? (badDebtAmount / expectedAmount) * 100 : 0;
   const receivableBalancePercent =
-    expectedAmount > 0
-      ? (receivableBalance / expectedAmount) * 100
-      : 0;
+    expectedAmount > 0 ? (receivableBalance / expectedAmount) * 100 : 0;
   const actualBarPercent = Math.max(0, Math.min(100, actualPercent));
   const badDebtBarPercent = Math.max(
     0,
@@ -93,7 +95,7 @@ export default function ProjectReceivablePlanSnapshot({
     combinedBarPercent >= 100 && badDebtAmount <= 0 ? "#52c41a" : "#1677ff";
   const progressSummaryText = `${
     badDebtAmount > 0 ? "已收+已核销" : "已收"
-  }：${completedAmount.toLocaleString("zh-CN")} / 预收：${expectedAmount.toLocaleString(
+  }：${completedAmount.toLocaleString("zh-CN")} / 预收：${actualExpectedAmount.toLocaleString(
     "zh-CN",
   )} 元`;
 
@@ -131,7 +133,7 @@ export default function ProjectReceivablePlanSnapshot({
           statistic={{
             title: "预收金额合计",
             icon: <WalletTwoTone />,
-            value: expectedAmount,
+            value: actualExpectedAmount,
             suffix: "元",
             styles: {
               title: { fontSize: 13 },
