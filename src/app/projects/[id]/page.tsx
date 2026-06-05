@@ -388,14 +388,11 @@ const ProjectDetailPage = () => {
 
   const handleManualCostSaved = useCallback(
     (savedProject: Project) => {
-      setProject((prev) => {
-        const nextProject = prev ? { ...prev, ...savedProject } : savedProject;
-        upsertProjects([nextProject]);
-        return nextProject;
-      });
+      setProject((prev) => (prev ? { ...prev, ...savedProject } : savedProject));
       setManualCostModalOpen(false);
+      void fetchProject();
     },
-    [upsertProjects],
+    [fetchProject],
   );
 
   const handleDeleteManualCost = useCallback(async () => {
@@ -418,15 +415,12 @@ const ProjectDetailPage = () => {
       }
 
       const savedProject = (await response.json()) as Project;
-      setProject((prev) => {
-        const nextProject = prev ? { ...prev, ...savedProject } : savedProject;
-        upsertProjects([nextProject]);
-        return nextProject;
-      });
+      setProject((prev) => (prev ? { ...prev, ...savedProject } : savedProject));
+      void fetchProject();
     } finally {
       setDeletingManualCost(false);
     }
-  }, [projectId, upsertProjects]);
+  }, [fetchProject, projectId]);
 
   useEffect(() => {
     if (!projectId) return;

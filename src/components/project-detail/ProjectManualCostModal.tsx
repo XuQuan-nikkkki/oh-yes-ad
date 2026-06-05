@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { App, Form, Input, InputNumber, Modal } from "antd";
+import { Alert, Form, Input, InputNumber, Modal } from "antd";
 import type { Project, ProjectManualCost } from "@/types/projectDetail";
 
 type Props = {
@@ -107,13 +107,14 @@ const ProjectManualCostModal = ({
   onCancel,
   onSaved,
 }: Props) => {
-  const app = App.useApp();
   const [form] = Form.useForm<ManualCostFormValues>();
   const [submitting, setSubmitting] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     form.setFieldsValue(normalizeInitialValues(initialValues));
+    setErrorText(null);
   }, [form, initialValues, open]);
 
   const handleSubmit = async () => {
@@ -124,6 +125,7 @@ const ProjectManualCostModal = ({
     if (
       JSON.stringify(normalizedValues) === JSON.stringify(normalizedInitialValues)
     ) {
+      setErrorText(null);
       onCancel();
       return;
     }
@@ -137,10 +139,11 @@ const ProjectManualCostModal = ({
     });
 
     if (!hasValue) {
-      app.message.warning("请至少填写一项成本或备注");
+      setErrorText("请至少填写一项成本或备注");
       return;
     }
 
+    setErrorText(null);
     setSubmitting(true);
     try {
       const response = await fetch(`/api/projects/${projectId}`, {
@@ -155,16 +158,16 @@ const ProjectManualCostModal = ({
       });
 
       if (!response.ok) {
-        app.message.error("补充成本保存失败");
+        setErrorText("补充成本保存失败");
         return;
       }
 
       const project = (await response.json()) as Project;
-      app.message.success("补充成本已保存");
+      setErrorText(null);
       onSaved(project);
     } catch (error) {
       console.error(error);
-      app.message.error("补充成本保存失败");
+      setErrorText("补充成本保存失败");
     } finally {
       setSubmitting(false);
     }
@@ -182,6 +185,14 @@ const ProjectManualCostModal = ({
       destroyOnHidden
       width={760}
     >
+      {errorText ? (
+        <Alert
+          type="error"
+          showIcon
+          message={errorText}
+          style={{ marginBottom: 16 }}
+        />
+      ) : null}
       <Form form={form} layout="vertical">
         {FIELD_CONFIG.map(({ amountKey, remarkKey, label }) => (
           <div

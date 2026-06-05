@@ -249,6 +249,18 @@ const formatYuanText = (value: number) => {
   return rounded.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 };
 
+const REALTIME_TAX_RATE = 0.01;
+
+const getPreTaxIncomeFromTaxIncludedIncome = (taxIncludedIncome: number) => {
+  if (!Number.isFinite(taxIncludedIncome) || taxIncludedIncome <= 0) return 0;
+  return taxIncludedIncome / (1 + REALTIME_TAX_RATE);
+};
+
+const calculateRealtimeTax = (taxIncludedIncome: number) => {
+  const preTaxIncome = getPreTaxIncomeFromTaxIncludedIncome(taxIncludedIncome);
+  return preTaxIncome * REALTIME_TAX_RATE;
+};
+
 const formatRatio = (value: number | null) =>
   value === null ? "-" : `${(value * 100).toFixed(2)}%`;
 const formatRatioPercentText = (value: number | null) =>
@@ -1359,12 +1371,12 @@ const ProjectRealtimeCostTrackingTable = ({
       ),
     [receivablePlans],
   );
-  const taxTotal = toNumber(clientContract?.taxAmount);
-  // Allocate total tax across receivable plans by contractAmount proportion.
+  // 税费按项目不含税收入的 1% 实时计算。
+  const tax = useMemo(() => calculateRealtimeTax(income), [income]);
   const taxBreakdown = useMemo(() => {
     const plans = receivablePlans ?? [];
     const total = income;
-    if (plans.length === 0 || total <= 0 || taxTotal <= 0) {
+    if (plans.length === 0 || total <= 0 || tax <= 0) {
       return plans.map((plan) => ({
         id: plan.id,
         serviceContent: plan.serviceContent,
@@ -1378,12 +1390,11 @@ const ProjectRealtimeCostTrackingTable = ({
       return {
         id: plan.id,
         serviceContent: plan.serviceContent,
-        tax: taxTotal * ratio,
+        tax: tax * ratio,
         actualAmount,
       };
     });
-  }, [income, receivablePlans, taxTotal]);
-  const tax = taxTotal;
+  }, [income, receivablePlans, tax]);
   const netIncome = income - tax;
   const autoAgencyFee =
     income > 0
