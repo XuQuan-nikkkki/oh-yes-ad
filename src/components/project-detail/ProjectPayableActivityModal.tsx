@@ -4,6 +4,7 @@ import { Modal } from "antd";
 import ProjectPayableActivity from "@/components/project-detail/ProjectPayableActivity";
 import type { ProjectPayableActualNodeFormValues } from "@/components/project-detail/ProjectPayableActualNodeModal";
 import type { ProjectPayableAdjustmentRecordFormValues } from "@/components/project-detail/ProjectPayableAdjustmentRecordModal";
+import type { ProjectPayableNodeRow } from "@/components/project-detail/ProjectPayableNodeTable";
 import type { ProjectPayableNodeFormValues } from "@/components/project-detail/ProjectPayableNodeModal";
 import type { ProjectPayableActivityRow } from "@/components/project-detail/project-payable-activity/types";
 
@@ -21,7 +22,7 @@ type Props = {
   onCancel: () => void;
   canManageProject: boolean;
   onEditNode?: (
-    row: ProjectPayableActivityRow,
+    row: ProjectPayableNodeRow,
     values: ProjectPayableNodeFormValues,
   ) => Promise<void> | void;
   onDeleteNode?: (nodeId: string) => Promise<void> | void;

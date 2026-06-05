@@ -1,5 +1,28 @@
 "use client";
 
+export type ProjectPayableActivityActualNode = {
+  id: string;
+  actualAmountTaxIncluded?: number | null;
+  actualDate?: string | null;
+  remark?: string | null;
+  remarkNeedsAttention?: boolean;
+  createdAt?: string | null;
+};
+
+export type ProjectPayableActivityAdjustmentRecord = {
+  id: string;
+  type: "REDUCTION" | "INCREASE" | "REDUCTION_REVERSAL";
+  amountTaxIncluded?: number | null;
+  occurredAt?: string | null;
+  reason?: string | null;
+  remark?: string | null;
+  createdAt?: string | null;
+  createdByEmployee?: {
+    id: string;
+    name: string;
+  } | null;
+};
+
 export type ProjectPayableActivityRow = {
   id: string;
   stageOptionId: string;
@@ -13,27 +36,8 @@ export type ProjectPayableActivityRow = {
   expectedDate: string;
   remark?: string | null;
   remarkNeedsAttention: boolean;
-  actualNodes?: Array<{
-    id: string;
-    actualAmountTaxIncluded?: number | null;
-    actualDate?: string | null;
-    remark?: string | null;
-    remarkNeedsAttention?: boolean;
-    createdAt?: string | null;
-  }>;
-  adjustmentRecords?: Array<{
-    id: string;
-    type: "REDUCTION" | "INCREASE" | "REDUCTION_REVERSAL";
-    amountTaxIncluded?: number | null;
-    occurredAt?: string | null;
-    reason?: string | null;
-    remark?: string | null;
-    createdAt?: string | null;
-    createdByEmployee?: {
-      id: string;
-      name: string;
-    } | null;
-  }>;
+  actualNodes?: ProjectPayableActivityActualNode[];
+  adjustmentRecords?: ProjectPayableActivityAdjustmentRecord[];
 };
 
 export type ActivityType = "PAYABLE_NODE" | "PAYMENT" | "ADJUSTMENT";
@@ -54,10 +58,6 @@ export type ActivityTableRow = {
   operationAtText: string;
   operationAtValue: number;
   sourceRow: ProjectPayableActivityRow;
-  sourceActualNode?: ProjectPayableActivityRow["actualNodes"] extends Array<infer T>
-    ? T
-    : never;
-  sourceAdjustmentRecord?: ProjectPayableActivityRow["adjustmentRecords"] extends Array<infer T>
-    ? T
-    : never;
+  sourceActualNode?: ProjectPayableActivityActualNode;
+  sourceAdjustmentRecord?: ProjectPayableActivityAdjustmentRecord;
 };

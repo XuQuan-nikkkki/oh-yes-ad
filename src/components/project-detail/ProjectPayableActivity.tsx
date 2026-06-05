@@ -17,6 +17,7 @@ import ProjectPayableActualNodeModal, {
 import ProjectPayableAdjustmentRecordModal, {
   type ProjectPayableAdjustmentRecordFormValues,
 } from "@/components/project-detail/ProjectPayableAdjustmentRecordModal";
+import type { ProjectPayableNodeRow } from "@/components/project-detail/ProjectPayableNodeTable";
 import ProjectPayableNodeModal, {
   type ProjectPayableNodeFormValues,
 } from "@/components/project-detail/ProjectPayableNodeModal";
@@ -30,7 +31,7 @@ type Props = {
   stageOptions: Array<{ id: string; value: string; color?: string | null }>;
   initialSelectedStageOptionIds?: string[];
   canManageProject: boolean;
-  onEditNode?: (row: ProjectPayableActivityRow, values: ProjectPayableNodeFormValues) => Promise<void> | void;
+  onEditNode?: (row: ProjectPayableNodeRow, values: ProjectPayableNodeFormValues) => Promise<void> | void;
   onDeleteNode?: (nodeId: string) => Promise<void> | void;
   onEditActualNode?: (actualNodeId: string, values: ProjectPayableActualNodeFormValues) => Promise<void> | void;
   onDeleteActualNode?: (actualNodeId: string) => Promise<void> | void;
@@ -58,7 +59,7 @@ export default function ProjectPayableActivity({
 }: Props) {
   const [selectedStageOptionIds, setSelectedStageOptionIds] = useState<string[]>(initialSelectedStageOptionIds ?? []);
   const [, contextHolder] = message.useMessage();
-  const [editingNodeRow, setEditingNodeRow] = useState<ProjectPayableActivityRow | null>(null);
+  const [editingNodeRow, setEditingNodeRow] = useState<ProjectPayableNodeRow | null>(null);
   const [editingActualRow, setEditingActualRow] = useState<ActivityTableRow["sourceActualNode"] | null>(null);
   const [editingAdjustmentRow, setEditingAdjustmentRow] = useState<ActivityTableRow["sourceAdjustmentRecord"] | null>(null);
   const [nodeSubmitting, setNodeSubmitting] = useState(false);
@@ -145,7 +146,7 @@ export default function ProjectPayableActivity({
         render: (_value, record) => (
           <div style={{ display: "flex", gap: 8 }}>
             <Button type="link" size="small" icon={<EditOutlined />} disabled={!canManageProject} onClick={() => {
-              if (record.eventType === "PAYABLE_NODE") setEditingNodeRow(record.sourceRow);
+              if (record.eventType === "PAYABLE_NODE") setEditingNodeRow(record.sourceRow as ProjectPayableNodeRow);
               if (record.eventType === "PAYMENT") setEditingActualRow(record.sourceActualNode ?? null);
               if (record.eventType === "ADJUSTMENT") setEditingAdjustmentRow(record.sourceAdjustmentRecord ?? null);
             }}>编辑</Button>
