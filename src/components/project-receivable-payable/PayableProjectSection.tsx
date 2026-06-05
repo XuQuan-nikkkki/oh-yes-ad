@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, Empty, Progress } from "antd";
+import { Card, Empty, Progress, Tooltip } from "antd";
 import ProjectPayableActivityModal from "@/components/project-detail/ProjectPayableActivityModal";
 import type { ProjectPayableAdjustmentRecordFormValues } from "@/components/project-detail/ProjectPayableAdjustmentRecordModal";
 import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
@@ -96,8 +96,15 @@ export default function PayableProjectSection({
   const [activityModalOpen, setActivityModalOpen] = useState(false);
   const [activityTargetStageOptionIds, setActivityTargetStageOptionIds] =
     useState<string[]>([]);
+  const formatAmount = (value: number) => `${value.toLocaleString("zh-CN")} 元`;
   const expectedAmountTotal = rows.reduce(
     (sum, row) => sum + Number(row.expectedAmountTaxIncluded ?? 0),
+    0,
+  );
+  const payableAmountTotal = rows.reduce(
+    (sum, row) =>
+      sum +
+      Number(row.payableAmountTaxIncluded ?? row.expectedAmountTaxIncluded ?? 0),
     0,
   );
   const actualAmountTotal = rows.reduce((sum, row) => {
@@ -107,19 +114,20 @@ export default function PayableProjectSection({
     );
     return sum + rowActual;
   }, 0);
+  const adjustmentAmountTotal = payableAmountTotal - expectedAmountTotal;
   const progressPercent =
-    expectedAmountTotal > 0
+    payableAmountTotal > 0
       ? Math.max(
           0,
           Math.min(
             100,
-            Math.round((actualAmountTotal / expectedAmountTotal) * 100),
+            Math.round((actualAmountTotal / payableAmountTotal) * 100),
           ),
         )
       : 0;
-  const hasPayableAmount = expectedAmountTotal > 0;
+  const hasPayableAmount = payableAmountTotal > 0;
   const isFullyPaid =
-    hasPayableAmount && actualAmountTotal >= expectedAmountTotal;
+    hasPayableAmount && actualAmountTotal >= payableAmountTotal;
   const leftBorderColor = !hasPayableAmount
     ? "var(--ant-colorTextQuaternary, #bfbfbf)"
     : isFullyPaid
@@ -203,7 +211,25 @@ export default function PayableProjectSection({
           <div
             style={{ width: 96, display: "inline-flex", alignItems: "center" }}
           >
-            <Progress percent={progressPercent} showInfo={false} size="small" />
+            <Tooltip
+              title={
+                <div style={{ whiteSpace: "nowrap" }}>
+                  <div>合同金额：{formatAmount(Number(contractAmountTotal ?? 0))}</div>
+                  <div>预付节点合计：{formatAmount(expectedAmountTotal)}</div>
+                  {adjustmentAmountTotal !== 0 ? (
+                    <div>
+                      应付调整：
+                      {adjustmentAmountTotal > 0 ? "+" : ""}
+                      {formatAmount(adjustmentAmountTotal)}
+                    </div>
+                  ) : null}
+                  <div>调整后应付：{formatAmount(payableAmountTotal)}</div>
+                  <div>实付金额：{formatAmount(actualAmountTotal)}</div>
+                </div>
+              }
+            >
+              <Progress percent={progressPercent} showInfo={false} size="small" />
+            </Tooltip>
           </div>
           <span>{progressPercent}%</span>
         </div>

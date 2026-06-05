@@ -185,6 +185,7 @@ const formatAmount = (value?: number | null) => {
 };
 
 const getBarPercent = (value: number) => Math.max(0, Math.min(100, value));
+const toCentAmount = (value: number) => Math.round(value * 100);
 
 const getExpectedDateTs = (value: string | null | undefined) => {
   const raw = String(value ?? "").trim();
@@ -192,6 +193,21 @@ const getExpectedDateTs = (value: string | null | undefined) => {
   const parsed = dayjs(raw);
   if (!parsed.isValid()) return Number.POSITIVE_INFINITY;
   return parsed.valueOf();
+};
+
+const isFullyBadDebtRow = (row: ProjectReceivableNodeRow) => {
+  const expectedAmount = toAmountNumber(row.expectedAmountTaxIncluded) ?? 0;
+  const actualAmount = toAmountNumber(row.actualAmountTotal) ?? 0;
+  const writeOffAmount = toAmountNumber(row.badDebtWriteOffAmountTotal) ?? 0;
+  const recoveryAmount = toAmountNumber(row.badDebtRecoveryAmountTotal) ?? 0;
+  const badDebtAmount = Math.max(writeOffAmount - recoveryAmount, 0);
+
+  if (toCentAmount(expectedAmount) <= 0) return false;
+
+  return (
+    toCentAmount(actualAmount) <= 0 &&
+    toCentAmount(badDebtAmount) >= toCentAmount(expectedAmount)
+  );
 };
 
 const ProjectReceivableNodeTable = ({
@@ -647,13 +663,20 @@ const ProjectReceivableNodeTable = ({
           pagination={false}
           toolBarRender={false}
           scroll={{ x: "max-content" }}
-          rowClassName={(record) =>
-            Boolean(record.isCollectionAmountMatched)
-              ? "receivable-node-row-complete"
-              : ""
-          }
+          rowClassName={(record) => {
+            if (isFullyBadDebtRow(record)) {
+              return "receivable-node-row-bad-debt";
+            }
+            if (Boolean(record.isCollectionAmountMatched)) {
+              return "receivable-node-row-complete";
+            }
+            return "";
+          }}
         />
         <style jsx global>{`
+          .receivable-node-row-bad-debt > td.ant-table-cell {
+            background: rgba(190, 46, 44, 0.1) !important;
+          }
           .receivable-node-row-complete > td.ant-table-cell {
             background: #eff6e6 !important;
           }

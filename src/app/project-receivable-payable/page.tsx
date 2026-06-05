@@ -317,6 +317,22 @@ type PayableNode = {
   remark?: string | null;
   remarkNeedsAttention: boolean;
   actualNodes?: ActualNode[];
+  adjustmentRecords?: Array<{
+    id: string;
+    type: "REDUCTION" | "INCREASE" | "REDUCTION_REVERSAL";
+    amountTaxIncluded?: number | null;
+    occurredAt?: string | null;
+    reason?: string | null;
+    remark?: string | null;
+    createdAt?: string | null;
+    createdByEmployee?: {
+      id: string;
+      name: string;
+    } | null;
+  }>;
+  payableAmountTaxIncluded?: number | null;
+  actualAmountTotal?: number | null;
+  paymentProgressPercent?: number | null;
 };
 
 type PayablePlan = {
@@ -1800,6 +1816,34 @@ function ProjectReceivablePayablePageContent() {
             remark: actual.remark ?? null,
             remarkNeedsAttention: Boolean(actual.remarkNeedsAttention),
           })),
+          adjustmentRecords: (node.adjustmentRecords ?? []).map((record) => ({
+            id: record.id,
+            type: record.type,
+            amountTaxIncluded:
+              record.amountTaxIncluded === null ||
+              record.amountTaxIncluded === undefined
+                ? null
+                : Number(record.amountTaxIncluded),
+            occurredAt: record.occurredAt ?? null,
+            reason: record.reason ?? null,
+            remark: record.remark ?? null,
+            createdAt: record.createdAt ?? null,
+            createdByEmployee: record.createdByEmployee ?? null,
+          })),
+          payableAmountTaxIncluded:
+            node.payableAmountTaxIncluded === null ||
+            node.payableAmountTaxIncluded === undefined
+              ? null
+              : Number(node.payableAmountTaxIncluded),
+          actualAmountTotal:
+            node.actualAmountTotal === null || node.actualAmountTotal === undefined
+              ? null
+              : Number(node.actualAmountTotal),
+          paymentProgressPercent:
+            node.paymentProgressPercent === null ||
+            node.paymentProgressPercent === undefined
+              ? null
+              : Number(node.paymentProgressPercent),
         })),
         stageOptionMap: new Map(
           (plan.nodes ?? [])

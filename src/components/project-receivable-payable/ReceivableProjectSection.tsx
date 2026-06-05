@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, Empty, Progress, Tag, Tooltip } from "antd";
+import { Card, Empty, Tag, Tooltip } from "antd";
 import ProjectReceivableActivityModal from "@/components/project-detail/ProjectReceivableActivityModal";
 import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import ProjectReceivableNodeTable, {
@@ -131,13 +131,27 @@ export default function ReceivableProjectSection({
     (sum, row) => sum + Number(row.actualAmountTotal ?? 0),
     0,
   );
+  const badDebtAmountTotal = Math.max(
+    0,
+    badDebtWriteOffAmountTotal - badDebtRecoveryAmountTotal,
+  );
+  const completedAmountTotal = actualAmountTotal + badDebtAmountTotal;
+  const actualPercent =
+    expectedAmountTotal > 0 ? (actualAmountTotal / expectedAmountTotal) * 100 : 0;
+  const badDebtPercent =
+    expectedAmountTotal > 0 ? (badDebtAmountTotal / expectedAmountTotal) * 100 : 0;
+  const actualBarPercent = Math.max(0, Math.min(100, actualPercent));
+  const badDebtBarPercent = Math.max(
+    0,
+    Math.min(100 - actualBarPercent, badDebtPercent),
+  );
   const progressPercent =
     expectedAmountTotal > 0
       ? Math.max(
           0,
           Math.min(
             100,
-            Math.round((actualAmountTotal / expectedAmountTotal) * 100),
+            Math.round((completedAmountTotal / expectedAmountTotal) * 100),
           ),
         )
       : 0;
@@ -150,7 +164,9 @@ export default function ReceivableProjectSection({
   const hasBadDebtRecovery = Math.round(badDebtRecoveryAmountTotal * 100) > 0;
   const isDiffIncrease = Math.round(expectedContractDiff * 100) > 0;
   const isFullyCollected =
-    hasReceivableAmount && actualAmountTotal >= expectedAmountTotal;
+    hasReceivableAmount && completedAmountTotal >= expectedAmountTotal;
+  const actualBarColor =
+    progressPercent >= 100 && badDebtAmountTotal <= 0 ? "#52c41a" : "#1677ff";
   const leftBorderColor = !hasReceivableAmount
     ? "var(--ant-colorTextQuaternary, #bfbfbf)"
     : isFullyCollected
@@ -265,7 +281,51 @@ export default function ReceivableProjectSection({
           <div
             style={{ width: 96, display: "inline-flex", alignItems: "center" }}
           >
-            <Progress percent={progressPercent} showInfo={false} size="small" />
+            <Tooltip
+              title={
+                <div style={{ whiteSpace: "nowrap" }}>
+                  <div>实收金额：{formatAmount(actualAmountTotal)}</div>
+                  {hasBadDebtWriteOff || hasBadDebtRecovery ? (
+                    <div>净坏账核销：{formatAmount(badDebtAmountTotal)}</div>
+                  ) : null}
+                  <div>进度口径：{formatAmount(completedAmountTotal)}</div>
+                  <div>预收节点合计：{formatAmount(expectedAmountTotal)}</div>
+                </div>
+              }
+            >
+              <div
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  height: 8,
+                  borderRadius: 999,
+                  overflow: "hidden",
+                  background: "rgba(0,0,0,0.06)",
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: `${actualBarPercent}%`,
+                    background: actualBarColor,
+                    borderRadius: badDebtBarPercent > 0 ? "999px 0 0 999px" : "999px",
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    bottom: 0,
+                    left: `${actualBarPercent}%`,
+                    width: `${badDebtBarPercent}%`,
+                    background: "#BE2E2C",
+                    borderRadius:
+                      actualBarPercent > 0 ? "0 999px 999px 0" : "999px",
+                  }}
+                />
+              </div>
+            </Tooltip>
           </div>
           <span>{progressPercent}%</span>
         </div>

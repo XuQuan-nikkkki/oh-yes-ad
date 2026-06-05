@@ -148,6 +148,19 @@ const getSignedAdjustmentAmount = (row: ProjectPayableNodeRow) =>
     return sum;
   }, 0);
 
+const toCentAmount = (value: number) => Math.round(value * 100);
+
+const isFullyReducedRow = (row: ProjectPayableNodeRow) => {
+  const expectedAmount = Number(row.expectedAmountTaxIncluded ?? 0);
+  const payableAmount = getPayableAmount(row);
+
+  if (!Number.isFinite(expectedAmount) || toCentAmount(expectedAmount) <= 0) {
+    return false;
+  }
+
+  return Number.isFinite(payableAmount) && toCentAmount(payableAmount) === 0;
+};
+
 const getExpectedDateTs = (value: string | null | undefined) => {
   const raw = String(value ?? "").trim();
   if (!raw) return Number.POSITIVE_INFINITY;
@@ -464,13 +477,20 @@ const ProjectPayableNodeTable = ({
         pagination={false}
         toolBarRender={false}
         scroll={{ x: "max-content" }}
-        rowClassName={(record) =>
-          getPaymentProgressPercent(record) === 100
-            ? "payable-node-row-complete"
-            : ""
-        }
+        rowClassName={(record) => {
+          if (isFullyReducedRow(record)) {
+            return "payable-node-row-reduced";
+          }
+          if (getPaymentProgressPercent(record) === 100) {
+            return "payable-node-row-complete";
+          }
+          return "";
+        }}
       />
       <style jsx global>{`
+        .payable-node-row-reduced > td.ant-table-cell {
+          background: rgba(0, 0, 0, 0.02) !important;
+        }
         .payable-node-row-complete > td.ant-table-cell {
           background: #eff6e6 !important;
         }
