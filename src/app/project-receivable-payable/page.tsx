@@ -7,6 +7,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useTransition,
 } from "react";
 import dayjs from "dayjs";
 import {
@@ -18,6 +19,7 @@ import {
   Select,
   Segmented,
   Space,
+  Spin,
   Tag,
   Table,
   Tooltip,
@@ -56,6 +58,10 @@ type TabKey = "summary" | "receivable" | "payable";
 type ReceivableViewMode = "card" | "table";
 type PayableViewMode = "card" | "table";
 type YearFilterValue = "all" | `${number}`;
+type ReceivableInvoiceStatusFilter =
+  | "UNINVOICED"
+  | "PARTIALLY_INVOICED"
+  | "INVOICED";
 type SummarySettlementFilter =
   | "all"
   | "receivable_unfinished"
@@ -64,6 +70,14 @@ type SummarySettlementFilter =
 const TAB_KEYS: TabKey[] = ["summary", "receivable", "payable"];
 const YEAR_FILTER_START = 2024;
 const YEAR_FILTER_ALL: YearFilterValue = "all";
+const RECEIVABLE_INVOICE_STATUS_OPTIONS: Array<{
+  label: string;
+  value: ReceivableInvoiceStatusFilter;
+}> = [
+  { label: "未开票", value: "UNINVOICED" },
+  { label: "部分开票", value: "PARTIALLY_INVOICED" },
+  { label: "已开票", value: "INVOICED" },
+];
 const ALL_PROJECTS_QUERY_KEY = JSON.stringify({
   type: "",
   ownerId: "",
@@ -106,6 +120,7 @@ type ActualNode = {
   id: string;
   actualAmountTaxIncluded?: number | null;
   actualDate?: string | null;
+  invoiceDate?: string | null;
   remark?: string | null;
   remarkNeedsAttention?: boolean;
 };
@@ -250,6 +265,7 @@ const mapReceivableNodeToRow = (
         ? null
         : Number(actual.actualAmountTaxIncluded),
     actualDate: actual.actualDate ?? null,
+    invoiceDate: actual.invoiceDate ?? null,
     remark: actual.remark ?? null,
     remarkNeedsAttention: Boolean(actual.remarkNeedsAttention),
   })),
@@ -381,6 +397,7 @@ type SummaryProjectRow = {
   receivableBadDebtAmountTotal: number;
   receivableActualAmountTotal: number;
   receivableProgressPercent: number;
+  receivableInvoiceStatus: ReceivableInvoiceStatusFilter;
   payableContractAmountTotal: number;
   payableContractDetails: Array<{
     key: string;
@@ -579,6 +596,50 @@ const nodeMatchesYear = (
     (actual) => getDateYear(actual.actualDate) === year,
   );
 };
+const getReceivableActualNodeAmount = (actual: ActualNode) => {
+  if (getDateYear(actual.actualDate) === null) return 0;
+  return Number(actual.actualAmountTaxIncluded ?? 0);
+};
+const getReceivableNodeAmount = (node: ReceivableNode) =>
+  Number(node.receivableAmountTaxIncluded ?? node.expectedAmountTaxIncluded ?? 0);
+const getReceivableNodeInvoiceAmount = (node: ReceivableNode) =>
+  (node.actualNodes ?? []).reduce((sum, actual) => {
+    if (getDateYear(actual.invoiceDate) === null) return sum;
+    return sum + Number(actual.actualAmountTaxIncluded ?? 0);
+  }, 0);
+const getReceivableNodeInvoiceStatus = (
+  node: ReceivableNode,
+): ReceivableInvoiceStatusFilter => {
+  const invoiceAmount = getReceivableNodeInvoiceAmount(node);
+
+  if (toCentAmount(invoiceAmount) <= 0) return "UNINVOICED";
+  if (toCentAmount(invoiceAmount) >= toCentAmount(getReceivableNodeAmount(node))) {
+    return "INVOICED";
+  }
+  return "PARTIALLY_INVOICED";
+};
+const getReceivableProjectInvoiceStatus = (
+  plans: ReceivablePlan[],
+): ReceivableInvoiceStatusFilter => {
+  const nodes = plans.flatMap((plan) => plan.nodes ?? []);
+  if (nodes.length === 0) return "UNINVOICED";
+
+  const nodeStatuses = nodes.map(getReceivableNodeInvoiceStatus);
+  if (nodeStatuses.every((status) => status === "UNINVOICED")) {
+    return "UNINVOICED";
+  }
+  if (nodeStatuses.every((status) => status === "INVOICED")) {
+    return "INVOICED";
+  }
+  return "PARTIALLY_INVOICED";
+};
+const mergeReceivableInvoiceStatus = (
+  currentStatus: ReceivableInvoiceStatusFilter,
+  nextStatus: ReceivableInvoiceStatusFilter,
+): ReceivableInvoiceStatusFilter => {
+  if (currentStatus === nextStatus) return currentStatus;
+  return "PARTIALLY_INVOICED";
+};
 const matchesReceivablePlanByYear = (
   plan: ReceivablePlan,
   year: number | null,
@@ -605,6 +666,8 @@ const getStoredProjectStatusValue = (project: unknown) => {
 };
 function ProjectReceivablePayablePageContent() {
   const [messageApi, contextHolder] = message.useMessage();
+  const [isReceivableFilterPending, startReceivableFilterTransition] =
+    useTransition();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -673,6 +736,8 @@ function ProjectReceivablePayablePageContent() {
   >([]);
   const [receivableProjectStatusFilters, setReceivableProjectStatusFilters] =
     useState<string[]>([]);
+  const [receivableInvoiceStatusFilters, setReceivableInvoiceStatusFilters] =
+    useState<ReceivableInvoiceStatusFilter[]>([]);
   const [receivableYearFilter, setReceivableYearFilter] =
     useState<YearFilterValue>(YEAR_FILTER_ALL);
   const [payableProjectFilterIds, setPayableProjectFilterIds] = useState<
@@ -699,6 +764,8 @@ function ProjectReceivablePayablePageContent() {
   const [summaryOwnerFilters, setSummaryOwnerFilters] = useState<string[]>([]);
   const [summaryProjectStatusFilters, setSummaryProjectStatusFilters] =
     useState<string[]>([]);
+  const [summaryInvoiceStatusFilters, setSummaryInvoiceStatusFilters] =
+    useState<ReceivableInvoiceStatusFilter[]>([]);
   const [summaryYearFilter, setSummaryYearFilter] =
     useState<YearFilterValue>(YEAR_FILTER_ALL);
   const deferredReceivableProjectFilterIds = useDeferredValue(
@@ -712,6 +779,9 @@ function ProjectReceivablePayablePageContent() {
   );
   const deferredReceivableProjectStatusFilters = useDeferredValue(
     receivableProjectStatusFilters,
+  );
+  const deferredReceivableInvoiceStatusFilters = useDeferredValue(
+    receivableInvoiceStatusFilters,
   );
   const deferredReceivableYearFilter = useDeferredValue(receivableYearFilter);
   const deferredPayableProjectFilterIds = useDeferredValue(
@@ -738,6 +808,9 @@ function ProjectReceivablePayablePageContent() {
   const deferredSummaryOwnerFilters = useDeferredValue(summaryOwnerFilters);
   const deferredSummaryProjectStatusFilters = useDeferredValue(
     summaryProjectStatusFilters,
+  );
+  const deferredSummaryInvoiceStatusFilters = useDeferredValue(
+    summaryInvoiceStatusFilters,
   );
   const deferredSummaryYearFilter = useDeferredValue(summaryYearFilter);
   const employeesFull = useEmployeesStore((state) => state.employeesFull);
@@ -1258,16 +1331,31 @@ function ProjectReceivablePayablePageContent() {
               getProjectStatusValue(plan.project?.statusOption),
             )
           : true;
+      const matchesInvoiceStatus =
+        deferredReceivableInvoiceStatusFilters.length > 0
+          ? deferredReceivableInvoiceStatusFilters.includes(
+              getReceivableProjectInvoiceStatus(
+                receivablePlans.filter((item) => {
+                  if (plan.project?.id) {
+                    return item.project?.id === plan.project.id;
+                  }
+                  return item.id === plan.id;
+                }),
+              ),
+            )
+          : true;
       const matchesYear = matchesReceivablePlanByYear(plan, selectedYear);
       return (
         matchesProject &&
         matchesLegalEntity &&
         matchesOwner &&
         matchesProjectStatus &&
+        matchesInvoiceStatus &&
         matchesYear
       );
     });
   }, [
+    deferredReceivableInvoiceStatusFilters,
     deferredReceivableLegalEntityFilterIds,
     deferredReceivableOwnerFilterIds,
     deferredReceivableProjectFilterIds,
@@ -1325,6 +1413,8 @@ function ProjectReceivablePayablePageContent() {
     payablePlans,
     projectsById,
   ]);
+
+  const isReceivableContentLoading = loading || isReceivableFilterPending;
   const payableNodeTableRows = useMemo<PayableNodeTableViewRow[]>(() => {
     const rows: PayableNodeTableViewRow[] = [];
     const sortedPlans = [...filteredPayablePlans].sort((left, right) => {
@@ -1531,17 +1621,27 @@ function ProjectReceivablePayablePageContent() {
         (sum, node) => sum + Number(node.expectedAmountTaxIncluded ?? 0),
         0,
       );
+      const planReceivableAmountTotal = nodes.reduce(
+        (sum, node) =>
+          sum +
+          Number(
+            node.receivableAmountTaxIncluded ??
+              node.expectedAmountTaxIncluded ??
+              0,
+          ),
+        0,
+      );
       const planActualAmountTotal = nodes.reduce((sum, node) => {
         const actualSum = (node.actualNodes ?? []).reduce(
           (actualAcc, actual) =>
-            actualAcc + Number(actual.actualAmountTaxIncluded ?? 0),
+            actualAcc + getReceivableActualNodeAmount(actual),
           0,
         );
         return sum + actualSum;
       }, 0);
       const isPlanFullyCollected =
-        planExpectedAmountTotal > 0 &&
-        planActualAmountTotal >= planExpectedAmountTotal;
+        planReceivableAmountTotal > 0 &&
+        planActualAmountTotal >= planReceivableAmountTotal;
       const hasVendorPayment = Boolean(plan.hasVendorPayment);
 
       const planRows: ReceivableNodeTableViewRow[] = [];
@@ -1577,12 +1677,15 @@ function ProjectReceivablePayablePageContent() {
           ? node.actualNodes
           : [];
         const nodeExpectedAmount = Number(node.expectedAmountTaxIncluded ?? 0);
+        const nodeReceivableAmount = Number(
+          node.receivableAmountTaxIncluded ?? node.expectedAmountTaxIncluded ?? 0,
+        );
         const nodeActualAmount = actualNodes.reduce(
-          (sum, actual) => sum + Number(actual.actualAmountTaxIncluded ?? 0),
+          (sum, actual) => sum + getReceivableActualNodeAmount(actual),
           0,
         );
         const isNodeFullyCollected =
-          nodeExpectedAmount > 0 && nodeActualAmount >= nodeExpectedAmount;
+          nodeReceivableAmount > 0 && nodeActualAmount >= nodeReceivableAmount;
 
         if (actualNodes.length === 0) {
           planRows.push({
@@ -1652,6 +1755,7 @@ function ProjectReceivablePayablePageContent() {
               ? dayjs(node.expectedDate).format("YYYY-MM-DD")
               : "-",
             actualAmountTaxIncluded:
+              getDateYear(actual.actualDate) === null ||
               actual.actualAmountTaxIncluded === null ||
               actual.actualAmountTaxIncluded === undefined
                 ? null
@@ -1679,12 +1783,27 @@ function ProjectReceivablePayablePageContent() {
       (sum, plan) => sum + Number(plan.contractAmount ?? 0),
       0,
     );
+    const receivableAmountTotal = filteredReceivablePlans.reduce(
+      (planSum, plan) =>
+        planSum +
+        (plan.nodes ?? []).reduce(
+          (nodeSum, node) =>
+            nodeSum +
+            Number(
+              node.receivableAmountTaxIncluded ??
+                node.expectedAmountTaxIncluded ??
+                0,
+            ),
+          0,
+        ),
+      0,
+    );
     const actualAmountTotal = filteredReceivablePlans.reduce(
       (planSum, plan) => {
         const nodeActualSum = (plan.nodes ?? []).reduce((nodeSum, node) => {
           const actualNodeSum = (node.actualNodes ?? []).reduce(
             (actualSum, actual) =>
-              actualSum + Number(actual.actualAmountTaxIncluded ?? 0),
+              actualSum + getReceivableActualNodeAmount(actual),
             0,
           );
           return nodeSum + actualNodeSum;
@@ -1695,20 +1814,21 @@ function ProjectReceivablePayablePageContent() {
     );
     const pendingAmountTotal = Math.max(
       0,
-      contractAmountTotal - actualAmountTotal,
+      receivableAmountTotal - actualAmountTotal,
     );
     const actualPercent =
-      contractAmountTotal > 0
-        ? (actualAmountTotal / contractAmountTotal) * 100
+      receivableAmountTotal > 0
+        ? (actualAmountTotal / receivableAmountTotal) * 100
         : 0;
     const pendingPercent =
-      contractAmountTotal > 0
-        ? (pendingAmountTotal / contractAmountTotal) * 100
+      receivableAmountTotal > 0
+        ? (pendingAmountTotal / receivableAmountTotal) * 100
         : 0;
 
     return {
       planCount,
       contractAmountTotal,
+      receivableAmountTotal,
       actualAmountTotal,
       pendingAmountTotal,
       actualPercent,
@@ -2600,13 +2720,18 @@ function ProjectReceivablePayablePageContent() {
           sum +
           (node.actualNodes ?? []).reduce(
             (actualSum, actual) =>
-              actualSum + Number(actual.actualAmountTaxIncluded ?? 0),
+              actualSum + getReceivableActualNodeAmount(actual),
             0,
           ),
         0,
       );
+      const receivableInvoiceStatus = getReceivableProjectInvoiceStatus([plan]);
       if (existing) {
         existing.hasReceivablePlan = true;
+        existing.receivableInvoiceStatus = mergeReceivableInvoiceStatus(
+          existing.receivableInvoiceStatus,
+          receivableInvoiceStatus,
+        );
         existing.receivableContractAmountTotal += receivableContractAmount;
         existing.receivableNodeExpectedAmountTotal +=
           receivableNodeExpectedAmountTotal;
@@ -2664,6 +2789,7 @@ function ProjectReceivablePayablePageContent() {
         receivableBadDebtAmountTotal,
         receivableActualAmountTotal,
         receivableProgressPercent: 0,
+        receivableInvoiceStatus,
         payableContractAmountTotal: 0,
         payableContractDetails: [],
         payableExpectedAmountTotal: 0,
@@ -2775,6 +2901,7 @@ function ProjectReceivablePayablePageContent() {
         receivableBadDebtAmountTotal: 0,
         receivableActualAmountTotal: 0,
         receivableProgressPercent: 0,
+        receivableInvoiceStatus: "UNINVOICED",
         payableContractAmountTotal: payableContractAmount,
         payableContractDetails: [payableContractDetail],
         payableExpectedAmountTotal: payableAdjustedAmountTotal,
@@ -3074,16 +3201,25 @@ function ProjectReceivablePayablePageContent() {
           deferredSummaryProjectStatusFilters.length > 0
             ? deferredSummaryProjectStatusFilters.includes(row.projectStatus)
             : true;
+        const matchesInvoiceStatus =
+          deferredSummaryInvoiceStatusFilters.length > 0
+            ? row.hasReceivablePlan &&
+              deferredSummaryInvoiceStatusFilters.includes(
+                row.receivableInvoiceStatus,
+              )
+            : true;
 
         return (
           matchesSettlementFilter &&
           matchesSigningCompany &&
           matchesProject &&
           matchesOwner &&
-          matchesProjectStatus
+          matchesProjectStatus &&
+          matchesInvoiceStatus
         );
       }),
     [
+      deferredSummaryInvoiceStatusFilters,
       deferredSummaryOwnerFilters,
       deferredSummaryProjectFilters,
       deferredSummaryProjectStatusFilters,
@@ -3879,8 +4015,8 @@ function ProjectReceivablePayablePageContent() {
                 mode="multiple"
                 allowClear
                 showSearch
-                placeholder="选择签约公司"
-                style={{ width: 180 }}
+                placeholder="签约公司"
+                style={{ width: 140 }}
                 options={summarySigningCompanyOptions}
                 value={summarySigningCompanyFilters}
                 optionFilterProp="label"
@@ -3894,8 +4030,8 @@ function ProjectReceivablePayablePageContent() {
                 mode="multiple"
                 allowClear
                 showSearch
-                placeholder="选择项目"
-                style={{ width: 260 }}
+                placeholder="项目"
+                style={{ width: 240 }}
                 options={summaryProjectOptions}
                 value={summaryProjectFilters}
                 optionFilterProp="label"
@@ -3909,8 +4045,8 @@ function ProjectReceivablePayablePageContent() {
                 mode="multiple"
                 allowClear
                 showSearch
-                placeholder="选择项目状态"
-                style={{ width: 160 }}
+                placeholder="项目状态"
+                style={{ width: 120 }}
                 options={projectStatusOptions}
                 value={summaryProjectStatusFilters}
                 maxTagCount={summaryProjectStatusFilters.length > 1 ? 0 : undefined}
@@ -3927,9 +4063,30 @@ function ProjectReceivablePayablePageContent() {
               <Select
                 mode="multiple"
                 allowClear
+                placeholder="开票状态"
+                style={{ width: 120 }}
+                options={RECEIVABLE_INVOICE_STATUS_OPTIONS}
+                value={summaryInvoiceStatusFilters}
+                maxTagCount={
+                  summaryInvoiceStatusFilters.length > 1 ? 0 : undefined
+                }
+                maxTagPlaceholder={() =>
+                  `选中 ${summaryInvoiceStatusFilters.length} 个状态`
+                }
+                onChange={(value) => {
+                  setSummaryInvoiceStatusFilters(
+                    Array.isArray(value)
+                      ? (value as ReceivableInvoiceStatusFilter[])
+                      : [],
+                  );
+                }}
+              />
+              <Select
+                mode="multiple"
+                allowClear
                 showSearch
-                placeholder="选择跟进人"
-                style={{ width: 160 }}
+                placeholder="跟进人"
+                style={{ width: 100 }}
                 options={summaryOwnerOptions}
                 value={summaryOwnerFilters}
                 optionFilterProp="label"
@@ -4039,7 +4196,7 @@ function ProjectReceivablePayablePageContent() {
               flexWrap: "wrap",
             }}
           >
-            <Space size={8}>
+            <Space size={8} wrap>
               <Select
                 allowClear
                 placeholder="选择年度"
@@ -4054,8 +4211,8 @@ function ProjectReceivablePayablePageContent() {
                 mode="multiple"
                 allowClear
                 showSearch
-                placeholder="选择签约公司"
-                style={{ width: 130 }}
+                placeholder="签约公司"
+                style={{ width: 100 }}
                 options={searchableLegalEntityOptions}
                 value={receivableLegalEntityFilterIds}
                 optionFilterProp="label"
@@ -4069,8 +4226,8 @@ function ProjectReceivablePayablePageContent() {
                 mode="multiple"
                 allowClear
                 showSearch
-                placeholder="选择项目"
-                style={{ width: 260 }}
+                placeholder="项目"
+                style={{ width: 240 }}
                 options={searchableProjectOptions}
                 value={receivableProjectFilterIds}
                 optionFilterProp="label"
@@ -4084,8 +4241,8 @@ function ProjectReceivablePayablePageContent() {
                 mode="multiple"
                 allowClear
                 showSearch
-                placeholder="选择项目状态"
-                style={{ width: 160 }}
+                placeholder="项目状态"
+                style={{ width: 120 }}
                 options={projectStatusOptions}
                 value={receivableProjectStatusFilters}
                 maxTagCount={
@@ -4104,9 +4261,30 @@ function ProjectReceivablePayablePageContent() {
               <Select
                 mode="multiple"
                 allowClear
-                showSearch
-                placeholder="选择跟进人"
+                placeholder="开票状态"
                 style={{ width: 140 }}
+                options={RECEIVABLE_INVOICE_STATUS_OPTIONS}
+                value={receivableInvoiceStatusFilters}
+                maxTagCount={
+                  receivableInvoiceStatusFilters.length > 1 ? 0 : undefined
+                }
+                maxTagPlaceholder={() =>
+                  `选中 ${receivableInvoiceStatusFilters.length} 个状态`
+                }
+                onChange={(value) => {
+                  setReceivableInvoiceStatusFilters(
+                    Array.isArray(value)
+                      ? (value as ReceivableInvoiceStatusFilter[])
+                      : [],
+                  );
+                }}
+              />
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                placeholder="跟进人"
+                style={{ width: 100 }}
                 options={searchableOwnerOptions}
                 value={receivableOwnerFilterIds}
                 optionFilterProp="label"
@@ -4139,7 +4317,7 @@ function ProjectReceivablePayablePageContent() {
           {receivableViewMode === "table" ? (
             <Table
               rowKey="key"
-              loading={loading}
+              loading={isReceivableContentLoading}
               bordered
               size="small"
               columns={receivableTableViewColumns}
@@ -4158,6 +4336,7 @@ function ProjectReceivablePayablePageContent() {
                 }}
               >
                 <StatisticCard
+                  loading={isReceivableContentLoading}
                   style={{ background: "#F5F4EE" }}
                   statistic={{
                     title: "项目个数",
@@ -4168,6 +4347,7 @@ function ProjectReceivablePayablePageContent() {
                   }}
                 />
                 <StatisticCard
+                  loading={isReceivableContentLoading}
                   style={{ background: "#F5F4EE" }}
                   statistic={{
                     title: "合同总金额(含税)",
@@ -4178,6 +4358,7 @@ function ProjectReceivablePayablePageContent() {
                   }}
                 />
                 <StatisticCard
+                  loading={isReceivableContentLoading}
                   style={{ background: "#F5F4EE" }}
                   statistic={{
                     title: "实收金额",
@@ -4194,6 +4375,7 @@ function ProjectReceivablePayablePageContent() {
                   }}
                 />
                 <StatisticCard
+                  loading={isReceivableContentLoading}
                   style={{ background: "#F5F4EE" }}
                   statistic={{
                     title: "待收金额",
@@ -4216,44 +4398,46 @@ function ProjectReceivablePayablePageContent() {
                   margin: "0 -24px 24px",
                 }}
               />
-              {receivableProjects.length > 0 ? (
-                receivableProjects.map((project) => (
-                  <ReceivableProjectSection
-                    key={project.projectId}
-                    projectId={project.projectId}
-                    projectName={project.projectName}
-                    signingCompanyName={project.signingCompanyName}
-                    contractAmountTotal={project.contractAmountTotal}
-                    ownerName={project.ownerName}
-                    projectStatusOption={project.projectStatusOption}
-                    onProjectStatusUpdated={fetchData}
-                    primaryPlanId={project.primaryPlanId}
-                    rows={project.rows}
-                    stageOptions={
-                      stageOptions.length > 0
-                        ? stageOptions
-                        : Array.from(project.stageOptionMap.values())
-                    }
-                    canManageProject={hasWriteAccess}
-                    canManageProjectStatus={hasProjectWriteAccess}
-                    canManageBadDebtRecords={canManageBadDebtRecords}
-                    onCreateNode={handleCreateReceivableNode}
-                    onDeleteNode={handleDeleteReceivableNode}
-                    onEditNode={handleEditReceivableNode}
-                    onDragSortNodes={handleDragSortReceivableNodes}
-                    onCollectNode={handleCollectReceivableNode}
-                    onEditActualNode={handleEditReceivableActualNode}
-                    onDeleteActualNode={handleDeleteReceivableActualNode}
-                    onCreateBadDebtRecord={handleCreateReceivableBadDebtRecord}
-                    onEditBadDebtRecord={handleEditReceivableBadDebtRecord}
-                    onDeleteBadDebtRecord={handleDeleteReceivableBadDebtRecord}
-                    onDelayNode={handleDelayReceivableNode}
-                    onHistoryChanged={fetchData}
-                  />
-                ))
-              ) : (
-                <Empty description="暂无项目数据" />
-              )}
+              <Spin spinning={isReceivableContentLoading}>
+                {receivableProjects.length > 0 ? (
+                  receivableProjects.map((project) => (
+                    <ReceivableProjectSection
+                      key={project.projectId}
+                      projectId={project.projectId}
+                      projectName={project.projectName}
+                      signingCompanyName={project.signingCompanyName}
+                      contractAmountTotal={project.contractAmountTotal}
+                      ownerName={project.ownerName}
+                      projectStatusOption={project.projectStatusOption}
+                      onProjectStatusUpdated={fetchData}
+                      primaryPlanId={project.primaryPlanId}
+                      rows={project.rows}
+                      stageOptions={
+                        stageOptions.length > 0
+                          ? stageOptions
+                          : Array.from(project.stageOptionMap.values())
+                      }
+                      canManageProject={hasWriteAccess}
+                      canManageProjectStatus={hasProjectWriteAccess}
+                      canManageBadDebtRecords={canManageBadDebtRecords}
+                      onCreateNode={handleCreateReceivableNode}
+                      onDeleteNode={handleDeleteReceivableNode}
+                      onEditNode={handleEditReceivableNode}
+                      onDragSortNodes={handleDragSortReceivableNodes}
+                      onCollectNode={handleCollectReceivableNode}
+                      onEditActualNode={handleEditReceivableActualNode}
+                      onDeleteActualNode={handleDeleteReceivableActualNode}
+                      onCreateBadDebtRecord={handleCreateReceivableBadDebtRecord}
+                      onEditBadDebtRecord={handleEditReceivableBadDebtRecord}
+                      onDeleteBadDebtRecord={handleDeleteReceivableBadDebtRecord}
+                      onDelayNode={handleDelayReceivableNode}
+                      onHistoryChanged={fetchData}
+                    />
+                  ))
+                ) : (
+                  <Empty description="暂无项目数据" />
+                )}
+              </Spin>
             </>
           )}
         </>

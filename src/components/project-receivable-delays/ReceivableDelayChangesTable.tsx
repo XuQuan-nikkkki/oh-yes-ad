@@ -165,7 +165,7 @@ export default function ReceivableDelayChangesTable({
             ? toDate.startOf("day").diff(fromDate.startOf("day"), "day")
             : 0;
         const changeText =
-          diffDays < 0 ? `提前${Math.abs(diffDays)}天` : `推迟${diffDays}天`;
+          diffDays < 0 ? `提前 ${Math.abs(diffDays)} 天` : `推迟 ${diffDays} 天`;
         const changeColor = diffDays < 0 ? "#387E22" : "#BE2E2C";
         const overdueDays =
           showOverdueHintInToDate && toDate.isValid()

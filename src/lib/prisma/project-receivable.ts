@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 type ReceivableActualNodeLike = {
   actualAmountTaxIncluded?: unknown;
+  actualDate?: unknown;
 };
 
 type ReceivableBadDebtRecordLike = {
@@ -39,9 +40,18 @@ const toAmountNumber = (value: unknown) => {
 
 const toCentAmount = (value: number) => Math.round(value * 100);
 
+const hasActualDate = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return false;
+  const date = value instanceof Date ? value : new Date(String(value));
+  return !Number.isNaN(date.valueOf());
+};
+
 const sumActualAmount = (actualNodes?: ReceivableActualNodeLike[]) =>
   (actualNodes ?? []).reduce(
-    (sum, item) => sum + toAmountNumber(item.actualAmountTaxIncluded),
+    (sum, item) =>
+      hasActualDate(item.actualDate)
+        ? sum + toAmountNumber(item.actualAmountTaxIncluded)
+        : sum,
     0,
   );
 
@@ -95,11 +105,12 @@ export const getReceivableNodeSummary = (node: ReceivableNodeLike) => {
     pendingAmount,
     collectionProgressPercent: getProgressPercent(
       actualAmountTotal,
-      expectedAmountTotal,
+      receivableAmountTaxIncluded,
     ),
     isCollectionAmountMatched:
-      expectedAmountTotal > 0 &&
-      toCentAmount(actualAmountTotal) === toCentAmount(expectedAmountTotal),
+      receivableAmountTaxIncluded > 0 &&
+      toCentAmount(actualAmountTotal) >=
+        toCentAmount(receivableAmountTaxIncluded),
   };
 };
 
@@ -140,11 +151,11 @@ export const getReceivablePlanSummary = (nodes?: ReceivableNodeLike[]) => {
     ),
     collectionProgressPercent: getProgressPercent(
       summary.actualAmountTotal,
-      summary.expectedAmountTotal,
+      summary.receivableAmountTotal,
     ),
     isFullyCollected:
-      summary.expectedAmountTotal > 0 &&
-      summary.actualAmountTotal >= summary.expectedAmountTotal,
+      summary.receivableAmountTotal > 0 &&
+      summary.actualAmountTotal >= summary.receivableAmountTotal,
   };
 };
 

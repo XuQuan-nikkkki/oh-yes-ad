@@ -1,7 +1,7 @@
 "use client";
 
 import type { Dayjs } from "dayjs";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   Col,
   DatePicker,
@@ -44,14 +44,21 @@ const ProjectReceivableActualNodeModal = ({
   maxAmountTaxIncluded,
 }: Props) => {
   const [form] = Form.useForm<ProjectReceivableActualNodeFormValues>();
+  const wasOpenRef = useRef(false);
+  const actualAmountTaxIncluded = Form.useWatch(
+    "actualAmountTaxIncluded",
+    form,
+  );
 
   useEffect(() => {
-    if (!open) return;
-    form.resetFields();
-    form.setFieldsValue({
-      remarkNeedsAttention: false,
-      ...initialValues,
-    });
+    if (open && !wasOpenRef.current) {
+      form.resetFields();
+      form.setFieldsValue({
+        remarkNeedsAttention: false,
+        ...initialValues,
+      });
+    }
+    wasOpenRef.current = open;
   }, [form, initialValues, open]);
 
   const handleSubmit = async () => {
@@ -88,25 +95,25 @@ const ProjectReceivableActualNodeModal = ({
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
-              label="实收金额（含税）"
+              label="收款金额（含税）"
               name="actualAmountTaxIncluded"
               rules={[
-                { required: true, message: "请输入实收金额" },
+                { required: true, message: "请输入收款金额" },
                 {
                   validator: async (_, value: number | undefined) => {
                     if (value === undefined || value === null) return;
                     if (!Number.isFinite(Number(value))) {
-                      throw new Error("请输入有效的实收金额");
+                      throw new Error("请输入有效的收款金额");
                     }
                     if (Number(value) < 0) {
-                      throw new Error("实收金额不能小于0");
+                      throw new Error("收款金额不能小于0");
                     }
                     if (
                       maxAmountTaxIncluded !== undefined &&
                       Number(value) > Number(maxAmountTaxIncluded)
                     ) {
                       throw new Error(
-                        `实收金额不能大于剩余可收金额（${Number(
+                        `收款金额不能大于剩余可收金额（${Number(
                           maxAmountTaxIncluded,
                         ).toLocaleString("zh-CN")}）`,
                       );
@@ -124,7 +131,25 @@ const ProjectReceivableActualNodeModal = ({
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item label="实收日期" name="actualDate">
+            <Form.Item label="开票金额">
+              <InputNumber
+                precision={2}
+                min={0}
+                value={actualAmountTaxIncluded}
+                disabled
+                style={{ width: "100%" }}
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="收款日期" name="actualDate">
+              <DatePicker style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="开票日期" name="invoiceDate">
               <DatePicker style={{ width: "100%" }} />
             </Form.Item>
           </Col>

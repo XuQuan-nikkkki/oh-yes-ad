@@ -59,6 +59,35 @@ const getExpectedDateDelta = (
   return {};
 };
 
+const getCollectionDateDelta = (
+  expectedDate?: string | null,
+  actualDate?: string | null,
+) => {
+  if (!dayjs(expectedDate).isValid() || !dayjs(actualDate).isValid()) {
+    return undefined;
+  }
+
+  const diffDays = dayjs(actualDate)
+    .startOf("day")
+    .diff(dayjs(expectedDate).startOf("day"), "day");
+
+  if (diffDays > 0) {
+    return {
+      text: `延后 ${diffDays} 天`,
+      color: "#BE2E2C",
+    };
+  }
+
+  if (diffDays < 0) {
+    return {
+      text: `提前 ${Math.abs(diffDays)} 天`,
+      color: "#387E22",
+    };
+  }
+
+  return undefined;
+};
+
 const formatMoney = (value?: number | string | null) => {
   const amount =
     typeof value === "number" ? value : Number(String(value ?? "").trim());
@@ -75,9 +104,10 @@ const getStageText = (row: ProjectReceivableActivityRow) =>
 const activityTypeSortOrder: Record<ActivityTableRow["eventType"], number> = {
   EXPECTED_DATE_CHANGE: 0,
   RECEIVABLE_NODE: 1,
-  COLLECTION: 2,
-  BAD_DEBT_RECOVERY: 3,
-  BAD_DEBT_WRITE_OFF: 3,
+  INVOICE: 2,
+  COLLECTION: 3,
+  BAD_DEBT_RECOVERY: 4,
+  BAD_DEBT_WRITE_OFF: 4,
 };
 
 export const buildActivityRows = (rows: ProjectReceivableActivityRow[]) => {
@@ -111,24 +141,51 @@ export const buildActivityRows = (rows: ProjectReceivableActivityRow[]) => {
       const amount = Number(actualNode.actualAmountTaxIncluded ?? 0);
       const remark = String(actualNode.remark ?? "").trim();
 
-      result.push({
-        id: `actual-${actualNode.id}`,
-        eventAtText: formatDate(actualNode.actualDate),
-        eventAtValue: getTimeValue(actualNode.actualDate),
-        stageOptionId: row.stageOptionId,
-        stageText,
-        stageColor,
-        eventType: "COLLECTION",
-        detailText: remark ? `备注：${remark}` : "-",
-        detailIsAlert: Boolean(actualNode.remarkNeedsAttention),
-        amountText: `+${formatMoney(amount)}`,
-        amountColor: "#1677ff",
-        operatorName: actualNode.createdByEmployee?.name?.trim() || "",
-        operationAtText: formatDateTime(actualNode.createdAt),
-        operationAtValue: getDateTimeValue(actualNode.createdAt),
-        sourceRow: row,
-        sourceActualNode: actualNode,
-      });
+      if (dayjs(actualNode.invoiceDate).isValid()) {
+        result.push({
+          id: `invoice-${actualNode.id}`,
+          eventAtText: formatDate(actualNode.invoiceDate),
+          eventAtValue: getTimeValue(actualNode.invoiceDate),
+          stageOptionId: row.stageOptionId,
+          stageText,
+          stageColor,
+          eventType: "INVOICE",
+          detailText: remark ? `备注：${remark}` : "-",
+          detailIsAlert: Boolean(actualNode.remarkNeedsAttention),
+          amountText: formatMoney(amount),
+          amountColor: "#13a8a8",
+          operatorName: actualNode.createdByEmployee?.name?.trim() || "",
+          operationAtText: formatDateTime(actualNode.createdAt),
+          operationAtValue: getDateTimeValue(actualNode.createdAt),
+          sourceRow: row,
+          sourceActualNode: actualNode,
+        });
+      }
+
+      if (dayjs(actualNode.actualDate).isValid()) {
+        result.push({
+          id: `actual-${actualNode.id}`,
+          eventAtText: formatDate(actualNode.actualDate),
+          eventAtValue: getTimeValue(actualNode.actualDate),
+          stageOptionId: row.stageOptionId,
+          stageText,
+          stageColor,
+          eventType: "COLLECTION",
+          detailText: remark ? `备注：${remark}` : "-",
+          detailIsAlert: Boolean(actualNode.remarkNeedsAttention),
+          collectionDateDelta: getCollectionDateDelta(
+            row.expectedDate,
+            actualNode.actualDate,
+          ),
+          amountText: `+${formatMoney(amount)}`,
+          amountColor: "#1677ff",
+          operatorName: actualNode.createdByEmployee?.name?.trim() || "",
+          operationAtText: formatDateTime(actualNode.createdAt),
+          operationAtValue: getDateTimeValue(actualNode.createdAt),
+          sourceRow: row,
+          sourceActualNode: actualNode,
+        });
+      }
     });
 
     (row.expectedDateHistories ?? []).forEach((history) => {
@@ -200,6 +257,13 @@ export const buildActivityRows = (rows: ProjectReceivableActivityRow[]) => {
   });
 
   return result.sort((left, right) => {
+    const leftIsReceivableNode = left.eventType === "RECEIVABLE_NODE";
+    const rightIsReceivableNode = right.eventType === "RECEIVABLE_NODE";
+
+    if (leftIsReceivableNode !== rightIsReceivableNode) {
+      return leftIsReceivableNode ? -1 : 1;
+    }
+
     if (left.eventAtValue !== right.eventAtValue) {
       return left.eventAtValue - right.eventAtValue;
     }

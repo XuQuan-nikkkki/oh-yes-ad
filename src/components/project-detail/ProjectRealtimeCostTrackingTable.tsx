@@ -65,6 +65,7 @@ type ReceivablePlan = {
   nodes?: Array<{
     actualNodes?: Array<{
       actualAmountTaxIncluded?: number | string | null;
+      actualDate?: string | null;
     }>;
   }>;
 };
@@ -240,7 +241,9 @@ const getReceivablePlanActualAmount = (plan: ReceivablePlan) =>
       nodeSum +
       (node.actualNodes ?? []).reduce(
         (actualSum, actual) =>
-          actualSum + toNumber(actual.actualAmountTaxIncluded),
+          actual.actualDate
+            ? actualSum + toNumber(actual.actualAmountTaxIncluded)
+            : actualSum,
         0,
       ),
     0,

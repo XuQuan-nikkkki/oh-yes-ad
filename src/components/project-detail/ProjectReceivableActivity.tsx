@@ -6,6 +6,7 @@ import {
   DeleteOutlined,
   DollarOutlined,
   EditOutlined,
+  FileDoneOutlined,
   MinusOutlined,
   PlusOutlined,
   WalletOutlined,
@@ -80,6 +81,13 @@ const getEventTypeConfig = (eventType: ActivityType) => {
       icon: <DollarOutlined />,
       color: "#1677ff",
       text: "收款",
+    };
+  }
+  if (eventType === "INVOICE") {
+    return {
+      icon: <FileDoneOutlined />,
+      color: "#13a8a8",
+      text: "开票",
     };
   }
   if (eventType === "EXPECTED_DATE_CHANGE") {
@@ -192,7 +200,9 @@ export default function ProjectReceivableActivity({
       return selectedEventFilters.some((filter) => {
         if (filter === "COLLECTION") {
           return (
-            row.eventType === "RECEIVABLE_NODE" || row.eventType === "COLLECTION"
+            row.eventType === "RECEIVABLE_NODE" ||
+            row.eventType === "INVOICE" ||
+            row.eventType === "COLLECTION"
           );
         }
 
@@ -274,34 +284,51 @@ export default function ProjectReceivableActivity({
         dataIndex: "eventType",
         width: 160,
         filters: [
-          { text: "预收&实收", value: "COLLECTION" },
+          { text: "预收/开票/收款", value: "COLLECTION" },
           { text: "计划收款日变更", value: "EXPECTED_DATE_CHANGE" },
           { text: "坏账记录", value: "BAD_DEBT" },
         ],
         filterMultiple: true,
         filteredValue:
           selectedEventFilters.length > 0 ? selectedEventFilters : null,
-        render: (value: ActivityType) => {
+        render: (value: ActivityType, record) => {
           const config = getEventTypeConfig(value);
 
           return (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span
-                style={{
-                  width: 16,
-                  height: 16,
-                  borderRadius: "50%",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#fff",
-                  background: config.color,
-                  fontSize: 9,
-                }}
-              >
-                {config.icon}
-              </span>
-              <span style={{ color: config.color, fontWeight: 600 }}>{config.text}</span>
+            <div>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: "50%",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#fff",
+                    background: config.color,
+                    fontSize: 9,
+                  }}
+                >
+                  {config.icon}
+                </span>
+                <span style={{ color: config.color, fontWeight: 600 }}>
+                  {config.text}
+                </span>
+              </div>
+              {record.collectionDateDelta ? (
+                <div
+                  style={{
+                    color: record.collectionDateDelta.color,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    lineHeight: 1.4,
+                    marginTop: 2,
+                  }}
+                >
+                  {record.collectionDateDelta.text}
+                </div>
+              ) : null}
             </div>
           );
         },
@@ -389,23 +416,6 @@ export default function ProjectReceivableActivity({
         ),
       },
       {
-        title: "操作信息",
-        dataIndex: "operatorName",
-        width: 140,
-        render: (_value: string, record) => (
-          <div
-            style={{
-              fontSize: 13,
-              lineHeight: 1.4,
-              color: "rgba(0,0,0,0.65)",
-            }}
-          >
-            {record.operatorName ? <div>{record.operatorName}</div> : null}
-            {record.operationAtText ? <div>{record.operationAtText}</div> : null}
-          </div>
-        ),
-      },
-      {
         title: "操作",
         key: "actions",
         width: 120,
@@ -428,7 +438,10 @@ export default function ProjectReceivableActivity({
                     setEditingNodeRow(record.sourceRow);
                     return;
                   }
-                  if (record.eventType === "COLLECTION") {
+                  if (
+                    record.eventType === "INVOICE" ||
+                    record.eventType === "COLLECTION"
+                  ) {
                     setEditingActualRow(record.sourceActualNode ?? null);
                     return;
                   }
@@ -468,7 +481,11 @@ export default function ProjectReceivableActivity({
                       await onDeleteNode(record.sourceRow.id);
                       return;
                     }
-                    if (record.eventType === "COLLECTION" && record.sourceActualNode) {
+                    if (
+                      (record.eventType === "INVOICE" ||
+                        record.eventType === "COLLECTION") &&
+                      record.sourceActualNode
+                    ) {
                       await onDeleteActualNode?.(record.sourceActualNode.id);
                       return;
                     }
@@ -566,7 +583,17 @@ export default function ProjectReceivableActivity({
         pagination={false}
         size="small"
         scroll={{ x: "max-content" }}
+        rowClassName={(record) =>
+          record.eventType === "RECEIVABLE_NODE"
+            ? "project-receivable-activity-node-row"
+            : ""
+        }
       />
+      <style jsx global>{`
+        .project-receivable-activity-node-row > td.ant-table-cell {
+          background: rgba(114, 46, 209, 0.08) !important;
+        }
+      `}</style>
       <ProjectReceivableNodeModal
         open={Boolean(editingNodeRow)}
         title="编辑收款节点"
@@ -604,7 +631,7 @@ export default function ProjectReceivableActivity({
       />
       <ProjectReceivableActualNodeModal
         open={Boolean(editingActualRow)}
-        title="修改实收"
+        title="编辑收款记录"
         loading={actualSubmitting}
         onCancel={() => setEditingActualRow(null)}
         onSubmit={async (values) => {
@@ -624,6 +651,9 @@ export default function ProjectReceivableActivity({
                   editingActualRow.actualAmountTaxIncluded ?? undefined,
                 actualDate: editingActualRow.actualDate
                   ? dayjs(editingActualRow.actualDate)
+                  : undefined,
+                invoiceDate: editingActualRow.invoiceDate
+                  ? dayjs(editingActualRow.invoiceDate)
                   : undefined,
                 remark: editingActualRow.remark ?? undefined,
                 remarkNeedsAttention: Boolean(editingActualRow.remarkNeedsAttention),

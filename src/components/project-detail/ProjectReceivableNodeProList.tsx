@@ -26,11 +26,15 @@ type Props = {
 
 const getActualAmountSum = (row: ProjectReceivableNodeRow) => {
   const actualNodes = (row as ProjectReceivableNodeRow & {
-    actualNodes?: Array<{ actualAmountTaxIncluded?: number | null }>;
+    actualNodes?: Array<{
+      actualAmountTaxIncluded?: number | null;
+      actualDate?: string | null;
+    }>;
   }).actualNodes;
 
   if (Array.isArray(actualNodes) && actualNodes.length > 0) {
     return actualNodes.reduce((sum, item) => {
+      if (!item.actualDate) return sum;
       const amount = Number(item.actualAmountTaxIncluded ?? 0);
       return Number.isFinite(amount) ? sum + amount : sum;
     }, 0);

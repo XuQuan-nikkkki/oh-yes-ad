@@ -36,6 +36,7 @@ type LegalEntityOption = {
 type ActualNode = {
   id: string;
   actualAmountTaxIncluded?: number | null;
+  actualDate?: string | null;
 };
 type ReceivableNode = {
   id: string;
@@ -267,10 +268,10 @@ function ProjectReceivableDelaysPageContent() {
       const projectId = plan.project?.id ?? null;
       return (plan.nodes ?? []).flatMap((node) => {
         const expectedAmount = Number(node.expectedAmountTaxIncluded ?? 0);
-        const actualAmount = (node.actualNodes ?? []).reduce(
-          (sum, actual) => sum + Number(actual.actualAmountTaxIncluded ?? 0),
-          0,
-        );
+        const actualAmount = (node.actualNodes ?? []).reduce((sum, actual) => {
+          if (!dayjs(actual.actualDate).isValid()) return sum;
+          return sum + Number(actual.actualAmountTaxIncluded ?? 0);
+        }, 0);
         const isCompleted = actualAmount >= expectedAmount;
         if (isCompleted) return [];
         const expectedDateDayjs = dayjs(String(node.expectedDate ?? ""));
@@ -381,10 +382,10 @@ function ProjectReceivableDelaysPageContent() {
         if (histories.length === 0) continue;
 
         const expectedAmount = Number(node.expectedAmountTaxIncluded ?? 0);
-        const actualAmount = (node.actualNodes ?? []).reduce(
-          (sum, actual) => sum + Number(actual.actualAmountTaxIncluded ?? 0),
-          0,
-        );
+        const actualAmount = (node.actualNodes ?? []).reduce((sum, actual) => {
+          if (!dayjs(actual.actualDate).isValid()) return sum;
+          return sum + Number(actual.actualAmountTaxIncluded ?? 0);
+        }, 0);
         if (actualAmount >= expectedAmount) continue;
 
         const sortedValidHistories = histories

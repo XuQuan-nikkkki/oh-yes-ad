@@ -23,6 +23,7 @@ import {
   Popconfirm,
   Row,
   Space,
+  Tag,
   Typography,
 } from "antd";
 import type { Dayjs } from "dayjs";
@@ -71,6 +72,7 @@ export type ProjectReceivableNodeRow = {
     id: string;
     actualAmountTaxIncluded?: number | null;
     actualDate?: string | null;
+    invoiceDate?: string | null;
     remark?: string | null;
     remarkNeedsAttention?: boolean;
   }>;
@@ -195,6 +197,52 @@ const getExpectedDateTs = (value: string | null | undefined) => {
   return parsed.valueOf();
 };
 
+type InvoiceStatus = {
+  color: string;
+  text: "未开票" | "部分开票" | "已开票";
+};
+
+const getActualReceivableAmount = (row: ProjectReceivableNodeRow) => {
+  const receivableAmount = toAmountNumber(row.receivableAmountTaxIncluded);
+  if (receivableAmount !== null) return Math.max(receivableAmount, 0);
+
+  const expectedAmount = toAmountNumber(row.expectedAmountTaxIncluded) ?? 0;
+  const writeOffAmount = toAmountNumber(row.badDebtWriteOffAmountTotal) ?? 0;
+  const recoveryAmount = toAmountNumber(row.badDebtRecoveryAmountTotal) ?? 0;
+  return Math.max(expectedAmount - writeOffAmount + recoveryAmount, 0);
+};
+
+const getRemainingReceivableAmount = (row: ProjectReceivableNodeRow) =>
+  Math.max(
+    getActualReceivableAmount(row) - (toAmountNumber(row.actualAmountTotal) ?? 0),
+    0,
+  );
+
+const getInvoiceAmountTotal = (row: ProjectReceivableNodeRow) =>
+  (row.actualNodes ?? []).reduce((sum, actualNode) => {
+    if (!actualNode.invoiceDate) return sum;
+    return sum + (toAmountNumber(actualNode.actualAmountTaxIncluded) ?? 0);
+  }, 0);
+
+const getInvoiceStatus = (row: ProjectReceivableNodeRow): InvoiceStatus => {
+  const actualNodes = row.actualNodes ?? [];
+  const invoiceAmountTotal = getInvoiceAmountTotal(row);
+  const actualReceivableAmount = getActualReceivableAmount(row);
+
+  if (
+    actualNodes.length === 0 ||
+    toCentAmount(invoiceAmountTotal) <= 0
+  ) {
+    return { text: "未开票", color: "default" };
+  }
+
+  if (toCentAmount(invoiceAmountTotal) < toCentAmount(actualReceivableAmount)) {
+    return { text: "部分开票", color: "processing" };
+  }
+
+  return { text: "已开票", color: "success" };
+};
+
 const isFullyBadDebtRow = (row: ProjectReceivableNodeRow) => {
   const expectedAmount = toAmountNumber(row.expectedAmountTaxIncluded) ?? 0;
   const actualAmount = toAmountNumber(row.actualAmountTotal) ?? 0;
@@ -207,6 +255,16 @@ const isFullyBadDebtRow = (row: ProjectReceivableNodeRow) => {
   return (
     toCentAmount(actualAmount) <= 0 &&
     toCentAmount(badDebtAmount) >= toCentAmount(expectedAmount)
+  );
+};
+
+const isCollectionAmountMatched = (row: ProjectReceivableNodeRow) => {
+  const actualReceivableAmount = getActualReceivableAmount(row);
+  const actualAmount = toAmountNumber(row.actualAmountTotal) ?? 0;
+
+  return (
+    toCentAmount(actualReceivableAmount) > 0 &&
+    toCentAmount(actualAmount) >= toCentAmount(actualReceivableAmount)
   );
 };
 
@@ -350,7 +408,7 @@ const ProjectReceivableNodeTable = ({
       {
         title: "收款进度",
         dataIndex: "collectionProgress",
-        width: 220,
+        width: 180,
         editable: false,
         render: (_dom, row) => {
           const actualAmount = toAmountNumber(row.actualAmountTotal) ?? 0;
@@ -464,7 +522,7 @@ const ProjectReceivableNodeTable = ({
         title: "预收日期",
         dataIndex: "expectedDate",
         valueType: "date",
-        width: 160,
+        width: 120,
         render: (_dom, row) => {
           const dateText = row.expectedDate
             ? dayjs(row.expectedDate).format("YYYY-MM-DD")
@@ -486,6 +544,34 @@ const ProjectReceivableNodeTable = ({
                   }}
                 >
                   {`已变动${delayCount}次`}
+                </div>
+              ) : null}
+            </div>
+          );
+        },
+      },
+      {
+        title: "开票状态",
+        dataIndex: "invoiceStatus",
+        width: 110,
+        editable: false,
+        render: (_dom, row) => {
+          const invoiceStatus = getInvoiceStatus(row);
+          const invoiceAmountTotal = getInvoiceAmountTotal(row);
+
+          return (
+            <div style={{ lineHeight: 1.3 }}>
+              <Tag color={invoiceStatus.color}>{invoiceStatus.text}</Tag>
+              {invoiceStatus.text !== "未开票" ? (
+                <div
+                  style={{
+                    marginTop: 2,
+                    color: "#1677ff",
+                    fontSize: 11,
+                    fontWeight: 600,
+                  }}
+                >
+                  {`已开票 ${formatAmount(invoiceAmountTotal)}`}
                 </div>
               ) : null}
             </div>
@@ -540,7 +626,7 @@ const ProjectReceivableNodeTable = ({
                   items: [
                     {
                       key: "collect",
-                      label: "新增收款",
+                      label: "新增收款记录",
                       icon: <MoneyCollectOutlined />,
                       disabled: !canManageProject || isCollectionCompleted,
                     },
@@ -667,7 +753,7 @@ const ProjectReceivableNodeTable = ({
             if (isFullyBadDebtRow(record)) {
               return "receivable-node-row-bad-debt";
             }
-            if (Boolean(record.isCollectionAmountMatched)) {
+            if (isCollectionAmountMatched(record)) {
               return "receivable-node-row-complete";
             }
             return "";
@@ -701,11 +787,7 @@ const ProjectReceivableNodeTable = ({
         maxAmountTaxIncluded={
           editingActualNode || !currentCollectRow
             ? undefined
-            : Math.max(
-                Number(currentCollectRow.expectedAmountTaxIncluded ?? 0) -
-                  (toAmountNumber(currentCollectRow.actualAmountTotal) ?? 0),
-                0,
-              )
+            : getRemainingReceivableAmount(currentCollectRow)
         }
         onCancel={() => {
           setActualModalOpen(false);
@@ -728,7 +810,7 @@ const ProjectReceivableNodeTable = ({
           setCurrentCollectRow(null);
           setEditingActualNode(null);
         }}
-        title={editingActualNode ? "修改实收" : "新增实收"}
+        title={editingActualNode ? "编辑收款记录" : "新增收款记录"}
         initialValues={
           editingActualNode
             ? {
@@ -736,6 +818,9 @@ const ProjectReceivableNodeTable = ({
                   editingActualNode.actualAmountTaxIncluded ?? undefined,
                 actualDate: editingActualNode.actualDate
                   ? dayjs(editingActualNode.actualDate)
+                  : undefined,
+                invoiceDate: editingActualNode.invoiceDate
+                  ? dayjs(editingActualNode.invoiceDate)
                   : undefined,
                 remark: editingActualNode.remark ?? undefined,
                 remarkNeedsAttention: Boolean(
@@ -745,15 +830,7 @@ const ProjectReceivableNodeTable = ({
             : currentCollectRow
               ? {
                   actualAmountTaxIncluded:
-                    Math.max(
-                      Number(currentCollectRow.expectedAmountTaxIncluded ?? 0) -
-                        (toAmountNumber(currentCollectRow.actualAmountTotal) ??
-                          0),
-                      0,
-                    ),
-                  actualDate: currentCollectRow.expectedDate
-                    ? dayjs(currentCollectRow.expectedDate)
-                    : undefined,
+                    getRemainingReceivableAmount(currentCollectRow),
                 }
               : undefined
         }

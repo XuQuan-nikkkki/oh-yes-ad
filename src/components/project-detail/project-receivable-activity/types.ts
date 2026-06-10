@@ -16,6 +16,7 @@ export type ProjectReceivableActivityRow = {
     id: string;
     actualAmountTaxIncluded?: number | null;
     actualDate?: string | null;
+    invoiceDate?: string | null;
     createdAt?: string;
     remark?: string | null;
     remarkNeedsAttention?: boolean;
@@ -54,6 +55,7 @@ export type ProjectReceivableActivityRow = {
 
 export type ActivityType =
   | "RECEIVABLE_NODE"
+  | "INVOICE"
   | "COLLECTION"
   | "EXPECTED_DATE_CHANGE"
   | "BAD_DEBT_RECOVERY"
@@ -69,6 +71,10 @@ export type ActivityTableRow = {
   eventType: ActivityType;
   detailText: string;
   detailIsAlert?: boolean;
+  collectionDateDelta?: {
+    text: string;
+    color: string;
+  };
   expectedDateChangeDetail?: {
     fromDate: string;
     toDate: string;

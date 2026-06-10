@@ -94,6 +94,7 @@ type ReceivableNode = {
     id: string;
     actualAmountTaxIncluded: number;
     actualDate: string;
+    invoiceDate?: string | null;
     remark?: string | null;
     remarkNeedsAttention: boolean;
   }>;
