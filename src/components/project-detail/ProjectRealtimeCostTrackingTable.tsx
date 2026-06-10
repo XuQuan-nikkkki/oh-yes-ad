@@ -579,7 +579,7 @@ const ProjectRealtimeCostTrackingTable = ({
     return roleCodes.includes("ADMIN") || roleCodes.includes("FINANCE");
   }, [currentUser]);
   const [loading, setLoading] = useState(true);
-  const [clientContract, setClientContract] = useState<ClientContract | null>(
+  const [, setClientContract] = useState<ClientContract | null>(
     null,
   );
   const [financialStructure, setFinancialStructure] =
@@ -1690,23 +1690,27 @@ const ProjectRealtimeCostTrackingTable = ({
     ],
     [
       agencyFee,
+      agencyFeeRemarkText,
       bonusRatio,
       laborCost,
       executionCost,
       executionRemarkText,
       effectiveRentCost,
       finalProfit,
-      financialStructure?.agencyFeeRate,
       income,
+      incomeRemarkText,
       laborRemarkText,
       middleOfficeCost,
+      middleOfficeRemarkText,
       netIncome,
       outsourceCost,
+      outsourceRemarkText,
       projectBonus,
       projectLevel,
       projectProfit,
       rentRemarkText,
       tax,
+      taxRemarkText,
       totalCost,
       totalCostRatio,
       projectFundAmount,
@@ -1915,20 +1919,23 @@ const ProjectRealtimeCostTrackingTable = ({
     effectiveRentCost,
     finalProfit,
     income,
+    incomeRemarkText,
+    isManualCostMode,
     laborCost,
     laborRemarkText,
     middleOfficeCost,
     netIncome,
     outsourceCost,
+    outsourceRemarkText,
     projectBonus,
     projectLevel,
     projectProfit,
     rentRemarkText,
     tax,
+    taxRemarkText,
     totalCost,
     projectFundAmount,
     middleOfficeRemarkText,
-    financialStructure?.agencyFeeRate,
   ]);
 
   const breakdownColumns = useMemo<ColumnsType<BreakdownRow>>(() => {

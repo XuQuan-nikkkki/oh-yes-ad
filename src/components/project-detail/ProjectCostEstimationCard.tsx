@@ -203,12 +203,7 @@ const ProjectCostEstimationCard = ({
     const budget = parseBudgetValue(latestCostEstimation?.clientBudget);
     if (budget === null) return null;
     return ((latestCostEstimation?.agencyFeeRate ?? 0) / 100) * budget;
-  }, [
-    hasAgencyFeeRate,
-    latestCostEstimation?.agencyFeeRate,
-    latestCostEstimation?.clientBudget,
-    latestCostEstimation?.estimatedAgencyFee,
-  ]);
+  }, [hasAgencyFeeRate, latestCostEstimation]);
 
   const actionsNode = canManageByPmRole ? (
     hasEstimation ? (

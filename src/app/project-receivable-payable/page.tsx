@@ -1618,10 +1618,6 @@ function ProjectReceivablePayablePageContent() {
         "remark" in plan && typeof plan.remark === "string"
           ? plan.remark.trim() || "-"
           : "-";
-      const planExpectedAmountTotal = nodes.reduce(
-        (sum, node) => sum + Number(node.expectedAmountTaxIncluded ?? 0),
-        0,
-      );
       const planReceivableAmountTotal = nodes.reduce(
         (sum, node) =>
           sum +
@@ -1677,7 +1673,6 @@ function ProjectReceivablePayablePageContent() {
         const actualNodes = Array.isArray(node.actualNodes)
           ? node.actualNodes
           : [];
-        const nodeExpectedAmount = Number(node.expectedAmountTaxIncluded ?? 0);
         const nodeReceivableAmount = Number(
           node.receivableAmountTaxIncluded ?? node.expectedAmountTaxIncluded ?? 0,
         );
@@ -4304,11 +4299,13 @@ function ProjectReceivablePayablePageContent() {
                   `选中 ${receivableInvoiceStatusFilters.length} 个状态`
                 }
                 onChange={(value) => {
-                  setReceivableInvoiceStatusFilters(
-                    Array.isArray(value)
-                      ? (value as ReceivableInvoiceStatusFilter[])
-                      : [],
-                  );
+                  startReceivableFilterTransition(() => {
+                    setReceivableInvoiceStatusFilters(
+                      Array.isArray(value)
+                        ? (value as ReceivableInvoiceStatusFilter[])
+                        : [],
+                    );
+                  });
                 }}
               />
               <Select

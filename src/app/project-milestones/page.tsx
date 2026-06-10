@@ -494,11 +494,6 @@ function ProjectMilestonesPageContent() {
     [weekBoundaryAfterIndexes],
   );
 
-  const todayColumnIndex = useMemo(
-    () => timelineDayMeta.findIndex((meta) => meta.isToday),
-    [timelineDayMeta],
-  );
-
   const timelineProjects = useMemo(() => {
     const today = dayjs().startOf("day");
     const projectMap = new Map<

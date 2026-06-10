@@ -599,6 +599,7 @@ const ProjectFinancialStructureModal = ({
       })),
     };
   }, [
+    contractAmount,
     executionCostItemDefinitions,
     estimation,
     estimatedLaborCost,

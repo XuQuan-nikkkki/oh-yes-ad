@@ -243,9 +243,6 @@ const EmployeeFormModal = ({
   const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const systemSettings = useSystemSettingsStore((state) => state.records);
-  const fetchSystemSettings = useSystemSettingsStore(
-    (state) => state.fetchSystemSettings,
-  );
 
   const defaultWorkstationCost = useMemo(
     () =>
@@ -383,7 +380,7 @@ const EmployeeFormModal = ({
       bankName: initialValues?.bankName ?? undefined,
       bankBranch: initialValues?.bankBranch ?? undefined,
     }),
-    [defaultRoleIds, defaultUtilityCost, defaultWorkstationCost, initialValues],
+    [defaultRoleIds, initialValues],
   );
 
   useEffect(() => {

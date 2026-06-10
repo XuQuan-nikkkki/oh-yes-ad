@@ -137,11 +137,6 @@ const formatClientBudgetText = (value: unknown) => {
 };
 
 const formatPercent = (value: number) => `${value.toFixed(2)}%`;
-const formatMoneyText = (value: unknown) =>
-  `${roundMoney(value).toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}元`;
 
 const sumBudgetAmountCents = (items?: PricingCostItemFormRow[]) =>
   (items ?? []).reduce((sum, item) => sum + toMoneyCents(item.budgetAmount), 0);

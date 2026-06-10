@@ -20,7 +20,6 @@ import {
   Form,
   Input,
   Modal,
-  Popconfirm,
   Row,
   Space,
   Tag,
@@ -279,11 +278,9 @@ const ProjectReceivableNodeTable = ({
   onEditNode,
   onCollectNode,
   onEditActualNode,
-  onDeleteActualNode,
   onDelayNode,
   onCreateBadDebtRecord,
   onEditBadDebtRecord,
-  onDeleteBadDebtRecord,
   onHistoryChanged,
   onViewDetails,
 }: Props) => {
@@ -408,7 +405,7 @@ const ProjectReceivableNodeTable = ({
       {
         title: "收款进度",
         dataIndex: "collectionProgress",
-        width: 180,
+        width: 220,
         editable: false,
         render: (_dom, row) => {
           const actualAmount = toAmountNumber(row.actualAmountTotal) ?? 0;
@@ -420,16 +417,10 @@ const ProjectReceivableNodeTable = ({
             toAmountNumber(row.badDebtRecoveryAmountTotal) ?? 0;
           const badDebtAmount = writeOffAmount - recoveryAmount;
           const hasBadDebtAmount = badDebtAmount !== 0;
-          const receivableBalance = Math.max(
-            expectedAmount - actualAmount - badDebtAmount,
-            0,
-          );
           const actualPercent =
             expectedAmount > 0 ? (actualAmount / expectedAmount) * 100 : 0;
           const badDebtPercent =
             expectedAmount > 0 ? (badDebtAmount / expectedAmount) * 100 : 0;
-          const receivablePercent =
-            expectedAmount > 0 ? (receivableBalance / expectedAmount) * 100 : 0;
           const actualBarPercent = getBarPercent(actualPercent);
           const badDebtBarPercent = getBarPercent(
             Math.min(100 - actualBarPercent, badDebtPercent),
@@ -522,7 +513,7 @@ const ProjectReceivableNodeTable = ({
         title: "预收日期",
         dataIndex: "expectedDate",
         valueType: "date",
-        width: 120,
+        width: 110,
         render: (_dom, row) => {
           const dateText = row.expectedDate
             ? dayjs(row.expectedDate).format("YYYY-MM-DD")
@@ -553,7 +544,7 @@ const ProjectReceivableNodeTable = ({
       {
         title: "开票状态",
         dataIndex: "invoiceStatus",
-        width: 110,
+        width: 120,
         editable: false,
         render: (_dom, row) => {
           const invoiceStatus = getInvoiceStatus(row);

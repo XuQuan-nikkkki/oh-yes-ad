@@ -10,7 +10,6 @@ import {
 } from "react";
 import {
   Button,
-  Card,
   Descriptions,
   Empty,
   message,
@@ -192,7 +191,6 @@ const ProjectReceivableInfo = forwardRef<
       planModalOpen: externalPlanModalOpen,
       planModalMode: externalPlanModalMode,
       onPlanModalOpenChange,
-      onPlanModalModeChange,
       onCurrentPlanChange,
       nodeModalOpen: externalNodeModalOpen,
       onNodeModalOpenChange,
@@ -202,9 +200,6 @@ const ProjectReceivableInfo = forwardRef<
     const [messageApi, contextHolder] = message.useMessage();
     const [plans, setPlans] = useState<ReceivablePlan[]>([]);
     const [internalPlanModalOpen, setInternalPlanModalOpen] = useState(false);
-    const [internalPlanModalMode, setInternalPlanModalMode] = useState<
-      "create" | "edit"
-    >("create");
     const [internalNodeModalOpen, setInternalNodeModalOpen] = useState(false);
     const [contractModalOpen, setContractModalOpen] = useState(false);
     const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
@@ -218,11 +213,7 @@ const ProjectReceivableInfo = forwardRef<
         ? externalPlanModalOpen
         : internalPlanModalOpen;
     const setPlanModalOpen = onPlanModalOpenChange || setInternalPlanModalOpen;
-    const planModalMode =
-      externalPlanModalMode !== undefined
-        ? externalPlanModalMode
-        : internalPlanModalMode;
-    const setPlanModalMode = onPlanModalModeChange || setInternalPlanModalMode;
+    const planModalMode = externalPlanModalMode ?? "create";
     const nodeModalOpen =
       externalNodeModalOpen !== undefined
         ? externalNodeModalOpen

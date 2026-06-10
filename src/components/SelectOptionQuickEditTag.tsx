@@ -171,26 +171,22 @@ const InlineColorPickerEditor = ({
 }: InlineColorPickerEditorProps) => {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [draftColor, setDraftColor] = useState(appliedColor);
-
-  useEffect(() => {
-    if (pickerOpen) return;
-    setDraftColor(appliedColor);
-  }, [appliedColor, pickerOpen]);
+  const previewColor = pickerOpen ? draftColor : appliedColor;
 
   return (
     <Space>
       <Tag
-        color={draftColor}
+        color={previewColor}
         style={{
           minWidth: 96,
           textAlign: "center",
           marginInlineEnd: 0,
         }}
       >
-        {draftColor}
+        {previewColor}
       </Tag>
       <ColorPicker
-        value={draftColor}
+        value={previewColor}
         format="hex"
         disabledAlpha
         disabled={disabled}

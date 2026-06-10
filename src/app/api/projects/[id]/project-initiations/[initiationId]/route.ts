@@ -7,7 +7,6 @@ import { requireProjectWritePermission } from "@/lib/api-permissions";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import { AUTH_SESSION_COOKIE, decodeAuthSession } from "@/lib/auth-session";
 import { toNullableDecimal } from "@/lib/toNullableDecimal";
-import { toNullableInt } from "@/lib/toNullableInt";
 import { toSerializableNumber } from "@/lib/toSerializableNumber";
 import {
   getProjectOutsourceTotal,

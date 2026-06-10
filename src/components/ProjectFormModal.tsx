@@ -239,7 +239,7 @@ const ProjectFormModal = ({
       map.set(initialValues.ownerId, initialValues.ownerId);
     }
     return map;
-  }, [employees, initialValues?.ownerId]);
+  }, [employees, initialValues]);
 
   const isEdit = !!initialValues?.id;
   const fixedTypeCode = normalizeProjectTypeCode(projectType);
