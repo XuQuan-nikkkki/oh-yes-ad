@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import { Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import AppLink from "@/components/AppLink";
-import SelectOptionTag from "@/components/SelectOptionTag";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import { getSigningCompanyTagColor } from "@/lib/constants";
 
 export type ReceivableDelayChangeRow = {
@@ -222,7 +222,9 @@ export default function ReceivableDelayChangesTable({
       dataIndex: "stageName",
       width: 100,
       render: (_value, row) => (
-        <SelectOptionTag
+        <SelectOptionQuickEditTag
+          field="project.receivableNode.stage"
+          disabled
           option={
             row.stageOption
               ? {

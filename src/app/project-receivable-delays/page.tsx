@@ -23,7 +23,7 @@ import ReceivableCollectionModal from "@/components/project-receivable-delays/Re
 import ReceivableDelayChangesTable, {
   type ReceivableDelayChangeRow,
 } from "@/components/project-receivable-delays/ReceivableDelayChangesTable";
-import SelectOptionTag from "@/components/SelectOptionTag";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import { getSigningCompanyTagColor } from "@/lib/constants";
 import { canManageProjectResources } from "@/lib/role-permissions";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
@@ -37,6 +37,11 @@ type ActualNode = {
   id: string;
   actualAmountTaxIncluded?: number | null;
   actualDate?: string | null;
+  invoiceDate?: string | null;
+};
+type BadDebtRecord = {
+  type?: "WRITE_OFF" | "RECOVERY" | string | null;
+  amountTaxIncluded?: number | string | null;
 };
 type ReceivableNode = {
   id: string;
@@ -47,6 +52,7 @@ type ReceivableNode = {
   } | null;
   keyDeliverable?: string | null;
   expectedAmountTaxIncluded?: number | null;
+  receivableAmountTaxIncluded?: number | string | null;
   expectedDate?: string | null;
   expectedDateHistories?: Array<{
     id: string;
@@ -61,6 +67,7 @@ type ReceivableNode = {
     remark?: string | null;
   }>;
   actualNodes?: ActualNode[];
+  badDebtRecords?: BadDebtRecord[];
 };
 type ReceivablePlan = {
   id: string;
@@ -90,6 +97,7 @@ type ForecastNodeRow = {
   keyDeliverable: string;
   expectedAmount: number;
   actualAmount: number;
+  invoiceAmount: number;
   isDelayed: boolean;
 };
 const ALL_PROJECTS_QUERY_KEY = JSON.stringify({
@@ -104,6 +112,31 @@ const formatAmountWithYen = (value?: number | null) => {
   const numberValue = Number(value ?? 0);
   if (!Number.isFinite(numberValue)) return "-";
   return `¥${numberValue.toLocaleString("zh-CN")}`;
+};
+const toAmountNumber = (value?: number | string | null) => {
+  const numberValue = Number(value ?? 0);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+};
+const getBadDebtAmount = (records?: BadDebtRecord[]) =>
+  (records ?? []).reduce(
+    (sum, record) =>
+      record.type === "RECOVERY"
+        ? sum - toAmountNumber(record.amountTaxIncluded)
+        : sum + toAmountNumber(record.amountTaxIncluded),
+    0,
+  );
+const getReceivableAmount = (node: ReceivableNode) => {
+  if (
+    node.receivableAmountTaxIncluded !== null &&
+    node.receivableAmountTaxIncluded !== undefined
+  ) {
+    return Math.max(toAmountNumber(node.receivableAmountTaxIncluded), 0);
+  }
+  return Math.max(
+    toAmountNumber(node.expectedAmountTaxIncluded) -
+      getBadDebtAmount(node.badDebtRecords),
+    0,
+  );
 };
 const renderAccountTag = (name: string) => (
   <Tag
@@ -267,9 +300,13 @@ function ProjectReceivableDelaysPageContent() {
       const projectName = plan.project?.name?.trim() || "未关联项目";
       const projectId = plan.project?.id ?? null;
       return (plan.nodes ?? []).flatMap((node) => {
-        const expectedAmount = Number(node.expectedAmountTaxIncluded ?? 0);
+        const expectedAmount = getReceivableAmount(node);
         const actualAmount = (node.actualNodes ?? []).reduce((sum, actual) => {
           if (!dayjs(actual.actualDate).isValid()) return sum;
+          return sum + Number(actual.actualAmountTaxIncluded ?? 0);
+        }, 0);
+        const invoiceAmount = (node.actualNodes ?? []).reduce((sum, actual) => {
+          if (!dayjs(actual.invoiceDate).isValid()) return sum;
           return sum + Number(actual.actualAmountTaxIncluded ?? 0);
         }, 0);
         const isCompleted = actualAmount >= expectedAmount;
@@ -290,15 +327,16 @@ function ProjectReceivableDelaysPageContent() {
             projectName,
             stageOption: node.stageOption?.value
               ? {
-                  id: node.id,
+                  id: node.stageOption.id ?? node.id,
                   value: node.stageOption.value,
-                  color: null,
+                  color: node.stageOption.color ?? null,
                 }
               : null,
             stageName: node.stageOption?.value?.trim() || "-",
             keyDeliverable: node.keyDeliverable?.trim() || "-",
             expectedAmount,
             actualAmount,
+            invoiceAmount,
             isDelayed: expectedDateDayjs.isBefore(todayStart, "day"),
           },
         ];
@@ -381,7 +419,7 @@ function ProjectReceivableDelaysPageContent() {
           : [];
         if (histories.length === 0) continue;
 
-        const expectedAmount = Number(node.expectedAmountTaxIncluded ?? 0);
+        const expectedAmount = getReceivableAmount(node);
         const actualAmount = (node.actualNodes ?? []).reduce((sum, actual) => {
           if (!dayjs(actual.actualDate).isValid()) return sum;
           return sum + Number(actual.actualAmountTaxIncluded ?? 0);
@@ -651,7 +689,9 @@ function ProjectReceivableDelaysPageContent() {
         dataIndex: "stageName",
         width: 120,
         render: (_value, row) => (
-          <SelectOptionTag
+          <SelectOptionQuickEditTag
+            field="project.receivableNode.stage"
+            disabled
             option={
               row.stageOption
                 ? {
@@ -686,6 +726,20 @@ function ProjectReceivableDelaysPageContent() {
             >
               {formatAmountWithYen(Number(value ?? 0))}
             </div>
+            {Number(row.invoiceAmount ?? 0) > 0 ? (
+              <div
+                style={{
+                  marginTop: 2,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#1677ff",
+                }}
+              >
+                {`已开票 ${Number(row.invoiceAmount ?? 0).toLocaleString(
+                  "zh-CN",
+                )} 元`}
+              </div>
+            ) : null}
             {Number(row.actualAmount ?? 0) > 0 ? (
               <div
                 style={{
@@ -719,7 +773,7 @@ function ProjectReceivableDelaysPageContent() {
             disabled={!canCollectReceivable}
             onClick={() => setCollectingRow(row)}
           >
-            收款
+            开票 & 收款
           </Button>
         ),
       },
@@ -1106,7 +1160,6 @@ function ProjectReceivableDelaysPageContent() {
         loading={collecting}
         expectedAmount={Number(collectingRow?.expectedAmount ?? 0)}
         actualAmount={Number(collectingRow?.actualAmount ?? 0)}
-        expectedDate={collectingRow?.expectedDate ?? null}
         onCancel={() => setCollectingRow(null)}
         onSubmit={async (values: ProjectReceivableActualNodeFormValues) => {
           if (!collectingRow) return;

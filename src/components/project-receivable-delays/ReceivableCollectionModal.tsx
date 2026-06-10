@@ -1,6 +1,5 @@
 "use client";
 
-import dayjs from "dayjs";
 import ProjectReceivableActualNodeModal, {
   type ProjectReceivableActualNodeFormValues,
 } from "@/components/project-detail/ProjectReceivableActualNodeModal";
@@ -14,7 +13,6 @@ type Props = {
   ) => void | Promise<void>;
   expectedAmount: number;
   actualAmount: number;
-  expectedDate?: string | null;
 };
 
 const ReceivableCollectionModal = ({
@@ -24,7 +22,6 @@ const ReceivableCollectionModal = ({
   onSubmit,
   expectedAmount,
   actualAmount,
-  expectedDate,
 }: Props) => {
   const remainingAmount = Math.max(
     Number(expectedAmount ?? 0) - Number(actualAmount ?? 0),
@@ -41,7 +38,6 @@ const ReceivableCollectionModal = ({
       maxAmountTaxIncluded={remainingAmount}
       initialValues={{
         actualAmountTaxIncluded: remainingAmount,
-        actualDate: expectedDate ? dayjs(expectedDate) : undefined,
       }}
     />
   );
