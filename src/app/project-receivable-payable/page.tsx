@@ -2360,6 +2360,7 @@ function ProjectReceivablePayablePageContent() {
           receivableNodeId: row.id,
           actualAmountTaxIncluded: values.actualAmountTaxIncluded,
           actualDate: values.actualDate?.toISOString() ?? null,
+          invoiceDate: values.invoiceDate?.toISOString() ?? null,
           remark: values.remark?.trim() ? values.remark.trim() : null,
           remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
         }),
@@ -2389,6 +2390,7 @@ function ProjectReceivablePayablePageContent() {
           body: JSON.stringify({
             actualAmountTaxIncluded: values.actualAmountTaxIncluded,
             actualDate: values.actualDate?.toISOString() ?? null,
+            invoiceDate: values.invoiceDate?.toISOString() ?? null,
             remark: values.remark?.trim() ? values.remark.trim() : null,
             remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
           }),

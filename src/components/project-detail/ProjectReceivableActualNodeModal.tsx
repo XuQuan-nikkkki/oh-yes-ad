@@ -17,6 +17,7 @@ import {
 export type ProjectReceivableActualNodeFormValues = {
   actualAmountTaxIncluded: number;
   actualDate?: Dayjs | null;
+  invoiceDate?: Dayjs | null;
   remark?: string;
   remarkNeedsAttention?: boolean;
 };

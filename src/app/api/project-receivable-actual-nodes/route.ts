@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
 
   const actualAmountTaxIncluded = toNullableDecimal(body.actualAmountTaxIncluded);
   const actualDate = toNullableDate(body.actualDate);
+  const invoiceDate = toNullableDate(body.invoiceDate);
   const remarkNeedsAttentionRaw = toNullableBool(body.remarkNeedsAttention);
 
   if (actualAmountTaxIncluded === null) {
@@ -79,6 +80,7 @@ export async function POST(req: NextRequest) {
       receivableNodeId,
       actualAmountTaxIncluded,
       actualDate,
+      invoiceDate,
       remark:
         typeof body.remark === "string" && body.remark.trim().length > 0
           ? body.remark.trim()

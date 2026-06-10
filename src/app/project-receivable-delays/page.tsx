@@ -1120,6 +1120,7 @@ function ProjectReceivableDelaysPageContent() {
                   Number(values.actualAmountTaxIncluded ?? 0),
                 ),
                 actualDate: values.actualDate?.toISOString(),
+                invoiceDate: values.invoiceDate?.toISOString() ?? null,
                 remark: values.remark?.trim() || null,
                 remarkNeedsAttention: Boolean(values.remarkNeedsAttention),
               }),

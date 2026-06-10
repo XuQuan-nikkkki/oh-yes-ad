@@ -68,6 +68,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     patchData.actualDate = actualDate;
   }
 
+  if ("invoiceDate" in body) {
+    const invoiceDate = toNullableDate(body.invoiceDate);
+    patchData.invoiceDate = invoiceDate;
+  }
+
   if ("remark" in body) {
     patchData.remark =
       typeof body.remark === "string" && body.remark.trim().length > 0

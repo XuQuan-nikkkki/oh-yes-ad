@@ -644,6 +644,7 @@ model ProjectReceivableActualNode {
 
   actualAmountTaxIncluded Decimal
   actualDate              DateTime?
+  invoiceDate             DateTime?
   remark                  String?
   remarkNeedsAttention    Boolean   @default(false)
 
