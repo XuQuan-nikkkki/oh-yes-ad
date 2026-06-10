@@ -396,6 +396,7 @@ type SummaryProjectRow = {
   receivableBadDebtRecoveryAmountTotal: number;
   receivableBadDebtAmountTotal: number;
   receivableActualAmountTotal: number;
+  receivableInvoiceAmountTotal: number;
   receivableProgressPercent: number;
   receivableInvoiceStatus: ReceivableInvoiceStatusFilter;
   payableContractAmountTotal: number;
@@ -2725,6 +2726,10 @@ function ProjectReceivablePayablePageContent() {
           ),
         0,
       );
+      const receivableInvoiceAmountTotal = (plan.nodes ?? []).reduce(
+        (sum, node) => sum + getReceivableNodeInvoiceAmount(node),
+        0,
+      );
       const receivableInvoiceStatus = getReceivableProjectInvoiceStatus([plan]);
       if (existing) {
         existing.hasReceivablePlan = true;
@@ -2742,6 +2747,7 @@ function ProjectReceivablePayablePageContent() {
           receivableBadDebtRecoveryAmountTotal;
         existing.receivableBadDebtAmountTotal += receivableBadDebtAmountTotal;
         existing.receivableActualAmountTotal += receivableActualAmountTotal;
+        existing.receivableInvoiceAmountTotal += receivableInvoiceAmountTotal;
         if (
           signingCompanyName &&
           signingCompanyName !== "-" &&
@@ -2788,6 +2794,7 @@ function ProjectReceivablePayablePageContent() {
         receivableBadDebtRecoveryAmountTotal,
         receivableBadDebtAmountTotal,
         receivableActualAmountTotal,
+        receivableInvoiceAmountTotal,
         receivableProgressPercent: 0,
         receivableInvoiceStatus,
         payableContractAmountTotal: 0,
@@ -2900,6 +2907,7 @@ function ProjectReceivablePayablePageContent() {
         receivableBadDebtRecoveryAmountTotal: 0,
         receivableBadDebtAmountTotal: 0,
         receivableActualAmountTotal: 0,
+        receivableInvoiceAmountTotal: 0,
         receivableProgressPercent: 0,
         receivableInvoiceStatus: "UNINVOICED",
         payableContractAmountTotal: payableContractAmount,
@@ -2989,7 +2997,17 @@ function ProjectReceivablePayablePageContent() {
               const nodeExpectedAmount = row.receivableNodeExpectedAmountTotal;
               const diffAmount = amount - contractAmount;
               const isIncrease = toCentAmount(diffAmount) > 0;
-              return renderAmountTrend({
+              const invoiceAmount = toMoneyNumber(
+                row.receivableInvoiceAmountTotal,
+              );
+              const hasInvoiceAmount = toCentAmount(invoiceAmount) > 0;
+              const isFullyInvoiced =
+                toCentAmount(invoiceAmount) >=
+                toCentAmount(row.receivableExpectedAmountTotal);
+
+              return (
+                <div>
+                  {renderAmountTrend({
                 amount,
                 baselineAmount: contractAmount,
                 tooltipTitle: (
@@ -3002,7 +3020,21 @@ function ProjectReceivablePayablePageContent() {
                     </div>
                   </div>
                 ),
-              });
+                  })}
+                  {hasInvoiceAmount ? (
+                    <div
+                      style={{
+                        marginTop: 2,
+                        color: isFullyInvoiced ? "#387E22" : "#1677ff",
+                        fontSize: 10,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {`已开票 ${formatAmount(invoiceAmount)}`}
+                    </div>
+                  ) : null}
+                </div>
+              );
             },
           },
           {
