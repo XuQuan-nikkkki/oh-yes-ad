@@ -1,6 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireProjectWritePermission } from "@/lib/api-permissions";
+import {
+  requireFinanceOrAdminPermission,
+  requireProjectWritePermission,
+} from "@/lib/api-permissions";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import { getProjectOutsourceTotal } from "@/lib/project-outsource";
 import { computeInitiationEstimatedAgencyFee } from "@/lib/prisma/project-initiation";
@@ -206,6 +209,11 @@ const MANUAL_COST_FIELDS = [
   "middleOffice",
   "execution",
 ] as const;
+const MANUAL_COST_PATCH_KEYS = new Set(["costSourceMode", "manualCost"]);
+
+const isManualCostPatch = (body: Record<string, unknown>) =>
+  Object.prototype.hasOwnProperty.call(body, "manualCost") &&
+  Object.keys(body).every((key) => MANUAL_COST_PATCH_KEYS.has(key));
 
 const serializeManualCost = (manualCost: ProjectManualCostPayload | null | undefined) => {
   if (!manualCost) return null;
@@ -751,9 +759,6 @@ export async function GET(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const denied = await requireProjectWritePermission();
-  if (denied) return denied;
-
   const { pathname } = new URL(req.url);
   const id = pathname.split("/").pop();
 
@@ -761,7 +766,12 @@ export async function PATCH(req: Request) {
     return new Response("Missing ID", { status: 400 });
   }
 
-  const body = await req.json();
+  const body = (await req.json()) as Record<string, unknown>;
+  const denied = isManualCostPatch(body)
+    ? await requireFinanceOrAdminPermission()
+    : await requireProjectWritePermission();
+  if (denied) return denied;
+
   const has = (key: string) => Object.prototype.hasOwnProperty.call(body, key);
   const [typeOptionId, statusOptionId, stageOptionId] = await Promise.all([
     has("type")
