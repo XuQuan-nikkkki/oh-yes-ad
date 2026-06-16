@@ -191,7 +191,11 @@ const serializeProjectInitiationPayload = (
 });
 
 export async function POST(req: NextRequest, context: RouteContext) {
-  const denied = await requireProjectWritePermission();
+  const body = await sanitizeRequestBody(req);
+  const financialStructureId = String(body.financialStructureId ?? "").trim();
+  const denied = financialStructureId
+    ? await requireFinanceOrAdminPermission()
+    : await requireProjectWritePermission();
   if (denied) return denied;
 
   const { id: projectId } = await context.params;
@@ -207,7 +211,6 @@ export async function POST(req: NextRequest, context: RouteContext) {
     return new Response("Project not found", { status: 404 });
   }
 
-  const body = await sanitizeRequestBody(req);
   const rawSession = (await cookies()).get(AUTH_SESSION_COOKIE)?.value;
   const session = rawSession ? decodeAuthSession(rawSession) : null;
   if (!session?.employeeId) {
@@ -218,11 +221,6 @@ export async function POST(req: NextRequest, context: RouteContext) {
     return new Response("Invalid estimatedDuration", { status: 400 });
   }
   const normalizedEstimatedDuration = Math.round(estimatedDuration);
-  const financialStructureId = String(body.financialStructureId ?? "").trim();
-  if (financialStructureId) {
-    const financeDenied = await requireFinanceOrAdminPermission();
-    if (financeDenied) return financeDenied;
-  }
 
   const members = normalizeMembers(body.members);
   const memberEmployeeIds = Array.from(new Set(members.map((item) => item.employeeId)));
