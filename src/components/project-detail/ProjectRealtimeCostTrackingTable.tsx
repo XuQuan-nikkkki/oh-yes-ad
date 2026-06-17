@@ -1475,7 +1475,7 @@ const ProjectRealtimeCostTrackingTable = ({
     executionCost +
     middleOfficeCost;
   const projectProfit = netIncome - totalCost;
-  const totalCostRatio = income > 0 ? totalCost / income : null;
+  const totalCostRatio = netIncome > 0 ? totalCost / netIncome : null;
   const projectLevel = getProjectLevel(totalCostRatio ?? 1);
   const bonusRatio = getBonusRatio(projectLevel);
   const projectBonus = projectProfit * bonusRatio;
@@ -1602,7 +1602,7 @@ const ProjectRealtimeCostTrackingTable = ({
         key: "agencyFee",
         category: "中介费",
         amount: formatAmount(agencyFee),
-        ratio: formatRatio(income > 0 ? agencyFee / income : null),
+        ratio: formatRatio(netIncome > 0 ? agencyFee / netIncome : null),
         remark: agencyFeeRemarkText,
       },
       {
@@ -1616,28 +1616,32 @@ const ProjectRealtimeCostTrackingTable = ({
         key: "laborCost",
         category: "人力成本",
         amount: formatAmount(laborCost),
-        ratio: formatRatio(income > 0 ? laborCost / income : null),
+        ratio: formatRatio(netIncome > 0 ? laborCost / netIncome : null),
         remark: laborRemarkText,
       },
       {
         key: "rentCost",
         category: "租金成本",
         amount: formatAmount(effectiveRentCost),
-        ratio: formatRatio(income > 0 ? effectiveRentCost / income : null),
+        ratio: formatRatio(
+          netIncome > 0 ? effectiveRentCost / netIncome : null,
+        ),
         remark: rentRemarkText,
       },
       {
         key: "executionCost",
         category: "执行费用成本",
         amount: formatAmount(executionCost),
-        ratio: formatRatio(income > 0 ? executionCost / income : null),
+        ratio: formatRatio(netIncome > 0 ? executionCost / netIncome : null),
         remark: executionRemarkText,
       },
       {
         key: "middleOfficeCost",
         category: "中台成本",
         amount: formatAmount(middleOfficeCost),
-        ratio: formatRatio(income > 0 ? middleOfficeCost / income : null),
+        ratio: formatRatio(
+          netIncome > 0 ? middleOfficeCost / netIncome : null,
+        ),
         remark: middleOfficeRemarkText,
       },
       {
@@ -1652,7 +1656,7 @@ const ProjectRealtimeCostTrackingTable = ({
         key: "projectProfit",
         category: "项目利润",
         amount: formatAmount(projectProfit),
-        ratio: formatRatio(income > 0 ? projectProfit / income : null),
+        ratio: formatRatio(netIncome > 0 ? projectProfit / netIncome : null),
         remark: "-",
       },
       {
@@ -1673,21 +1677,23 @@ const ProjectRealtimeCostTrackingTable = ({
         key: "projectBonus",
         category: "项目奖金",
         amount: formatAmount(projectBonus),
-        ratio: formatRatio(income > 0 ? projectBonus / income : null),
+        ratio: formatRatio(netIncome > 0 ? projectBonus / netIncome : null),
         remark: "-",
       },
       {
         key: "fund",
         category: "基金",
         amount: formatAmount(projectFundAmount),
-        ratio: formatRatio(income > 0 ? projectFundAmount / income : null),
+        ratio: formatRatio(
+          netIncome > 0 ? projectFundAmount / netIncome : null,
+        ),
         remark: "-",
       },
       {
         key: "finalProfit",
         category: "利润",
         amount: formatAmount(finalProfit),
-        ratio: formatRatio(income > 0 ? finalProfit / income : null),
+        ratio: formatRatio(netIncome > 0 ? finalProfit / netIncome : null),
         remark: "-",
       },
     ],
@@ -1721,7 +1727,7 @@ const ProjectRealtimeCostTrackingTable = ({
   );
 
   const breakdownRows = useMemo<BreakdownRow[]>(() => {
-    const incomeBase = income > 0 ? income : 0;
+    const netIncomeBase = netIncome > 0 ? netIncome : 0;
 
     const incomeRemark = incomeRemarkText;
     const taxRemark = taxRemarkText;
@@ -1732,7 +1738,7 @@ const ProjectRealtimeCostTrackingTable = ({
     )}%`;
 
     const buildRatio = (signedAmount: number) =>
-      incomeBase > 0 ? signedAmount / incomeBase : null;
+      netIncomeBase > 0 ? signedAmount / netIncomeBase : null;
 
     const rows: BreakdownRow[] = [
       {
@@ -1745,8 +1751,8 @@ const ProjectRealtimeCostTrackingTable = ({
         key: "income",
         label: "收入",
         indent: 1,
-        amountValue: incomeBase,
-        ratioValue: incomeBase > 0 ? 1 : 0,
+        amountValue: income,
+        ratioValue: null,
         tone: "neutral",
         bold: true,
         barColor: "#4F88D7",
@@ -1942,7 +1948,7 @@ const ProjectRealtimeCostTrackingTable = ({
   ]);
 
   const breakdownColumns = useMemo<ColumnsType<BreakdownRow>>(() => {
-    const incomeBase = income > 0 ? income : 0;
+    const netIncomeBase = netIncome > 0 ? netIncome : 0;
     const hiddenBarRowKeys = new Set([
       "income",
       "tax",
@@ -2078,7 +2084,7 @@ const ProjectRealtimeCostTrackingTable = ({
         },
       },
       {
-        title: `金额占比（相对收入${formatYuanText(incomeBase)}）`,
+        title: `金额占比（相对净收入${formatYuanText(netIncomeBase)}）`,
         dataIndex: "bar",
         key: "bar",
         onHeaderCell: () => ({
@@ -2101,7 +2107,9 @@ const ProjectRealtimeCostTrackingTable = ({
           }
           const amount = Number(row.amountValue ?? 0);
           const ratio =
-            incomeBase > 0 ? Math.min(1, Math.abs(amount) / incomeBase) : 0;
+            netIncomeBase > 0
+              ? Math.min(1, Math.abs(amount) / netIncomeBase)
+              : 0;
           const progressPercent = Math.max(0, Math.min(100, ratio * 100));
           const barColor = row.barColor || "rgba(0,0,0,0.25)";
 
@@ -2238,7 +2246,7 @@ const ProjectRealtimeCostTrackingTable = ({
       },
     ];
   }, [
-    income,
+    netIncome,
     executionCost,
     executionCostBudget,
     canViewLaborDetail,
@@ -2248,8 +2256,9 @@ const ProjectRealtimeCostTrackingTable = ({
   ]);
 
   const overdueDays = Math.max(0, elapsedWorkdays - expectedWorkdays);
-  const projectProfitRatio = income > 0 ? projectProfit / income : null;
-  const finalProfitRatio = income > 0 ? finalProfit / income : null;
+  const projectProfitRatio =
+    netIncome > 0 ? projectProfit / netIncome : null;
+  const finalProfitRatio = netIncome > 0 ? finalProfit / netIncome : null;
   const renderRatioBarDescription = (
     ratio: number | null,
     barColor: string,
