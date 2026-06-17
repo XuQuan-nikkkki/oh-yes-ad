@@ -14,6 +14,7 @@ import {
   Space,
   Tag,
   ColorPicker,
+  message,
 } from "antd";
 import type { DefaultOptionType } from "antd/es/select";
 import { ProForm, StepsForm } from "@ant-design/pro-components";
@@ -144,6 +145,16 @@ type ColorValueLike =
   | string
   | {
       toHexString?: () => string;
+    }
+  | null
+  | undefined;
+
+type DateValueLike =
+  | string
+  | Date
+  | dayjs.Dayjs
+  | {
+      toISOString?: () => string;
     }
   | null
   | undefined;
@@ -404,6 +415,22 @@ const EmployeeFormModal = ({
     return Number.isFinite(parsed) ? parsed : null;
   };
 
+  const normalizeDateValue = (value: DateValueLike) => {
+    if (!value) return null;
+    if (dayjs.isDayjs(value)) return value.toISOString();
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === "string") {
+      const parsed = dayjs(value);
+      return parsed.isValid() ? parsed.toISOString() : null;
+    }
+    return value.toISOString?.() ?? null;
+  };
+
+  const handleSubmitError = (error: unknown) => {
+    console.error("保存团队成员失败:", error);
+    message.error(error instanceof Error ? error.message : "保存成员失败");
+  };
+
   const workstationCostValue = Form.useWatch("workstationCost", form);
   const utilityCostValue = Form.useWatch("utilityCost", form);
 
@@ -483,69 +510,77 @@ const EmployeeFormModal = ({
   };
 
   const onNormalFinish = async (values: FormValues) => {
-    const resolved = await resolveCreatableValues(values);
+    try {
+      const resolved = await resolveCreatableValues(values);
 
-    if (!isEdit) {
-      const payload = {
-        name: resolved.name,
-        phone: resolved.phone || null,
-        fullName: resolved.fullName || null,
-        roleIds: canManageRoles ? resolved.roleIds ?? defaultRoleIds : defaultRoleIds,
-        function: toSingleValue(resolved.function),
-        employmentStatus: toSingleValue(resolved.employmentStatus),
-      };
-      await saveEmployee(payload);
-      return;
-    }
+      if (!isEdit) {
+        const payload = {
+          name: resolved.name,
+          phone: resolved.phone || null,
+          fullName: resolved.fullName || null,
+          roleIds: canManageRoles ? resolved.roleIds ?? defaultRoleIds : defaultRoleIds,
+          function: toSingleValue(resolved.function),
+          employmentStatus: toSingleValue(resolved.employmentStatus),
+        };
+        await saveEmployee(payload);
+        return;
+      }
 
-    if (viewMode === "basic") {
+      if (viewMode === "basic") {
+        await saveEmployee({
+          name: resolved.name,
+          phone: resolved.phone || null,
+          fullName: resolved.fullName || null,
+          function: toSingleValue(resolved.function),
+          ...(canManageRoles ? { roleIds: resolved.roleIds ?? [] } : {}),
+        });
+        return;
+      }
+
       await saveEmployee({
         name: resolved.name,
         phone: resolved.phone || null,
         fullName: resolved.fullName || null,
         function: toSingleValue(resolved.function),
-        ...(canManageRoles ? { roleIds: resolved.roleIds ?? [] } : {}),
+        employmentStatus: toSingleValue(resolved.employmentStatus),
       });
-      return;
+    } catch (error) {
+      handleSubmitError(error);
     }
-
-    await saveEmployee({
-      name: resolved.name,
-      phone: resolved.phone || null,
-      fullName: resolved.fullName || null,
-      roleIds: resolved.roleIds ?? [],
-      function: toSingleValue(resolved.function),
-      employmentStatus: toSingleValue(resolved.employmentStatus),
-    });
   };
 
   const onPositionFinish = async (values: FormValues) => {
-    const resolved = await resolveCreatableValues(values);
+    try {
+      const resolved = await resolveCreatableValues(values);
 
-    await saveEmployee({
-      name: resolved.name,
-      phone: resolved.phone || null,
-      fullName: resolved.fullName || null,
-      function: toSingleValue(resolved.function),
-      legalEntityId: resolved.legalEntityId || null,
-      departmentLevel1: toSingleValue(resolved.departmentLevel1),
-      departmentLevel2: toSingleValue(resolved.departmentLevel2),
-      position: toSingleValue(resolved.position),
-      level: resolved.level || null,
-      employmentType: toSingleValue(resolved.employmentType),
-      employmentStatus: toSingleValue(resolved.employmentStatus),
-      entryDate: resolved.entryDate ? resolved.entryDate.toISOString() : null,
-      leaveDate: resolved.leaveDate ? resolved.leaveDate.toISOString() : null,
-      salary: normalizeNumberText(resolved.salary),
-      socialSecurity: normalizeNumberText(resolved.socialSecurity),
-      providentFund: normalizeNumberText(resolved.providentFund),
-      workstationCost: normalizeNumberText(resolved.workstationCost),
-      utilityCost: normalizeNumberText(resolved.utilityCost),
-      bankAccountNumber: resolved.bankAccountNumber || null,
-      bankName: resolved.bankName || null,
-      bankBranch: resolved.bankBranch || null,
-    });
-    return true;
+      await saveEmployee({
+        name: resolved.name,
+        phone: resolved.phone || null,
+        fullName: resolved.fullName || null,
+        function: toSingleValue(resolved.function),
+        legalEntityId: resolved.legalEntityId || null,
+        departmentLevel1: toSingleValue(resolved.departmentLevel1),
+        departmentLevel2: toSingleValue(resolved.departmentLevel2),
+        position: toSingleValue(resolved.position),
+        level: resolved.level || null,
+        employmentType: toSingleValue(resolved.employmentType),
+        employmentStatus: toSingleValue(resolved.employmentStatus),
+        entryDate: normalizeDateValue(resolved.entryDate),
+        leaveDate: normalizeDateValue(resolved.leaveDate),
+        salary: normalizeNumberText(resolved.salary),
+        socialSecurity: normalizeNumberText(resolved.socialSecurity),
+        providentFund: normalizeNumberText(resolved.providentFund),
+        workstationCost: normalizeNumberText(resolved.workstationCost),
+        utilityCost: normalizeNumberText(resolved.utilityCost),
+        bankAccountNumber: resolved.bankAccountNumber || null,
+        bankName: resolved.bankName || null,
+        bankBranch: resolved.bankBranch || null,
+      });
+      return true;
+    } catch (error) {
+      handleSubmitError(error);
+      return false;
+    }
   };
 
   const activateCreate = (key: CreatableKey, prefixedName?: string) => {
