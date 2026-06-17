@@ -1474,7 +1474,7 @@ const ProjectRealtimeCostTrackingTable = ({
     effectiveRentCost +
     executionCost +
     middleOfficeCost;
-  const projectProfit = income - totalCost;
+  const projectProfit = netIncome - totalCost;
   const totalCostRatio = income > 0 ? totalCost / income : null;
   const projectLevel = getProjectLevel(totalCostRatio ?? 1);
   const bonusRatio = getBonusRatio(projectLevel);
