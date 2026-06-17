@@ -40,6 +40,7 @@ type Props = {
   projectId: string;
   project: Project;
   canManageProject: boolean;
+  canCollectReceivable?: boolean;
   canManageBadDebtRecords?: boolean;
   planModalOpen?: boolean;
   planModalMode?: "create" | "edit";
@@ -187,6 +188,7 @@ const ProjectReceivableInfo = forwardRef<
       projectId,
       project,
       canManageProject,
+      canCollectReceivable = canManageProject,
       canManageBadDebtRecords = false,
       planModalOpen: externalPlanModalOpen,
       planModalMode: externalPlanModalMode,
@@ -1046,6 +1048,7 @@ const ProjectReceivableInfo = forwardRef<
                       value: item.value,
                     }))}
                     canManageProject={canManageProject}
+                    canCollectReceivable={canCollectReceivable}
                     canManageBadDebtRecords={canManageBadDebtRecords}
                     onAddNode={() => {
                       setNodeTargetPlanId(plan.id);

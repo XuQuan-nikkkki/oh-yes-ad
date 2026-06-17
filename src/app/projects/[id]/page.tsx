@@ -230,6 +230,13 @@ const ProjectDetailPage = () => {
     () => roleCodes.includes("ADMIN") || roleCodes.includes("FINANCE"),
     [roleCodes],
   );
+  const canCollectReceivable = useMemo(
+    () =>
+      roleCodes.includes("ADMIN") ||
+      roleCodes.includes("FINANCE") ||
+      roleCodes.includes("PROJECT_MANAGER"),
+    [roleCodes],
+  );
   const hasManualCost = useMemo(() => {
     if (!project?.manualCost) return false;
     return Object.values(project.manualCost).some((value) => {
@@ -1896,6 +1903,7 @@ const ProjectDetailPage = () => {
                         projectId={projectId}
                         project={project}
                         canManageProject={canManageProject}
+                        canCollectReceivable={canCollectReceivable}
                         canManageBadDebtRecords={canManageReimbursements}
                         planModalOpen={receivablePlanModalOpen}
                         planModalMode={receivablePlanModalMode}

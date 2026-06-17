@@ -129,6 +129,7 @@ type Props = {
   rows: ProjectReceivableNodeRow[];
   stageOptions: StageOption[];
   canManageProject: boolean;
+  canCollectReceivable?: boolean;
   canManageBadDebtRecords?: boolean;
   onAddNode: () => void;
   onDeleteNode: (nodeId: string) => void | Promise<void>;
@@ -272,6 +273,7 @@ const ProjectReceivableNodeTable = ({
   rows,
   stageOptions,
   canManageProject,
+  canCollectReceivable = canManageProject,
   canManageBadDebtRecords = false,
   onAddNode,
   onDeleteNode,
@@ -619,7 +621,7 @@ const ProjectReceivableNodeTable = ({
                       key: "collect",
                       label: "新增收款记录",
                       icon: <MoneyCollectOutlined />,
-                      disabled: !canManageProject || isCollectionCompleted,
+                      disabled: !canCollectReceivable || isCollectionCompleted,
                     },
                     {
                       key: "badDebt",
@@ -689,7 +691,9 @@ const ProjectReceivableNodeTable = ({
                 }}
                 trigger={["click"]}
               >
-                {canManageProject || canManageBadDebtRecords ? (
+                {canManageProject ||
+                canCollectReceivable ||
+                canManageBadDebtRecords ? (
                   <Button
                     variant="text"
                     color="primary"
@@ -715,6 +719,7 @@ const ProjectReceivableNodeTable = ({
     ],
     [
       canManageBadDebtRecords,
+      canCollectReceivable,
       canManageProject,
       onDeleteNode,
       onViewDetails,
