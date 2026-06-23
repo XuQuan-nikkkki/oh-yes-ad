@@ -2403,7 +2403,6 @@ function ProjectReceivablePayablePageContent() {
         },
         body: JSON.stringify({
           stageOptionId,
-          sortOrder: row.sortOrder,
           keyDeliverable: values.keyDeliverable,
           expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
           expectedDate: values.expectedDate?.toISOString() ?? null,
@@ -2624,36 +2623,6 @@ function ProjectReceivablePayablePageContent() {
       }
       messageApi.success("删除坏账记录成功");
       await fetchData();
-    },
-    [fetchData, messageApi],
-  );
-
-  const handleDragSortReceivableNodes = useCallback(
-    async (nextRows: ProjectReceivableNodeRow[]) => {
-      const planSortCounter = new Map<string, number>();
-      const payloads = nextRows.map((row) => {
-        const nextSortOrder = (planSortCounter.get(row.planId) ?? 0) + 1;
-        planSortCounter.set(row.planId, nextSortOrder);
-        return { id: row.id, sortOrder: nextSortOrder };
-      });
-
-      try {
-        await Promise.all(
-          payloads.map((item) =>
-            fetch(`/api/project-receivable-nodes/${item.id}`, {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ sortOrder: item.sortOrder }),
-            }),
-          ),
-        );
-        await fetchData();
-      } catch {
-        messageApi.error("更新节点排序失败");
-        await fetchData();
-      }
     },
     [fetchData, messageApi],
   );
@@ -4452,7 +4421,6 @@ function ProjectReceivablePayablePageContent() {
                       onCreateNode={handleCreateReceivableNode}
                       onDeleteNode={handleDeleteReceivableNode}
                       onEditNode={handleEditReceivableNode}
-                      onDragSortNodes={handleDragSortReceivableNodes}
                       onCollectNode={handleCollectReceivableNode}
                       onEditActualNode={handleEditReceivableActualNode}
                       onDeleteActualNode={handleDeleteReceivableActualNode}

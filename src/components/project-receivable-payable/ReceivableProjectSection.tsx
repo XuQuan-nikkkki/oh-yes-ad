@@ -45,9 +45,6 @@ type ReceivableProjectSectionProps = {
     row: ProjectReceivableNodeRow,
     values: ProjectReceivableNodeFormValues,
   ) => Promise<void>;
-  onDragSortNodes: (
-    nextRows: ProjectReceivableNodeRow[],
-  ) => void | Promise<void>;
   onCollectNode?: (
     row: ProjectReceivableNodeRow,
     values: ProjectReceivableActualNodeFormValues,
@@ -92,7 +89,6 @@ export default function ReceivableProjectSection({
   onCreateNode,
   onDeleteNode,
   onEditNode,
-  onDragSortNodes,
   onCollectNode,
   onEditActualNode,
   onDeleteActualNode,
@@ -350,7 +346,6 @@ export default function ReceivableProjectSection({
           }}
           onDeleteNode={onDeleteNode}
           onEditNode={onEditNode}
-          onDragSortNodes={onDragSortNodes}
           onCollectNode={onCollectNode}
           onEditActualNode={onEditActualNode}
           onDeleteActualNode={onDeleteActualNode}

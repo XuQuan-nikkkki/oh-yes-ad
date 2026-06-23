@@ -4,7 +4,6 @@ import { requireReceivablePayableWritePermission } from "@/lib/api-permissions";
 import { prisma } from "@/lib/prisma";
 import { enrichReceivableNode } from "@/lib/prisma/project-receivable";
 import { toNullableDecimal } from "@/lib/toNullableDecimal";
-import { toNullableInt } from "@/lib/toNullableInt";
 
 const includeDetail = {
   stageOption: {
@@ -55,7 +54,10 @@ export async function GET(req: NextRequest) {
   const rows = await prisma.projectReceivableNode.findMany({
     where: { planId },
     include: includeDetail,
-    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    orderBy: [
+      { expectedDate: { sort: "asc", nulls: "last" } },
+      { createdAt: "asc" },
+    ],
   });
 
   return Response.json(rows.map((row) => enrichReceivableNode(row)));
@@ -92,14 +94,11 @@ export async function POST(req: NextRequest) {
   if (!plan) return new Response("Plan not found", { status: 404 });
   if (!stageOption) return new Response("Stage option not found", { status: 404 });
 
-  const sortOrderFromBody = toNullableInt(body.sortOrder);
   const sortOrder =
-    sortOrderFromBody !== null
-      ? sortOrderFromBody
-      : ((await prisma.projectReceivableNode.aggregate({
-          where: { planId },
-          _max: { sortOrder: true },
-        }))._max.sortOrder ?? 0) + 1;
+    ((await prisma.projectReceivableNode.aggregate({
+      where: { planId },
+      _max: { sortOrder: true },
+    }))._max.sortOrder ?? 0) + 1;
 
   const created = await prisma.$transaction(async (tx) => {
     const node = await tx.projectReceivableNode.create({

@@ -89,7 +89,10 @@ const includeDetail = {
         orderBy: [{ occurredAt: "asc" as const }, { createdAt: "asc" as const }],
       },
     },
-    orderBy: [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }],
+    orderBy: [
+      { expectedDate: { sort: "asc" as const, nulls: "last" as const } },
+      { createdAt: "asc" as const },
+    ],
   },
 };
 

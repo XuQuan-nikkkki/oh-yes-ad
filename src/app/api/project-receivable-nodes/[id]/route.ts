@@ -6,7 +6,6 @@ import { AUTH_SESSION_COOKIE, decodeAuthSession } from "@/lib/auth-session";
 import { prisma } from "@/lib/prisma";
 import { enrichReceivableNode } from "@/lib/prisma/project-receivable";
 import { toNullableDecimal } from "@/lib/toNullableDecimal";
-import { toNullableInt } from "@/lib/toNullableInt";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -87,14 +86,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return new Response("stageOptionId is invalid", { status: 400 });
     }
     patchData.stageOptionId = stageOptionId;
-  }
-
-  if ("sortOrder" in body) {
-    const sortOrder = toNullableInt(body.sortOrder);
-    if (sortOrder === null) {
-      return new Response("sortOrder is invalid", { status: 400 });
-    }
-    patchData.sortOrder = sortOrder;
   }
 
   if ("keyDeliverable" in body) {

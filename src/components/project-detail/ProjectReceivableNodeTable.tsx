@@ -137,9 +137,6 @@ type Props = {
     row: ProjectReceivableNodeRow,
     values: ProjectReceivableNodeFormValues,
   ) => Promise<void>;
-  onDragSortNodes: (
-    nextRows: ProjectReceivableNodeRow[],
-  ) => void | Promise<void>;
   onCollectNode?: (
     row: ProjectReceivableNodeRow,
     values: ProjectReceivableActualNodeFormValues,
@@ -331,11 +328,6 @@ const ProjectReceivableNodeTable = ({
         getExpectedDateTs(left.expectedDate) -
         getExpectedDateTs(right.expectedDate);
       if (byDate !== 0) return byDate;
-
-      const leftSortOrder = Number(left.sortOrder ?? 0);
-      const rightSortOrder = Number(right.sortOrder ?? 0);
-      if (leftSortOrder !== rightSortOrder)
-        return leftSortOrder - rightSortOrder;
 
       return String(left.id).localeCompare(String(right.id));
     });

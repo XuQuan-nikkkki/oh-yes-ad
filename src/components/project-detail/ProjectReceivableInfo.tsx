@@ -668,7 +668,6 @@ const ProjectReceivableInfo = forwardRef<
         }
         const payload = {
           stageOptionId,
-          sortOrder: row.sortOrder,
           keyDeliverable: values.keyDeliverable,
           expectedAmountTaxIncluded: values.expectedAmountTaxIncluded,
           expectedDate: values.expectedDate?.toISOString() ?? null,
@@ -910,53 +909,6 @@ const ProjectReceivableInfo = forwardRef<
       [fetchPlans, messageApi],
     );
 
-    const handleNodesDraftChange = useCallback(
-      (planId: string, nextRows: readonly ReceivableNode[]) => {
-        setPlans((prev) =>
-          prev.map((plan) =>
-            plan.id === planId
-              ? {
-                  ...plan,
-                  nodes: [...nextRows],
-                }
-              : plan,
-          ),
-        );
-      },
-      [],
-    );
-
-    const handleDragSortNodes = useCallback(
-      async (planId: string, newDataSource: ReceivableNode[]) => {
-        const nextRows = newDataSource.map((item, index) => ({
-          ...item,
-          sortOrder: index + 1,
-        }));
-        handleNodesDraftChange(planId, nextRows);
-
-        try {
-          await Promise.all(
-            nextRows.map((row) =>
-              fetch(`/api/project-receivable-nodes/${row.id}`, {
-                method: "PATCH",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  sortOrder: row.sortOrder,
-                }),
-              }),
-            ),
-          );
-          await fetchPlans();
-        } catch {
-          messageApi.error("更新节点排序失败");
-          await fetchPlans();
-        }
-      },
-      [fetchPlans, handleNodesDraftChange, messageApi],
-    );
-
     return (
       <>
         {contextHolder}
@@ -1057,12 +1009,6 @@ const ProjectReceivableInfo = forwardRef<
                     onDeleteNode={handleDeleteNode}
                     onEditNode={async (row, values) => {
                       await handleEditNode(row as ReceivableNode, values);
-                    }}
-                    onDragSortNodes={async (nextRows) => {
-                      await handleDragSortNodes(
-                        plan.id,
-                        nextRows as ReceivableNode[],
-                      );
                     }}
                     onCollectNode={async (row, values) => {
                       await handleCollectNode(row as ReceivableNode, values);
