@@ -1903,6 +1903,7 @@ const ProjectDetailPage = () => {
                         projectId={projectId}
                         project={project}
                         canManageProject={canManageProject}
+                        canManageReceivableNodes={canCollectReceivable}
                         canCollectReceivable={canCollectReceivable}
                         canManageBadDebtRecords={canManageReimbursements}
                         planModalOpen={receivablePlanModalOpen}

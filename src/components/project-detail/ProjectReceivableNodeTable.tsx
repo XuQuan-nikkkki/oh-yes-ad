@@ -129,6 +129,7 @@ type Props = {
   rows: ProjectReceivableNodeRow[];
   stageOptions: StageOption[];
   canManageProject: boolean;
+  canManageReceivableNodes?: boolean;
   canCollectReceivable?: boolean;
   canManageBadDebtRecords?: boolean;
   onAddNode: () => void;
@@ -270,6 +271,7 @@ const ProjectReceivableNodeTable = ({
   rows,
   stageOptions,
   canManageProject,
+  canManageReceivableNodes = canManageProject,
   canCollectReceivable = canManageProject,
   canManageBadDebtRecords = false,
   onAddNode,
@@ -625,7 +627,7 @@ const ProjectReceivableNodeTable = ({
                       key: "delay",
                       label: "修改预收日期",
                       icon: <CalendarOutlined />,
-                      disabled: !canManageProject,
+                      disabled: !canManageReceivableNodes,
                     },
                     {
                       type: "divider",
@@ -634,7 +636,7 @@ const ProjectReceivableNodeTable = ({
                       key: "edit",
                       label: "编辑节点",
                       icon: <EditOutlined />,
-                      disabled: !canManageProject,
+                      disabled: !canManageReceivableNodes,
                     },
                     {
                       type: "divider",
@@ -643,7 +645,7 @@ const ProjectReceivableNodeTable = ({
                       key: "delete",
                       label: "删除节点",
                       icon: <DeleteOutlined />,
-                      disabled: !canManageProject,
+                      disabled: !canManageReceivableNodes,
                       danger: true,
                     },
                   ],
@@ -684,6 +686,7 @@ const ProjectReceivableNodeTable = ({
                 trigger={["click"]}
               >
                 {canManageProject ||
+                canManageReceivableNodes ||
                 canCollectReceivable ||
                 canManageBadDebtRecords ? (
                   <Button
@@ -713,6 +716,7 @@ const ProjectReceivableNodeTable = ({
       canManageBadDebtRecords,
       canCollectReceivable,
       canManageProject,
+      canManageReceivableNodes,
       onDeleteNode,
       onViewDetails,
       stageOptions,
