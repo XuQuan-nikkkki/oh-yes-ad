@@ -410,6 +410,18 @@ function SchedulePageContent() {
   }, [refreshProjects]);
 
   useEffect(() => {
+    if (
+      activeScheduleTab !== "internal-project-schedule" ||
+      loadingProjects
+    ) {
+      return;
+    }
+
+    // Keep rendering cached projects while refreshing the list in the background.
+    void refreshProjects(true);
+  }, [activeScheduleTab, loadingProjects, refreshProjects]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const fetchEmployees = async () => {
