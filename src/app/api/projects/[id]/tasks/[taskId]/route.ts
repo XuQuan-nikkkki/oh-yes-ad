@@ -171,8 +171,13 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
     return new Response("Not Found", { status: 404 });
   }
 
-  await prisma.projectTask.delete({
-    where: { id: taskId },
+  await prisma.$transaction(async (tx) => {
+    await tx.plannedWorkEntry.deleteMany({
+      where: { taskId },
+    });
+    await tx.projectTask.delete({
+      where: { id: taskId },
+    });
   });
 
   return Response.json({ success: true });

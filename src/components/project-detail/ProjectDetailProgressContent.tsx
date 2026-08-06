@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Button, Collapse, Empty, Popover } from "antd";
+import { App, Button, Collapse, Empty, Popover } from "antd";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import { EditOutlined, PlusOutlined } from "@ant-design/icons";
@@ -147,6 +147,7 @@ const ProjectDetailProgressContent = ({
   onAfterUpdateTask,
   onAfterDeleteTask,
 }: Props) => {
+  const { message } = App.useApp();
   const [editingTask, setEditingTask] = useState<ProjectProgressTaskRow | null>(null);
   const currentIsoWeek = dayjs().isoWeek();
   const currentIsoWeekYear = dayjs().isoWeekYear();
@@ -345,10 +346,21 @@ const ProjectDetailProgressContent = ({
             }}
             onDelete={async () => {
               if (actionsDisabled) return;
-              await fetch(`/api/projects/${projectId}/tasks/${row.id}`, {
-                method: "DELETE",
-              });
-              await onAfterDeleteTask?.();
+              try {
+                const response = await fetch(
+                  `/api/projects/${projectId}/tasks/${row.id}`,
+                  { method: "DELETE" },
+                );
+                if (!response.ok) {
+                  throw new Error((await response.text()) || "删除任务失败");
+                }
+                await onAfterDeleteTask?.();
+                message.success("任务已删除");
+              } catch (error) {
+                message.error(
+                  error instanceof Error ? error.message : "删除任务失败",
+                );
+              }
             }}
             disabled={actionsDisabled}
             deleteTitle="确定删除该任务？"

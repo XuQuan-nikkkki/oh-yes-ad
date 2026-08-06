@@ -231,6 +231,9 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const found = await prisma.projectTask.findUnique({ where: { id }, select: { id: true } });
   if (!found) return new Response("Not Found", { status: 404 });
-  await prisma.projectTask.delete({ where: { id } });
+  await prisma.$transaction(async (tx) => {
+    await tx.plannedWorkEntry.deleteMany({ where: { taskId: id } });
+    await tx.projectTask.delete({ where: { id } });
+  });
   return Response.json({ success: true });
 }
