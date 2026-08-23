@@ -69,8 +69,16 @@ docker run --rm \
     echo '[2/3] dump prod db'
     pg_dump \"\$PROD_URL\" -Fc -f '/dump/$prod_dump_file'
 
-    echo '[3/3] restore prod dump to test db'
-    pg_restore --clean --if-exists --no-owner --no-privileges -d \"\$TEST_URL\" '/dump/$prod_dump_file'
+    echo '[3/3] reset test schema and restore prod dump'
+    psql \"\$TEST_URL\" -v ON_ERROR_STOP=1 -c \\
+      'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
+
+    pg_restore \\
+      --exit-on-error \\
+      --no-owner \\
+      --no-privileges \\
+      -d \"\$TEST_URL\" \\
+      '/dump/$prod_dump_file'
 
     echo 'DONE'
   "
