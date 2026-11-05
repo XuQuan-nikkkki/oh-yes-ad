@@ -495,10 +495,10 @@ const ProjectReceivableInfo = forwardRef<
               remarkNeedsAttention: editingPlan.remarkNeedsAttention,
             }
           : {
-              // Only prefill owner for create; other fields stay empty.
               ownerEmployeeId: defaultOwnerFromProject,
+              serviceContent: project.serviceContent?.trim() || undefined,
             },
-      [defaultOwnerFromProject, editingPlan, planModalMode, contracts],
+      [defaultOwnerFromProject, editingPlan, planModalMode, contracts, project.serviceContent],
     );
 
     const handleSubmitPlan = async (
