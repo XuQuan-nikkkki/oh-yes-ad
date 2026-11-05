@@ -114,6 +114,12 @@ model SelectOption {
   @@index([field, order])
 }
 
+model DataMigration {
+  key         String   @id
+  rowsUpdated Int?
+  completedAt DateTime @default(now())
+}
+
 model SystemSetting {
   id String @id @default(uuid())
 

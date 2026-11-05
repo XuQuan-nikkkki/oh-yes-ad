@@ -5,10 +5,11 @@
   "packageManager": "npm@10.9.2",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push --accept-data-loss && prisma db seed && next build && tsx scripts/auto-migrate-on-deploy.ts",
+    "build": "prisma generate && prisma db push --accept-data-loss && tsx scripts/backfill-project-service-content.ts --execute && prisma db seed && next build && tsx scripts/auto-migrate-on-deploy.ts",
     "start": "next start",
     "lint": "eslint",
     "db:seed": "prisma db seed",
+    "backfill:project-service-content": "tsx scripts/backfill-project-service-content.ts",
     "db:sync-prod-to-test": "bash scripts/sync-prod-to-test-db.sh",
     "sync:new-select-option-colors": "tsx scripts/sync-new-select-option-colors.ts",
     "seed:project-cost-estimation-options": "tsx scripts/seed-project-cost-estimation-options.ts"
