@@ -23,6 +23,7 @@ type ColumnKey =
   | "name"
   | "type"
   | "client"
+  | "serviceContent"
   | "status"
   | "stage"
   | "owner"
@@ -217,6 +218,14 @@ const ProjectsTable = ({
         ) : (
           "-"
         ),
+    },
+    serviceContent: {
+      title: "服务内容",
+      dataIndex: "serviceContent",
+      width: 260,
+      ellipsis: true,
+      render: (_value: string | null, record: Project) =>
+        record.serviceContent?.trim() || "-",
     },
     status: {
       title: "项目状态",

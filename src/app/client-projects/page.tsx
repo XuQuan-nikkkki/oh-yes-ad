@@ -108,8 +108,8 @@ const ClientProjectsPage = () => {
         columnsStatePersistenceKey="client-projects-table-columns-state"
         projects={projects}
         loading={loading}
-        columnKeys={["name", "client", "status", "stage", "owner", "isArchived", "actions"]}
-        defaultVisibleColumnKeys={["name", "client", "status", "stage", "owner", "isArchived", "actions"]}
+        columnKeys={["name", "client", "serviceContent", "status", "stage", "owner", "isArchived", "actions"]}
+        defaultVisibleColumnKeys={["name", "client", "serviceContent", "status", "stage", "owner", "isArchived", "actions"]}
         onOptionUpdated={fetchProjects}
         onEdit={(project) => {
           void ensureClientsLoaded();
