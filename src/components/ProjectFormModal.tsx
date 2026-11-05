@@ -21,6 +21,7 @@ import { useSubmitLock } from "@/hooks/useSubmitLock";
 type Project = {
   id?: string;
   name?: string;
+  serviceContent?: string | null;
   type?: string;
   isArchived?: boolean | null;
   status?: string | null;
@@ -57,6 +58,7 @@ type Props = {
 
 type ProjectFormValues = {
   name: string;
+  serviceContent?: string;
   type?: string;
   clientId?: string | null;
   ownerId?: string | null;
@@ -253,6 +255,7 @@ const ProjectFormModal = ({
 
   const baseValues: ProjectFormValues = {
     name: initialValues?.name ?? "",
+    serviceContent: initialValues?.serviceContent ?? undefined,
     type:
       normalizeProjectTypeCode(initialValues?.type) ??
       fixedTypeCode ??
@@ -296,6 +299,7 @@ const ProjectFormModal = ({
 
     const payload = {
       name: values.name,
+      serviceContent: values.serviceContent?.trim() || null,
       type,
       clientId: isInternal ? null : normalizeIdValue(values.clientId),
       ownerId: normalizeIdValue(values.ownerId),
@@ -444,6 +448,10 @@ const ProjectFormModal = ({
               </ProForm.Item>
             </Col>
           </Row>
+
+          <ProForm.Item label="服务内容" name="serviceContent">
+            <Input placeholder="请输入服务内容" />
+          </ProForm.Item>
         </StepsForm.StepForm>
 
         <StepsForm.StepForm<ProjectFormValues>

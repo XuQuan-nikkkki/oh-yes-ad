@@ -18,6 +18,7 @@ export type ProjectManualCost = {
 export type Project = {
   id: string;
   name: string;
+  serviceContent?: string | null;
   costSourceMode?: ProjectCostSourceMode;
   type?: string | null;
   isArchived?: boolean | null;

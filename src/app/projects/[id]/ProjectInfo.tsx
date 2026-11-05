@@ -52,6 +52,9 @@ const ProjectInfo = ({ project, workdayAdjustments, onProjectUpdated }: Props) =
             "-"
           )}
         </Descriptions.Item>
+        <Descriptions.Item label="服务内容" span={3}>
+          {project.serviceContent?.trim() || "-"}
+        </Descriptions.Item>
       </Descriptions>
 
       {isInternalProject ? (

@@ -99,6 +99,7 @@ export type ProjectCostEstimationSummary = {
 export type Project = {
   id: string;
   name: string;
+  serviceContent?: string | null;
   costSourceMode?: ProjectCostSourceMode;
   type: string;
   status?: string | null;

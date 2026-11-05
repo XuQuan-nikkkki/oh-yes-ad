@@ -302,8 +302,12 @@ export async function POST(req: Request) {
     upsertSelectOption("project.stage", body.stage ?? null),
   ]);
   const manualCost = buildManualCostWriteInput(body.manualCost);
+  if ("serviceContent" in body && body.serviceContent !== null && typeof body.serviceContent !== "string") {
+    return new Response("serviceContent must be a string or null", { status: 400 });
+  }
   const projectData = {
     name,
+    serviceContent: typeof body.serviceContent === "string" ? body.serviceContent.trim() || null : null,
     costSourceMode: body.costSourceMode === "MANUAL" ? "MANUAL" : "AUTO",
     typeOptionId,
     isArchived: Boolean(body.isArchived),
@@ -349,6 +353,9 @@ export async function PUT(req: Request) {
     upsertSelectOption("project.stage", body.stage ?? null),
   ]);
   const manualCost = buildManualCostWriteInput(body.manualCost);
+  if ("serviceContent" in body && body.serviceContent !== null && typeof body.serviceContent !== "string") {
+    return new Response("serviceContent must be a string or null", { status: 400 });
+  }
   const shouldDeleteManualCost =
     "manualCost" in body && manualCost === undefined;
 
@@ -362,6 +369,9 @@ export async function PUT(req: Request) {
 
     const projectData = {
       name,
+      ...("serviceContent" in body
+        ? { serviceContent: (body.serviceContent as string | null)?.trim() || null }
+        : {}),
       costSourceMode: body.costSourceMode === "MANUAL" ? "MANUAL" : "AUTO",
       typeOptionId,
       isArchived: Boolean(body.isArchived),
