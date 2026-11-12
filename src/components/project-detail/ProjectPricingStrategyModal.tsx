@@ -1197,7 +1197,7 @@ const ProjectPricingStrategyModal = ({
                   },
                   {
                     key: "rent",
-                    label: "组件成本",
+                    label: "租金成本",
                     amount: rentCost,
                     dotColor: COST_COMPOSITION_COLORS.rent,
                   },
