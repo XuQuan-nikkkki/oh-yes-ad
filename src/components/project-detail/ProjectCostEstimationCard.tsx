@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Button, Card, Empty, Modal, Space, Typography } from "antd";
-import MultipleSelectOptions from "@/components/MultipleSelectOptions";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import InfoGrid from "@/components/project-detail/InfoGrid";
 import ProjectCostEstimationModal from "@/components/project-detail/ProjectCostEstimationModal";
 import StyledStatisticCard from "@/components/project-detail/StyledStatisticCard";
@@ -122,11 +122,17 @@ const buildSyncSummary = (
   const executionCostValues = (estimation.executionCostTypes ?? [])
     .map((item) => toTrimmedString(item.value))
     .filter(Boolean)
-    .map((value) =>
-      value === "其他" && otherExecutionCostRemark
+    .map((value) => {
+      const label = value === "其他" && otherExecutionCostRemark
         ? `其他（${otherExecutionCostRemark}）`
-        : value,
-    );
+        : value;
+      const amount = estimation.executionCostItems?.find(
+        (item) => item.costTypeOption?.value === value,
+      )?.requestedAmount;
+      return typeof amount === "number"
+        ? `${label}：${formatAmount(amount)}元`
+        : label;
+    });
   lines.push(`执行费用需求：${executionCostValues.join("、") || "-"}`);
 
   if (detailLink) {
@@ -204,6 +210,24 @@ const ProjectCostEstimationCard = ({
     if (budget === null) return null;
     return ((latestCostEstimation?.agencyFeeRate ?? 0) / 100) * budget;
   }, [hasAgencyFeeRate, latestCostEstimation]);
+  const executionCostOptions = (latestCostEstimation?.executionCostTypes ?? [])
+    .filter((option) => Boolean(option?.value));
+  const requestedAmountsByOptionId = new Map(
+    (latestCostEstimation?.executionCostItems ?? []).map((item) => [
+      item.costTypeOptionId,
+      item.requestedAmount,
+    ]),
+  );
+  const requestedAmounts = executionCostOptions.map((option) =>
+    requestedAmountsByOptionId.get(option.id ?? ""),
+  );
+  const executionCostTotal =
+    requestedAmounts.length > 0 &&
+    requestedAmounts.every((amount): amount is number =>
+      typeof amount === "number" && Number.isFinite(amount),
+    )
+      ? requestedAmounts.reduce((total, amount) => total + (amount ?? 0), 0)
+      : null;
 
   const actionsNode = canManageByPmRole ? (
     hasEstimation ? (
@@ -348,20 +372,50 @@ const ProjectCostEstimationCard = ({
             },
             {
               columns: hasOtherExecutionCostType ? 2 : 1,
-              title: "执行费用",
+              title: (
+                <span style={{ display: "inline-flex", alignItems: "baseline", gap: 12 }}>
+                  <span>执行费用</span>
+                  {executionCostTotal !== null ? (
+                    <>
+                      <span style={{ fontWeight: 400, color: "rgba(0,0,0,0.45)" }}>
+                        预算合计
+                      </span>
+                      <span style={{ color: "rgba(0,0,0,0.88)" }}>
+                        {formatAmount(executionCostTotal)} 元
+                      </span>
+                    </>
+                  ) : null}
+                </span>
+              ),
               items: [
                 {
-                  title: "执行费用类别",
+                  title: "执行费用明细",
                   value:
-                    (latestCostEstimation?.executionCostTypes?.length ?? 0) >
-                      0 &&
-                    (latestCostEstimation?.executionCostTypes ?? []).some(
-                      (item) => item?.value,
-                    ) ? (
-                      <MultipleSelectOptions
-                        field={executionCostField}
-                        options={latestCostEstimation?.executionCostTypes}
-                      />
+                    executionCostOptions.length > 0 ? (
+                      <Space size={[8, 8]} wrap>
+                        {executionCostOptions.map((option) => {
+                          const amount = requestedAmountsByOptionId.get(option.id ?? "");
+                          return (
+                            <SelectOptionQuickEditTag
+                              key={option.id ?? option.value}
+                              field={executionCostField}
+                              option={option}
+                              tagSuffix={typeof amount === "number" ? (
+                                <span
+                                  style={{
+                                    borderLeft: "1px solid currentColor",
+                                    marginLeft: 10,
+                                    paddingLeft: 10,
+                                    fontWeight: 400,
+                                  }}
+                                >
+                                  {formatAmount(amount)} 元
+                                </span>
+                              ) : undefined}
+                            />
+                          );
+                        })}
+                      </Space>
                     ) : (
                       "-"
                     ),

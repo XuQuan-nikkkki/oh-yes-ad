@@ -101,6 +101,7 @@ model SelectOption {
   projectMilestonesByType                     ProjectMilestone[]                           @relation("ProjectMilestoneType")
   projectMilestonesByMethod                   ProjectMilestone[]                           @relation("ProjectMilestoneMethod")
   projectCostEstimationsByExecutionCostType   ProjectCostEstimation[]                      @relation("ProjectCostEstimationExecutionCostTypes")
+  projectCostEstimationExecutionCostItems     ProjectCostEstimationExecutionCostItem[]     @relation("ProjectCostEstimationExecutionCostItemType")
   projectInitiationsByExecutionCostType       ProjectInitiation[]                          @relation("ProjectInitiationExecutionCostTypes")
   projectPricingStrategyExecutionCostTypes    ProjectPricingStrategyExecutionCostItem[]    @relation("ProjectPricingStrategyExecutionCostType")
   projectFinancialStructureExecutionCostTypes ProjectFinancialStructureExecutionCostItem[] @relation("ProjectFinancialStructureExecutionCostType")
