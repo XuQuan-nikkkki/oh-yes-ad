@@ -242,7 +242,7 @@ const ProjectPricingStrategyTargetTable = ({
         align: "center",
       },
       {
-        title: "客户报价(不含税)",
+        title: "客户预算（不含税）",
         dataIndex: "customerBudgetValue",
         key: "customerBudgetValue",
         width: 220,

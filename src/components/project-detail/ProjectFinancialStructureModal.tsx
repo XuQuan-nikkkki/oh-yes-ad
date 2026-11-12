@@ -987,13 +987,13 @@ const ProjectFinancialStructureModal = ({
           </Form.Item>
         </StepsForm.StepForm>
 
-        <StepsForm.StepForm title="人力&中台成本">
+        <StepsForm.StepForm title="人力与中台成本">
           <Form.Item
             label="人力成本"
             name="laborCost"
             initialValue={initialValues.laborCost}
             rules={[{ required: true, message: "请输入人力成本" }]}
-            extra={`计算方式：按成本测算-人员配置中，每个成员的(薪资 + 社保 + 公积金) / ${monthlyWorkdayBase} * 项目预估时长计算`}
+            extra={`计算方式：按立项申请-人员配置中，每个成员的(薪资 + 社保 + 公积金) / ${monthlyWorkdayBase} * 项目预估时长计算`}
           >
             <InputNumber min={0} precision={2} style={{ width: "100%" }} />
           </Form.Item>

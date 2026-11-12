@@ -93,10 +93,10 @@ const buildSyncSummary = (
   if (includeQuoteAmount && typeof estimation.contractAmount === "number") {
     lines.push(`报价金额：${formatAmount(estimation.contractAmount)}元`);
   }
-  lines.push(`预计时长：${estimation.estimatedDuration}个工作日`);
+  lines.push(`预估时长：${estimation.estimatedDuration}个工作日`);
   const clientBudget = parseBudgetValue(estimation.clientBudget);
   if (typeof clientBudget === "number") {
-    lines.push(`客户报价(不含税)：${formatAmount(clientBudget)}`);
+    lines.push(`客户预算（不含税）：${formatAmount(clientBudget)}`);
   }
   lines.push("");
 
@@ -270,7 +270,7 @@ const ProjectCostEstimationCard = ({
         >
           <StyledStatisticCard
             statistic={{
-              title: "客户报价(不含税)",
+              title: "客户预算（不含税）",
               value:
                 parseBudgetValue(latestCostEstimation?.clientBudget) ?? "-",
               suffix:

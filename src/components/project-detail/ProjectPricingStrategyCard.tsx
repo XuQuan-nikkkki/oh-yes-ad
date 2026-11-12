@@ -326,7 +326,7 @@ const ProjectPricingStrategyCard = ({
           ? formatAmount(customerBudgetValue * (projectCostBaselineRatio / 100))
           : "-";
 
-        worksheet.addRow(["类别", "客户报价(不含税)", "建议报价", "备注"]);
+        worksheet.addRow(["类别", "客户预算（不含税）", "建议报价", "备注"]);
         const rows: Array<[string, string, string, string]> = [
           [
             "收入",
@@ -697,7 +697,7 @@ const ProjectPricingStrategyCard = ({
       return [
         {
           ...buildPanel(
-            "客户报价(不含税)",
+            "客户预算（不含税）",
             pricingStrategy.plannedSummaryAtCustomerBudget,
             {
               quoteIncome: customerBudgetAmount,
@@ -1017,7 +1017,7 @@ const ProjectPricingStrategyCard = ({
       ];
 
       return {
-        leftTitle: "客户报价(不含税)",
+        leftTitle: "客户预算（不含税）",
         rightTitle: "建议报价",
         rows,
       };

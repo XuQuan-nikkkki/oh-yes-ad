@@ -261,7 +261,7 @@ const ProjectCostEstimationModal = ({
     <>
       {contextHolder}
       <Modal
-        title={latestCostEstimation ? "更新成本预算" : "开始成本测算"}
+        title={latestCostEstimation ? "更新成本测算" : "开始成本测算"}
         open={open}
         onCancel={onCancel}
         afterOpenChange={handleOpenChange}

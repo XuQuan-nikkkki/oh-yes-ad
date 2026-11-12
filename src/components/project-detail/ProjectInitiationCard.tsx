@@ -82,7 +82,7 @@ const buildSyncSummary = (
   if (includeQuoteAmount && typeof estimation.contractAmount === "number") {
     lines.push(`报价金额：${formatAmount(estimation.contractAmount)}元`);
   }
-  lines.push(`预计时长：${estimation.estimatedDuration}个工作日`);
+  lines.push(`预估时长：${estimation.estimatedDuration}个工作日`);
   lines.push("");
 
   lines.push("人员配置：");
@@ -402,7 +402,7 @@ const ProjectInitiationCard = ({
                 lineHeight: 1.8,
               }}
             >
-              {syncSummaryText || "暂无可同步的测算信息"}
+              {syncSummaryText || "暂无可同步的立项申请信息"}
             </div>
           </Modal>
         </>

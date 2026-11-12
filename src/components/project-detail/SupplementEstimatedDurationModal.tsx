@@ -33,7 +33,7 @@ const SupplementEstimatedDurationModal = ({
 
   return (
     <Modal
-      title="补充预计时长"
+      title="补充预估时长"
       open={open}
       confirmLoading={loading}
       onCancel={handleCancel}

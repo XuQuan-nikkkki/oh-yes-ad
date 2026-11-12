@@ -634,13 +634,13 @@ const ProjectPricingStrategyModal = ({
             setDraftValues((prev) => ({ ...prev, ...allValues }));
           }}
         >
-          <Form.Item label="客户报价(不含税)" name="clientBudget">
+          <Form.Item label="客户预算（不含税）" name="clientBudget">
             <Input value={clientBudgetText} readOnly disabled />
           </Form.Item>
           <Form.Item
-            label="预计时长(工作日)"
+            label="预估时长(工作日)"
             name="estimatedDuration"
-            rules={[{ required: true, message: "请输入预计时长" }]}
+            rules={[{ required: true, message: "请输入预估时长" }]}
           >
             <InputNumber min={1} precision={0} style={{ width: "100%" }} />
           </Form.Item>
@@ -1529,7 +1529,7 @@ const ProjectPricingStrategyModal = ({
                         <Form.Item
                           label={
                             <span style={{ fontSize: 14 }}>
-                              客户报价（不含税）
+                              客户预算（不含税）
                             </span>
                           }
                           style={{ marginBottom: 0 }}
