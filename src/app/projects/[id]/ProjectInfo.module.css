@@ -1,0 +1,67 @@
+.title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.titleName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titleStatus {
+  flex: none;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.8fr);
+  gap: 18px;
+  padding: 4px 0;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fact {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  line-height: 26px;
+}
+
+.label {
+  flex: none;
+  color: #8a929e;
+  white-space: nowrap;
+}
+
+.fact a,
+.period {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.period {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .column:last-child {
+    grid-column: 1 / -1;
+  }
+}

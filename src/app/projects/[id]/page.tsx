@@ -36,11 +36,13 @@ import ProjectReimbursementRecordsContent from "@/components/project-detail/Proj
 import ProjectReimbursementCreateAction from "@/components/project-detail/ProjectReimbursementCreateAction";
 import ProjectPayableInfo from "@/components/project-detail/ProjectPayableInfo";
 import ProjectReceivableInfo from "@/components/project-detail/ProjectReceivableInfo";
+import ProjectStatusValue from "@/components/project-detail/ProjectStatusValue";
 import {
   ProjectActualWorkAction,
   ProjectMilestoneAction,
 } from "@/components/project-detail/ProjectDetailActionModules";
 import ProjectInfo from "./ProjectInfo";
+import projectInfoStyles from "./ProjectInfo.module.css";
 import ProjectPrimaryActions from "./ProjectPrimaryActions";
 import AppLink from "@/components/AppLink";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
@@ -664,33 +666,51 @@ const ProjectDetailPage = () => {
     />
   );
 
+  const handleProjectUpdated = (updatedProject: Project) => {
+    setProject(updatedProject);
+    upsertProjects([updatedProject]);
+  };
+
   return (
     <DetailPageContainer>
       {messageContextHolder}
       <Card
-        title={project.name || "项目信息"}
+        title={
+          <div className={projectInfoStyles.title}>
+            <span className={projectInfoStyles.titleName}>
+              {project.name || "项目信息"}
+            </span>
+            {!isInternalProject && (
+              <span className={projectInfoStyles.titleStatus}>
+                <ProjectStatusValue
+                  projectId={project.id}
+                  status={project.status}
+                  statusOption={project.statusOption}
+                  onSaved={handleProjectUpdated}
+                />
+              </span>
+            )}
+          </div>
+        }
         loading={loading}
         extra={
           <ProjectPrimaryActions
             projectId={projectId}
             projectName={project.name}
-        canManageProject={canManageProject}
-        deletingProject={deletingProject}
-        setDeletingProject={setDeletingProject}
-        onDeleted={() => {
-          removeProjectFromStore(projectId);
-        }}
-        onOpenEdit={() => setActiveModal({ type: "project-edit" })}
-      />
+            canManageProject={canManageProject}
+            deletingProject={deletingProject}
+            setDeletingProject={setDeletingProject}
+            onDeleted={() => {
+              removeProjectFromStore(projectId);
+            }}
+            onOpenEdit={() => setActiveModal({ type: "project-edit" })}
+          />
         }
       >
         <ProjectInfo
           project={project}
           workdayAdjustments={workdayAdjustments}
-          onProjectUpdated={(updatedProject) => {
-            setProject(updatedProject);
-            upsertProjects([updatedProject]);
-          }}
+          onProjectUpdated={handleProjectUpdated}
         />
       </Card>
 

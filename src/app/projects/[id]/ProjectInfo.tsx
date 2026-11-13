@@ -1,13 +1,12 @@
 "use client";
 
-import { Descriptions } from "antd";
 import AppLink from "@/components/AppLink";
 import BooleanTag from "@/components/BooleanTag";
 import ProjectPeriodValue from "@/components/project-detail/ProjectPeriodValue";
 import ProjectStageValue from "@/components/project-detail/ProjectStageValue";
-import ProjectStatusValue from "@/components/project-detail/ProjectStatusValue";
 import ProjectTypeValue from "@/components/project-detail/ProjectTypeValue";
 import type { Project, WorkdayAdjustment } from "@/types/projectDetail";
+import styles from "./ProjectInfo.module.css";
 
 type Props = {
   project: Project;
@@ -15,102 +14,75 @@ type Props = {
   onProjectUpdated?: (project: Project) => void;
 };
 
-const titleStyle = { fontSize: "14px", fontWeight: 500 } as const;
-const sectionStyle = { marginBottom: "24px" } as const;
-
 const ProjectInfo = ({ project, workdayAdjustments, onProjectUpdated }: Props) => {
   const isInternalProject = project.type === "INTERNAL";
 
   return (
-    <>
-      <Descriptions
-        title={<span style={titleStyle}>基础信息</span>}
-        column={3}
-        size="small"
-        style={sectionStyle}
-      >
-        <Descriptions.Item label="项目类型">
+    <div className={styles.facts}>
+      <div className={styles.column}>
+        <div className={styles.fact}>
+          <span className={styles.label}>项目类型：</span>
           <ProjectTypeValue
             projectId={project.id}
             type={project.type}
             typeOption={project.typeOption}
           />
-        </Descriptions.Item>
-        {!isInternalProject && project.client ? (
-          <Descriptions.Item label="所属客户">
-            <AppLink href={`/clients/${project.client.id}`}>
-              {project.client.name}
-            </AppLink>
-          </Descriptions.Item>
-        ) : null}
-        <Descriptions.Item label="负责人">
-          {project.owner ? (
-            <AppLink href={`/employees/${project.owner.id}`}>
-              {project.owner.name}
-            </AppLink>
-          ) : (
-            "-"
-          )}
-        </Descriptions.Item>
-        <Descriptions.Item label="服务内容" span={3}>
-          {project.serviceContent?.trim() || "-"}
-        </Descriptions.Item>
-      </Descriptions>
-
-      {isInternalProject ? (
-        <Descriptions
-          title={<span style={titleStyle}>项目进度</span>}
-          column={3}
-          size="small"
-          style={sectionStyle}
-        >
-          <Descriptions.Item label="项目周期" span={1}>
-            <ProjectPeriodValue
-              startDate={project.startDate}
-              endDate={project.endDate}
-              adjustments={workdayAdjustments}
-            />
-          </Descriptions.Item>
-          <Descriptions.Item label="已归档">
-            <BooleanTag value={Boolean(project.isArchived)} />
-          </Descriptions.Item>
-        </Descriptions>
-      ) : (
-        <Descriptions
-          title={<span style={titleStyle}>项目进度</span>}
-          column={3}
-          size="small"
-          style={sectionStyle}
-        >
-          <Descriptions.Item label="项目状态">
-            <ProjectStatusValue
-              projectId={project.id}
-              status={project.status}
-              statusOption={project.statusOption}
-              onSaved={onProjectUpdated}
-            />
-          </Descriptions.Item>
-          <Descriptions.Item label="项目阶段">
+        </div>
+        {!isInternalProject && (
+          <div className={styles.fact}>
+            <span className={styles.label}>项目阶段：</span>
             <ProjectStageValue
               projectId={project.id}
               stage={project.stage}
               stageOption={project.stageOption}
               onSaved={onProjectUpdated}
             />
-          </Descriptions.Item>
-          <Descriptions.Item label="已归档">
-            <BooleanTag value={Boolean(project.isArchived)} />
-          </Descriptions.Item>
-          <Descriptions.Item label="项目周期" span={3}>
+          </div>
+        )}
+      </div>
+
+      <div className={styles.column}>
+        {!isInternalProject && project.client && (
+          <div className={styles.fact}>
+            <span className={styles.label}>所属客户：</span>
+            <AppLink href={`/clients/${project.client.id}`}>
+              {project.client.name}
+            </AppLink>
+          </div>
+        )}
+        <div className={styles.fact}>
+          <span className={styles.label}>已归档：</span>
+          <BooleanTag value={Boolean(project.isArchived)} />
+        </div>
+      </div>
+
+      <div className={styles.column}>
+        <div className={styles.fact}>
+          <span className={styles.label}>负责人：</span>
+          {project.owner ? (
+            <AppLink href={`/employees/${project.owner.id}`}>
+              {project.owner.name}
+            </AppLink>
+          ) : (
+            <span>-</span>
+          )}
+        </div>
+        <div className={styles.fact}>
+          <span className={styles.label}>项目周期：</span>
+          <span className={styles.period}>
             <ProjectPeriodValue
               startDate={project.startDate}
               endDate={project.endDate}
               adjustments={workdayAdjustments}
             />
-          </Descriptions.Item>
-        </Descriptions>
-      )}
-    </>
+          </span>
+        </div>
+        <div className={styles.fact}>
+          <span className={styles.label}>服务内容：</span>
+          <span>{project.serviceContent?.trim() || "-"}</span>
+        </div>
+      </div>
+    </div>
   );
 };
 
