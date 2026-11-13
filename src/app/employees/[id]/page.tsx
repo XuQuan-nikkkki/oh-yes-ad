@@ -236,9 +236,12 @@ const EmployeeDetailPage = () => {
   const [messageApi, contextHolder] = message.useMessage();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
-  const isAdmin = roleCodes.includes("ADMIN");
-  const hideProjectAndWorkLogTabs =
-    !isAdmin && (roleCodes.includes("HR") || roleCodes.includes("FINANCE"));
+  const canManageProjectWorkLogs =
+    roleCodes.includes("ADMIN") ||
+    roleCodes.includes("PROJECT_MANAGER") ||
+    (Boolean(currentUser?.id) &&
+      !roleCodes.includes("HR") &&
+      !roleCodes.includes("FINANCE"));
   const fetchEmployeesFromStore = useEmployeesStore((state) => state.fetchEmployees);
   const removeEmployeeFromStore = useEmployeesStore((state) => state.removeEmployee);
   const systemSettings = useSystemSettingsStore((state) => state.records);
@@ -345,13 +348,6 @@ const EmployeeDetailPage = () => {
       setActiveTabKey("catering-projects");
     }
   }, [activeTabKey, canViewHrFinanceInfo]);
-
-  useEffect(() => {
-    if (!hideProjectAndWorkLogTabs) return;
-    if (activeTabKey === "catering-projects" || activeTabKey === "work-logs") {
-      setActiveTabKey(canViewHrFinanceInfo ? "employee-info" : "leave-records");
-    }
-  }, [activeTabKey, canViewHrFinanceInfo, hideProjectAndWorkLogTabs]);
 
   useEffect(() => {
     if (!compensationModalOpen) return;
@@ -850,7 +846,10 @@ const EmployeeDetailPage = () => {
           : null
       }
       fallbackText={fallbackText}
-      disabled={!canEditEmployeeOptions}
+      disabled={
+        !roleCodes.includes("ADMIN") &&
+        !roleCodes.includes("PROJECT_MANAGER")
+      }
       modalTitle={`修改${label}`}
       optionValueLabel={label}
       saveSuccessText={`${label}已保存`}
@@ -1106,9 +1105,7 @@ const EmployeeDetailPage = () => {
                   },
                 ]
               : []),
-            ...(!hideProjectAndWorkLogTabs
-              ? [
-                  {
+            {
                     key: "catering-projects",
                     label: "参与项目",
                     children: (
@@ -1157,6 +1154,7 @@ const EmployeeDetailPage = () => {
                     label: "实际工时记录",
                     children: (
                       <ActualWorkEntriesTable
+                        canManageRow={() => canManageProjectWorkLogs}
                         refreshKey={actualWorkRefreshKey}
                         compactHorizontalPadding
                         headerTitle={null}
@@ -1205,9 +1203,11 @@ const EmployeeDetailPage = () => {
                           };
                         }}
                         onEdit={(row) => {
+                          if (!canManageProjectWorkLogs) return;
                           router.push(`/actual-work-entries/${row.id}`);
                         }}
                         onDelete={async (entryId, title) => {
+                          if (!canManageProjectWorkLogs) return;
                           const res = await fetch(`/api/actual-work-entries/${entryId}`, {
                             method: "DELETE",
                           });
@@ -1221,8 +1221,6 @@ const EmployeeDetailPage = () => {
                       />
                     ),
                   },
-                ]
-              : []),
             {
               key: "leave-records",
               label: "请假记录",

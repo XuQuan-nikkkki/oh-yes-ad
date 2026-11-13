@@ -18,7 +18,6 @@ import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
 import AppLink from "@/components/AppLink";
 import DetailPageContainer from "@/components/DetailPageContainer";
-import PageAccessResult from "@/components/PageAccessResult";
 import PlannedWorkEntryForm, {
   PlannedWorkEntryFormPayload,
 } from "@/components/project-detail/PlannedWorkEntryForm";
@@ -92,9 +91,6 @@ export default function Page() {
     () => canManageProjectResources(roleCodes),
     [roleCodes],
   );
-  const isAdmin = roleCodes.includes("ADMIN");
-  const hideWorktimeEntryPages =
-    !isAdmin && (roleCodes.includes("HR") || roleCodes.includes("FINANCE"));
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
@@ -284,10 +280,6 @@ export default function Page() {
       throw new Error((await res.text()) || "更新周数失败");
     }
   };
-
-  if (hideWorktimeEntryPages) {
-    return <PageAccessResult type="forbidden" />;
-  }
 
   if (loading) {
     return (

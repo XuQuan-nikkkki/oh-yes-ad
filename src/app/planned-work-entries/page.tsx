@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Modal } from "antd";
 import ListPageContainer from "@/components/ListPageContainer";
-import PageAccessResult from "@/components/PageAccessResult";
 import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import PlannedWorkEntryForm, {
   PlannedWorkEntryFormPayload,
@@ -27,9 +26,6 @@ export default function Page() {
     () => canManageProjectResources(roleCodes),
     [roleCodes],
   );
-  const isAdmin = roleCodes.includes("ADMIN");
-  const hideWorktimeEntryPages =
-    !isAdmin && (roleCodes.includes("HR") || roleCodes.includes("FINANCE"));
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [tasks, setTasks] = useState<
     {
@@ -292,10 +288,6 @@ export default function Page() {
     },
     [canManagePlannedWork],
   );
-
-  if (hideWorktimeEntryPages) {
-    return <PageAccessResult type="forbidden" />;
-  }
 
   return (
     <ListPageContainer>

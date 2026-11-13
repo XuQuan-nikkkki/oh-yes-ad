@@ -36,9 +36,7 @@ export type NavigationItem = {
 
 const NAV_ROLE_GROUPS = {
   adminOnly: ["ADMIN"] as const,
-  adminAndProjectManager: ["ADMIN", "PROJECT_MANAGER"] as const,
   orgManagement: ["ADMIN", "PROJECT_MANAGER", "HR", "FINANCE"] as const,
-  orgManagementWithoutFinance: ["ADMIN", "PROJECT_MANAGER", "HR"] as const,
   legalAndFinance: ["ADMIN", "HR", "FINANCE"] as const,
   systemSettings: ["ADMIN", "HR", "FINANCE"] as const,
 } satisfies Record<string, readonly NavigationRoleCode[]>;
@@ -58,7 +56,6 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
         key: "/schedule",
         icon: <CalendarOutlined />,
         label: "项目排期",
-        forbiddenRoles: ["HR", "FINANCE"],
       },
     ],
   },
@@ -76,31 +73,26 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
         key: "/internal-projects",
         icon: <ApartmentOutlined />,
         label: "内部项目",
-        forbiddenRoles: ["HR", "FINANCE"],
       },
       {
         key: "/project-segments",
         icon: <AppstoreOutlined />,
         label: "项目环节",
-        forbiddenRoles: ["HR", "FINANCE"],
       },
       {
         key: "/project-tasks",
         icon: <ProfileOutlined />,
         label: "项目任务",
-        forbiddenRoles: ["HR", "FINANCE"],
       },
       {
         key: "/project-milestones",
         icon: <FlagOutlined />,
         label: "项目里程碑",
-        forbiddenRoles: ["HR", "FINANCE"],
       },
       {
         key: "/project-documents",
         icon: <FileTextOutlined />,
         label: "项目资料",
-        forbiddenRoles: ["HR", "FINANCE"],
       },
     ],
   },
@@ -113,13 +105,11 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
         key: "/planned-work-entries",
         icon: <CalendarOutlined />,
         label: "计划工时",
-        forbiddenRoles: ["HR", "FINANCE"],
       },
       {
         key: "/actual-work-entries",
         icon: <ClockCircleOutlined />,
         label: "实际工时",
-        forbiddenRoles: ["HR", "FINANCE"],
       },
       {
         key: "/work-hours-analysis",
@@ -133,7 +123,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     key: "crm",
     icon: <ShopOutlined />,
     label: "客户与供应商",
-    roles: NAV_ROLE_GROUPS.adminAndProjectManager,
+    roles: NAV_ROLE_GROUPS.orgManagement,
     children: [
       {
         key: "/clients",
@@ -156,7 +146,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     key: "team-mgmt",
     icon: <TeamOutlined />,
     label: "团队管理",
-    roles: NAV_ROLE_GROUPS.orgManagementWithoutFinance,
+    roles: NAV_ROLE_GROUPS.orgManagement,
     children: [
       {
         key: "/employees",
@@ -180,18 +170,17 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
         icon: <SettingOutlined />,
         label: "系统参数",
         roles: NAV_ROLE_GROUPS.systemSettings,
+        forbiddenRoles: ["FINANCE"],
       },
       {
         key: "/leave-calendar",
         icon: <CalendarFilled />,
         label: "请假日历",
-        forbiddenRoles: ["FINANCE"],
       },
       {
         key: "/workday-adjustments",
         icon: <SwapOutlined />,
         label: "工作日变动",
-        forbiddenRoles: ["FINANCE"],
       },
     ],
   },

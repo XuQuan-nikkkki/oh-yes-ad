@@ -4,7 +4,6 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Modal, Radio, Select, Space, Spin } from "antd";
 import type { DefaultOptionType } from "antd/es/select";
 import { useSearchParams } from "next/navigation";
-import PageAccessResult from "@/components/PageAccessResult";
 import ActualWorkEntryForm, {
   ActualWorkEntryFormPayload,
 } from "@/components/project-detail/ActualWorkEntryForm";
@@ -40,10 +39,13 @@ function ActualWorkEntriesPageContent() {
   const searchParams = useSearchParams();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
-  const isAdmin = roleCodes.includes("ADMIN");
-  const hideWorktimeEntryPages =
-    !isAdmin && (roleCodes.includes("HR") || roleCodes.includes("FINANCE"));
   const canManageAnyActualWorkEntry = canManageProjectResources(roleCodes);
+  const canEditOwnActualWorkEntry =
+    Boolean(currentUser?.id) &&
+    !roleCodes.includes("HR") &&
+    !roleCodes.includes("FINANCE");
+  const canEditActualWorkEntry =
+    canManageAnyActualWorkEntry || canEditOwnActualWorkEntry;
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [employees, setEmployees] = useState<EmployeeOptionItem[]>([]);
   const [open, setOpen] = useState(false);
@@ -184,12 +186,14 @@ function ActualWorkEntriesPageContent() {
   );
 
   const onDelete = async (id: string) => {
+    if (!canEditActualWorkEntry) return;
     await fetch(`/api/actual-work-entries/${id}`, { method: "DELETE" });
     clearEntriesCache();
     setRefreshKey((prev) => prev + 1);
   };
 
   const onSubmit = async (payload: ActualWorkEntryFormPayload) => {
+    if (!canEditActualWorkEntry) return;
     if (editing) {
       await fetch(`/api/actual-work-entries/${editing.id}`, {
         method: "PATCH",
@@ -347,7 +351,7 @@ function ActualWorkEntriesPageContent() {
           { label: "日历", value: "calendar" },
         ]}
       />
-      {viewMode === "table" ? (
+      {viewMode === "table" && canEditActualWorkEntry ? (
         <Button
           key="create-actual-work-entry"
           type="primary"
@@ -361,7 +365,7 @@ function ActualWorkEntriesPageContent() {
         >
           新增实际工时
         </Button>
-      ) : (
+      ) : viewMode === "calendar" ? (
         <Select
           showSearch
           virtual={false}
@@ -389,13 +393,9 @@ function ActualWorkEntriesPageContent() {
               .includes(input.toLowerCase())
           }
         />
-      )}
+      ) : null}
     </Space>
   );
-
-  if (hideWorktimeEntryPages) {
-    return <PageAccessResult type="forbidden" />;
-  }
 
   return (
     <ListPageContainer>
@@ -418,7 +418,9 @@ function ActualWorkEntriesPageContent() {
           }}
           canManageRow={(row) =>
             canManageAnyActualWorkEntry ||
-            (Boolean(currentEmployeeId) && row.employee?.id === currentEmployeeId)
+            (canEditOwnActualWorkEntry &&
+              Boolean(currentEmployeeId) &&
+              row.employee?.id === currentEmployeeId)
           }
           onDelete={(id) => {
             void onDelete(id);

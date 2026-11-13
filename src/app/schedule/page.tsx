@@ -15,7 +15,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
 import AppLink from "@/components/AppLink";
-import PageAccessResult from "@/components/PageAccessResult";
 import ClientProjectSchedulePane from "@/components/schedule/ClientProjectSchedulePane";
 import WeeklyTasksPanel from "@/components/schedule/WeeklyTasksPanel";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
@@ -32,7 +31,6 @@ import PlannedWorkEntryForm, {
 import ProjectMilestoneSection from "@/components/project-detail/ProjectMilestoneSection";
 import ProjectMilestoneSectionActions from "@/components/project-detail/ProjectMilestoneSectionActions";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
-import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useProjectsStore } from "@/stores/projectsStore";
 
@@ -300,11 +298,6 @@ function SchedulePageContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [messageApi, contextHolder] = message.useMessage();
-  const currentUser = useAuthStore((state) => state.currentUser);
-  const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
-  const isAdmin = roleCodes.includes("ADMIN");
-  const shouldHideSchedulePage =
-    !isAdmin && (roleCodes.includes("HR") || roleCodes.includes("FINANCE"));
   const [loadingProjects, setLoadingProjects] = useState(true);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
   const [allProjects, setAllProjects] = useState<ProjectListItem[]>([]);
@@ -1268,10 +1261,6 @@ function SchedulePageContent() {
       scroll: false,
     });
   };
-
-  if (shouldHideSchedulePage) {
-    return <PageAccessResult type="forbidden" />;
-  }
 
   return (
     <>

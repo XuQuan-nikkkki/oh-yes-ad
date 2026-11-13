@@ -21,6 +21,8 @@ import {
   getActualWorkDateKey,
   getActualWorkEntryHours,
 } from "@/lib/actual-workdays";
+import { canManageProjectResources } from "@/lib/role-permissions";
+import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useProjectsStore } from "@/stores/projectsStore";
 
 dayjs.extend(isoWeek);
@@ -116,6 +118,13 @@ const normalizeQueryDate = (value: string | null) => {
 
 const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
   const [messageApi, contextHolder] = message.useMessage();
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const roleCodes = getRoleCodesFromUser(currentUser);
+  const canEditWorkLogs =
+    canManageProjectResources(roleCodes) ||
+    (Boolean(currentUser?.id) &&
+      !roleCodes.includes("HR") &&
+      !roleCodes.includes("FINANCE"));
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -453,6 +462,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
   }, [actualRows, employee]);
 
   useEffect(() => {
+    if (!canEditWorkLogs) return;
     const onKeyDown = async (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (
@@ -542,6 +552,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
+    canEditWorkLogs,
     copiedWorkLog,
     employee,
     employeeActualRows,
@@ -691,7 +702,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
   };
 
   const openCreateWorkLogFromTask = (task: WeeklyTaskCard) => {
-    if (!employee) return;
+    if (!employee || !canEditWorkLogs) return;
     void ensureWorkLogProjectOptionsLoaded();
     const start = dayjs();
     const end = start.add(1, "hour");
@@ -712,6 +723,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
   };
 
   const handleSubmitWorkLog = async (payload: ActualWorkEntryFormPayload) => {
+    if (!canEditWorkLogs) return;
     setWorkLogSubmitting(true);
     try {
       let res: Response;
@@ -769,7 +781,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
   };
 
   const handleDeleteWorkLog = async () => {
-    if (workLogMode !== "edit" || !editingWorkLogId) return;
+    if (!canEditWorkLogs || workLogMode !== "edit" || !editingWorkLogId) return;
     const confirmed = window.confirm("确定删除这条工时记录？");
     if (!confirmed) return;
 
@@ -802,6 +814,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
     startDate: string,
     endDate: string,
   ) => {
+    if (!canEditWorkLogs) return;
     const res = await fetch(`/api/actual-work-entries/${entryId}?projectType=all`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -920,15 +933,15 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
               {weeklyTasks.map((task) => (
                 <Card
                   key={task.taskId}
-                  hoverable
+                  hoverable={canEditWorkLogs}
                   size="small"
                   title={task.taskName}
-                  onClick={() => openCreateWorkLogFromTask(task)}
-                  extra={
+                  onClick={canEditWorkLogs ? () => openCreateWorkLogFromTask(task) : undefined}
+                  extra={canEditWorkLogs ? (
                     <span style={{ color: "rgba(0,0,0,0.45)", fontSize: 12 }}>
                       点击记录工时
                     </span>
-                  }
+                  ) : null}
                 >
                   <div style={{ color: "rgba(0,0,0,0.65)", marginBottom: 4 }}>
                     {task.projectName}
@@ -1066,10 +1079,10 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
               scrollTime="00:00:00"
               dayMaxEvents
               height="auto"
-              editable
-              eventStartEditable
-              eventDurationEditable
-              eventResizableFromStart
+              editable={canEditWorkLogs}
+              eventStartEditable={canEditWorkLogs}
+              eventDurationEditable={canEditWorkLogs}
+              eventResizableFromStart={canEditWorkLogs}
               datesSet={(info) => {
                 setCalendarVisibleRange((prev) => {
                   const prevStart = prev?.start?.getTime?.() ?? null;
@@ -1087,6 +1100,10 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
                 syncCalendarSearchParams(info);
               }}
               eventClick={(info) => {
+                if (!canEditWorkLogs) {
+                  router.push(`/actual-work-entries/${info.event.id}`);
+                  return;
+                }
                 setSelectedCalendarEntryId(info.event.id);
                 const entry = employeeActualRows.find(
                   (item) => item.id === info.event.id,
@@ -1095,6 +1112,10 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
                 void openEditWorkLogModal(entry);
               }}
               eventDrop={(info) => {
+                if (!canEditWorkLogs) {
+                  info.revert();
+                  return;
+                }
                 void handleCalendarTimeChange({
                   entryId: info.event.id,
                   start: info.event.start,
@@ -1103,6 +1124,10 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
                 });
               }}
               eventResize={(info) => {
+                if (!canEditWorkLogs) {
+                  info.revert();
+                  return;
+                }
                 void handleCalendarTimeChange({
                   entryId: info.event.id,
                   start: info.event.start,
@@ -1111,6 +1136,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
                 });
               }}
               dateClick={(info) => {
+                if (!canEditWorkLogs) return;
                 setSelectedCalendarEntryId(null);
                 lastCalendarDateRef.current = {
                   date: info.date,
@@ -1146,7 +1172,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
       `}</style>
       <Modal
         title={workLogMode === "edit" ? "修改工时记录" : "创建工时记录"}
-        open={workLogModalOpen}
+        open={canEditWorkLogs && workLogModalOpen}
         onCancel={() => {
           if (workLogSubmitting || workLogDeleting) return;
           resetWorkLogModalState();
