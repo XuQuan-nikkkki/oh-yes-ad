@@ -35,8 +35,7 @@ function HomePageContent() {
   const hideHomeWorkTabs =
     !roleCodes.includes("ADMIN") &&
     (roleCodes.includes("HR") || roleCodes.includes("FINANCE"));
-  const canViewOwnedProjectsTab =
-    roleCodes.includes("PROJECT_MANAGER") && !hideHomeWorkTabs;
+  const canViewOwnedProjectsTab = roleCodes.includes("PROJECT_MANAGER");
   const availableHomeTabs = useMemo(
     () => [
       HOME_TAB_SITE_MAP,
