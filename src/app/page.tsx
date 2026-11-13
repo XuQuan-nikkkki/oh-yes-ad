@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { AppstoreOutlined, ArrowRightOutlined, ClockCircleOutlined, PlusOutlined } from "@ant-design/icons";
 import { Button, Card, Drawer, Empty, Space, Spin, Tag, Typography, message } from "antd";
 import dayjs from "dayjs";
+import "dayjs/locale/zh-cn";
 import isoWeek from "dayjs/plugin/isoWeek";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import HomeSiteMap from "@/components/home/HomeSiteMap";
@@ -160,7 +161,7 @@ function HomePageContent() {
 
   return <div className="home-workbench">
     {contextHolder}
-    <div className="home-heading"><div><h1>我的工作台</h1><p>{dayjs().format("YYYY年M月D日 dddd")} · <span>{groups.find((group) => group.key === "overdue")?.items.length ?? 0} 项工作逾期，{groups.find((group) => group.key === "today")?.items.length ?? 0} 项今日到期</span></p></div><Space wrap><Button icon={<AppstoreOutlined />} onClick={() => setDrawer("site-map")}>全部功能</Button>{canViewWork ? <Button type="primary" icon={<PlusOutlined />} onClick={() => openCalendar(true)}>记录工时</Button> : null}</Space></div>
+    <div className="home-heading"><div><h1>我的工作台</h1><p>{dayjs().locale("zh-cn").format("YYYY年M月D日 ddd")} · <span>{groups.find((group) => group.key === "overdue")?.items.length ?? 0} 项工作逾期，{groups.find((group) => group.key === "today")?.items.length ?? 0} 项今日到期</span></p></div><Space wrap><Button icon={<AppstoreOutlined />} onClick={() => setDrawer("site-map")}>全部功能</Button>{canViewWork ? <Button type="primary" icon={<PlusOutlined />} onClick={() => openCalendar(true)}>记录工时</Button> : null}</Space></div>
     {error ? <Card><Typography.Text type="danger">{error}</Typography.Text><Button type="link" onClick={() => void loadHome()}>重试</Button></Card> : null}
     <Spin spinning={loading}><div className="home-dashboard">
       <Card className="home-panel home-work-panel" title={<span>我的工作 {canViewWork ? <button className="home-participation-link" onClick={() => setDrawer("participation")}>参与项目 {data?.projects.length ?? 0}</button> : null}</span>}>{!canViewWork ? <Empty description="当前角色暂无个人工作项" /> : groups.length ? groups.map((group) => <section className="home-work-group" key={group.key}><div className="home-group-title"><i style={{ backgroundColor: group.color }} />{group.label}<small>{group.items.length}</small></div>{group.items.map(workRow)}</section>) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="目前没有待处理的工作项" />}{canViewWork && workItems.length > 0 ? <div className="home-panel-footer"><Button type="link" onClick={() => setShowAllWork((value) => !value)}>{showAllWork ? "收起工作项" : "查看全部工作项"} <ArrowRightOutlined /></Button></div> : null}</Card>
