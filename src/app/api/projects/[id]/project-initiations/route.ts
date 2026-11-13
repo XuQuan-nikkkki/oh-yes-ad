@@ -17,6 +17,7 @@ import {
 } from "@/lib/project-outsource";
 import { computeInitiationEstimatedAgencyFee } from "@/lib/prisma/project-initiation";
 import { getNumericSystemSettings } from "@/lib/system-settings.server";
+import { parseRequestedExecutionCostItems } from "@/lib/project-estimation-execution-cost";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -114,6 +115,15 @@ const includeDetail = {
       value: true,
       color: true,
     },
+  },
+  executionCostItems: {
+    select: {
+      id: true,
+      costTypeOptionId: true,
+      requestedAmount: true,
+      costTypeOption: { select: { id: true, value: true, color: true } },
+    },
+    orderBy: { createdAt: "asc" as const },
   },
   outsourceItems: {
     select: {
@@ -276,15 +286,22 @@ export async function POST(req: NextRequest, context: RouteContext) {
     0,
   );
 
-  const executionCostTypeValues = Array.isArray(body.executionCostTypes)
+  const executionCostTypeValues = Array.from(new Set(Array.isArray(body.executionCostTypes)
     ? body.executionCostTypes
         .filter((item: unknown): item is string => typeof item === "string")
         .map((item: string) => item.trim())
         .filter(Boolean)
-    : [];
+    : [])) as string[];
   const executionCostTypeOptionIds = await upsertExecutionCostTypeOptions(
     executionCostTypeValues,
   );
+  const requestedCostItems = parseRequestedExecutionCostItems(
+    body.executionCostItems,
+    executionCostTypeValues,
+  );
+  if (!requestedCostItems) {
+    return new Response("Invalid executionCostItems", { status: 400 });
+  }
   const outsourceItems = normalizeProjectOutsourceItems(
     Array.isArray(body.outsourceItems) ? body.outsourceItems : [],
   );
@@ -357,6 +374,12 @@ export async function POST(req: NextRequest, context: RouteContext) {
         },
         executionCostTypes: {
           connect: executionCostTypeOptionIds.map((id) => ({ id })),
+        },
+        executionCostItems: {
+          create: requestedCostItems.map((item, index) => ({
+            costTypeOptionId: executionCostTypeOptionIds[index],
+            requestedAmount: item.requestedAmount,
+          })),
         },
         members: {
           create: memberCreateData.map(

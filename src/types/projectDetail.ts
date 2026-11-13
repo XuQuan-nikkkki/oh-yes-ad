@@ -69,6 +69,16 @@ export type ProjectCostEstimationSummary = {
     value?: string | null;
     color?: string | null;
   }[];
+  executionCostItems?: {
+    id: string;
+    costTypeOptionId: string;
+    requestedAmount: number | null;
+    costTypeOption?: {
+      id?: string;
+      value?: string | null;
+      color?: string | null;
+    } | null;
+  }[];
   hasOtherExecutionCostType?: boolean;
   members?: {
     id: string;

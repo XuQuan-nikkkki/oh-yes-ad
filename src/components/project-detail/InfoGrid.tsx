@@ -41,6 +41,7 @@ export type InfoGridItemProps = {
   title: ReactNode;
   value?: ReactNode;
   description?: ReactNode;
+  cornerTag?: ReactNode;
   colSpan?: number;
   minHeight?: number;
   style?: CSSProperties;
@@ -51,6 +52,7 @@ export const InfoGridItem = ({
   title,
   value,
   description,
+  cornerTag,
   colSpan = 1,
   minHeight,
   style,
@@ -59,6 +61,7 @@ export const InfoGridItem = ({
   <div
     className={className}
     style={{
+      position: "relative",
       background: "#fff",
       padding: "18px 24px",
       minHeight: typeof minHeight === "number" ? minHeight : undefined,
@@ -66,14 +69,36 @@ export const InfoGridItem = ({
       ...style,
     }}
   >
-    <div style={titleStyle}>{title}</div>
+    {title === null || title === undefined ? null : (
+      <div style={titleStyle}>{title}</div>
+    )}
     {value === null || value === undefined ? null : (
-      <div style={{ marginTop: 10 }}>{renderWithTextStyle(value, valueTextStyle)}</div>
+      <div style={{ marginTop: title === null || title === undefined ? 0 : 10 }}>
+        {renderWithTextStyle(value, valueTextStyle)}
+      </div>
     )}
     {description === null || description === undefined ? null : (
       <div style={{ marginTop: 8 }}>
         {renderWithTextStyle(description, descriptionTextStyle)}
       </div>
+    )}
+    {cornerTag === null || cornerTag === undefined ? null : (
+      <span
+        style={{
+          position: "absolute",
+          top: 8,
+          right: 8,
+          padding: "2px 6px",
+          borderRadius: 4,
+          background: "#f5f5f5",
+          color: "rgba(0,0,0,0.45)",
+          fontSize: 12,
+          lineHeight: "18px",
+          pointerEvents: "none",
+        }}
+      >
+        {cornerTag}
+      </span>
     )}
   </div>
 );

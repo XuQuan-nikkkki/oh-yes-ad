@@ -52,18 +52,18 @@ export const AgencyFeeRateInput = ({
 export const HasClientBudgetSwitch = ({
   name = "hasClientBudget",
 }: FormItemProps) => (
-  <Form.Item label="是否有客户报价" name={name} valuePropName="checked" layout="horizontal">
+  <Form.Item label="是否有客户预算" name={name} valuePropName="checked" layout="horizontal">
     <Switch checkedChildren="有" unCheckedChildren="没有" />
   </Form.Item>
 );
 
 export const ClientBudgetInput = ({ name = "clientBudget" }: FormItemProps) => (
   <Form.Item
-    label="客户报价(不含税)"
+    label="客户预算（不含税）"
     name={name}
-    rules={[{ required: true, message: "请输入客户报价(不含税)" }]}
+    rules={[{ required: true, message: "请输入客户预算（不含税）" }]}
   >
-    <Input placeholder="请输入客户报价(不含税)" />
+    <Input placeholder="请输入客户预算（不含税）" />
   </Form.Item>
 );
 
@@ -126,7 +126,7 @@ export const ExecutionCostTypesSelect = ({
 export const OtherExecutionCostRemarkInput = ({
   name = "otherExecutionCostRemark",
 }: FormItemProps) => (
-  <Form.Item label="其他费用备注" name={name}>
-    <Input.TextArea rows={1} placeholder="请输入其他费用备注" />
+  <Form.Item label="其他执行费用备注" name={name}>
+    <Input.TextArea rows={1} placeholder="请输入其他执行费用备注" />
   </Form.Item>
 );

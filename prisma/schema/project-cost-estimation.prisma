@@ -21,6 +21,7 @@ model ProjectCostEstimation {
   outsourceRemark String?
 
   executionCostTypes       SelectOption[] @relation("ProjectCostEstimationExecutionCostTypes")
+  executionCostItems       ProjectCostEstimationExecutionCostItem[]
   otherExecutionCostRemark String?
 
   pricingStrategy ProjectPricingStrategy?
@@ -31,6 +32,25 @@ model ProjectCostEstimation {
   @@unique([projectId, version])
   @@index([projectId])
   @@index([ownerId])
+}
+
+model ProjectCostEstimationExecutionCostItem {
+  id String @id @default(uuid())
+
+  costEstimationId String
+  costEstimation   ProjectCostEstimation @relation(fields: [costEstimationId], references: [id], onDelete: Cascade)
+
+  costTypeOptionId String
+  costTypeOption   SelectOption @relation("ProjectCostEstimationExecutionCostItemType", fields: [costTypeOptionId], references: [id])
+
+  requestedAmount Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([costEstimationId, costTypeOptionId])
+  @@index([costEstimationId])
+  @@index([costTypeOptionId])
 }
 
 model ProjectCostEstimationMember {

@@ -1002,16 +1002,16 @@ const ProjectFinancialStructureCard = ({
         await fetchFinancialStructure();
         await onSaved?.();
         if (typeof app?.message?.success === "function") {
-          app.message.success("补充预计时长成功");
+          app.message.success("补充预估时长成功");
         } else {
-          void messageApi.success("补充预计时长成功");
+          void messageApi.success("补充预估时长成功");
         }
       } catch (error) {
         console.error(error);
         if (typeof app?.message?.error === "function") {
-          app.message.error("补充预计时长失败");
+          app.message.error("补充预估时长失败");
         } else {
-          void messageApi.error("补充预计时长失败");
+          void messageApi.error("补充预估时长失败");
         }
       } finally {
         setSupplementSubmitting(false);
@@ -1106,7 +1106,7 @@ const ProjectFinancialStructureCard = ({
           onClick={() => setSupplementModalOpen(true)}
           disabled={!canCreateFinancialStructure}
         >
-          补充预计时长
+          补充预估时长
         </Button>
       ) : null}
       {!financialStructure ? (

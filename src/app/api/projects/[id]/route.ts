@@ -164,6 +164,12 @@ type ProjectCostEstimationPayload = {
   }>;
   otherExecutionCostRemark?: string | null;
   executionCostTypes?: NullableSelectOptionValue[];
+  executionCostItems?: Array<{
+    id: string;
+    costTypeOptionId: string;
+    requestedAmount: number | null;
+    costTypeOption?: NullableSelectOptionValue;
+  }>;
   members?: ProjectCostEstimationMemberPayload[];
 } & Record<string, unknown>;
 type ProjectManualCostPayload = {
@@ -291,6 +297,15 @@ const projectCostEstimationSelect = {
       color: true,
     },
   },
+  executionCostItems: {
+    select: {
+      id: true,
+      costTypeOptionId: true,
+      requestedAmount: true,
+      costTypeOption: { select: { id: true, value: true, color: true } },
+    },
+    orderBy: { createdAt: "asc" as const },
+  },
   members: {
     select: {
       id: true,
@@ -338,6 +353,15 @@ const projectInitiationSelect = {
       value: true,
       color: true,
     },
+  },
+  executionCostItems: {
+    select: {
+      id: true,
+      costTypeOptionId: true,
+      requestedAmount: true,
+      costTypeOption: { select: { id: true, value: true, color: true } },
+    },
+    orderBy: { createdAt: "asc" as const },
   },
   members: {
     select: {

@@ -82,7 +82,7 @@ const buildSyncSummary = (
   if (includeQuoteAmount && typeof estimation.contractAmount === "number") {
     lines.push(`报价金额：${formatAmount(estimation.contractAmount)}元`);
   }
-  lines.push(`预计时长：${estimation.estimatedDuration}个工作日`);
+  lines.push(`预估时长：${estimation.estimatedDuration}个工作日`);
   lines.push("");
 
   lines.push("人员配置：");
@@ -107,11 +107,17 @@ const buildSyncSummary = (
   const executionCostValues = (estimation.executionCostTypes ?? [])
     .map((item) => toTrimmedString(item.value))
     .filter(Boolean)
-    .map((value) =>
-      value === "其他" && otherExecutionCostRemark
+    .map((value) => {
+      const label = value === "其他" && otherExecutionCostRemark
         ? `其他（${otherExecutionCostRemark}）`
-        : value,
-    );
+        : value;
+      const amount = estimation.executionCostItems?.find(
+        (item) => item.costTypeOption?.value === value,
+      )?.requestedAmount;
+      return typeof amount === "number"
+        ? `${label}：${formatAmount(amount)}元`
+        : label;
+    });
   lines.push(`执行费用需求：${executionCostValues.join("、") || "-"}`);
 
   if (detailLink) {
@@ -332,10 +338,24 @@ const ProjectInitiationCard = ({
                     (latestInitiation?.executionCostTypes ?? []).some(
                       (item) => item?.value,
                     ) ? (
-                      <MultipleSelectOptions
-                        field={executionCostField}
-                        options={latestInitiation?.executionCostTypes}
-                      />
+                      <Space orientation="vertical" size={4}>
+                        {(latestInitiation?.executionCostTypes ?? []).map((option) => {
+                          const amount = latestInitiation?.executionCostItems?.find(
+                            (item) => item.costTypeOptionId === option.id,
+                          )?.requestedAmount;
+                          return (
+                            <Space key={option.id ?? option.value}>
+                              <MultipleSelectOptions
+                                field={executionCostField}
+                                options={[option]}
+                              />
+                              {typeof amount === "number" ? (
+                                <span>申请预算 {formatAmount(amount)} 元</span>
+                              ) : null}
+                            </Space>
+                          );
+                        })}
+                      </Space>
                     ) : (
                       "-"
                     ),
@@ -402,7 +422,7 @@ const ProjectInitiationCard = ({
                 lineHeight: 1.8,
               }}
             >
-              {syncSummaryText || "暂无可同步的测算信息"}
+              {syncSummaryText || "暂无可同步的立项申请信息"}
             </div>
           </Modal>
         </>

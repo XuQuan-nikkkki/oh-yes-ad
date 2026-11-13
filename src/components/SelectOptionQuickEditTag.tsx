@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Button,
   Checkbox,
@@ -51,6 +51,7 @@ type Props = {
   disabled?: boolean;
   fallbackText?: string;
   tagText?: string;
+  tagSuffix?: ReactNode;
   tagColor?: string | null;
   modalTitle?: string;
   modalDescription?: string;
@@ -245,6 +246,7 @@ const SelectOptionQuickEditTag = ({
   disabled = false,
   fallbackText = "-",
   tagText,
+  tagSuffix,
   tagColor,
   modalTitle = "修改选项",
   modalDescription,
@@ -672,6 +674,7 @@ const SelectOptionQuickEditTag = ({
           }}
         >
           {resolvedTagText}
+          {tagSuffix}
         </Tag>
       </span>
 

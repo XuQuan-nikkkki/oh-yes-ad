@@ -56,14 +56,24 @@ const ProjectEstimationMembersFormList = ({
   return (
     <Form.List name="members">
       {(fields, { add, remove }, { errors }) => (
-        <Space orientation="vertical" style={{ width: "100%" }} size={12}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr)",
+            gap: 12,
+            width: "100%",
+            minWidth: 0,
+          }}
+        >
           <div
             ref={memberTableContainerRef}
             style={{
               width: "100%",
+              minWidth: 0,
+              maxWidth: "100%",
               maxHeight: MEMBER_TABLE_MAX_HEIGHT,
               overflowY: "auto",
-              overflowX: "hidden",
+              overflowX: "auto",
             }}
           >
             <Table
@@ -71,24 +81,23 @@ const ProjectEstimationMembersFormList = ({
               pagination={false}
               dataSource={fields}
               locale={{ emptyText: "暂无成员，请添加" }}
-              style={{ width: "100%" }}
+              style={{ width: "100%", minWidth: 0 }}
               tableLayout="fixed"
               scroll={{
-                x: "max-content",
                 y: MEMBER_TABLE_MAX_HEIGHT - 50,
               }}
               columns={[
                 {
                   title: "序号",
                   key: "index",
-                  width: 64,
+                  width: "7%",
                   align: "center",
                   render: (_value, _field, index) => index + 1,
                 },
                 {
                   title: "姓名",
                   key: "employeeId",
-                  width: 280,
+                  width: "32%",
                   render: (_value, field) => (
                     <Form.Item
                       name={[field.name, "employeeId"]}
@@ -128,6 +137,18 @@ const ProjectEstimationMembersFormList = ({
                               label: employee.name,
                               value: employee.id,
                             });
+                          }
+
+                          const selectedEmployee = currentEmployeeId
+                            ? employeeById.get(currentEmployeeId)
+                            : undefined;
+                          if (selectedEmployee && !isEmployeeActive(selectedEmployee)) {
+                            grouped.set("离职人员", [
+                              {
+                                label: `${selectedEmployee.name}（离职）`,
+                                value: selectedEmployee.id,
+                              },
+                            ]);
                           }
 
                           return Array.from(grouped.entries())
@@ -184,7 +205,7 @@ const ProjectEstimationMembersFormList = ({
                 {
                   title: "职能",
                   key: "function",
-                  width: 180,
+                  width: "18%",
                   render: (_value, field) => {
                     const row = memberDraftRows[field.name];
                     const employee = row?.employeeId
@@ -197,7 +218,7 @@ const ProjectEstimationMembersFormList = ({
                 {
                   title: "占比",
                   key: "allocationPercent",
-                  width: 220,
+                  width: "23%",
                   render: (_value, field) => (
                     <Form.Item
                       name={[field.name, "allocationPercent"]}
@@ -228,7 +249,7 @@ const ProjectEstimationMembersFormList = ({
                 {
                   title: "操作",
                   key: "actions",
-                  width: 120,
+                  width: "20%",
                   render: (_value, field) => (
                     <Space size={8} wrap={false}>
                       <Button
@@ -298,7 +319,7 @@ const ProjectEstimationMembersFormList = ({
           >
             + 添加一个成员
           </Button>
-        </Space>
+        </div>
       )}
     </Form.List>
   );

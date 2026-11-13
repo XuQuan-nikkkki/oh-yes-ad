@@ -2,9 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { Button, Card, Empty, Modal, Space, Typography } from "antd";
-import MultipleSelectOptions from "@/components/MultipleSelectOptions";
+import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import InfoGrid from "@/components/project-detail/InfoGrid";
 import ProjectCostEstimationModal from "@/components/project-detail/ProjectCostEstimationModal";
+import {
+  ProjectMinimumQuoteDetails,
+  ProjectMinimumQuoteSummary,
+  useMinimumQuote,
+} from "@/components/project-detail/ProjectMinimumQuoteEstimate";
+import minimumQuoteStyles from "@/components/project-detail/ProjectMinimumQuoteEstimate.module.css";
 import StyledStatisticCard from "@/components/project-detail/StyledStatisticCard";
 import {
   formatProjectOutsourceItemsText,
@@ -93,10 +99,10 @@ const buildSyncSummary = (
   if (includeQuoteAmount && typeof estimation.contractAmount === "number") {
     lines.push(`报价金额：${formatAmount(estimation.contractAmount)}元`);
   }
-  lines.push(`预计时长：${estimation.estimatedDuration}个工作日`);
+  lines.push(`预估时长：${estimation.estimatedDuration}个工作日`);
   const clientBudget = parseBudgetValue(estimation.clientBudget);
   if (typeof clientBudget === "number") {
-    lines.push(`客户报价(不含税)：${formatAmount(clientBudget)}`);
+    lines.push(`客户预算（不含税）：${formatAmount(clientBudget)}`);
   }
   lines.push("");
 
@@ -122,11 +128,17 @@ const buildSyncSummary = (
   const executionCostValues = (estimation.executionCostTypes ?? [])
     .map((item) => toTrimmedString(item.value))
     .filter(Boolean)
-    .map((value) =>
-      value === "其他" && otherExecutionCostRemark
+    .map((value) => {
+      const label = value === "其他" && otherExecutionCostRemark
         ? `其他（${otherExecutionCostRemark}）`
-        : value,
-    );
+        : value;
+      const amount = estimation.executionCostItems?.find(
+        (item) => item.costTypeOption?.value === value,
+      )?.requestedAmount;
+      return typeof amount === "number"
+        ? `${label}：${formatAmount(amount)}元`
+        : label;
+    });
   lines.push(`执行费用需求：${executionCostValues.join("、") || "-"}`);
 
   if (detailLink) {
@@ -154,6 +166,9 @@ const ProjectCostEstimationCard = ({
   const { canManageProject } = useProjectPermission();
   const [modalOpen, setModalOpen] = useState(false);
   const [syncInfoModalOpen, setSyncInfoModalOpen] = useState(false);
+  const minimumQuote = useMinimumQuote(
+    mode === "actions" ? undefined : latestCostEstimation,
+  );
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
   const canManageByPmRole =
@@ -180,30 +195,31 @@ const ProjectCostEstimationCard = ({
     ],
   );
 
-  const hasAgencyFeeRate =
-    typeof latestCostEstimation?.agencyFeeRate === "number" &&
-    latestCostEstimation.agencyFeeRate > 0;
-  const hasOtherExecutionCostType = useMemo(() => {
-    if (typeof latestCostEstimation?.hasOtherExecutionCostType === "boolean") {
-      return latestCostEstimation.hasOtherExecutionCostType;
-    }
-    return (latestCostEstimation?.executionCostTypes ?? []).some(
-      (item) =>
-        typeof item?.value === "string" && item.value.trim() === "其他",
-    );
-  }, [
-    latestCostEstimation?.executionCostTypes,
-    latestCostEstimation?.hasOtherExecutionCostType,
-  ]);
-  const estimatedAgencyFee = useMemo(() => {
-    if (typeof latestCostEstimation?.estimatedAgencyFee === "number") {
-      return latestCostEstimation.estimatedAgencyFee;
-    }
-    if (!hasAgencyFeeRate) return null;
-    const budget = parseBudgetValue(latestCostEstimation?.clientBudget);
-    if (budget === null) return null;
-    return ((latestCostEstimation?.agencyFeeRate ?? 0) / 100) * budget;
-  }, [hasAgencyFeeRate, latestCostEstimation]);
+  const hasOtherExecutionCostType =
+    typeof latestCostEstimation?.hasOtherExecutionCostType === "boolean"
+      ? latestCostEstimation.hasOtherExecutionCostType
+      : (latestCostEstimation?.executionCostTypes ?? []).some(
+          (item) =>
+            typeof item?.value === "string" && item.value.trim() === "其他",
+        );
+  const executionCostOptions = (latestCostEstimation?.executionCostTypes ?? [])
+    .filter((option) => Boolean(option?.value));
+  const requestedAmountsByOptionId = new Map(
+    (latestCostEstimation?.executionCostItems ?? []).map((item) => [
+      item.costTypeOptionId,
+      item.requestedAmount,
+    ]),
+  );
+  const requestedAmounts = executionCostOptions.map((option) =>
+    requestedAmountsByOptionId.get(option.id ?? ""),
+  );
+  const executionCostTotal =
+    requestedAmounts.length > 0 &&
+    requestedAmounts.every((amount): amount is number =>
+      typeof amount === "number" && Number.isFinite(amount),
+    )
+      ? requestedAmounts.reduce((total, amount) => total + (amount ?? 0), 0)
+      : null;
 
   const actionsNode = canManageByPmRole ? (
     hasEstimation ? (
@@ -230,23 +246,16 @@ const ProjectCostEstimationCard = ({
     )
   ) : null;
 
-  const contentNode = hasEstimation ? (
+  const contentNode = latestCostEstimation ? (
     <Space orientation="vertical" size={18} style={{ width: "100%" }}>
       <div>
         <Typography.Title level={5} style={sectionTitleStyle}>
           基础信息
         </Typography.Title>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-            gap: 12,
-            marginBottom: 12,
-          }}
-        >
+        <div className={minimumQuoteStyles.basicCards}>
           <StyledStatisticCard
             statistic={{
-              title: "客户报价(不含税)",
+              title: "客户预算（不含税）",
               value:
                 parseBudgetValue(latestCostEstimation?.clientBudget) ?? "-",
               suffix:
@@ -265,6 +274,9 @@ const ProjectCostEstimationCard = ({
                   <span style={statisticDescriptionStyle}>创建人：-</span>
                 ),
             }}
+          />
+          <ProjectMinimumQuoteSummary
+            quote={minimumQuote.estimate?.quote ?? null}
           />
           <StyledStatisticCard
             statistic={{
@@ -301,37 +313,51 @@ const ProjectCostEstimationCard = ({
           style={{ marginBottom: 12 }}
           rows={[
             {
-              columns: 2,
-              title: "中介费用",
-              items: [
-                {
-                  title: "中介费率",
-                  value: hasAgencyFeeRate
-                    ? `${formatAmount(latestCostEstimation.agencyFeeRate ?? 0)}%`
-                    : "-",
-                },
-                {
-                  title: "预估中介费",
-                  value:
-                    typeof estimatedAgencyFee === "number"
-                      ? `${formatAmount(estimatedAgencyFee)} 元`
-                      : "-",
-                },
-              ],
-            },
-            {
               columns: 3,
-              title: "外包费用",
+              title: (
+                <span style={{ display: "grid", gridTemplateColumns: "1fr 2fr" }}>
+                  <span
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "8px 24px",
+                    }}
+                  >
+                    <span>中介费用</span>
+                    <span style={{ fontWeight: 700 }}>
+                      费率 {typeof latestCostEstimation.agencyFeeRate === "number"
+                        ? `${formatAmount(latestCostEstimation.agencyFeeRate)}%`
+                        : "-"}
+                    </span>
+                  </span>
+                  <span
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "8px 24px",
+                      borderLeft: "1px solid #e5e5e5",
+                    }}
+                  >
+                    <span>外包费用</span>
+                    {(latestCostEstimation?.outsourceItems?.length ?? 0) > 0 ? (
+                      <span style={{ fontWeight: 700 }}>
+                        合计 {formatAmount(getProjectOutsourceTotal(latestCostEstimation?.outsourceItems))} 元
+                      </span>
+                    ) : null}
+                  </span>
+                </span>
+              ),
+              titleStyle: { padding: 0 },
               items: [
                 {
-                  title: "外包费用",
-                  value:
-                    (latestCostEstimation?.outsourceItems?.length ?? 0) > 0
-                      ? `${getProjectOutsourceTotal(latestCostEstimation?.outsourceItems)} 元`
-                      : "-",
+                  title: null,
+                  value: "按最终报价计算",
                 },
                 {
-                  title: "外包费用明细",
+                  title: null,
+                  cornerTag: "明细",
                   value: latestCostEstimation?.outsourceInfo?.trim()
                     ? latestCostEstimation.outsourceInfo
                     : (latestCostEstimation?.outsourceItems?.length ?? 0) > 0
@@ -341,27 +367,53 @@ const ProjectCostEstimationCard = ({
                       : "-",
                 },
                 {
-                  title: "外包费用备注",
+                  title: null,
+                  cornerTag: "备注",
                   value: latestCostEstimation?.outsourceRemark?.trim() || "-",
                 },
               ],
             },
             {
               columns: hasOtherExecutionCostType ? 2 : 1,
-              title: "执行费用",
+              title: (
+                <span style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+                  <span>执行费用</span>
+                  {executionCostTotal !== null ? (
+                    <span style={{ fontWeight: 700 }}>
+                      合计 {formatAmount(executionCostTotal)} 元
+                    </span>
+                  ) : null}
+                </span>
+              ),
               items: [
                 {
-                  title: "执行费用类别",
+                  title: null,
                   value:
-                    (latestCostEstimation?.executionCostTypes?.length ?? 0) >
-                      0 &&
-                    (latestCostEstimation?.executionCostTypes ?? []).some(
-                      (item) => item?.value,
-                    ) ? (
-                      <MultipleSelectOptions
-                        field={executionCostField}
-                        options={latestCostEstimation?.executionCostTypes}
-                      />
+                    executionCostOptions.length > 0 ? (
+                      <Space size={[8, 8]} wrap>
+                        {executionCostOptions.map((option) => {
+                          const amount = requestedAmountsByOptionId.get(option.id ?? "");
+                          return (
+                            <SelectOptionQuickEditTag
+                              key={option.id ?? option.value}
+                              field={executionCostField}
+                              option={option}
+                              tagSuffix={typeof amount === "number" ? (
+                                <span
+                                  style={{
+                                    borderLeft: "1px solid currentColor",
+                                    marginLeft: 10,
+                                    paddingLeft: 10,
+                                    fontWeight: 400,
+                                  }}
+                                >
+                                  {formatAmount(amount)} 元
+                                </span>
+                              ) : undefined}
+                            />
+                          );
+                        })}
+                      </Space>
                     ) : (
                       "-"
                     ),
@@ -381,6 +433,19 @@ const ProjectCostEstimationCard = ({
           ]}
         />
       </div>
+
+      {minimumQuote.estimate ? (
+        <div>
+          <Typography.Title level={5} style={sectionTitleStyle}>
+            最低报价推算
+          </Typography.Title>
+          <ProjectMinimumQuoteDetails
+            estimate={minimumQuote.estimate}
+            costBaselineRatio={minimumQuote.costBaselineRatio}
+            agencyFeeRate={latestCostEstimation.agencyFeeRate}
+          />
+        </div>
+      ) : null}
     </Space>
   ) : (
     <Empty description="暂无成本测算数据" />
