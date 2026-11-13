@@ -1,6 +1,7 @@
 import { config } from "dotenv";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { getDefaultSubmissionEnabled } from "../src/lib/work-item-defaults";
 
 config();
 if (process.argv.includes("--test")) config({ path: ".db-sync/sync.env" });
@@ -349,6 +350,7 @@ const main = async () => {
             legacyTaskId: task.id,
             briefId: brief.id,
             type,
+            submissionEnabled: getDefaultSubmissionEnabled(type),
             status,
             title: task.name,
             description: "",

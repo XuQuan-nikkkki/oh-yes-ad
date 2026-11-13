@@ -24,10 +24,11 @@ export async function PATCH(
     select: {
       id: true,
       isFinal: true,
-      workItem: { select: { type: true, sourceFilePolicy: true } },
+      workItem: { select: { type: true, sourceFilePolicy: true, submissionEnabled: true } },
     },
   });
   if (!submission) return new Response("提交记录不存在", { status: 404 });
+  if (!submission.workItem.submissionEnabled) return new Response("该工作项无提交内容", { status: 400 });
 
   if (mode === "source") {
     if (!submission.isFinal) {

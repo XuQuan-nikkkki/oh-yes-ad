@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { requireAuthenticatedEmployee, requireProjectWritePermission } from "@/lib/api-permissions";
+import { requireAuthenticatedEmployee } from "@/lib/api-permissions";
+import { canManageProjectResourcesByRoles } from "@/lib/role-permissions";
 import { parseSubmissionResources } from "@/lib/work-item-submission-input";
 import { prisma } from "@/lib/prisma";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
@@ -9,7 +10,9 @@ const getWorkItem = (id: string) => {
     where: { id },
     select: {
       id: true,
+      assigneeId: true,
       type: true,
+      submissionEnabled: true,
       submissions: {
         select: {
           id: true,
@@ -29,8 +32,6 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const denied = await requireProjectWritePermission();
-  if (denied) return denied;
   const auth = await requireAuthenticatedEmployee();
   if (auth.response || !auth.employee) return auth.response;
 
@@ -62,6 +63,10 @@ export async function POST(
 
   const workItem = await getWorkItem(id);
   if (!workItem) return new Response("工作项不存在", { status: 404 });
+  if (workItem.assigneeId !== auth.employee.id && !canManageProjectResourcesByRoles(auth.employee)) {
+    return new Response("Forbidden", { status: 403 });
+  }
+  if (!workItem.submissionEnabled) return new Response("该工作项无提交内容", { status: 400 });
   if (workItem.submissions.some((item) => item.isFinal)) {
     return new Response("已确定最终版，如需继续提交请先清空最终版", { status: 400 });
   }

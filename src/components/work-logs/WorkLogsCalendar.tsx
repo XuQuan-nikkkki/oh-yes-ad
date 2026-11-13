@@ -71,6 +71,8 @@ type Props = {
   employee?: WorkLogsCalendarEmployee | null;
   title?: ReactNode;
   extra?: ReactNode;
+  createRequest?: number;
+  onEntryChanged?: () => void;
 };
 
 type WeeklyWorkItemCard = {
@@ -78,7 +80,7 @@ type WeeklyWorkItemCard = {
   workItemName: string;
   projectId: string;
   projectName: string;
-  plannedDays: number;
+  dateLabel: string;
 };
 
 const WORK_LOG_VIEW_PARAM = "workLogView";
@@ -116,7 +118,7 @@ const normalizeQueryDate = (value: string | null) => {
   return parsed.isValid() ? parsed : dayjs();
 };
 
-const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
+const WorkLogsCalendar = ({ employee, title, extra, createRequest = 0, onEntryChanged }: Props) => {
   const [messageApi, contextHolder] = message.useMessage();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
@@ -394,70 +396,17 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
       }
       setWeeklyWorkItemsLoading(true);
       try {
+        const weekStart = dayjs().startOf("isoWeek");
         const params = new URLSearchParams({
-          page: "1",
-          pageSize: "1000",
-          year: String(dayjs().isoWeekYear()),
-          weekNumber: String(dayjs().isoWeek()),
+          employeeId: employee.id,
+          weekStart: weekStart.format("YYYY-MM-DD"),
+          weekEnd: weekStart.add(7, "day").format("YYYY-MM-DD"),
         });
-        const response = await fetch(`/api/planned-work-entries?${params.toString()}`, {
+        const response = await fetch(`/api/work-items/weekly?${params.toString()}`, {
           cache: "no-store",
         });
-        const payload = response.ok ? await response.json() : { data: [] };
-        const rows = Array.isArray(payload?.data)
-          ? payload.data
-          : Array.isArray(payload)
-            ? payload
-            : [];
-
-        const workItemMap = new Map<string, WeeklyWorkItemCard>();
-        for (const row of rows as Array<{
-          plannedDays?: number | null;
-          workItem?: {
-            id?: string;
-            title?: string | null;
-            assignee?: { id?: string | null } | null;
-            brief?: {
-              project?: { id?: string | null; name?: string | null } | null;
-            } | null;
-          } | null;
-        }>) {
-          const workItem = row.workItem;
-          const project = workItem?.brief?.project;
-          if (
-            !workItem?.id ||
-            !workItem.title ||
-            !project?.id ||
-            !project.name
-          ) {
-            continue;
-          }
-          if (workItem.assignee?.id !== employee.id) continue;
-          const existing = workItemMap.get(workItem.id);
-          if (existing) {
-            existing.plannedDays += Number(row.plannedDays ?? 0);
-            continue;
-          }
-          workItemMap.set(workItem.id, {
-            workItemId: workItem.id,
-            workItemName: workItem.title,
-            projectId: project.id,
-            projectName: project.name,
-            plannedDays: Number(row.plannedDays ?? 0),
-          });
-        }
-
-        setWeeklyWorkItems(
-          Array.from(workItemMap.values()).sort((left, right) => {
-            if (right.plannedDays !== left.plannedDays) {
-              return right.plannedDays - left.plannedDays;
-            }
-            return left.workItemName.localeCompare(
-              right.workItemName,
-              "zh-CN",
-            );
-          }),
-        );
+        const rows = response.ok ? await response.json() : [];
+        setWeeklyWorkItems(Array.isArray(rows) ? rows as WeeklyWorkItemCard[] : []);
       } finally {
         setWeeklyWorkItemsLoading(false);
       }
@@ -695,6 +644,16 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
     setWorkLogModalOpen(true);
   };
 
+  const lastCreateRequestRef = useRef(0);
+  useEffect(() => {
+    if (createRequest === lastCreateRequestRef.current) return;
+    lastCreateRequestRef.current = createRequest;
+    if (createRequest <= 0) return;
+    openQuickCreateFromCalendar(new Date(), false);
+  // A counter represents an explicit action from the parent, not a calendar state change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createRequest]);
+
   const openEditWorkLogModal = (entry: ActualWorkEntryRow) => {
     if (!employee) return;
     void ensureWorkLogProjectOptionsLoaded();
@@ -778,6 +737,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
       if (calendarVisibleRange && employee?.id) {
         await fetchActualRowsInRange(calendarVisibleRange, employee.id);
       }
+      onEntryChanged?.();
     } catch (error) {
       const text = error instanceof Error ? error.message : "保存工时失败";
       messageApi.error(text);
@@ -816,6 +776,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
       if (calendarVisibleRange && employee?.id) {
         await fetchActualRowsInRange(calendarVisibleRange, employee.id);
       }
+      onEntryChanged?.();
     } catch (error) {
       const text = error instanceof Error ? error.message : "删除工时失败";
       messageApi.error(text);
@@ -893,6 +854,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
         ),
       );
       messageApi.success("工时时间已更新");
+      onEntryChanged?.();
     } catch (error) {
       params.revert();
       const text = error instanceof Error ? error.message : "更新时间失败";
@@ -962,7 +924,7 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
                     {workItem.projectName}
                   </div>
                   <div style={{ color: "rgba(0,0,0,0.45)", fontSize: 12 }}>
-                    计划工时 {formatSummaryNumber(workItem.plannedDays)}d
+                    {workItem.dateLabel}
                   </div>
                 </Card>
               ))}

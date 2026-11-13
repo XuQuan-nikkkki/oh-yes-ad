@@ -342,6 +342,10 @@ a {
   padding: 0 20px 0 44px;
 }
 
+.brief-work-item-detail[data-has-properties="false"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .brief-work-item-section {
   display: flex;
   min-width: 0;
@@ -402,19 +406,6 @@ a {
 }
 
 @container (max-width: 900px) {
-  .brief-display-card > .ant-collapse-item > .ant-collapse-header {
-    flex-wrap: wrap;
-    row-gap: 8px;
-  }
-
-  .brief-display-card
-    > .ant-collapse-item
-    > .ant-collapse-header
-    > .ant-collapse-extra {
-    width: 100%;
-    margin-inline-start: 32px;
-  }
-
   .brief-display-summary {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -440,7 +431,8 @@ a {
     justify-content: flex-end;
   }
 
-  .brief-work-item-detail {
+  .brief-work-item-detail,
+  .brief-work-item-detail[data-has-properties="false"] {
     grid-template-columns: minmax(0, 1fr);
     padding-inline: 20px;
   }
@@ -590,23 +582,6 @@ a {
   box-shadow: 0 2px 8px rgb(22 119 255 / 8%);
 }
 
-.submission-resource-card > img,
-.submission-resource-file-icon {
-  grid-column: 1 / -1;
-  width: 100%;
-  height: 88px;
-  object-fit: contain;
-  background: #f5f7fa;
-}
-
-.submission-resource-file-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #7d8795;
-  font-size: 26px;
-}
-
 .submission-resource-name {
   overflow: hidden;
   padding: 8px 4px 8px 9px;
@@ -675,19 +650,20 @@ a {
   border-bottom: 0;
 }
 
-.submission-adjustment-item > div:first-child {
+.submission-adjustment-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   margin-bottom: 6px;
 }
 
-.submission-adjustment-item > div:first-child > span {
+.submission-adjustment-number {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 20px;
   height: 20px;
+  flex: 0 0 20px;
   border-radius: 50%;
   background: #eaf3ff;
   color: #1677ff;
@@ -698,6 +674,13 @@ a {
 .submission-adjustment-item .ant-typography {
   margin-bottom: 10px;
   white-space: pre-wrap;
+}
+
+.submission-adjustment-heading .submission-adjustment-title {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
 }
 
 .submission-feedback-meta {
@@ -719,7 +702,7 @@ a {
 
 .submission-link-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.8fr) minmax(160px, 0.8fr) auto;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(0, 1.8fr) auto;
   gap: 8px;
   align-items: start;
 }
@@ -936,4 +919,35 @@ a {
   .brief-work-item-assignment-history {
     margin-inline: 20px;
   }
+}
+
+/* 工作项弹窗：标题和操作区保持可见，仅表单正文滚动。 */
+.work-item-edit-form { display: flex; flex-direction: column; max-height: calc(100dvh - 148px); min-height: 0; }
+.work-item-edit-form-scroll { overflow-y: auto; overflow-x: hidden; min-height: 0; padding: 4px 8px 0; margin-inline: -8px; }
+.work-item-edit-form-actions { flex-shrink: 0; }
+.work-item-requirements-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 8px 0 16px; }
+.work-item-requirements-heading .brief-work-item-form-section-title { margin: 0 !important; }
+.work-item-submission-toggle { display: flex; align-items: center; gap: 12px; }
+.brief-work-item-form-fields > [hidden], .brief-work-item-properties[hidden] { display: none !important; }
+
+/* 折叠需求单标题栏：优先保留标题及常用操作。 */
+.brief-display-card > .ant-collapse-item > .ant-collapse-header { flex-wrap: nowrap; gap: 12px; }
+.brief-display-card > .ant-collapse-item > .ant-collapse-header > .ant-collapse-header-text { flex: 1; overflow: hidden; }
+.brief-display-card > .ant-collapse-item > .ant-collapse-header > .ant-collapse-extra { flex: none; }
+.brief-display-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brief-display-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; font-weight: 600; }
+.brief-display-heading .ant-tag { flex-shrink: 0; margin-inline-end: 0; }
+.brief-display-header-extra { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+.brief-display-owner { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.brief-display-add { padding-inline: 6px; }
+@container (max-width: 760px) {
+  .brief-display-owner { display: none; }
+  .brief-display-header-extra { gap: 6px; }
+  .brief-display-assignment-label { display: none; }
+}
+@container (max-width: 520px) {
+  .brief-display-add-label { display: none; }
+  .brief-display-heading { gap: 6px; }
+  .brief-display-header-extra { gap: 2px; }
+  .brief-display-card > .ant-collapse-item > .ant-collapse-header { gap: 6px; }
 }

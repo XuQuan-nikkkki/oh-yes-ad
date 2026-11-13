@@ -31,7 +31,7 @@ export const WorkItemAssignmentHistory = ({
     () =>
       [...changes].reverse().map((change, index) => ({
         color: index === 0 ? "blue" : "gray",
-        children: (
+        content: (
           <div className="brief-work-item-assignment-history-item">
             <Flex gap={8} align="baseline" wrap>
               <Typography.Text>

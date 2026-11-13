@@ -34,6 +34,8 @@ export type MilestoneCardRow = {
   } | null;
   date?: string | null;
   detail?: string | null;
+  method?: string | null;
+  location?: string | null;
   clientParticipants?: MilestoneClientParticipant[];
   internalParticipants?: MilestoneParticipant[];
   vendorParticipants?: MilestoneParticipant[];
@@ -68,6 +70,9 @@ const participantTitleStyle = {
 type Props = {
   milestone: MilestoneCardRow;
   height?: number;
+  projectName?: string;
+  onOpen?: () => void;
+  titleLink?: boolean;
 };
 
 const getMilestoneDateStatus = (date?: string | null) => {
@@ -97,7 +102,7 @@ const getCountdownIcon = (dateStatus: "past" | "today" | "future" | null) => {
   return null;
 };
 
-const MilestoneCard = ({ milestone, height }: Props) => {
+const MilestoneCard = ({ milestone, height, projectName, onOpen, titleLink = true }: Props) => {
   const dateStatus = getMilestoneDateStatus(milestone.date);
   const countdownIcon = getCountdownIcon(dateStatus);
   const rightBorderColor =
@@ -120,9 +125,11 @@ const MilestoneCard = ({ milestone, height }: Props) => {
           }}
         >
           <span style={{ fontSize: 14, minWidth: 0, flex: 1 }}>
-            <AppLink href={`/project-milestones/${milestone.id}`}>
-              {milestone.name}
-            </AppLink>
+            {onOpen || !titleLink ? milestone.name : (
+              <AppLink href={`/project-milestones/${milestone.id}`}>
+                {milestone.name}
+              </AppLink>
+            )}
           </span>
           {/* <MilestoneTypeValue
             type={milestone.type}
@@ -131,6 +138,15 @@ const MilestoneCard = ({ milestone, height }: Props) => {
         </div>
       }
       bordered
+      onClick={onOpen}
+      onKeyDown={onOpen ? (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      } : undefined}
+      role={onOpen ? "button" : undefined}
+      tabIndex={onOpen ? 0 : undefined}
       extra={
         <MilestoneTypeValue
           type={milestone.type}
@@ -141,6 +157,7 @@ const MilestoneCard = ({ milestone, height }: Props) => {
         height: height ?? "100%",
         width: "100%",
         minWidth: 0,
+        cursor: onOpen ? "pointer" : undefined,
         opacity: dateStatus === "past" ? 0.7 : 1,
         ...(rightBorderColor
           ? { borderLeft: `3px solid ${rightBorderColor}` }
@@ -168,6 +185,7 @@ const MilestoneCard = ({ milestone, height }: Props) => {
             gap: 6,
           }}
         >
+          {projectName ? <div style={{ color: "#8C8C8C", fontSize: 12 }}>{projectName}</div> : null}
           {milestone.clientParticipants &&
           milestone.clientParticipants.length > 0 ? (
             <div style={{ fontSize: 12 }}>
@@ -190,6 +208,13 @@ const MilestoneCard = ({ milestone, height }: Props) => {
               <div style={participantTitleStyle}>供应商：</div>
               <div>{renderPeople(milestone.vendorParticipants)}</div>
             </div>
+          ) : null}
+
+          {milestone.method?.trim() ? (
+            <div style={{ fontSize: 12 }}><div style={participantTitleStyle}>参会方式：</div><div>{milestone.method}</div></div>
+          ) : null}
+          {milestone.location?.trim() ? (
+            <div style={{ fontSize: 12 }}><div style={participantTitleStyle}>地址：</div><div>{milestone.location}</div></div>
           ) : null}
 
           {milestone.detail?.trim() ? (

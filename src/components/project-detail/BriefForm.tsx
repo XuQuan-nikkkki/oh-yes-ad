@@ -11,6 +11,7 @@ import dayjs, { type Dayjs } from "dayjs";
 import zhCN from "antd/locale/zh_CN";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
+import { getDefaultSubmissionEnabled } from "@/lib/work-item-defaults";
 import { DEFAULT_COLOR } from "@/lib/constants";
 
 export type WorkItemType = "DESIGN" | "COPY" | "PROJECT_MANAGEMENT" | "NEW_MEDIA";
@@ -18,6 +19,7 @@ export type WorkItemType = "DESIGN" | "COPY" | "PROJECT_MANAGEMENT" | "NEW_MEDIA
 export type BriefWorkItemPayload = {
   id?: string;
   type: WorkItemType;
+  submissionEnabled: boolean;
   sourceFilePolicy: "REQUIRED" | "OPTIONAL";
   title: string;
   description: string;
@@ -81,6 +83,7 @@ type Props = {
     workItems?: Array<{
       id: string;
       type: string;
+      submissionEnabled?: boolean;
       sourceFilePolicy?: "REQUIRED" | "OPTIONAL";
       title: string;
       description: string;
@@ -345,7 +348,7 @@ export const WorkItemFormFields = ({
     const defaultReviewerId = getDefaultWorkItemReviewerId(employees, currentType, projectOwnerId);
     if (defaultReviewerId) form.setFieldValue(reviewerPath, defaultReviewerId);
   }, [employees, fieldName, form, type, projectOwnerId]);
-  const meta = typeMeta[type];
+  const submissionEnabled = Form.useWatch(watchName("submissionEnabled"), form) !== false;
   const reviewerOptions = buildFunctionGroupedOptions(employees, type, reviewerId);
   const assigneeOptions = buildFunctionGroupedOptions(employees, type, assigneeId);
   return (
@@ -369,6 +372,7 @@ export const WorkItemFormFields = ({
             ]}
             onChange={(event) => {
               const nextType = event.target.value as WorkItemType;
+              form.setFieldValue(watchName("submissionEnabled"), getDefaultSubmissionEnabled(nextType));
               form.setFieldValue(
                 watchName("sourceFilePolicy"),
                 nextType === "DESIGN" ? "REQUIRED" : "OPTIONAL",
@@ -387,30 +391,40 @@ export const WorkItemFormFields = ({
         </Form.Item>
       </Col>
       <Col span={24}>
-        <Typography.Text className="brief-work-item-form-section-title">工作要求</Typography.Text>
+        <div className="work-item-requirements-heading">
+          <Typography.Text className="brief-work-item-form-section-title">工作要求</Typography.Text>
+          <div className="work-item-submission-toggle">
+            <span>是否有提交内容</span>
+            <Form.Item name={itemName("submissionEnabled")} noStyle>
+              <Radio.Group aria-label="是否有提交内容" optionType="button" options={[
+                { label: "有", value: true }, { label: "无", value: false },
+              ]} />
+            </Form.Item>
+          </div>
+        </div>
       </Col>
       <Col span={24}>
         <Form.Item label="工作项描述" name={itemName("description")} rules={[{ required: true, whitespace: true, message: "请输入工作项描述" }]}>
           <Input.TextArea rows={3} placeholder="请输入工作要求、内容范围及验收说明" />
         </Form.Item>
       </Col>
-      <Col span={24}>
+      <Col span={24} hidden={!submissionEnabled}>
         <Typography.Text className="brief-work-item-form-section-title">工作项属性</Typography.Text>
       </Col>
-      <Col xs={24} md={6}>
+      <Col xs={24} md={6} hidden={!submissionEnabled}>
         <Form.Item label="格式" name={itemName("formatOptionIds")}>
           <MultipleOptionSelect field={FORMAT_OPTION_FIELD} placeholder="请选择格式" />
         </Form.Item>
       </Col>
-      <Col xs={24} md={6}>
+      <Col xs={24} md={6} hidden={!submissionEnabled}>
         <Form.Item label="类别/场景" name={itemName("categoryOrSceneOptionIds")}>
           <MultipleOptionSelect field={CATEGORY_SCENE_OPTION_FIELD} placeholder="请选择类别或场景" />
         </Form.Item>
       </Col>
-      <Col xs={24} md={6}>
+      <Col xs={24} md={6} hidden={!submissionEnabled}>
         <Form.Item label="规格" name={itemName("specification")}><Input placeholder="如：1920 × 1080 px" /></Form.Item>
       </Col>
-      <Col xs={24} md={6}>
+      <Col xs={24} md={6} hidden={!submissionEnabled}>
         <Form.Item label="源文件" name={itemName("sourceFilePolicy")} rules={[{ required: true, message: "请选择源文件要求" }]}>
           <Radio.Group className="brief-source-file-policy-radio" optionType="button" buttonStyle="outline" options={[
             { label: "必须提交", value: "REQUIRED" },
@@ -421,33 +435,33 @@ export const WorkItemFormFields = ({
       <Col span={24}>
         <Typography.Text className="brief-work-item-form-section-title">人员与时间</Typography.Text>
       </Col>
-      <Col xs={24} md={12}>
+      <Col xs={24} md={submissionEnabled ? 12 : 8}>
         <Form.Item
-          label={meta.reviewerLabel}
+          label="审核人"
           name={itemName("reviewerId")}
-          rules={[{ required: true, message: `请选择${meta.reviewerLabel}` }]}
+          rules={[{ required: true, message: "请选择审核人" }]}
         >
-          <Select allowClear showSearch optionFilterProp="label" placeholder={`请选择${meta.reviewerLabel}`} options={reviewerOptions} />
+          <Select allowClear showSearch optionFilterProp="label" placeholder="请选择审核人" options={reviewerOptions} />
         </Form.Item>
       </Col>
-      <Col xs={24} md={12}>
-        <Form.Item label={`${meta.label}执行人`} name={itemName("assigneeId")}>
-          <Select allowClear showSearch optionFilterProp="label" placeholder={`请选择${meta.label}执行人`} options={assigneeOptions} />
+      <Col xs={24} md={submissionEnabled ? 12 : 8}>
+        <Form.Item label="执行人" name={itemName("assigneeId")}>
+          <Select allowClear showSearch optionFilterProp="label" placeholder="请选择执行人" options={assigneeOptions} />
         </Form.Item>
       </Col>
-      <Col xs={24} md={8}>
+      <Col xs={24} md={8} hidden={!submissionEnabled}>
         <Form.Item label="初稿时间" name={itemName("firstDraftAt")}>
           <DatePicker style={{ width: "100%" }} placeholder="请选择初稿日期" />
         </Form.Item>
       </Col>
-      <Col xs={24} md={8}>
+      <Col xs={24} md={8} hidden={!submissionEnabled}>
         <Form.Item label="修改时间" name={itemName("revisionAt")}>
           <DatePicker style={{ width: "100%" }} placeholder="请选择修改日期" />
         </Form.Item>
       </Col>
       <Col xs={24} md={8}>
-        <Form.Item label="定稿时间" name={itemName("finalAt")} rules={[{ required: true, message: "请选择定稿时间" }]}>
-          <DatePicker style={{ width: "100%" }} placeholder="请选择定稿日期" />
+        <Form.Item label={submissionEnabled ? "定稿时间" : "截止时间"} name={itemName("finalAt")} rules={[{ required: true, message: submissionEnabled ? "请选择定稿时间" : "请选择截止时间" }]}>
+          <DatePicker style={{ width: "100%" }} placeholder={submissionEnabled ? "请选择定稿日期" : "请选择截止日期"} />
         </Form.Item>
       </Col>
     </Row>
@@ -484,6 +498,7 @@ const BriefForm = ({
     workItems: (initialBrief?.workItems ?? []).map((item) => ({
       id: item.id,
       uiKey: item.id,
+      submissionEnabled: item.submissionEnabled ?? getDefaultSubmissionEnabled(item.type),
       sourceFilePolicy: item.sourceFilePolicy ?? (item.type === "DESIGN" ? "REQUIRED" : "OPTIONAL"),
       type: (["DESIGN", "COPY", "PROJECT_MANAGEMENT", "NEW_MEDIA"] as const).includes(item.type as WorkItemType)
         ? item.type as WorkItemType
@@ -585,6 +600,7 @@ const BriefForm = ({
                 const pendingFieldKey = String(fields.length);
                 add({
                   type: "DESIGN",
+                  submissionEnabled: true,
                   sourceFilePolicy: "REQUIRED",
                   title: "",
                   description: "",

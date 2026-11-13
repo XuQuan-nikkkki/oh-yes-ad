@@ -1,3 +1,4 @@
+import { getDefaultSubmissionEnabled } from "@/lib/work-item-defaults";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import {
@@ -35,6 +36,9 @@ export async function POST(
 
   const { id: briefId } = await params;
   const body = await sanitizeRequestBody(req);
+  if (body?.submissionEnabled !== undefined && typeof body.submissionEnabled !== "boolean") {
+    return new Response("提交内容选项无效", { status: 400 });
+  }
   if (!body || !["REQUIRED", "OPTIONAL"].includes(String(body.sourceFilePolicy))) {
     return new Response("请选择是否必须提交源文件", { status: 400 });
   }
@@ -116,6 +120,7 @@ export async function POST(
     const created = await tx.workItem.create({
       data: {
         type: body.type,
+        submissionEnabled: body.submissionEnabled ?? getDefaultSubmissionEnabled(body.type),
         sourceFilePolicy: body.sourceFilePolicy,
         title: body.title.trim(),
         description: body.description.trim(),

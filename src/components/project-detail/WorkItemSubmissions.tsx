@@ -1,9 +1,9 @@
 "use client";
 
+import { ImageAttachmentPicker, imageThumbnail, type ImageDraft } from "@/components/ImageAttachmentPicker";
 import { useMemo, useState, type ReactNode } from "react";
 import {
   EditOutlined,
-  FileOutlined,
   LinkOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
@@ -26,6 +26,8 @@ import {
   message,
 } from "antd";
 import dayjs from "dayjs";
+import { startImageUpload } from "@/lib/image-upload-client";
+import { openFeedbackPrint } from "@/lib/feedback-print";
 
 export type WorkItemSubmissionResource = {
   id: string;
@@ -100,12 +102,12 @@ type ResourceDraft = {
 
 type FeedbackDraft = {
   feedbackContent?: string;
-  feedbackImages?: ResourceDraft[];
+  feedbackImages?: ImageDraft[];
   adjustmentItems?: Array<{
     id?: string;
     title?: string;
     content?: string;
-    images?: ResourceDraft[];
+    images?: ImageDraft[];
   }>;
 };
 
@@ -126,44 +128,27 @@ const resourceName = (resource: { url: string; name?: string | null }) => {
   }
 };
 
-const isImageResource = (resource: WorkItemSubmissionResource) =>
-  Boolean(
-    resource.thumbnailUrl ||
-      resource.mimeType?.startsWith("image/") ||
-      /\.(avif|gif|jpe?g|png|webp)(?:[?#].*)?$/i.test(resource.url),
-  );
-
 const ResourceGrid = ({
   resources,
 }: {
   resources: WorkItemSubmissionResource[];
 }) => (
   <div className="submission-resource-grid">
-    {resources.map((resource) => {
-      const previewUrl = resource.thumbnailUrl || (isImageResource(resource) ? resource.url : null);
-      return (
-        <a
-          className="submission-resource-card"
-          href={resource.url}
-          target="_blank"
-          rel="noreferrer"
-          key={resource.id}
-        >
-          {previewUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={previewUrl} alt="" />
-          ) : (
-            <span className="submission-resource-file-icon">
-              <FileOutlined />
-            </span>
-          )}
-          <span className="submission-resource-name">
-            {resource.name || resourceName(resource)}
-          </span>
-          <LinkOutlined />
-        </a>
-      );
-    })}
+    {resources.map((resource) => (
+      <a
+        className="submission-resource-card"
+        href={resource.url}
+        target="_blank"
+        rel="noreferrer"
+        title={resource.name || resourceName(resource)}
+        key={resource.id}
+      >
+        <span className="submission-resource-name">
+          {resource.name || resourceName(resource)}
+        </span>
+        <LinkOutlined />
+      </a>
+    ))}
   </div>
 );
 
@@ -184,6 +169,14 @@ const ResourceFields = ({
             <div className="submission-link-row" key={key}>
               <Form.Item
                 {...field}
+                name={[field.name, "name"]}
+                rules={[{ required: true, whitespace: true, message: "请输入内容名称" }]}
+                noStyle
+              >
+                <Input placeholder="内容名称（必填）" aria-label="内容名称" />
+              </Form.Item>
+              <Form.Item
+                {...field}
                 name={[field.name, "url"]}
                 rules={[
                   {
@@ -195,9 +188,6 @@ const ResourceFields = ({
                 noStyle
               >
                 <Input placeholder="粘贴文件或在线文档链接" />
-              </Form.Item>
-              <Form.Item {...field} name={[field.name, "name"]} noStyle>
-                <Input placeholder="显示名称（可选）" />
               </Form.Item>
               <Button
                 type="text"
@@ -224,44 +214,15 @@ const ResourceFields = ({
   </Form.List>
 );
 
-const FeedbackImageFields = ({ name }: { name: (string | number)[] }) => (
-  <Form.List name={name}>
-    {(fields, { add, remove }) => (
-      <div className="feedback-image-link-list">
-        {fields.map(({ key, ...field }) => (
-          <div className="feedback-image-link-row" key={key}>
-            <Form.Item
-              {...field}
-              name={[field.name, "url"]}
-              rules={[{ required: true, type: "url", message: "请输入有效图片链接" }]}
-              noStyle
-            >
-              <Input placeholder="粘贴截图或标注图链接" />
-            </Form.Item>
-            <Button type="text" danger onClick={() => remove(field.name)}>
-              删除
-            </Button>
-          </div>
-        ))}
-        <Button
-          type="dashed"
-          icon={<PlusOutlined />}
-          onClick={() => add({ url: "" })}
-        >
-          添加图片链接
-        </Button>
-      </div>
-    )}
-  </Form.List>
-);
-
 export const useWorkItemSubmissionManager = ({
   workItem,
   canManage,
+  canSubmit = canManage,
   onChanged,
 }: {
   workItem: WorkItemForSubmissions;
   canManage: boolean;
+  canSubmit?: boolean;
   onChanged?: () => Promise<void> | void;
 }): { extra: ReactNode; content: ReactNode; modal: ReactNode } => {
   const [messageApi, contextHolder] = message.useMessage();
@@ -269,8 +230,8 @@ export const useWorkItemSubmissionManager = ({
   const [feedbackStep, setFeedbackStep] = useState(0);
   const [activeAdjustment, setActiveAdjustment] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [readingImages, setReadingImages] = useState(false);
   const [form] = Form.useForm();
-  const adjustmentDrafts = Form.useWatch("adjustmentItems", form) ?? [];
   const submissions = useMemo(
     () => [...(workItem.submissions ?? [])].sort((a, b) => b.versionNumber - a.versionNumber),
     [workItem.submissions],
@@ -356,7 +317,7 @@ export const useWorkItemSubmissionManager = ({
   };
 
   const saveModal = async () => {
-    if (!modal) return;
+    if (!modal || saving || readingImages) return;
     setSaving(true);
     try {
       if (modal.kind === "feedback") {
@@ -371,14 +332,27 @@ export const useWorkItemSubmissionManager = ({
           messageApi.warning(`请填写调整项 ${missingIndex + 1} 的标题`);
           return;
         }
+        const uploadImages = (images: ImageDraft[]) => Promise.all(images.map(async (image) => {
+          if (!image.file) return { url: image.url, name: image.name };
+          image.upload ??= startImageUpload(image.file);
+          try {
+            return { url: await image.upload.promise, name: image.name };
+          } catch {
+            throw new Error(`${image.name || "图片"}上传失败，请返回图片处重试或移除后保存`);
+          }
+        }));
+        const [images, uploadedItems] = await Promise.all([
+          uploadImages(values.feedbackImages ?? []),
+          Promise.all(items.map(async (item) => ({ ...item, images: await uploadImages(item.images ?? []) }))),
+        ]);
         await request(
           `/api/work-items/${workItem.id}/submissions/${modal.submission.id}/feedback`,
           "PUT",
           {
             feedback: {
               content: values.feedbackContent,
-              images: values.feedbackImages ?? [],
-              adjustmentItems: items,
+              images,
+              adjustmentItems: uploadedItems,
             },
           },
         );
@@ -462,14 +436,14 @@ export const useWorkItemSubmissionManager = ({
             placeholder="待定"
             options={submissions.map((submission) => ({
               value: submission.id,
-              label: `V${submission.versionNumber} · ${submission.versionTitle || "未命名版本"}`,
+              label: `V${submission.versionNumber}${submission.versionTitle?.trim() ? ` · ${submission.versionTitle.trim()}` : ""}`,
             }))}
             onChange={(value) => void setFinal(value)}
             disabled={!canManage}
           />
         </span>
       ) : null}
-      {canManage ? (
+      {canSubmit ? (
         finalSubmission ? (
           <Tooltip title="已有最终版，如需继续提交，请先清空最终版">
             <span>
@@ -480,7 +454,7 @@ export const useWorkItemSubmissionManager = ({
                 icon={<PlusOutlined />}
                 styles={{ root: { padding: 6 } }}
               >
-                新增提交
+                新增提交内容
               </Button>
             </span>
           </Tooltip>
@@ -492,7 +466,7 @@ export const useWorkItemSubmissionManager = ({
             onClick={openSubmit}
             styles={{ root: { padding: 6 } }}
           >
-            新增提交
+            新增提交内容
           </Button>
         )
       ) : null}
@@ -515,7 +489,9 @@ export const useWorkItemSubmissionManager = ({
             <div className="submission-version-label">
               <Space size={8} wrap>
                 <Typography.Text strong>V{submission.versionNumber}</Typography.Text>
-                <Typography.Text>{submission.versionTitle || "未命名版本"}</Typography.Text>
+                {submission.versionTitle?.trim() ? (
+                  <Typography.Text>{submission.versionTitle.trim()}</Typography.Text>
+                ) : null}
                 {submission.isFinal ? (
                   <>
                     <Tag color="green">最终版</Tag>
@@ -540,7 +516,7 @@ export const useWorkItemSubmissionManager = ({
                 <div className="submission-section-heading">
                   <Typography.Title level={5}>提交内容</Typography.Title>
                   {canManage ? (
-                    <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openEdit(submission)}>
+                    <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(submission)}>
                       编辑
                     </Button>
                   ) : null}
@@ -582,6 +558,13 @@ export const useWorkItemSubmissionManager = ({
               <section className="submission-feedback-column">
                 <div className="submission-section-heading">
                   <Typography.Title level={5}>本版反馈</Typography.Title>
+                  <Space size={4} wrap>
+                  {feedback ? (
+                    <Button type="link" size="small" onClick={() => {
+                      try { openFeedbackPrint(submission); }
+                      catch (error) { messageApi.error(error instanceof Error ? error.message : "打开导出页面失败"); }
+                    }}>导出 PDF</Button>
+                  ) : null}
                   {canManage ? (
                     <Button
                       type="link"
@@ -592,6 +575,7 @@ export const useWorkItemSubmissionManager = ({
                       {feedback ? "编辑反馈" : "添加反馈"}
                     </Button>
                   ) : null}
+                  </Space>
                 </div>
                 {!feedback ? (
                   <Empty
@@ -609,7 +593,7 @@ export const useWorkItemSubmissionManager = ({
                       <Image.PreviewGroup>
                         <div className="submission-feedback-images">
                           {feedback.images.map((image) => (
-                            <Image key={image.id} src={image.url} alt={image.name || ""} />
+                            <Image key={image.id} src={imageThumbnail(image.url)} preview={{ src: image.url }} alt={image.name || ""} />
                           ))}
                         </div>
                       </Image.PreviewGroup>
@@ -619,16 +603,16 @@ export const useWorkItemSubmissionManager = ({
                         <Typography.Text type="secondary">调整项</Typography.Text>
                         {adjustmentItems.map((item, itemIndex) => (
                           <div key={item.id} className="submission-adjustment-item">
-                            <div>
-                              <span>{itemIndex + 1}</span>
-                              <Typography.Text strong>{item.title}</Typography.Text>
+                            <div className="submission-adjustment-heading">
+                              <span className="submission-adjustment-number">{itemIndex + 1}</span>
+                              <Typography.Text strong className="submission-adjustment-title">{item.title}</Typography.Text>
                             </div>
                             {item.content ? <Typography.Paragraph>{item.content}</Typography.Paragraph> : null}
                             {item.images?.length ? (
                               <Image.PreviewGroup>
                                 <div className="submission-feedback-images">
                                   {item.images.map((image) => (
-                                    <Image key={image.id} src={image.url} alt={image.name || ""} />
+                                    <Image key={image.id} src={imageThumbnail(image.url)} preview={{ src: image.url }} alt={image.name || ""} />
                                   ))}
                                 </div>
                               </Image.PreviewGroup>
@@ -670,7 +654,10 @@ export const useWorkItemSubmissionManager = ({
                   ? `${modal.submission.feedback ? "编辑" : "添加"} V${modal.submission.versionNumber} 反馈`
                   : ""
         }
-        onCancel={closeModal}
+        onCancel={() => { if (!saving && !readingImages) closeModal(); }}
+        closable={!saving && !readingImages}
+        mask={{ closable: !saving && !readingImages }}
+        keyboard={!saving && !readingImages}
         width={modal?.kind === "feedback" ? 900 : 720}
         styles={
           modal?.kind === "feedback"
@@ -680,27 +667,27 @@ export const useWorkItemSubmissionManager = ({
         footer={
           modal?.kind === "feedback" && feedbackStep === 0 ? (
             <Space>
-              <Button onClick={closeModal}>取消</Button>
-              <Button type="primary" onClick={() => setFeedbackStep(1)}>
+              <Button disabled={readingImages || saving} onClick={closeModal}>取消</Button>
+              <Button type="primary" disabled={readingImages} onClick={() => setFeedbackStep(1)}>
                 下一步
               </Button>
             </Space>
           ) : (
             <Space>
               {modal?.kind === "feedback" ? (
-                <Button onClick={() => setFeedbackStep(0)}>上一步</Button>
+                <Button disabled={saving || readingImages} onClick={() => setFeedbackStep(0)}>上一步</Button>
               ) : (
-                <Button onClick={closeModal}>取消</Button>
+                <Button disabled={readingImages || saving} onClick={closeModal}>取消</Button>
               )}
-              <Button type="primary" loading={saving} onClick={() => void saveModal()}>
+              <Button type="primary" loading={saving} disabled={readingImages} onClick={() => void saveModal()}>
                 保存
               </Button>
             </Space>
           )
         }
-        destroyOnHidden
+        forceRender
       >
-        <Form form={form} layout="vertical" className="submission-modal-form">
+        <Form form={form} disabled={saving || readingImages} layout="vertical" className="submission-modal-form">
           {modal?.kind === "source" ? (
             <ResourceFields
               name="resources"
@@ -712,7 +699,7 @@ export const useWorkItemSubmissionManager = ({
               <Steps
                 size="small"
                 current={feedbackStep}
-                onChange={setFeedbackStep}
+                onChange={(step) => { if (!saving && !readingImages) setFeedbackStep(step); }}
                 items={[{ title: "反馈说明" }, { title: "调整项" }]}
               />
               {feedbackStep === 0 ? (
@@ -723,8 +710,8 @@ export const useWorkItemSubmissionManager = ({
                       placeholder="记录整体评价、方向或背景说明"
                     />
                   </Form.Item>
-                  <Form.Item label="反馈图片（可选）">
-                    <FeedbackImageFields name={["feedbackImages"]} />
+                  <Form.Item name="feedbackImages" label="反馈图片（可选）">
+                    <ImageAttachmentPicker disabled={saving} onReadingChange={setReadingImages} hint="支持选择或在此粘贴图片，每张最多 20 MB；选择后自动上传，保存时关联图片。" />
                   </Form.Item>
                 </div>
               ) : (
@@ -743,20 +730,23 @@ export const useWorkItemSubmissionManager = ({
                             <Button size="small" type="text" icon={<PlusOutlined />} onClick={addItem} />
                           </div>
                           {fields.length ? (
-                            fields.map((field, index) => {
-                              const title = adjustmentDrafts[field.name]?.title;
-                              return (
-                                <button
-                                  type="button"
-                                  className={index === activeAdjustment ? "is-active" : ""}
-                                  key={field.key}
-                                  title={title || `调整项 ${index + 1}`}
-                                  onClick={() => setActiveAdjustment(index)}
-                                >
-                                  {title || `调整项 ${index + 1}`}
-                                </button>
-                              );
-                            })
+                            <Form.Item noStyle shouldUpdate>
+                              {({ getFieldValue }) => fields.map((field, index) => {
+                                const title = String(getFieldValue(["adjustmentItems", field.name, "title"]) ?? "").trim();
+                                const label = title || `调整项 ${index + 1}`;
+                                return (
+                                  <button
+                                    type="button"
+                                    className={index === activeAdjustment ? "is-active" : ""}
+                                    key={field.key}
+                                    title={label}
+                                    onClick={() => setActiveAdjustment(index)}
+                                  >
+                                    {label}
+                                  </button>
+                                );
+                              })}
+                            </Form.Item>
                           ) : (
                             <Typography.Text type="secondary">暂无调整项</Typography.Text>
                           )}
@@ -796,8 +786,8 @@ export const useWorkItemSubmissionManager = ({
                                   placeholder="补充具体修改要求"
                                 />
                               </Form.Item>
-                              <Form.Item label="关联图片（可选）">
-                                <FeedbackImageFields name={["adjustmentItems", activeField.name, "images"]} />
+                              <Form.Item name={[activeField.name, "images"]} label="关联图片（可选）">
+                                <ImageAttachmentPicker key={activeField.key} disabled={saving} onReadingChange={setReadingImages} hint="支持选择或在此粘贴图片，每张最多 20 MB；选择后自动上传，保存时关联图片。" />
                               </Form.Item>
                             </>
                           ) : (
@@ -825,7 +815,7 @@ export const useWorkItemSubmissionManager = ({
                 </Form.Item>
               ) : null}
               {workItem.type === "DESIGN" ? (
-                <ResourceFields name="resources" label="设计链接" required />
+                <ResourceFields name="resources" label="内容链接" required />
               ) : workItem.type !== "COPY" ? (
                 <ResourceFields name="resources" label="提交链接（可选）" />
               ) : null}

@@ -19,9 +19,10 @@ export async function PATCH(
 
   const workItem = await prisma.workItem.findUnique({
     where: { id },
-    select: { id: true },
+    select: { id: true, submissionEnabled: true },
   });
   if (!workItem) return new Response("工作项不存在", { status: 404 });
+  if (!workItem.submissionEnabled) return new Response("该工作项无提交内容", { status: 400 });
 
   if (submissionId) {
     const target = await prisma.workItemSubmission.findFirst({

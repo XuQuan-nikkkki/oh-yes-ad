@@ -274,19 +274,19 @@ export default function BriefDetailPage() {
                 {activeWorkItem.description || "-"}
               </Typography.Paragraph>
             </Descriptions.Item>
-            <Descriptions.Item label="格式">
+            {activeWorkItem.submissionEnabled !== false ? (<Descriptions.Item label="格式">
               {activeWorkItem.formatOptions?.length
                 ? activeWorkItem.formatOptions.map(({ option }) => <Tag key={option.id} color={option.color ?? undefined}>{option.value}</Tag>)
                 : "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="类别">
+            </Descriptions.Item>) : null}
+            {activeWorkItem.submissionEnabled !== false ? (<Descriptions.Item label="类别">
               {activeWorkItem.categoryOrSceneOptions?.length
                 ? activeWorkItem.categoryOrSceneOptions.map(({ option }) => <Tag key={option.id} color={option.color ?? undefined}>{option.value}</Tag>)
                 : "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="规格">
+            </Descriptions.Item>) : null}
+            {activeWorkItem.submissionEnabled !== false ? (<Descriptions.Item label="规格">
               <span style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{activeWorkItem.specification || "-"}</span>
-            </Descriptions.Item>
+            </Descriptions.Item>) : null}
           </Descriptions>
           <Descriptions column={3} size="small" style={{ marginTop: 24 }}>
             <Descriptions.Item label="审核人">
@@ -298,9 +298,9 @@ export default function BriefDetailPage() {
             <Descriptions.Item>{null}</Descriptions.Item>
           </Descriptions>
           <Descriptions column={3} size="small" style={{ marginTop: 24 }}>
-            <Descriptions.Item label="初稿日期">{formatDate(activeWorkItem.firstDraftAt, "YYYY-MM-DD")}</Descriptions.Item>
-            <Descriptions.Item label="修改日期">{formatDate(activeWorkItem.revisionAt, "YYYY-MM-DD")}</Descriptions.Item>
-            <Descriptions.Item label="定稿日期">{formatDate(activeWorkItem.finalAt, "YYYY-MM-DD")}</Descriptions.Item>
+            {activeWorkItem.submissionEnabled !== false ? (<Descriptions.Item label="初稿日期">{formatDate(activeWorkItem.firstDraftAt, "YYYY-MM-DD")}</Descriptions.Item>) : null}
+            {activeWorkItem.submissionEnabled !== false ? (<Descriptions.Item label="修改日期">{formatDate(activeWorkItem.revisionAt, "YYYY-MM-DD")}</Descriptions.Item>) : null}
+            <Descriptions.Item label={activeWorkItem.submissionEnabled === false ? "截止时间" : "定稿日期"}>{formatDate(activeWorkItem.finalAt, "YYYY-MM-DD")}</Descriptions.Item>
           </Descriptions>
           {activeWorkItem.assignmentChanges?.length ? (
             <div style={{ marginTop: 28 }}>

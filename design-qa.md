@@ -45,3 +45,13 @@
 - [x] Prisma schema、TypeScript、ESLint 与 diff whitespace 检查通过
 
 final result: passed
+
+## 首页工作台视觉复核（2026-09-12）
+
+- 参考：`design-prototypes/home-workbench/src/App.jsx`、`styles.css` 中用户已确认的工作台布局；问题截图为正式首页修改前的登录态页面。
+- 已核对并修正：顶栏恢复“我的工作台”和“全部功能 / 记录工时”；移除额外的“本周排期”；左右卡片比例、标题、工作项行与日期列、里程碑空态、工时项目分布按原型样式调整。
+- 自动检查：TypeScript、ESLint、`git diff --check` 和 Next.js 生产构建通过。
+- 阻碍：已启动正式预览 `http://127.0.0.1:4181/`，浏览器打开后跳到登录页；当前没有登录态，无法截取正式首页修改后的同视口截图，因此不能确认像素级视觉一致性。
+- 待复核：在登录态正式首页以用户截图同尺寸检查卡片宽度、标题区、工作项日期列和工时柱图；如有差异再调整 CSS。
+
+final result: blocked

@@ -748,6 +748,8 @@ const projectDetailInclude = {
         select: {
           id: true,
           type: true,
+          submissionEnabled: true,
+          status: true,
           sourceFilePolicy: true,
           title: true,
           description: true,

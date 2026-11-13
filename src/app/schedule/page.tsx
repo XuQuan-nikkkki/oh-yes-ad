@@ -1220,6 +1220,9 @@ function SchedulePageContent() {
             )}
             project={{ id: project.id, name: project.name }}
             canManagePlannedWork={canManageProject}
+            onAfterStatusChange={async () => {
+              await fetchProjectDetailById(project.id, true);
+            }}
             onAfterPlannedWorkChange={async () => {
               refreshProjectDetails(project.id);
             }}
@@ -1564,7 +1567,7 @@ function SchedulePageContent() {
             const isEditing = Boolean(editingWorkItem.workItem);
             const endpoint = isEditing
               ? `/api/work-items/${editingWorkItem.workItem!.id}`
-              : `/api/briefs/${editingWorkItem.briefId}/workItems`;
+              : `/api/briefs/${editingWorkItem.briefId}/work-items`;
             const response = await fetch(endpoint, {
                 method: isEditing ? "PATCH" : "POST",
                 headers: { "Content-Type": "application/json" },

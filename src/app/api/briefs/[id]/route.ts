@@ -1,3 +1,4 @@
+import { getDefaultSubmissionEnabled } from "@/lib/work-item-defaults";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import {
@@ -12,6 +13,7 @@ const CATEGORY_SCENE_OPTION_FIELD = "briefWorkItem.categoryOrScene";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 type WorkItemInput = {
+  submissionEnabled?: boolean;
   sourceFilePolicy: "REQUIRED" | "OPTIONAL";
   id?: string;
   type: "DESIGN" | "COPY" | "PROJECT_MANAGEMENT" | "NEW_MEDIA";
@@ -90,6 +92,9 @@ export async function PATCH(
       return new Response("工作项数据无效", { status: 400 });
     }
     const item = raw as Record<string, unknown>;
+    if (item.submissionEnabled !== undefined && typeof item.submissionEnabled !== "boolean") {
+      return new Response("提交内容选项无效", { status: 400 });
+    }
     if (!["REQUIRED", "OPTIONAL"].includes(String(item.sourceFilePolicy))) {
       return new Response("请选择是否必须提交源文件", { status: 400 });
     }
@@ -111,6 +116,7 @@ export async function PATCH(
     workItems.push({
       id: typeof item.id === "string" && item.id ? item.id : undefined,
       type: item.type as WorkItemInput["type"],
+      submissionEnabled: item.submissionEnabled as boolean | undefined,
       sourceFilePolicy: item.sourceFilePolicy as WorkItemInput["sourceFilePolicy"],
       title: item.title.trim(),
       description: item.description.trim(),
@@ -230,6 +236,7 @@ export async function PATCH(
     for (const item of workItems) {
       const data = {
         type: item.type,
+        submissionEnabled: item.submissionEnabled ?? (item.id ? undefined : getDefaultSubmissionEnabled(item.type)),
         sourceFilePolicy: item.sourceFilePolicy,
         title: item.title,
         description: item.description,

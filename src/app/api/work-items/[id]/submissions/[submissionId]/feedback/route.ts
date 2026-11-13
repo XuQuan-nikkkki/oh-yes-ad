@@ -26,6 +26,7 @@ export async function PUT(
     where: { id: submissionId, workItemId: id },
     select: {
       id: true,
+      workItem: { select: { submissionEnabled: true } },
       feedback: {
         select: {
           id: true,
@@ -40,6 +41,7 @@ export async function PUT(
     },
   });
   if (!submission) return new Response("提交记录不存在", { status: 404 });
+  if (!submission.workItem.submissionEnabled) return new Response("该工作项无提交内容", { status: 400 });
 
   const existingIds = new Set(
     submission.feedback?.adjustmentItems.map((item) => item.id) ?? [],

@@ -628,6 +628,7 @@ const ProjectDetailPage = () => {
       onAfterPlannedWorkChange={fetchProject}
       onAfterAssignmentChange={canManageProject ? fetchProject : undefined}
       onAfterSubmissionChange={canManageProject ? fetchProject : undefined}
+      onAfterStatusChange={canManageProject ? fetchProject : undefined}
       onEditBrief={canManageProject ? (brief) => {
         if (!project.client) {
           messageApi.error("当前项目未关联客户");
@@ -1646,7 +1647,7 @@ const ProjectDetailPage = () => {
               const isEditing = Boolean(editingWorkItem.workItem);
               const endpoint = isEditing
                 ? `/api/work-items/${editingWorkItem.workItem!.id}`
-                : `/api/briefs/${editingWorkItem.briefId}/workItems`;
+                : `/api/briefs/${editingWorkItem.briefId}/work-items`;
               const response = await fetch(endpoint, {
                 method: isEditing ? "PATCH" : "POST",
                 headers: { "Content-Type": "application/json" },

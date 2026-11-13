@@ -9,10 +9,12 @@ import {
   type WorkItemType,
 } from "@/components/project-detail/BriefForm";
 import type { ProjectBriefWorkItem } from "@/components/project-detail/ProjectBriefProgressContent";
+import { getDefaultSubmissionEnabled } from "@/lib/work-item-defaults";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 export type WorkItemEditPayload = {
   type: WorkItemType;
+  submissionEnabled: boolean;
   sourceFilePolicy: "REQUIRED" | "OPTIONAL";
   title: string;
   description: string;
@@ -59,10 +61,12 @@ const WorkItemEditForm = ({
     <Form<FormValues>
       form={form}
       layout="vertical"
+      className="work-item-edit-form"
       initialValues={{
         type: (["DESIGN", "COPY", "PROJECT_MANAGEMENT", "NEW_MEDIA"] as const).includes(workItem?.type as WorkItemType)
           ? workItem?.type as WorkItemType
           : "DESIGN",
+        submissionEnabled: workItem?.submissionEnabled ?? getDefaultSubmissionEnabled(workItem?.type ?? "DESIGN"),
         title: workItem?.title ?? "",
         sourceFilePolicy: workItem?.sourceFilePolicy ?? (!workItem || workItem.type === "DESIGN" ? "REQUIRED" : "OPTIONAL"),
         description: workItem?.description ?? "",
@@ -101,7 +105,7 @@ const WorkItemEditForm = ({
         )
       }
     >
-      <WorkItemFormFields employees={employees} projectOwnerId={projectOwnerId} />
+      <div className="work-item-edit-form-scroll"><WorkItemFormFields employees={employees} projectOwnerId={projectOwnerId} /></div>
       <Flex className="work-item-edit-form-actions" justify="flex-end" gap={8}>
         <Button onClick={onCancel}>取消</Button>
         <Button

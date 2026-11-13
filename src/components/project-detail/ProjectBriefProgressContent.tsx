@@ -9,6 +9,12 @@ import {
 } from "react";
 import {
   ExclamationCircleOutlined,
+  InfoCircleOutlined,
+  MoreOutlined,
+  DownOutlined,
+  CheckOutlined,
+  EditOutlined,
+  DeleteOutlined,
   PlusOutlined,
   SwapOutlined,
 } from "@ant-design/icons";
@@ -16,6 +22,8 @@ import {
   Button,
   Collapse,
   Divider,
+  Dropdown,
+  Tooltip,
   Empty,
   Flex,
   Modal,
@@ -26,7 +34,7 @@ import {
   message,
 } from "antd";
 import dayjs from "dayjs";
-import TableActions from "@/components/TableActions";
+import { reconcileWorkItemDisplayOrder } from "@/lib/work-item-display-order";
 import AppLink from "@/components/AppLink";
 import PlannedWorkEntriesTable, {
   type PlannedWorkEntryRow,
@@ -42,12 +50,14 @@ import {
   type WorkItemAssignmentChangeItem,
 } from "@/components/project-detail/WorkItemAssignmentChange";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import { useAuthStore } from "@/stores/authStore";
 import {
   useWorkItemSubmissionManager,
   type WorkItemSubmission,
 } from "@/components/project-detail/WorkItemSubmissions";
 
 export type ProjectBriefWorkItem = {
+  submissionEnabled?: boolean;
   sourceFilePolicy?: "REQUIRED" | "OPTIONAL";
   id: string;
   type: "DESIGN" | "COPY" | string;
@@ -107,6 +117,9 @@ type Props = {
   onAfterPlannedWorkChange?: () => Promise<void> | void;
   onAfterAssignmentChange?: () => Promise<void> | void;
   onAfterSubmissionChange?: () => Promise<void> | void;
+  onAfterStatusChange?: () => Promise<void> | void;
+  initialExpandedWorkItemId?: string;
+  includeCompletedWorkItems?: boolean;
 };
 
 const briefStatusMeta: Record<
@@ -117,6 +130,13 @@ const briefStatusMeta: Record<
   in_progress: { label: "进行中", color: "green", rail: "#22c55e" },
   paused: { label: "暂停", color: "gold", rail: "#eab308" },
   completed: { label: "已完成", color: "blue", rail: "#1677ff" },
+};
+
+const workItemStatusMeta: Record<string, { label: string; color: string }> = {
+  pending: { label: "待推进", color: "default" },
+  in_progress: { label: "进行中", color: "green" },
+  completed: { label: "已完成", color: "blue" },
+  paused: { label: "暂停", color: "gold" },
 };
 
 const briefStatusOrder: Record<string, number> = {
@@ -136,6 +156,7 @@ const WorkItemDetails = ({
   totalPlannedDays,
   onAssignment,
   canManage,
+  canSubmit,
   onSubmissionChange,
 }: {
   item: ProjectBriefWorkItem;
@@ -144,17 +165,24 @@ const WorkItemDetails = ({
   totalPlannedDays: number;
   onAssignment?: () => void;
   canManage: boolean;
+  canSubmit?: boolean;
   onSubmissionChange?: () => Promise<void> | void;
 }) => {
-  const [activeTab, setActiveTab] = useState("submissions");
+  const [selectedTab, setActiveTab] = useState("submissions");
+  const submissionEnabled = item.submissionEnabled !== false;
+  const showProperties = submissionEnabled && Boolean(
+    item.formatOptions?.length || item.categoryOrSceneOptions?.length || item.specification?.trim(),
+  );
+  const activeTab = !submissionEnabled && selectedTab === "submissions" ? "planned-work" : selectedTab;
   const submissions = useWorkItemSubmissionManager({
     workItem: item,
     canManage,
+    canSubmit,
     onChanged: onSubmissionChange,
   });
   return (
     <>
-    <div className="brief-work-item-detail">
+    <div className="brief-work-item-detail" data-has-properties={showProperties}>
       <div className="brief-work-item-section brief-work-item-fields">
         <Typography.Text className="brief-work-item-section-title">
           工作描述
@@ -165,7 +193,7 @@ const WorkItemDetails = ({
           </Typography.Paragraph>
         </div>
       </div>
-      <div className="brief-work-item-section brief-work-item-properties">
+      <div className="brief-work-item-section brief-work-item-properties" hidden={!showProperties}>
         <Typography.Text className="brief-work-item-section-title">
           工作属性
         </Typography.Text>
@@ -206,14 +234,14 @@ const WorkItemDetails = ({
       </div>
       <div className="brief-work-item-section brief-work-item-plan">
         <Typography.Text className="brief-work-item-section-title">
-          计划交付时间
+          {submissionEnabled ? "计划交付时间" : "截止时间"}
         </Typography.Text>
         <div className="brief-work-item-dates">
-          {[
+          {(submissionEnabled ? [
             ["初稿", item.firstDraftAt],
             ["修改", item.revisionAt],
             ["定稿", item.finalAt],
-          ].map(([label, value]) => (
+          ] : [["截止", item.finalAt]]).map(([label, value]) => (
             <div key={label}>
               <Typography.Text type="secondary">{label}</Typography.Text>
               <Typography.Text>{formatDate(value)}</Typography.Text>
@@ -253,10 +281,10 @@ const WorkItemDetails = ({
               </div>
             ),
           },
-        ]}
+        ].filter((tab) => submissionEnabled || tab.key !== "submissions")}
       />
     </div>
-    {submissions.modal}
+    {submissionEnabled ? submissions.modal : null}
     </>
   );
 };
@@ -273,8 +301,61 @@ const ProjectBriefProgressContent = ({
   onAfterPlannedWorkChange,
   onAfterAssignmentChange,
   onAfterSubmissionChange,
+  onAfterStatusChange,
+  initialExpandedWorkItemId,
+  includeCompletedWorkItems = false,
 }: Props) => {
+  const currentUserId = useAuthStore((state) => state.currentUser?.id);
   const [messageApi, contextHolder] = message.useMessage();
+  const [workItemDisplayOrder, setWorkItemDisplayOrder] = useState<Record<string, string[]>>({});
+  const displayOrder = reconcileWorkItemDisplayOrder(workItemDisplayOrder, briefs);
+  if (displayOrder !== workItemDisplayOrder) setWorkItemDisplayOrder(displayOrder);
+  const [savingStatusId, setSavingStatusId] = useState<string | null>(null);
+  const changeBriefStatus = async (brief: ProjectBrief, status: string) => {
+    if (!onEditBrief || savingStatusId || status === brief.status) return;
+    setSavingStatusId(brief.id);
+    try {
+      const response = await fetch(`/api/briefs/${brief.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) throw new Error((await response.text()) || "需求单状态保存失败");
+      messageApi.success("需求单状态已更新");
+      try {
+        await onAfterStatusChange?.();
+      } catch {
+        messageApi.warning("状态已保存，列表刷新失败，请刷新页面");
+      }
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "状态保存失败，请重试");
+    } finally {
+      setSavingStatusId(null);
+    }
+  };
+  const changeWorkItemStatus = async (item: ProjectBriefWorkItem, status: string) => {
+    if (!onEditWorkItem || savingStatusId || status === item.status) return;
+    setSavingStatusId(item.id);
+    try {
+      const response = await fetch(`/api/work-items/${item.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) throw new Error((await response.text()) || "状态保存失败");
+      messageApi.success(status === "completed" && !includeCompletedWorkItems ? "已完成，已从当前列表隐藏" : "状态已更新");
+      try {
+        await onAfterStatusChange?.();
+      } catch {
+        messageApi.warning("状态已保存，列表刷新失败，请刷新页面");
+      }
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "状态保存失败，请重试");
+    } finally {
+      setSavingStatusId(null);
+    }
+  };
+  const [modal, modalContextHolder] = Modal.useModal();
   const [plannedWorkModal, setPlannedWorkModal] = useState<{
     brief: ProjectBrief;
     workItem: ProjectBriefWorkItem;
@@ -324,7 +405,9 @@ const ProjectBriefProgressContent = ({
         ? [newestId]
         : previousIds
           ? (expansion.workItems[brief.id] ?? []).filter((id) => ids.includes(id))
-          : ids.slice(0, 1);
+          : initialExpandedWorkItemId && ids.includes(initialExpandedWorkItemId)
+            ? [initialExpandedWorkItemId]
+            : ids.slice(0, 1);
       expandedBriefs[brief.id] = newestId
         ? [brief.id]
         : expansion.briefs[brief.id] ?? (index === 0 ? [brief.id] : []);
@@ -361,9 +444,14 @@ const ProjectBriefProgressContent = ({
   return (
     <>
     {contextHolder}
+    {modalContextHolder}
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
       {sortedBriefs.map((brief) => {
         const workItems = brief.workItems ?? [];
+        const workItemsById = new Map(workItems.map((item) => [item.id, item]));
+        const visibleWorkItems = (displayOrder[brief.id] ?? [])
+          .map((id) => workItemsById.get(id))
+          .filter((item): item is ProjectBriefWorkItem => Boolean(item && (includeCompletedWorkItems || item.status !== "completed")));
         const assignedCount = workItems.filter(
           (item) => item.assignee,
         ).length;
@@ -389,62 +477,104 @@ const ProjectBriefProgressContent = ({
               {
                 key: brief.id,
                 label: (
-                  <Flex align="center" gap={10} wrap>
-                    <Typography.Text strong style={{ fontSize: 17 }}>
-                      <AppLink href={`/project-briefs/${brief.id}`} onClick={(event) => event.stopPropagation()}>
+                  <div className="brief-display-heading">
+                    <Tooltip title={brief.title}>
+                      <AppLink className="brief-display-title" href={`/project-briefs/${brief.id}`} onClick={(event) => event.stopPropagation()}>
                         {brief.title}
                       </AppLink>
-                    </Typography.Text>
-                    <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
-                  </Flex>
+                    </Tooltip>
+                    {onEditBrief ? (
+                      <Dropdown
+                        trigger={["click"]}
+                        disabled={savingStatusId !== null}
+                        menu={{
+                          selectable: true,
+                          selectedKeys: [brief.status],
+                          items: ["waiting_assignment", "in_progress", "completed", "paused"].map((status) => ({
+                            key: status,
+                            label: (
+                              <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 112, paddingBlock: 2, fontSize: 13, color: "var(--ant-color-text)" }}>
+                                <span aria-hidden style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, backgroundColor: briefStatusMeta[status].rail }} />
+                                <span>{briefStatusMeta[status].label}</span>
+                                {status === brief.status && <CheckOutlined style={{ marginInlineStart: "auto", color: "#1677ff", fontSize: 12 }} />}
+                              </span>
+                            ),
+                          })),
+                          onClick: ({ key, domEvent }) => {
+                            domEvent.stopPropagation();
+                            void changeBriefStatus(brief, key);
+                          },
+                        }}
+                      >
+                        <Button
+                          type="text"
+                          size="small"
+                          aria-label={`修改需求单状态：${statusMeta.label}`}
+                          loading={savingStatusId === brief.id}
+                          disabled={savingStatusId !== null}
+                          style={{ padding: 0, height: "auto" }}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <Tag color={statusMeta.color} style={{ marginInlineEnd: 0, cursor: "pointer" }}>
+                            {statusMeta.label} <DownOutlined style={{ fontSize: 10 }} />
+                          </Tag>
+                        </Button>
+                      </Dropdown>
+                    ) : <Tag color={statusMeta.color}>{statusMeta.label}</Tag>}
+                  </div>
                 ),
                 extra: (
-                  <Space
-                    size={8}
-                    separator={<Divider orientation="vertical" />}
-                    wrap
-                  >
-                    <Typography.Text type="secondary">
-                      负责人：{brief.owner?.name ?? "-"}
-                    </Typography.Text>
-                    <Typography.Text type="secondary">
-                      创建人：{brief.creator?.name ?? "-"}
-                    </Typography.Text>
-                    <Typography.Text type="secondary">
-                      创建日期：
-                      {dayjs(brief.createdAt).format("YYYY-MM-DD")}
-                    </Typography.Text>
-                    <Typography.Text
-                      type="secondary"
-                      className="brief-display-assignment-summary"
+                  <div className="brief-display-header-extra" onClick={(event) => event.stopPropagation()}>
+                    <Tooltip title={`负责人：${brief.owner?.name ?? "-"}`}>
+                      <Typography.Text type="secondary" className="brief-display-owner">
+                        负责人：{brief.owner?.name ?? "-"}
+                      </Typography.Text>
+                    </Tooltip>
+                    <Tooltip title={`已分配执行人：${assignedCount} / ${workItems.length} 个工作项`}>
+                      <Typography.Text type="secondary" className="brief-display-assignment-summary">
+                        <span className="brief-display-assignment-label">已指派 </span>
+                        <strong>{assignedCount}</strong> / {workItems.length}
+                      </Typography.Text>
+                    </Tooltip>
+                    <Tooltip trigger={["hover", "click", "focus"]} title={<div>
+                      <div>创建人：{brief.creator?.name ?? "-"}</div>
+                      <div>创建日期：{dayjs(brief.createdAt).format("YYYY-MM-DD")}</div>
+                    </div>}>
+                      <Button type="text" size="small" aria-label="需求单信息" icon={<InfoCircleOutlined />} />
+                    </Tooltip>
+                    <Button
+                      variant="text"
+                      color="primary"
+                      icon={<PlusOutlined />}
+                      aria-label="添加工作项"
+                      onClick={() => onAddWorkItem?.(brief)}
+                      className="brief-display-add"
                     >
-                      指派进度：<strong>{assignedCount}</strong>
-                       / {workItems.length} 个工作项
-                    </Typography.Text>
-                    <div className="brief-display-actions">
-                      <TableActions
-                        onEdit={() => onEditBrief?.(brief)}
-                        onDelete={() => onDeleteBrief?.(brief)}
-                        editText="修改需求"
-                        deleteText="删除需求"
-                        middleAction={
-                          <Button
-                            variant="text"
-                            color="primary"
-                            icon={<PlusOutlined />}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onAddWorkItem?.(brief);
-                            }}
-                            styles={{ root: { padding: 6 } }}
-                          >
-                            添加工作项
-                          </Button>
-                        }
-                        deleteTitle={`确定删除需求单“${brief.title}”？`}
-                      />
-                    </div>
-                  </Space>
+                      <span className="brief-display-add-label">添加工作项</span>
+                    </Button>
+                    <Dropdown
+                      trigger={["click"]}
+                      menu={{
+                        items: [
+                          { key: "edit", label: "修改需求", icon: <EditOutlined />, disabled: !onEditBrief },
+                          { key: "delete", label: "删除需求", icon: <DeleteOutlined />, danger: true, disabled: !onDeleteBrief },
+                        ],
+                        onClick: ({ key, domEvent }) => {
+                          domEvent.stopPropagation();
+                          if (key === "edit") onEditBrief?.(brief);
+                          if (key === "delete") modal.confirm({
+                            title: `确定删除需求单“${brief.title}”？`,
+                            okText: "确认删除",
+                            cancelText: "取消",
+                            okButtonProps: { danger: true },
+                            onOk: () => onDeleteBrief?.(brief),
+                          });
+                        },
+                      }}
+                    >
+                      <Button type="text" aria-label="更多需求单操作" icon={<MoreOutlined />} />
+                    </Dropdown>
+                  </div>
                 ),
                 children: (
                   <div className="brief-display-body">
@@ -472,10 +602,10 @@ const ProjectBriefProgressContent = ({
                       </div>
                     </div>
                     <div className="brief-display-work-items">
-                      {workItems.length === 0 ? (
+                      {visibleWorkItems.length === 0 ? (
                         <Empty
                           image={Empty.PRESENTED_IMAGE_SIMPLE}
-                          description="暂无工作项"
+                          description="暂无未完成的工作项"
                         />
                       ) : (
                         <div className="brief-work-item-table">
@@ -486,8 +616,11 @@ const ProjectBriefProgressContent = ({
                               ...current,
                               workItems: { ...current.workItems, [brief.id]: Array.isArray(keys) ? keys : [keys] },
                             }))}
-                            items={workItems.map((item, itemIndex) => {
-                              // TODO: 在工作项展示模块中展示 status 状态标签。
+                            items={visibleWorkItems.map((item, itemIndex) => {
+                              const itemStatusMeta = workItemStatusMeta[item.status] ?? {
+                                label: item.status || "未设置",
+                                color: "default",
+                              };
                               const typeMeta = {
                                 DESIGN: { label: "设计", color: "blue" },
                                 COPY: { label: "文案", color: "orange" },
@@ -523,6 +656,57 @@ const ProjectBriefProgressContent = ({
                                       wrap
                                     >
                                       <Typography.Text type="secondary">
+                                        状态：
+                                        {onEditWorkItem ? (
+                                          <Dropdown
+                                            trigger={["click"]}
+                                            disabled={savingStatusId !== null}
+                                            menu={{
+                                              selectable: true,
+                                              selectedKeys: [item.status],
+                                              items: ["pending", "in_progress", "completed", "paused"].map((status) => ({
+                                                key: status,
+                                                label: (
+                                                  <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 112, paddingBlock: 2, fontSize: 13, color: "var(--ant-color-text)" }}>
+                                                    <span aria-hidden style={{
+                                                      width: 7,
+                                                      height: 7,
+                                                      borderRadius: "50%",
+                                                      flexShrink: 0,
+                                                      backgroundColor: { pending: "#bfbfbf", in_progress: "#52c41a", paused: "#faad14", completed: "#1677ff" }[status],
+                                                    }} />
+                                                    <span>{workItemStatusMeta[status].label}</span>
+                                                    {status === item.status && <CheckOutlined style={{ marginInlineStart: "auto", color: "#1677ff", fontSize: 12 }} />}
+                                                  </span>
+                                                ),
+                                              })),
+                                              onClick: ({ key, domEvent }) => {
+                                                domEvent.stopPropagation();
+                                                void changeWorkItemStatus(item, key);
+                                              },
+                                            }}
+                                          >
+                                            <Button
+                                              type="text"
+                                              size="small"
+                                              aria-label={`修改工作项状态：${itemStatusMeta.label}`}
+                                              loading={savingStatusId === item.id}
+                                              disabled={savingStatusId !== null}
+                                              style={{ padding: 0, height: "auto" }}
+                                              onClick={(event) => event.stopPropagation()}
+                                            >
+                                              <Tag color={itemStatusMeta.color} style={{ marginInlineEnd: 0, cursor: "pointer" }}>
+                                                {itemStatusMeta.label} <DownOutlined style={{ fontSize: 10 }} />
+                                              </Tag>
+                                            </Button>
+                                          </Dropdown>
+                                        ) : (
+                                          <Tag color={itemStatusMeta.color} style={{ marginInlineEnd: 0 }}>
+                                            {itemStatusMeta.label}
+                                          </Tag>
+                                        )}
+                                      </Typography.Text>
+                                      <Typography.Text type="secondary">
                                         审核人：
                                         {item.reviewer?.name ?? "-"}
                                       </Typography.Text>
@@ -554,17 +738,33 @@ const ProjectBriefProgressContent = ({
                                             : "-"}
                                         </strong>
                                       </Typography.Text>
-                                      <TableActions
-                                        onEdit={() =>
-                                          onEditWorkItem?.(item)
-                                        }
-                                        onDelete={() =>
-                                          onDeleteWorkItem?.(item)
-                                        }
-                                        editText="修改"
-                                        deleteText="删除"
-                                        deleteTitle={`确定删除工作项“${item.title}”？`}
-                                      />
+                                      <Dropdown
+                                        trigger={["click"]}
+                                        menu={{
+                                          items: [
+                                            { key: "edit", label: "修改工作项", icon: <EditOutlined />, disabled: !onEditWorkItem },
+                                            { key: "delete", label: "删除工作项", icon: <DeleteOutlined />, danger: true, disabled: !onDeleteWorkItem },
+                                          ],
+                                          onClick: ({ key, domEvent }) => {
+                                            domEvent.stopPropagation();
+                                            if (key === "edit") onEditWorkItem?.(item);
+                                            if (key === "delete") modal.confirm({
+                                              title: `确定删除工作项“${item.title}”？`,
+                                              okText: "确认删除",
+                                              cancelText: "取消",
+                                              okButtonProps: { danger: true },
+                                              onOk: () => onDeleteWorkItem?.(item),
+                                            });
+                                          },
+                                        }}
+                                      >
+                                        <Button
+                                          type="text"
+                                          aria-label="更多工作项操作"
+                                          icon={<MoreOutlined />}
+                                          onClick={(event) => event.stopPropagation()}
+                                        />
+                                      </Dropdown>
                                     </Space>
                                   </div>
                                 ),
@@ -572,6 +772,7 @@ const ProjectBriefProgressContent = ({
                                   <WorkItemDetails
                                     item={item}
                                     canManage={canManagePlannedWork}
+                                    canSubmit={canManagePlannedWork || item.assignee?.id === currentUserId}
                                     onSubmissionChange={onAfterSubmissionChange}
                                     totalPlannedDays={totalPlannedDays}
                                     plannedWorkAction={canManagePlannedWork && project ? (

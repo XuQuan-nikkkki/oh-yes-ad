@@ -919,6 +919,7 @@ model WorkItem {
 
   // 旧项目任务迁移来源，用于追溯和防止重复迁移
   legacyTaskId String? @unique
+  submissionEnabled Boolean @default(true)
   sourceFilePolicy SourceFilePolicy @default(OPTIONAL)
 
   type          String

@@ -134,22 +134,22 @@ export default function WorkItemDetailPage() {
           <Descriptions.Item label="工作描述" span="filled">
             <Typography.Paragraph style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: 0 }}>{data.description}</Typography.Paragraph>
           </Descriptions.Item>
-          <Descriptions.Item label="格式">
+          {data.submissionEnabled !== false ? (<Descriptions.Item label="格式">
             {data.formatOptions?.length ? data.formatOptions.map(({ option }) => <Tag key={option.id} color={option.color ?? undefined}>{option.value}</Tag>) : "-"}
-          </Descriptions.Item>
-          <Descriptions.Item label="类别">
+          </Descriptions.Item>) : null}
+          {data.submissionEnabled !== false ? (<Descriptions.Item label="类别">
             {data.categoryOrSceneOptions?.length ? data.categoryOrSceneOptions.map(({ option }) => <Tag key={option.id} color={option.color ?? undefined}>{option.value}</Tag>) : "-"}
-          </Descriptions.Item>
-          <Descriptions.Item label="规格">
+          </Descriptions.Item>) : null}
+          {data.submissionEnabled !== false ? (<Descriptions.Item label="规格">
             <span style={{ whiteSpace: "pre-wrap" }}>{data.specification || "-"}</span>
-          </Descriptions.Item>
+          </Descriptions.Item>) : null}
         </Descriptions>
       </Card>
-      <Card title="交付时间">
+      <Card title={data.submissionEnabled === false ? "截止时间" : "交付时间"}>
         <Descriptions column={{ xs: 1, sm: 3 }} size="small">
-          <Descriptions.Item label="初稿日期">{formatDate(data.firstDraftAt, "YYYY-MM-DD")}</Descriptions.Item>
-          <Descriptions.Item label="修改日期">{formatDate(data.revisionAt, "YYYY-MM-DD")}</Descriptions.Item>
-          <Descriptions.Item label="定稿日期">{formatDate(data.finalAt, "YYYY-MM-DD")}</Descriptions.Item>
+          {data.submissionEnabled !== false ? (<Descriptions.Item label="初稿日期">{formatDate(data.firstDraftAt, "YYYY-MM-DD")}</Descriptions.Item>) : null}
+          {data.submissionEnabled !== false ? (<Descriptions.Item label="修改日期">{formatDate(data.revisionAt, "YYYY-MM-DD")}</Descriptions.Item>) : null}
+          <Descriptions.Item label={data.submissionEnabled === false ? "截止时间" : "定稿日期"}>{formatDate(data.finalAt, "YYYY-MM-DD")}</Descriptions.Item>
         </Descriptions>
       </Card>
       {data.assignmentChanges?.length ? (

@@ -57,6 +57,9 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await sanitizeRequestBody(req);
+  if (body?.submissionEnabled !== undefined && typeof body.submissionEnabled !== "boolean") {
+    return new Response("提交内容选项无效", { status: 400 });
+  }
   if (!body || !["REQUIRED", "OPTIONAL"].includes(String(body.sourceFilePolicy))) {
     return new Response("请选择是否必须提交源文件", { status: 400 });
   }
@@ -135,6 +138,7 @@ export async function PATCH(
       where: { id },
       data: {
         type: body.type,
+        submissionEnabled: body.submissionEnabled,
         sourceFilePolicy: body.sourceFilePolicy,
         title: body.title.trim(),
         description: body.description.trim(),

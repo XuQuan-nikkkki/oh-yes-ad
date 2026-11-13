@@ -25,6 +25,8 @@ const WorkItemEditModal = ({ open, ...formProps }: Props) => (
     destroyOnHidden
     mask={{ closable: false }}
     width={1040}
+    className="work-item-edit-modal"
+    style={{ top: 24, paddingBottom: 24 }}
   >
     <WorkItemEditForm {...formProps} />
   </Modal>
