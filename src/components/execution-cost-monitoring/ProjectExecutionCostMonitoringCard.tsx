@@ -15,6 +15,7 @@ type Props = {
   endDate?: string | null;
   adjustments?: WorkdayAdjustmentRange[];
   canManageProject?: boolean;
+  embedded?: boolean;
 };
 
 type ExecutionCostItem = {
@@ -108,6 +109,7 @@ const ProjectExecutionCostMonitoringCard = ({
   endDate,
   adjustments = [],
   canManageProject = false,
+  embedded = false,
 }: Props) => {
   const normalizedProjectName = projectName || "未命名项目";
   const [loading, setLoading] = useState(false);
@@ -337,7 +339,7 @@ const ProjectExecutionCostMonitoringCard = ({
 
   return (
     <Card
-      title={
+      title={embedded ? undefined :
         <div style={{ marginTop: 14, marginBottom: 8 }}>
           <AppLink href={`/projects/${projectId}?step=4&tab=realtime-cost`}>
             {normalizedProjectName}
@@ -352,7 +354,7 @@ const ProjectExecutionCostMonitoringCard = ({
           </div>
         </div>
       }
-      extra={
+      extra={embedded ? undefined :
         <ProjectReimbursementCreateAction
           projectId={projectId}
           projectName={normalizedProjectName}
@@ -363,8 +365,8 @@ const ProjectExecutionCostMonitoringCard = ({
           }}
         />
       }
-      styles={{ body: { padding: "0 0 4px" } }}
-      style={{ boxShadow: "none", backgroundColor: "#fff" }}
+      styles={{ body: { padding: embedded ? 0 : "0 0 4px" } }}
+      style={{ boxShadow: "none", backgroundColor: "#fff", border: embedded ? 0 : undefined }}
       loading={loading}
     >
       {rows.length > 0 ? (
@@ -379,7 +381,7 @@ const ProjectExecutionCostMonitoringCard = ({
             size="small"
             rowKey="key"
             columns={columns}
-            dataSource={tableData}
+            dataSource={embedded ? rows : tableData}
             rowClassName={(record) =>
               record.isTotal ? "execution-cost-total-row" : ""
             }

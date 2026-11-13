@@ -1,0 +1,139 @@
+.switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  width: 100%;
+  padding: 15px;
+  border: 1px solid #e7e9ee;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.switch button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 1px solid #e1e5eb;
+  border-radius: 6px;
+  background: #fff;
+  color: #464e5b;
+  cursor: pointer;
+}
+
+.switch button :global(.anticon) { font-size: 19px; }
+.switch button strong { font-size: 16px; }
+.switch button span:not(:global(.anticon)) { color: #929ba8; font-size: 13px; }
+.switch button.selected { border-color: #1677ff; box-shadow: inset 0 0 0 1px #1677ff; background: #f7faff; color: #1677ff; }
+.switch button.selected span:not(:global(.anticon)) { color: #618deb; }
+.switch button:focus-visible, .nav button:focus-visible, .financeGrid button:focus-visible { outline: 2px solid #1677ff; outline-offset: 2px; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 235px minmax(0, 1fr);
+  width: 100%;
+  margin-top: 8px;
+  min-height: 320px;
+  overflow: hidden;
+  border: 1px solid #e7e9ee;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.nav { display: flex; flex-direction: column; gap: 3px; padding: 14px; border-right: 1px solid #edf0f4; }
+.nav button, .activeItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #4c5562;
+  text-align: left;
+  font-size: 14px;
+}
+.nav button { cursor: pointer; }
+.nav button:hover { background: #f5f7fa; }
+.nav button.activeItem:hover { background: #eef5ff; }
+.nav button :global(.anticon), .activeItem :global(.anticon) { flex: 0 0 16px; color: #778392; font-size: 16px; }
+.nav button span:not(:global(.anticon)), .activeItem span:not(:global(.anticon)) { flex: 1; min-width: 0; }
+.nav button em, .activeItem em { flex: none; padding: 2px 6px; border-radius: 12px; background: #f1f2f4; color: #7f8997; font-size: 10px; font-style: normal; white-space: nowrap; }
+.activeItem { background: #eef5ff; color: #1677ff; font-weight: 600; }
+.activeItem :global(.anticon) { color: #1677ff; }
+
+.content { min-width: 0; padding: 20px; }
+.quotePage { min-width: 0; }
+.quotePage > h2 { margin: 0 0 17px; font-size: 22px; line-height: 1.4; }
+.quoteToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.quoteToolbar > :global(.ant-space) { flex-wrap: wrap; justify-content: flex-end; }
+.costPage { min-width: 0; }
+.costPageHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 17px; }
+.costPageHeader h2 { margin: 0; font-size: 22px; line-height: 1.4; }
+.overviewTitle { margin: 0 0 17px; font-size: 20px; line-height: 1.4; }
+.overview { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 14px; }
+.overviewMain, .overviewAside { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.metric { display: flex; flex-direction: column; gap: 9px; min-width: 0; min-height: 105px; padding: 15px; border: 1px solid #e6e9ef; border-radius: 7px; background: #fff; text-align: left; cursor: pointer; }
+.metric:hover { border-color: #91caff; }
+.metric span { color: #818b98; font-size: 12px; }
+.metric strong { color: #1677ff; font-size: 22px; font-weight: 600; }
+.metric small { color: #96a0ac; font-size: 11px; line-height: 1.4; }
+.overviewPanel { min-width: 0; padding: 18px; border: 1px solid #e7eaf0; border-radius: 7px; background: #fff; }
+.overviewHeading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 13px; }
+.overviewHeading h2 { margin: 0; font-size: 16px; font-weight: 650; }
+.overviewHeading :global(.ant-btn) { height: auto; padding: 0; }
+.overviewTable { overflow: hidden; border: 1px solid #e8eaf0; border-radius: 5px; }
+.overviewRow { display: grid; grid-template-columns: 24% minmax(0, 1fr) 80px 88px; align-items: center; gap: 12px; min-height: 42px; padding: 9px 12px; border-bottom: 1px solid #eef0f3; font-size: 13px; }
+.overviewRow:last-child { border-bottom: 0; }
+.overviewRowHead { min-height: 35px; background: #f8f9fb; color: #74808d; font-size: 12px; }
+.overviewRow strong, .overviewMilestone strong { min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
+.overviewRow :global(.ant-tag), .overviewMilestone :global(.ant-tag) { width: max-content; max-width: 100%; margin: 0; white-space: normal; }
+.overviewMuted { color: #9099a6; font-size: 12px; overflow-wrap: anywhere; }
+.overviewMilestone { display: grid; grid-template-columns: 115px minmax(0, 1fr) 90px; align-items: center; gap: 12px; padding: 10px 2px; border-bottom: 1px solid #eef0f3; font-size: 13px; }
+.overviewMilestone:last-child { border-bottom: 0; }
+.overviewMilestone time { color: #8a95a2; }
+.memberGroup { display: grid; gap: 7px; padding: 9px 0; border-bottom: 1px solid #eef0f3; }
+.memberGroup:last-child { border-bottom: 0; }
+.memberGroup > span { color: #8a95a2; font-size: 12px; }
+.memberGroup > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.memberGroup :global(.ant-tag) { margin: 0; border: 0; background: #f2f3f5; }
+.overviewCount { color: #1677ff; font-size: 28px; }
+.metric:focus-visible { outline: 2px solid #1677ff; outline-offset: 2px; }
+.progressToolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.progressToolbar h2 { margin: 0; font-size: 22px; line-height: 1.4; }
+.financeGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.financeGrid button { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 20px; border: 1px solid #e7eaf0; border-radius: 7px; background: #fff; text-align: left; cursor: pointer; }
+.financeGrid button:hover { border-color: #91caff; background: #fafdff; }
+.financeGrid button > :global(.anticon) { color: #1677ff; font-size: 20px; }
+.financeGrid button > span { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.financeGrid button strong { color: #242a34; font-size: 15px; }
+.financeGrid button small { color: #929ba8; font-size: 12px; }
+.financeGrid .linkText { margin-left: auto; color: #1677ff; white-space: nowrap; font-size: 12px; }
+
+@media (max-width: 1100px) {
+  .switch button span:not(:global(.anticon)) { display: none; }
+  .layout { grid-template-columns: 190px minmax(0, 1fr); }
+  .nav { padding: 9px; }
+  .nav button { gap: 8px; padding-inline: 8px; }
+  .nav button em { max-width: 82px; white-space: normal; text-align: center; line-height: 1.25; }
+  .financeGrid { grid-template-columns: 1fr; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .overview { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 700px) {
+  .quoteToolbar { flex-wrap: wrap; }
+  .switch { gap: 8px; padding: 8px; }
+  .switch button { gap: 8px; }
+  .switch button strong { font-size: 14px; }
+  .layout { grid-template-columns: 1fr; }
+  .nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid #edf0f4; }
+  .nav button, .activeItem { width: auto; flex: none; white-space: nowrap; }
+  .overviewRow { grid-template-columns: 22% minmax(0, 1fr) 65px 72px; gap: 6px; padding-inline: 8px; font-size: 12px; }
+  .overviewMilestone { grid-template-columns: 90px minmax(0, 1fr) 75px; gap: 6px; }
+}

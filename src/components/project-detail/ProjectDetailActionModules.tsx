@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Modal, Select, Space } from "antd";
+import { Button, Modal, Select, Space, message } from "antd";
 import type { ProjectMilestoneRow } from "@/components/ProjectMilestonesTable";
 import type { ProjectSegmentRow } from "@/components/project-detail/ProjectSegmentsTable";
 import type { ProjectTaskRow } from "@/components/project-detail/ProjectTasksTable";
@@ -185,6 +185,7 @@ export const ProjectSegmentAction = ({
 type ActualWorkActionProps = {
   projectId: string;
   visible: boolean;
+  renderModal?: boolean;
   actualWorkView: ActualWorkView;
   onActualWorkViewChange: (value: ActualWorkView) => void;
   project: Project | null;
@@ -199,6 +200,7 @@ type ActualWorkActionProps = {
 export const ProjectActualWorkAction = ({
   projectId,
   visible,
+  renderModal = true,
   actualWorkView,
   onActualWorkViewChange,
   project,
@@ -226,7 +228,7 @@ export const ProjectActualWorkAction = ({
         </Button>
       </Space>
     ) : null}
-    <Modal
+    {renderModal && <Modal
       title={editing ? "编辑实际工时" : "新增实际工时"}
       open={open}
       onCancel={onCancel}
@@ -256,27 +258,26 @@ export const ProjectActualWorkAction = ({
             : null
         }
         onSubmit={async (payload: ActualWorkEntryFormPayload) => {
-          if (editing) {
-            await fetch(
-              `/api/projects/${projectId}/actual-work-entries/${editing.id}`,
+          try {
+            const response = await fetch(
+              editing
+                ? `/api/projects/${projectId}/actual-work-entries/${editing.id}`
+                : `/api/projects/${projectId}/actual-work-entries`,
               {
-                method: "PATCH",
+                method: editing ? "PATCH" : "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
               },
             );
-          } else {
-            await fetch(`/api/projects/${projectId}/actual-work-entries`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
+            if (!response.ok) throw new Error("保存工时记录失败");
+            onCancel();
+            await onSaved();
+          } catch {
+            message.error("保存工时记录失败，请重试");
           }
-          onCancel();
-          await onSaved();
         }}
       />
-    </Modal>
+    </Modal>}
   </>
 );
 

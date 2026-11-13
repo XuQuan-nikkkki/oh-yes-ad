@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="240" viewBox="0 0 560 240">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#183e69"/><stop offset="1" stop-color="#91d0e4"/></linearGradient></defs>
+  <rect width="560" height="240" rx="16" fill="url(#g)"/>
+  <circle cx="474" cy="56" r="66" fill="#f5c861"/>
+  <path d="M290 240c56-70 112-8 166-70s76-14 104-30v100z" fill="#f4f8ee" opacity=".95"/>
+  <text x="36" y="88" fill="white" font-size="16" font-family="sans-serif">AUTUMN</text>
+  <text x="36" y="132" fill="white" font-size="34" font-weight="700" font-family="sans-serif">品牌活动</text>
+  <text x="38" y="162" fill="#e8f4fb" font-size="14" font-family="sans-serif">横版适配</text>
+</svg>

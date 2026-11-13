@@ -4,12 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { App, Empty, Table, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import AppLink from "@/components/AppLink";
-import SelectOptionTag from "@/components/SelectOptionTag";
+import MultipleSelectOptions from "@/components/MultipleSelectOptions";
 import TableActions from "@/components/TableActions";
 import ProjectReimbursementFormModal, {
   type ProjectReimbursementFormValues,
 } from "@/components/project-detail/ProjectReimbursementFormModal";
 import { formatDate } from "@/lib/date";
+import { EXECUTION_COST_FIELD } from "@/lib/execution-cost";
 
 type EmployeeOption = {
   id: string;
@@ -250,7 +251,7 @@ const ProjectReimbursementRecordsContent = ({
         dataIndex: "categoryOption",
         key: "categoryOption",
         render: (value: ReimbursementRow["categoryOption"]) =>
-          value?.value ? <SelectOptionTag option={value} /> : "-",
+          value?.value ? <MultipleSelectOptions field={EXECUTION_COST_FIELD} options={[value]} /> : "-",
       },
       {
         title: "金额",

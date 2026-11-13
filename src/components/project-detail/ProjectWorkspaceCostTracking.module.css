@@ -1,0 +1,15 @@
+.period { display: flex; align-items: center; gap: 24px; min-height: 62px; margin-bottom: 12px; padding: 12px 18px; border: 1px solid #e7eaf0; border-radius: 7px; background: #fff; }
+.period > div { display: flex; align-items: baseline; gap: 8px; padding-right: 24px; border-right: 1px solid #e7eaf0; }
+.period span { color: #818b98; font-size: 12px; }
+.period strong { font-size: 14px; font-weight: 600; }
+.period :global(.ant-tag) { margin: 0; border-radius: 5px; }
+.metricGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.metric { display: flex; flex-direction: column; min-width: 0; min-height: 116px; padding: 16px; border: 1px solid #e7eaf0; border-radius: 7px; background: #fff; }
+.tablePanel { overflow: hidden; border: 1px solid #e7eaf0; border-radius: 7px; background: #fff; }
+.panelHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 18px; border-bottom: 1px solid #e7eaf0; }
+.panelHeader > div { display: flex; flex-direction: column; gap: 3px; }
+.panelHeader h3 { margin: 0; font-size: 16px; font-weight: 650; }
+.panelHeader span { color: #929ba8; font-size: 12px; }
+.panelHeader :global(.ant-tag) { margin: 0; border-radius: 5px; }
+@media (max-width: 1200px) { .metricGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .period { flex-wrap: wrap; gap: 10px 16px; } .period > div { padding-right: 16px; } .metricGrid { grid-template-columns: 1fr; } }

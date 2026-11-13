@@ -1,0 +1,32 @@
+.heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.heading h2 { margin: 0; font-size: 20px; line-height: 1.4; }
+
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 14px; }
+.card, .empty { min-width: 0; overflow: hidden; border: 1px solid #e7eaf0; border-radius: 7px; background: #fff; }
+.empty { padding: 24px; }
+.cardHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid #edf0f3; }
+.cardHeader .name { min-width: 0; color: #242a34; font-size: 16px; font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
+.cardHeader .name:hover { color: #1677ff; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 16px 18px; }
+.fields > div { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.fields > div > span, .projectServices > span { color: #8c96a2; font-size: 12px; }
+.fields strong { color: #333b47; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.tags { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 26px; }
+.projectServices { padding: 14px 18px 16px; border-top: 1px solid #edf0f3; background: #fbfcfe; }
+.projectServices p { margin: 7px 0 0; color: #333b47; font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.loading { margin: 0; padding: 20px 18px; color: #8c96a2; font-size: 13px; }
+
+@media (max-width: 1050px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 700px) {
+  .fields { grid-template-columns: 1fr; }
+}

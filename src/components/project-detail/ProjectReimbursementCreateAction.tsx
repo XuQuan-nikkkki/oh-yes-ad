@@ -26,6 +26,7 @@ type Props = {
   employees?: EmployeeOption[];
   onCreated?: () => void;
   buttonType?: "default" | "primary";
+  buttonLabel?: string;
 };
 
 const toEmployeeOptions = (data: unknown): EmployeeOption[] => {
@@ -45,6 +46,7 @@ const ProjectReimbursementCreateAction = ({
   employees,
   onCreated,
   buttonType = "primary",
+  buttonLabel = "新增报销",
 }: Props) => {
   const app = App.useApp();
   const [messageApi, contextHolder] = message.useMessage();
@@ -189,7 +191,7 @@ const ProjectReimbursementCreateAction = ({
         disabled={!canCreateReimbursement}
         onClick={openModal}
       >
-        新增报销
+        {buttonLabel}
       </Button>
 
       <ProjectReimbursementFormModal

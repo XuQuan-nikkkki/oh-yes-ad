@@ -186,6 +186,7 @@ export type Project = {
     clientParticipants?: {
       id: string;
       name: string;
+      title?: string | null;
     }[];
     vendorParticipants?: {
       id: string;

@@ -22,6 +22,7 @@ import { calculateWorkdays } from "@/lib/workday";
 import { useSystemSettingsStore } from "@/stores/systemSettingsStore";
 import type { Project, WorkdayAdjustment } from "@/types/projectDetail";
 import ProjectDetailTableContainer from "@/components/project-detail/ProjectDetailTableContainer";
+import workspaceStyles from "./ProjectWorkspaceCostTracking.module.css";
 import {
   FINANCIAL_METRIC_BAR_COLORS,
   FINANCIAL_METRIC_COLORS,
@@ -39,6 +40,7 @@ type Props = {
   actualWorkEntries?: Project["actualWorkEntries"];
   workdayAdjustments?: WorkdayAdjustment[];
   onDownloadReady?: ((downloadFn: (() => void) | null) => void) | undefined;
+  embedded?: boolean;
 };
 
 type ClientContract = {
@@ -570,6 +572,7 @@ const ProjectRealtimeCostTrackingTable = ({
   actualWorkEntries = [],
   workdayAdjustments = [],
   onDownloadReady,
+  embedded = false,
 }: Props) => {
   const app = App.useApp();
   const [messageApi, contextHolder] = message.useMessage();
@@ -1969,18 +1972,18 @@ const ProjectRealtimeCostTrackingTable = ({
         title: "类别",
         dataIndex: "label",
         key: "label",
-        width: 160,
-        onHeaderCell: () => ({ style: { paddingLeft: 24 } }),
+        width: embedded ? 138 : 160,
+        onHeaderCell: () => ({ style: { paddingLeft: embedded ? 14 : 24 } }),
         onCell: (row) => {
           if (row.note) {
             return {
               colSpan: 5,
               style: row.isSection
-                ? { background: "#fafafa", paddingLeft: 24 }
-                : { paddingLeft: 24 },
+                ? { background: "#fafafa", paddingLeft: embedded ? 14 : 24 }
+                : { paddingLeft: embedded ? 14 : 24 },
             };
           }
-          return { style: { paddingLeft: 24 } };
+          return { style: { paddingLeft: embedded ? 14 : 24 } };
         },
         render: (_value, row) => {
           if (row.note) {
@@ -2023,11 +2026,11 @@ const ProjectRealtimeCostTrackingTable = ({
         title: "金额",
         dataIndex: "amountValue",
         key: "amountValue",
-        width: 120,
+        width: embedded ? 116 : 120,
         align: "right",
-        onHeaderCell: () => ({ style: { paddingRight: 24 } }),
+        onHeaderCell: () => ({ style: { paddingRight: embedded ? 12 : 24 } }),
         onCell: (row) =>
-          row.note ? { colSpan: 0 } : { style: { paddingRight: 24 } },
+          row.note ? { colSpan: 0 } : { style: { paddingRight: embedded ? 12 : 24 } },
         render: (_value, row) => {
           const isSubItem = Boolean(row.indent);
           const amount = normalizeNegativeZero(Number(row.amountValue ?? 0));
@@ -2053,11 +2056,11 @@ const ProjectRealtimeCostTrackingTable = ({
         title: "占比",
         dataIndex: "ratioValue",
         key: "ratioValue",
-        width: 120,
+        width: embedded ? 76 : 120,
         align: "right",
-        onHeaderCell: () => ({ style: { paddingRight: 24 } }),
+        onHeaderCell: () => ({ style: { paddingRight: embedded ? 12 : 24 } }),
         onCell: (row) =>
-          row.note ? { colSpan: 0 } : { style: { paddingRight: 24 } },
+          row.note ? { colSpan: 0 } : { style: { paddingRight: embedded ? 12 : 24 } },
         render: (_value, row) => {
           if (hiddenRatioRowKeys.has(row.key)) {
             return null;
@@ -2087,18 +2090,19 @@ const ProjectRealtimeCostTrackingTable = ({
         title: `金额占比（相对净收入${formatYuanText(netIncomeBase)}）`,
         dataIndex: "bar",
         key: "bar",
+        width: embedded ? 185 : undefined,
         onHeaderCell: () => ({
-          style: { paddingLeft: 24, paddingRight: 24, maxWidth: 300 },
+          style: { paddingLeft: embedded ? 12 : 24, paddingRight: embedded ? 12 : 24, maxWidth: 300 },
         }),
         onCell: (row) =>
           row.note
             ? { colSpan: 0 }
             : {
                 style: {
-                  minWidth: 180,
+                  minWidth: embedded ? 140 : 180,
                   maxWidth: 300,
-                  paddingLeft: 24,
-                  paddingRight: 24,
+                  paddingLeft: embedded ? 12 : 24,
+                  paddingRight: embedded ? 12 : 24,
                 },
               },
         render: (_value, row) => {
@@ -2125,7 +2129,7 @@ const ProjectRealtimeCostTrackingTable = ({
                 showInfo={false}
                 strokeColor={barColor}
                 railColor="#f3f1e6"
-                strokeWidth={6}
+                size={{ height: 6 }}
                 style={{ flex: 1, minWidth: 0 }}
               />
             </div>
@@ -2136,11 +2140,12 @@ const ProjectRealtimeCostTrackingTable = ({
         title: "备注",
         dataIndex: "remark",
         key: "remark",
-        onHeaderCell: () => ({ style: { minWidth: 220, paddingRight: 24 } }),
+        width: embedded ? 244 : undefined,
+        onHeaderCell: () => ({ style: { minWidth: embedded ? 200 : 220, paddingRight: embedded ? 12 : 24 } }),
         onCell: (row) =>
           row.note
             ? { colSpan: 0 }
-            : { style: { minWidth: 220, paddingRight: 24 } },
+            : { style: { minWidth: embedded ? 200 : 220, paddingRight: embedded ? 12 : 24 } },
         render: (_value, row) => {
           const value = String(row.remark ?? "").trim();
           if (
@@ -2246,6 +2251,7 @@ const ProjectRealtimeCostTrackingTable = ({
       },
     ];
   }, [
+    embedded,
     netIncome,
     executionCost,
     executionCostBudget,
@@ -2430,7 +2436,7 @@ const ProjectRealtimeCostTrackingTable = ({
 
   if (loading) {
     return (
-      <Card>
+      <Card style={embedded ? { border: 0, boxShadow: "none" } : undefined}>
         <div style={{ padding: "24px 0", textAlign: "center" }}>
           <Spin />
         </div>
@@ -2609,7 +2615,7 @@ const ProjectRealtimeCostTrackingTable = ({
           ]}
         />
       </Modal>
-      <div style={{ overflowX: "auto" }}>
+      <div style={{ overflowX: embedded ? "visible" : "auto" }}>
         <div style={{ width: "100%" }}>
           <style>{`
             /* Keep only horizontal separators; remove vertical dividers. */
@@ -2636,8 +2642,30 @@ const ProjectRealtimeCostTrackingTable = ({
             .labor-detail-summary-row > td {
               font-weight: 700;
             }
+            .workspace-cost-table-wrap .ant-table-thead > tr > th {
+              background: #f8f9fb !important;
+              color: #707d8b;
+              font-size: 12px;
+            }
+            .workspace-cost-table-wrap .ant-table-tbody > tr > td {
+              padding-top: 10px !important;
+              padding-bottom: 10px !important;
+            }
+            .workspace-cost-table-wrap .ant-table-tbody > tr.ant-table-measure-row > td {
+              height: 0 !important;
+              padding: 0 !important;
+              border: 0 !important;
+            }
+            .workspace-cost-table-wrap .workspace-cost-section-row > td {
+              background: #f8f9fb !important;
+            }
           `}</style>
-          <ProjectDetailTableContainer marginBottom={12}>
+          <ProjectDetailTableContainer marginBottom={embedded ? 0 : 12} style={embedded ? { border: 0, borderRadius: 0, overflow: "visible", background: "transparent" } : undefined}>
+            {embedded ? <div className={workspaceStyles.period}>
+              <div><span>预计工作日</span><strong>{expectedWorkdays || 0} 天</strong></div>
+              <div><span>实际工作日</span><strong>{elapsedWorkdays} 天</strong></div>
+              {overdueDays > 0 && <Tag color="orange">已超期 {overdueDays} 天</Tag>}
+            </div> :
             <div
               style={{
                 padding: "14px 16px",
@@ -2667,16 +2695,18 @@ const ProjectRealtimeCostTrackingTable = ({
                 {actualDurationNode} 天
                 {overdueSuffix ? <> {overdueSuffix}</> : null}
               </div>
-            </div>
+            </div>}
             <div
+              className={embedded ? workspaceStyles.metricGrid : undefined}
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                background: "#f0f0f0",
-                gap: 1,
+                gridTemplateColumns: embedded ? undefined : "repeat(4, minmax(0, 1fr))",
+                background: embedded ? "transparent" : "#f0f0f0",
+                gap: embedded ? 12 : 1,
+                marginBottom: embedded ? 14 : undefined,
               }}
             >
-              <div style={{ background: "#fafafa", padding: "16px 20px" }}>
+              <div className={embedded ? workspaceStyles.metric : undefined} style={embedded ? undefined : { background: "#fafafa", padding: "16px 20px" }}>
                 <div
                   style={{
                     fontSize: 12,
@@ -2707,7 +2737,7 @@ const ProjectRealtimeCostTrackingTable = ({
                 </div>
               </div>
 
-              <div style={{ background: "#fafafa", padding: "16px 20px" }}>
+              <div className={embedded ? workspaceStyles.metric : undefined} style={embedded ? undefined : { background: "#fafafa", padding: "16px 20px" }}>
                 <div
                   style={{
                     fontSize: 12,
@@ -2734,7 +2764,7 @@ const ProjectRealtimeCostTrackingTable = ({
                 )}
               </div>
 
-              <div style={{ background: "#fafafa", padding: "16px 20px" }}>
+              <div className={embedded ? workspaceStyles.metric : undefined} style={embedded ? undefined : { background: "#fafafa", padding: "16px 20px" }}>
                 <div
                   style={{
                     fontSize: 12,
@@ -2761,7 +2791,7 @@ const ProjectRealtimeCostTrackingTable = ({
                 )}
               </div>
 
-              <div style={{ background: "#fafafa", padding: "16px 20px" }}>
+              <div className={embedded ? workspaceStyles.metric : undefined} style={embedded ? undefined : { background: "#fafafa", padding: "16px 20px" }}>
                 <div
                   style={{
                     fontSize: 12,
@@ -2787,12 +2817,17 @@ const ProjectRealtimeCostTrackingTable = ({
                 )}
               </div>
             </div>
+            <div className={embedded ? workspaceStyles.tablePanel : undefined}>
+              {embedded && <div className={workspaceStyles.panelHeader}>
+                <div><h3>实时成本明细</h3><span>收入、成本与利润分配</span></div>
+                <Tag>{isManualCostMode ? "人工录入" : "系统自动计算"}</Tag>
+              </div>}
             <div
-              className="realtime-cost-table-wrap"
+              className={`realtime-cost-table-wrap${embedded ? " workspace-cost-table-wrap" : ""}`}
               style={{
-                overflow: "hidden",
+                overflow: embedded ? "auto" : "hidden",
                 background: "#fff",
-                borderTop: "1px solid #f0f0f0",
+                borderTop: embedded ? undefined : "1px solid #f0f0f0",
               }}
             >
               <Table<BreakdownRow>
@@ -2801,33 +2836,36 @@ const ProjectRealtimeCostTrackingTable = ({
                 columns={breakdownColumns}
                 dataSource={breakdownRows}
                 size="small"
-                tableLayout="auto"
+                tableLayout={embedded ? "fixed" : "auto"}
+                scroll={embedded ? { x: 760 } : undefined}
+                rowClassName={(record) => embedded && record.isSection ? "workspace-cost-section-row" : ""}
                 style={{ width: "100%" }}
                 onRow={(record) => {
                   if (record.note) {
                     return {
                       style: {
-                        background: record.isSection ? "#fafafa" : "#fff",
+                        background: record.isSection ? embedded ? "#f8f9fb" : "#fafafa" : "#fff",
                         color: "rgba(0,0,0,0.45)",
                       },
                     };
                   }
                   if (record.key === "totalCost") {
-                    return { style: { background: "#fafafa" } };
+                    return { style: { background: embedded ? "#fcf7f6" : "#fafafa" } };
                   }
                   if (record.tone === "beige") {
                     return { style: { background: "#f7f5ea" } };
                   }
                   if (record.tone === "green") {
-                    return { style: { background: "#eaf4df" } };
+                    return { style: { background: embedded ? "#f4f9ef" : "#eaf4df" } };
                   }
                   return { style: { background: "#fff" } };
                 }}
               />
             </div>
+            </div>
           </ProjectDetailTableContainer>
 
-          <div style={{ height: 16 }} />
+          {!embedded && <div style={{ height: 16 }} />}
         </div>
       </div>
     </>

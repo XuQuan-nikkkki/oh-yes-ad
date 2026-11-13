@@ -33,6 +33,7 @@ type Props = {
   showProjectInBasicInfo?: boolean;
   showContractAmountInBasicInfo?: boolean;
   includeQuoteAmountInSyncSummary?: boolean;
+  workspaceLayout?: boolean;
   mode?: "full" | "actions" | "content";
   onSaved?: (
     latestCostEstimation: Project["latestPlanningCostEstimation"],
@@ -160,6 +161,7 @@ const ProjectCostEstimationCard = ({
   syncSummarySourceEstimation,
   employees,
   includeQuoteAmountInSyncSummary = false,
+  workspaceLayout = false,
   mode = "full",
   onSaved,
 }: Props) => {
@@ -249,9 +251,11 @@ const ProjectCostEstimationCard = ({
   const contentNode = latestCostEstimation ? (
     <Space orientation="vertical" size={18} style={{ width: "100%" }}>
       <div>
-        <Typography.Title level={5} style={sectionTitleStyle}>
-          基础信息
-        </Typography.Title>
+        {!workspaceLayout && (
+          <Typography.Title level={5} style={sectionTitleStyle}>
+            基础信息
+          </Typography.Title>
+        )}
         <div className={minimumQuoteStyles.basicCards}>
           <StyledStatisticCard
             statistic={{
@@ -263,7 +267,7 @@ const ProjectCostEstimationCard = ({
                 "number"
                   ? "元"
                   : undefined,
-              description:
+              description: workspaceLayout ? undefined :
                 latestCostEstimation?.owner?.id &&
                 latestCostEstimation?.owner?.name ? (
                   <span style={statisticDescriptionStyle}>
@@ -294,7 +298,11 @@ const ProjectCostEstimationCard = ({
         </div>
       </div>
 
-      <div>
+      <div style={workspaceLayout ? {
+        border: "1px solid #e7eaf0",
+        borderRadius: 7,
+        padding: "18px 20px",
+      } : undefined}>
         <Typography.Title level={5} style={sectionTitleStyle}>
           人员配置
         </Typography.Title>

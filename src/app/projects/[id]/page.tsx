@@ -19,6 +19,7 @@ import ActualWorkEntriesTable, {
 } from "@/components/ActualWorkEntriesTable";
 import ProjectDetailMilestonesContent from "@/components/project-detail/ProjectDetailMilestonesContent";
 import ProjectDetailMembersContent from "@/components/project-detail/ProjectDetailMembersContent";
+import ProjectDetailWorkspaceComparison from "@/components/project-detail/ProjectDetailWorkspaceComparison";
 import ProjectBriefProgressContent, {
   type ProjectBrief,
   type ProjectBriefWorkItem,
@@ -671,6 +672,35 @@ const ProjectDetailPage = () => {
     upsertProjects([updatedProject]);
   };
 
+  const realtimeCostActions = (
+    <Space>
+      {canManageReimbursements ? (
+        project.costSourceMode === "MANUAL" && hasManualCost ? (
+          <>
+            <Button onClick={() => setManualCostModalOpen(true)}>编辑成本</Button>
+            <Popconfirm
+              title="确认删除补充成本？"
+              description="删除后将清空人工录入成本，并把成本口径切回自动计算。"
+              okText="删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true, loading: deletingManualCost }}
+              onConfirm={() => { void handleDeleteManualCost(); }}
+            >
+              <Button danger loading={deletingManualCost}>删除成本</Button>
+            </Popconfirm>
+          </>
+        ) : (
+          <Button onClick={() => setManualCostModalOpen(true)}>补充成本</Button>
+        )
+      ) : null}
+      {canViewRealtimeCostDownload ? (
+        <Button onClick={() => realtimeCostDownload?.()} disabled={!realtimeCostDownload}>
+          下载数据
+        </Button>
+      ) : null}
+    </Space>
+  );
+
   return (
     <DetailPageContainer>
       {messageContextHolder}
@@ -758,6 +788,7 @@ const ProjectDetailPage = () => {
                   <ProjectActualWorkAction
                     projectId={projectId}
                     visible
+                    renderModal={false}
                     actualWorkView={actualWorkView}
                     onActualWorkViewChange={setActualWorkView}
                     project={project}
@@ -936,7 +967,71 @@ const ProjectDetailPage = () => {
         />
       ) : (
         <>
-          <Card styles={{ body: { paddingTop: 16, paddingBottom: 16 } }}>
+          <ProjectDetailWorkspaceComparison
+            projectId={projectId}
+            projectName={project.name ?? ""}
+            startDate={project.startDate}
+            endDate={project.endDate}
+            costSourceMode={project.costSourceMode}
+            manualCost={project.manualCost}
+            latestCostEstimation={project.latestCostEstimation}
+            onCostEstimationSaved={handleCostEstimationSaved}
+            latestInitiation={project.latestInitiation}
+            workdayAdjustments={workdayAdjustments}
+            costTrackingActions={realtimeCostActions}
+            onCostDownloadReady={handleRealtimeCostDownloadReady}
+            members={project.members ?? []}
+            vendors={project.vendors ?? []}
+            milestones={project.milestones ?? []}
+            briefs={project.briefs ?? []}
+            actualWorkEntries={project.actualWorkEntries ?? []}
+            briefProgressContent={briefProgressContent}
+            onCreateBrief={openCreateBrief}
+            employees={employees}
+            canManageProject={canManageProject}
+            canManageReimbursements={canManageReimbursements}
+            onMembersChanged={fetchProject}
+            onOpenActualWorkCreate={() => setActiveModal({ type: "actual-work", editing: null })}
+            canManageActualWorkEntry={(entry) =>
+              canManageAnyActualWorkEntry ||
+              (Boolean(currentUser?.id) && entry.employee?.id === currentUser?.id)
+            }
+            onEditActualWork={(entry) => {
+              if (!canManageAnyActualWorkEntry && entry.employee?.id !== currentUser?.id) return;
+              setActiveModal({
+                type: "actual-work",
+                editing: {
+                  id: entry.id,
+                  title: entry.title,
+                  employeeId: entry.employee?.id ?? "",
+                  startDate: entry.startDate,
+                  endDate: entry.endDate,
+                },
+              });
+            }}
+            onDeleteActualWork={async (entry) => {
+              if (!canManageAnyActualWorkEntry && entry.employee?.id !== currentUser?.id) return;
+              try {
+                const response = await fetch(`/api/projects/${projectId}/actual-work-entries/${entry.id}`, { method: "DELETE" });
+                if (!response.ok) throw new Error("删除失败");
+                messageApi.success("工时记录已删除");
+                await fetchProject();
+              } catch {
+                messageApi.error("删除工时记录失败，请重试");
+              }
+            }}
+            onOpenLegacy={({ step, tab }) => {
+              const nextParams = new URLSearchParams(searchParams.toString());
+              nextParams.set("step", String(step));
+              nextParams.set("tab", tab);
+              replaceSearchParams(nextParams);
+              document.getElementById("project-detail-existing-steps")?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+            }}
+          />
+          <Card id="project-detail-existing-steps" styles={{ body: { paddingTop: 16, paddingBottom: 16 } }}>
             <Steps
               current={stepParam}
               onChange={handleStepChange}
@@ -1170,6 +1265,7 @@ const ProjectDetailPage = () => {
                       <ProjectActualWorkAction
                         projectId={projectId}
                         visible
+                        renderModal={false}
                         actualWorkView={actualWorkView}
                         onActualWorkViewChange={setActualWorkView}
                         project={project}
@@ -1405,60 +1501,8 @@ const ProjectDetailPage = () => {
                           canManageProject={canManageReimbursements}
                         />
                       </div>
-	                    ) : costTrackingTab === "realtime-cost" ? (
-	                      <div style={{ paddingRight: 16 }}>
-	                        <Space>
-	                          {canManageReimbursements ? (
-	                            project.costSourceMode === "MANUAL" &&
-	                            hasManualCost ? (
-	                              <>
-	                                <Button
-	                                  onClick={() => {
-	                                    setManualCostModalOpen(true);
-	                                  }}
-	                                >
-	                                  编辑成本
-	                                </Button>
-	                                <Popconfirm
-	                                  title="确认删除补充成本？"
-	                                  description="删除后将清空人工录入成本，并把成本口径切回自动计算。"
-	                                  okText="删除"
-	                                  cancelText="取消"
-	                                  okButtonProps={{
-	                                    danger: true,
-	                                    loading: deletingManualCost,
-	                                  }}
-	                                  onConfirm={() => {
-	                                    void handleDeleteManualCost();
-	                                  }}
-	                                >
-	                                  <Button danger loading={deletingManualCost}>
-	                                    删除成本
-	                                  </Button>
-	                                </Popconfirm>
-	                              </>
-	                            ) : (
-	                              <Button
-	                                onClick={() => {
-	                                  setManualCostModalOpen(true);
-	                                }}
-	                              >
-	                                补充成本
-	                              </Button>
-	                            )
-	                          ) : null}
-	                          {canViewRealtimeCostDownload ? (
-                            <Button
-                              onClick={() => {
-                                realtimeCostDownload?.();
-                              }}
-                              disabled={!realtimeCostDownload}
-                            >
-                              下载数据
-                            </Button>
-                          ) : null}
-                        </Space>
-                      </div>
+                    ) : costTrackingTab === "realtime-cost" ? (
+                      <div style={{ paddingRight: 16 }}>{realtimeCostActions}</div>
                     ) : null,
                   onChange: (key) => {
                     setCostTrackingTab(
@@ -1760,6 +1804,20 @@ const ProjectDetailPage = () => {
           }}
         />
       </Modal>
+
+      <ProjectActualWorkAction
+        projectId={projectId}
+        visible={false}
+        actualWorkView={actualWorkView}
+        onActualWorkViewChange={setActualWorkView}
+        project={project}
+        employees={employees}
+        open={activeModal.type === "actual-work"}
+        editing={activeModal.type === "actual-work" ? activeModal.editing : null}
+        onOpenCreate={() => setActiveModal({ type: "actual-work", editing: null })}
+        onCancel={() => setActiveModal({ type: null })}
+        onSaved={fetchProject}
+      />
 
       <ProjectFormModal
         open={activeModal.type === "project-edit"}

@@ -1,0 +1,160 @@
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.titleRow h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.card,
+.empty {
+  overflow: hidden;
+  border: 1px solid #e7eaf0;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.empty {
+  padding: 24px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid #edf0f3;
+}
+
+.cardHeader h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.cardHeader span {
+  color: #929ba8;
+  font-size: 12px;
+}
+
+.memberRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  padding: 7px 18px;
+  border-bottom: 1px solid #f0f1f3;
+}
+
+.memberRow:last-child {
+  border-bottom: 0;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.resignedTag {
+  margin: 0 !important;
+  color: #8c96a2 !important;
+  background: #f3f4f6 !important;
+  border-color: #e7e9ed !important;
+  font-size: 11px;
+}
+
+.remove {
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #8c96a2;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.remove:hover,
+.remove:focus-visible {
+  background: #fff1f0;
+  color: #cf1322;
+}
+
+.remove:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+.hint {
+  margin: 0 0 14px;
+  color: #8c96a2;
+  font-size: 13px;
+}
+
+.pickerList {
+  max-height: 390px;
+  overflow-y: auto;
+  margin-top: 16px;
+  padding-right: 4px;
+}
+
+.pickerGroup {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #edf0f3;
+}
+
+.pickerGroup:last-child {
+  margin-bottom: 0;
+  border-bottom: 0;
+}
+
+.pickerGroup h4 {
+  margin: 0 0 11px;
+  color: #697586;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pickerGroup > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+
+.pickerGroup :global(.ant-checkbox-wrapper) {
+  min-width: 0;
+  margin: 0;
+}
+
+@media (max-width: 700px) {
+  .titleRow { flex-wrap: wrap; }
+}
+
+@media (max-width: 1020px) {
+  .grid { display: flex; flex-direction: column; }
+  .column { display: contents; }
+  .card { width: 100%; }
+}
