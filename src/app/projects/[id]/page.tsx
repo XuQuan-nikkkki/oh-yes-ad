@@ -138,6 +138,7 @@ const ProjectDetailPage = () => {
     WorkdayAdjustment[]
   >([]);
   const [loading, setLoading] = useState(!hasCachedProject);
+  const [projectLoadError, setProjectLoadError] = useState<"not-found" | "failed" | null>(null);
   const [activeModal, setActiveModal] = useState<ActiveModalState>({
     type: null,
   });
@@ -280,11 +281,13 @@ const ProjectDetailPage = () => {
       try {
         const res = await fetch(`/api/projects/${projectId}`);
         if (!res.ok) {
+          setProjectLoadError(res.status === 404 ? "not-found" : "failed");
           setProject(null);
           setClientContacts([]);
           return;
         }
         const data = (await res.json()) as Project;
+        setProjectLoadError(null);
         setProject(data);
         if (data?.id) {
           upsertProjects([data]);
@@ -309,6 +312,9 @@ const ProjectDetailPage = () => {
           setClientContacts([]);
           setContactsLoadedClientId(null);
         }
+      } catch {
+        setProjectLoadError("failed");
+        setProject(null);
       } finally {
         if (showLoading) {
           setLoading(false);
@@ -741,7 +747,11 @@ const ProjectDetailPage = () => {
   if (!project) {
     return (
       <DetailPageContainer>
-        <Card loading={loading}>{loading ? null : "项目不存在"}</Card>
+        <Card loading={loading}>
+          {loading ? null : projectLoadError === "failed" ? (
+            <>项目加载失败，请刷新重试。 <Button onClick={() => void fetchProject(true)}>重新加载</Button></>
+          ) : "项目不存在"}
+        </Card>
       </DetailPageContainer>
     );
   }

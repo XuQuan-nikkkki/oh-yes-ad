@@ -5,6 +5,12 @@ import { Button, Card, Empty, Modal, Space, Typography } from "antd";
 import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import InfoGrid from "@/components/project-detail/InfoGrid";
 import ProjectCostEstimationModal from "@/components/project-detail/ProjectCostEstimationModal";
+import {
+  ProjectMinimumQuoteDetails,
+  ProjectMinimumQuoteSummary,
+  useMinimumQuote,
+} from "@/components/project-detail/ProjectMinimumQuoteEstimate";
+import minimumQuoteStyles from "@/components/project-detail/ProjectMinimumQuoteEstimate.module.css";
 import StyledStatisticCard from "@/components/project-detail/StyledStatisticCard";
 import {
   formatProjectOutsourceItemsText,
@@ -160,6 +166,9 @@ const ProjectCostEstimationCard = ({
   const { canManageProject } = useProjectPermission();
   const [modalOpen, setModalOpen] = useState(false);
   const [syncInfoModalOpen, setSyncInfoModalOpen] = useState(false);
+  const minimumQuote = useMinimumQuote(
+    mode === "actions" ? undefined : latestCostEstimation,
+  );
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
   const canManageByPmRole =
@@ -254,20 +263,13 @@ const ProjectCostEstimationCard = ({
     )
   ) : null;
 
-  const contentNode = hasEstimation ? (
+  const contentNode = latestCostEstimation ? (
     <Space orientation="vertical" size={18} style={{ width: "100%" }}>
       <div>
         <Typography.Title level={5} style={sectionTitleStyle}>
           基础信息
         </Typography.Title>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-            gap: 12,
-            marginBottom: 12,
-          }}
-        >
+        <div className={minimumQuoteStyles.basicCards}>
           <StyledStatisticCard
             statistic={{
               title: "客户预算（不含税）",
@@ -289,6 +291,10 @@ const ProjectCostEstimationCard = ({
                   <span style={statisticDescriptionStyle}>创建人：-</span>
                 ),
             }}
+          />
+          <ProjectMinimumQuoteSummary
+            quote={minimumQuote.estimate?.quote ?? null}
+            costBaselineRatio={minimumQuote.costBaselineRatio}
           />
           <StyledStatisticCard
             statistic={{
@@ -435,6 +441,18 @@ const ProjectCostEstimationCard = ({
           ]}
         />
       </div>
+
+      {minimumQuote.estimate ? (
+        <div>
+          <Typography.Title level={5} style={sectionTitleStyle}>
+            「预估最低报价」推算明细
+          </Typography.Title>
+          <ProjectMinimumQuoteDetails
+            estimate={minimumQuote.estimate}
+            costBaselineRatio={minimumQuote.costBaselineRatio}
+          />
+        </div>
+      ) : null}
     </Space>
   ) : (
     <Empty description="暂无成本测算数据" />

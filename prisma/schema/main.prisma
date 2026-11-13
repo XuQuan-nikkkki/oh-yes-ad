@@ -103,6 +103,7 @@ model SelectOption {
   projectCostEstimationsByExecutionCostType   ProjectCostEstimation[]                      @relation("ProjectCostEstimationExecutionCostTypes")
   projectCostEstimationExecutionCostItems     ProjectCostEstimationExecutionCostItem[]     @relation("ProjectCostEstimationExecutionCostItemType")
   projectInitiationsByExecutionCostType       ProjectInitiation[]                          @relation("ProjectInitiationExecutionCostTypes")
+  projectInitiationExecutionCostItems         ProjectInitiationExecutionCostItem[]         @relation("ProjectInitiationExecutionCostItemType")
   projectPricingStrategyExecutionCostTypes    ProjectPricingStrategyExecutionCostItem[]    @relation("ProjectPricingStrategyExecutionCostType")
   projectFinancialStructureExecutionCostTypes ProjectFinancialStructureExecutionCostItem[] @relation("ProjectFinancialStructureExecutionCostType")
   projectReimbursementsByCategory             ProjectReimbursement[]                       @relation("ProjectReimbursementCategory")

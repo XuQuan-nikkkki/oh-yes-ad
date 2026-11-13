@@ -117,6 +117,8 @@ const toMoneyCents = (value: unknown) => Math.round(toMoney(value) * 100);
 const fromMoneyCents = (cents: number) => Math.round(cents) / 100;
 
 const roundMoney = (value: unknown) => fromMoneyCents(toMoneyCents(value));
+const executionCostGridColumns =
+  "minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1.4fr)";
 const toOptionalMoney = (value: unknown) => {
   if (value === null || value === undefined || value === "") return undefined;
   return roundMoney(value);
@@ -285,14 +287,16 @@ const ProjectPricingStrategyModal = ({
             existingCostItem?.costTypeOption?.value ??
             "未命名费用类型",
           budgetAmount:
-            typeof existingCostItem?.budgetAmount === "number"
-              ? existingCostItem.budgetAmount
-              : undefined,
+            existingCostItem
+              ? existingCostItem.budgetAmount ?? undefined
+              : estimation?.executionCostItems?.find(
+                  (item) => item.costTypeOptionId === id,
+                )?.requestedAmount ?? undefined,
         };
       });
 
     return rows;
-  }, [estimation?.executionCostTypes, existingStrategy?.executionCostItems]);
+  }, [estimation?.executionCostTypes, estimation?.executionCostItems, existingStrategy?.executionCostItems]);
 
   const clientBudgetText = formatClientBudgetText(estimation?.clientBudget);
 
@@ -879,15 +883,28 @@ const ProjectPricingStrategyModal = ({
         >
           <Form.Item label="执行费用明细" style={{ marginBottom: 24 }}>
             {initialCostItems.length > 0 ? (
-              <ul
+              <div
                 style={{
-                  margin: 0,
-                  paddingInlineStart: 20,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
+                  border: "1px solid #f0f0f0",
+                  borderRadius: 8,
+                  overflow: "hidden",
                 }}
               >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: executionCostGridColumns,
+                    gap: 16,
+                    padding: "10px 16px",
+                    background: "#fafafa",
+                    color: "rgba(0, 0, 0, 0.65)",
+                    fontWeight: 600,
+                  }}
+                >
+                  <span>费用类别</span>
+                  <span>项目经理申请</span>
+                  <span>财务预算（元）</span>
+                </div>
                 {initialCostItems.map((item, index) => {
                   const showOtherRemark =
                     item.name.trim() === "其他" &&
@@ -896,38 +913,48 @@ const ProjectPricingStrategyModal = ({
                   const label = showOtherRemark
                     ? `${item.name}（${estimation?.otherExecutionCostRemark?.trim()}）`
                     : item.name;
+                  const requestedAmount = estimation?.executionCostItems?.find(
+                    (costItem) => costItem.costTypeOptionId === item.costTypeOptionId,
+                  )?.requestedAmount;
 
                   return (
-                    <li key={item.costTypeOptionId}>
+                    <div key={item.costTypeOptionId}>
+                      <Form.Item
+                        name={["executionCostItems", index, "costTypeOptionId"]}
+                        hidden
+                      >
+                        <Input />
+                      </Form.Item>
+                      <Form.Item
+                        name={["executionCostItems", index, "name"]}
+                        hidden
+                      >
+                        <Input />
+                      </Form.Item>
                       <div
                         style={{
-                          display: "flex",
+                          display: "grid",
+                          gridTemplateColumns: executionCostGridColumns,
                           alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: 12,
-                          width: "100%",
+                          gap: 16,
+                          padding: "10px 16px",
+                          borderTop: "1px solid #f0f0f0",
                         }}
                       >
-                        <Form.Item
-                          name={[
-                            "executionCostItems",
-                            index,
-                            "costTypeOptionId",
-                          ]}
-                          hidden
-                        >
-                          <Input />
-                        </Form.Item>
-                        <Form.Item
-                          name={["executionCostItems", index, "name"]}
-                          hidden
-                        >
-                          <Input />
-                        </Form.Item>
-                        <Typography.Text>{label}</Typography.Text>
+                        <Typography.Text style={{ minWidth: 0 }}>
+                          {label}
+                        </Typography.Text>
+                        <Typography.Text type="secondary">
+                          {typeof requestedAmount === "number"
+                            ? roundMoney(requestedAmount).toLocaleString("zh-CN", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })
+                            : "-"}
+                        </Typography.Text>
                         <Form.Item
                           name={["executionCostItems", index, "budgetAmount"]}
-                          style={{ marginBottom: 0, width: 320 }}
+                          style={{ marginBottom: 0, width: "100%" }}
                         >
                           <InputNumber
                             min={0}
@@ -936,10 +963,10 @@ const ProjectPricingStrategyModal = ({
                           />
                         </Form.Item>
                       </div>
-                    </li>
+                    </div>
                   );
                 })}
-              </ul>
+              </div>
             ) : (
               <Typography.Text type="secondary">
                 该测算没有执行费用类型
@@ -956,18 +983,22 @@ const ProjectPricingStrategyModal = ({
                 ),
               );
               return (
-                <Form.Item
-                  label="执行费用成本"
-                  extra={`执行费用明细加总：${roundMoney(suggested)}`}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    alignItems: "baseline",
+                    gap: 12,
+                  }}
                 >
-                  <InputNumber
-                    min={0}
-                    precision={2}
-                    style={{ width: "100%" }}
-                    value={roundMoney(suggested)}
-                    disabled
-                  />
-                </Form.Item>
+                  <Typography.Text type="secondary">执行费用成本合计</Typography.Text>
+                  <Typography.Text strong>
+                    {roundMoney(suggested).toLocaleString("zh-CN", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })} 元
+                  </Typography.Text>
+                </div>
               );
             }}
           </Form.Item>

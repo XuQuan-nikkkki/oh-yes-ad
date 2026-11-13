@@ -354,6 +354,15 @@ const projectInitiationSelect = {
       color: true,
     },
   },
+  executionCostItems: {
+    select: {
+      id: true,
+      costTypeOptionId: true,
+      requestedAmount: true,
+      costTypeOption: { select: { id: true, value: true, color: true } },
+    },
+    orderBy: { createdAt: "asc" as const },
+  },
   members: {
     select: {
       id: true,

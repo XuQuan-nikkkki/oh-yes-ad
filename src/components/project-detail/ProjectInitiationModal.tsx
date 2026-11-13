@@ -13,6 +13,7 @@ import {
 import { StepsForm } from "@ant-design/pro-components";
 import type { ProFormInstance } from "@ant-design/pro-components";
 import OutsourceItemsFormList from "@/components/project-detail/OutsourceItemsFormList";
+import ExecutionCostBudgetFormItems from "@/components/project-detail/ExecutionCostBudgetFormItems";
 import ProjectEstimationMembersFormList, {
   type EstimationMemberFormRow,
 } from "@/components/project-detail/ProjectEstimationMembersFormList";
@@ -26,9 +27,7 @@ import {
   AgencyFeeRateInput,
   ContractAmountInptut,
   EstimatedDurationInput,
-  ExecutionCostTypesSelect,
   HasOutsourceCostSwitch,
-  OtherExecutionCostRemarkInput,
   OutsourceRemarkInput,
 } from "./ProjectCostBasisFormItems";
 
@@ -61,6 +60,7 @@ type FormValues = {
   }>;
   outsourceRemark?: string;
   executionCostTypes?: string[];
+  executionCostAmounts?: Record<string, number | null>;
   otherExecutionCostRemark?: string;
 };
 
@@ -79,6 +79,7 @@ type CostEstimationSubmitPayload = {
   }>;
   outsourceRemark: string | null;
   executionCostTypes: string[];
+  executionCostItems: Array<{ value: string; requestedAmount: number | null }>;
   otherExecutionCostRemark: string | null;
 };
 
@@ -122,6 +123,12 @@ const mapEstimationToFormValues = (
     executionCostTypes: (estimation?.executionCostTypes ?? [])
       .map((item) => item.value ?? "")
       .filter((item): item is string => Boolean(item)),
+    executionCostAmounts: Object.fromEntries(
+      (estimation?.executionCostItems ?? []).map((item) => [
+        item.costTypeOption?.value ?? "",
+        item.requestedAmount,
+      ]),
+    ),
     otherExecutionCostRemark: estimation?.otherExecutionCostRemark ?? "",
   };
 };
@@ -177,6 +184,12 @@ const toSubmitPayloadFromFormValues = (
       ? toNullableTrimmedString(values.outsourceRemark)
       : null,
     executionCostTypes: normalizeExecutionCostTypes(values.executionCostTypes),
+    executionCostItems: normalizeExecutionCostTypes(values.executionCostTypes).map(
+      (value) => ({
+        value,
+        requestedAmount: values.executionCostAmounts?.[value] ?? null,
+      }),
+    ),
     otherExecutionCostRemark: toNullableTrimmedString(
       values.otherExecutionCostRemark,
     ),
@@ -209,6 +222,15 @@ const toSubmitPayloadFromEstimation = (
   executionCostTypes: normalizeExecutionCostTypes(
     (estimation?.executionCostTypes ?? []).map((item) => item.value ?? ""),
   ),
+  executionCostItems: normalizeExecutionCostTypes(
+    (estimation?.executionCostTypes ?? []).map((item) => item.value ?? ""),
+  ).map((value) => ({
+    value,
+    requestedAmount:
+      estimation?.executionCostItems?.find(
+        (item) => item.costTypeOption?.value === value,
+      )?.requestedAmount ?? null,
+  })),
   otherExecutionCostRemark: toNullableTrimmedString(
     estimation?.otherExecutionCostRemark ?? null,
   ),
@@ -243,6 +265,12 @@ const normalizeSubmitPayloadForComparison = (
     ),
   outsourceRemark: toNullableTrimmedString(payload.outsourceRemark ?? null),
   executionCostTypes: normalizeExecutionCostTypes(payload.executionCostTypes),
+  executionCostItems: payload.executionCostItems
+    .map((item) => ({
+      value: item.value.trim(),
+      requestedAmount: item.requestedAmount,
+    }))
+    .sort((left, right) => left.value.localeCompare(right.value, "zh-CN")),
   otherExecutionCostRemark: toNullableTrimmedString(
     payload.otherExecutionCostRemark ?? null,
   ),
@@ -337,6 +365,16 @@ const ProjectInitiationModal = ({
             setSubmitting(true);
 
             const payload = toSubmitPayloadFromFormValues(values);
+
+            if (payload.executionCostItems.some((item) =>
+              item.requestedAmount === null ||
+              !Number.isFinite(item.requestedAmount) ||
+              item.requestedAmount < 0,
+            )) {
+              notifyError("请填写全部执行费用申请预算");
+              setSubmitting(false);
+              return false;
+            }
 
             if (values.hasOutsource && payload.outsourceItems.length === 0) {
               notifyError("有外包时请至少添加 1 条完整的外包项");
@@ -480,24 +518,7 @@ const ProjectInitiationModal = ({
           </StepsForm.StepForm>
 
           <StepsForm.StepForm title="执行费用">
-            <ExecutionCostTypesSelect />
-            <Form.Item
-              noStyle
-              shouldUpdate={(prev: FormValues, next: FormValues) =>
-                JSON.stringify(prev.executionCostTypes ?? []) !==
-                JSON.stringify(next.executionCostTypes ?? [])
-              }
-            >
-              {({ getFieldValue }) => {
-                const values = getFieldValue("executionCostTypes") as
-                  | string[]
-                  | undefined;
-                const includeOther =
-                  Array.isArray(values) && values.includes("其他");
-                if (!includeOther) return null;
-                return <OtherExecutionCostRemarkInput />;
-              }}
-            </Form.Item>
+            <ExecutionCostBudgetFormItems />
           </StepsForm.StepForm>
         </StepsForm>
       </Modal>
