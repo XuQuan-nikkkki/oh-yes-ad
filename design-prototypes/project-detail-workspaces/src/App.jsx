@@ -10,7 +10,9 @@ import { project, projectPeriod, activeEmployees, briefs, briefWorkItemDetails, 
 import workEntrySnapshot from "./workEntries.snapshot.json";
 import { complexSubmissionBriefs } from "./submissionScenario";
 import CostTrackingPreview from "./CostTrackingPreview";
+import PaymentsPreview from "./PaymentsPreview";
 import QuotePreview from "./QuotePreview";
+import InitiationPreview from "./InitiationPreview";
 
 const executionNav = [
   ["overview", "执行概览", AppstoreOutlined, ""], ["members", "人员信息", TeamOutlined, "5"],
@@ -20,10 +22,10 @@ const executionNav = [
   ["work", "工时", ClockCircleOutlined, "83"],
 ];
 const financeNav = [
-  ["overview", "商务概览", AppstoreOutlined, ""], ["quote", "报价测算", FileTextOutlined, "v1"],
-  ["initiation", "项目立项", FileTextOutlined, "v1"],
+  ["cost", "项目成本追踪", DollarOutlined, "自动计算"],
+  ["quote", "测算&报价", FileTextOutlined, "v1"],
+  ["initiation", "立项&财务结构", FileTextOutlined, "v1"],
   ["payments", "收付款", WalletOutlined, "应收 1 / 应付 1"],
-  ["cost", "成本追踪", DollarOutlined, "自动计算"],
   ["expenses", "项目报销记录", FileTextOutlined, "0 条"],
 ];
 function Heading({ title, extra }) {
@@ -336,26 +338,16 @@ function Submissions({ initialItem }) {
     </Drawer>
   </section>;
 }
-function FinanceOverview({ go }) {
-  return <div className="two-column"><div className="column"><div className="metrics four">
-    <Metric title="成本测算 · 客户报价（不含税）" value={money(finance.quoteExTax)} onClick={() => go("quote")}/>
-    <Metric title="立项申请 · 报价金额（含税）" value={money(finance.initiationQuoteWithTax)} onClick={() => go("initiation")}/>
-    <Metric title="客户合同金额" value={money(finance.customerContract)} onClick={() => go("payments")}/>
-    <Metric title="财务结构 · 预算总成本" value={money(finance.totalCost)} onClick={() => go("initiation")}/>
-  </div><section className="panel"><Heading title="收付款摘要" extra={<Button type="link" onClick={() => go("payments")}>查看详情 <RightOutlined/></Button>}/><div className="payment-summary"><b>应收</b><div><strong>大理啤酒 · 一期款</strong><p>计划状态：草稿 · 计划 {money(finance.receivable.planned)} · 2027/01/01 · 实收 {money(0)}</p></div></div><div className="payment-summary"><b>应付</b><div><strong>萌萌 · 一期款</strong><p>计划 {money(finance.payable.planned)} · 2026/08/27 · 实付 {money(0)}</p></div></div></section><section className="panel"><Heading title="金额来源"/><p className="description">成本测算、立项申请、财务结构及客户合同为不同记录，分别显示其金额；不自动将差异判定为异常。</p></section></div><aside className="column"><CostComposition go={go}/></aside></div>;
-}
-function CostComposition({ go }) {
-  return <section className="panel"><Heading title="预算成本构成"/><span className="muted">财务结构 · 总成本</span><strong className="total-cost">{money(finance.totalCost)}</strong>{[["人力成本",finance.labor],["租金成本",finance.rent],["中台成本",finance.middle],["执行费用",finance.execution],["外包费用（3D渲染）",finance.outsource]].map(([name,value]) => <div className="cost-line" key={name}><span>{name}</span><strong>{money(value)}</strong></div>)}<Button block onClick={() => go("initiation")}>查看财务结构 <RightOutlined/></Button></section>;
-}
 function Quote() {
   const financeRole = new URLSearchParams(window.location.search).get("quotePreview") === "finance";
   return <QuotePreview financeRole={financeRole}/>;
 }
 function Initiation() {
-  return <section className="panel"><div className="panel-meta">立项申请 v1 · 项目财务结构</div><div className="metrics three"><Metric title="立项报价金额（含税）" value={money(finance.initiationQuoteWithTax)}/><Metric title="预估时长" value="40 个工作日"/><Metric title="财务结构总成本" value={money(finance.totalCost)}/></div><div className="detail-line"><strong>立项申请</strong><span>人员配置、中介费用、外包费用、执行费用类别</span></div><div className="detail-line"><strong>项目财务结构</strong><span>合同含税金额 {money(finance.structureContractWithTax)} · 成本构成</span></div></section>;
+  const financeRole = new URLSearchParams(window.location.search).get("initiationPreview") === "finance";
+  return <InitiationPreview financeRole={financeRole}/>;
 }
 function Payments() {
-  return <section className="panel"><div className="panel-meta">应收计划 1 · 应付计划 1</div><h4>项目收款</h4><div className="field-grid">{[["客户合同金额",money(finance.customerContract)],["计划状态","草稿"],["收款节点","一期款"],["关键交付物","方案验收"],["计划收款",money(finance.receivable.planned)],["计划日期",finance.receivable.date],["实际已收",money(0)]].map(([name,value]) => <div key={name}><span>{name}</span><strong>{value}</strong></div>)}</div><h4>项目付款</h4><div className="field-grid">{[["供应商","萌萌"],["供应商合同金额",money(finance.vendorContract)],["付款节点","一期款"],["付款条件","渲染完成"],["计划付款",money(finance.payable.planned)],["计划日期",finance.payable.date],["实际已付",money(0)]].map(([name,value]) => <div key={name}><span>{name}</span><strong>{value}</strong></div>)}</div></section>;
+  return <PaymentsPreview/>;
 }
 function Cost() {
   return <CostTrackingPreview/>;
@@ -380,9 +372,12 @@ function Expenses() {
 export function App() {
   const params = new URLSearchParams(window.location.search);
   const costPreview = params.get("costPreview") === "1";
+  const paymentPreview = params.get("paymentPreview") === "1";
   const quotePreview = params.has("quotePreview");
-  const [workspace,setWorkspace] = useState(costPreview || quotePreview ? "finance" : "execution");
-  const [active,setActive] = useState(costPreview ? "cost" : quotePreview ? "quote" : "overview");
+  const initiationPreview = params.has("initiationPreview");
+  const financeOverviewPreview = params.get("financeOverview") === "1";
+  const [workspace,setWorkspace] = useState(costPreview || paymentPreview || quotePreview || initiationPreview || financeOverviewPreview ? "finance" : "execution");
+  const [active,setActive] = useState(costPreview || financeOverviewPreview ? "cost" : paymentPreview ? "payments" : quotePreview ? "quote" : initiationPreview ? "initiation" : "overview");
   const [members,setMembers] = useState(() => project.members.map(group => ({...group,names:[...group.names]})));
   const [workRows,setWorkRows] = useState(() => workEntrySnapshot);
   const memberCount = members.reduce((total,group) => total + group.names.length,0);
@@ -393,11 +388,12 @@ export function App() {
   });
   const removeMember = name => setMembers(current => current.map(group => ({...group,names:group.names.filter(member => member !== name)})));
   const complexPreview = new URLSearchParams(window.location.search).get("submissionScenario") === "complex";
+  const currentTab = workspace === "finance" && active === "overview" ? "cost" : active;
   const nav = workspace === "execution" ? executionNav.map(item => item[0] === "members" ? [item[0],item[1],item[2],String(memberCount)] : item[0] === "work" ? [item[0],item[1],item[2],String(workRows.length)] : item[0] === "submissions" && complexPreview ? [item[0],item[1],item[2],String(complexSubmissionBriefs.flatMap(brief => brief.workItems).reduce((total, workItem) => total + workItem.versions.length, 0))] : item) : financeNav;
   const go = key => setActive(key);
   const content = workspace === "execution" ?
-    {overview:<ExecutionOverview go={go} members={members} workCount={workRows.length}/>,members:<Members members={members} onAdd={addMember} onRemove={removeMember}/>,vendors:<Vendors/>,milestones:<Milestones/>,briefs:<Briefs/>,work:<Work rows={workRows} onRowsChange={setWorkRows}/>,submissions:<Submissions/>}[active] :
-    {overview:<FinanceOverview go={go}/>,quote:<Quote/>,initiation:<Initiation/>,payments:<Payments/>,cost:<Cost/>,expenses:<Expenses/>}[active];
+    {overview:<ExecutionOverview go={go} members={members} workCount={workRows.length}/>,members:<Members members={members} onAdd={addMember} onRemove={removeMember}/>,vendors:<Vendors/>,milestones:<Milestones/>,briefs:<Briefs/>,work:<Work rows={workRows} onRowsChange={setWorkRows}/>,submissions:<Submissions/>}[currentTab] :
+    {quote:<Quote/>,initiation:<Initiation/>,payments:<Payments/>,cost:<Cost/>,expenses:<Expenses/>}[currentTab];
   const showPrototypeAction = action => Modal.info({
     title: `${action}项目`,
     content: `这里只展示“${action}”入口；原型不修改或删除真实项目。`,
@@ -406,5 +402,5 @@ export function App() {
   return <ConfigProvider theme={{token:{colorPrimary:"#1677ff",borderRadius:6,fontFamily:'-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif'}}}><div className="app"><div className="topbar"><strong>一条龙管理系统</strong><span><UserOutlined/> 小花</span></div><div className="page"><div className="project-header">
     <div className="project-header-top"><div className="project-heading"><h1>{project.name}</h1><Tag color="green">{project.status}</Tag></div><div className="project-actions"><Button icon={<EditOutlined/>} onClick={() => showPrototypeAction("编辑")}>编辑</Button><Button danger icon={<DeleteOutlined/>} onClick={() => showPrototypeAction("删除")}>删除</Button></div></div>
     <div className="project-facts"><div className="project-fact-column"><div><span>项目类型：</span><Tag color="green">{project.type}</Tag></div><div><span>项目阶段：</span><Tag color="lime">{project.stage}</Tag></div></div><div className="project-fact-column"><div><span>所属客户：</span><strong>{project.client}</strong></div><div><span>已归档：</span><Tag color="green">{project.archived ? "是" : "否"}</Tag></div></div><div className="project-fact-column"><div><span>负责人：</span><strong>{project.owner}</strong></div><div className="project-period"><span>项目周期：</span><strong>{projectPeriod()}</strong></div></div></div>
-  </div><div className="workspace-switch"><button className={workspace==="execution"?"selected":""} onClick={() => {setWorkspace("execution");setActive("overview")}}><AppstoreOutlined/><strong>项目执行</strong><span>人员、里程碑、需求单与工作项、工时和提交内容</span></button><button className={workspace==="finance"?"selected":""} onClick={() => {setWorkspace("finance");setActive("overview")}}><WalletOutlined/><strong>商务财务</strong><span>报价、立项、收付款、成本与报销</span></button></div><div className="workspace-layout"><aside className="side-nav">{nav.map(([key,label,Icon,count]) => <button key={key} className={active===key?"active":""} onClick={() => go(key)}><Icon/><span>{label}</span>{count && <em>{count}</em>}</button>)}</aside><main className="content"><div className="content-header"><div>{!(workspace === "finance" && ["cost", "expenses", "quote"].includes(active)) && <small>{workspace==="execution"?"项目执行":"商务财务"} / {nav.find(n=>n[0]===active)?.[1]}</small>}<h2>{nav.find(n=>n[0]===active)?.[1]}</h2>{workspace === "execution" && active === "submissions" && <p className="content-subtitle">按需求单和工作项归拢提交；每组按最近提交时间排列，工作项内按版本倒序查看提交与反馈。</p>}</div></div>{content}</main></div></div></div></ConfigProvider>;
+  </div><div className="workspace-switch"><button className={workspace==="execution"?"selected":""} onClick={() => {setWorkspace("execution");setActive("overview")}}><AppstoreOutlined/><strong>项目执行</strong><span>人员、里程碑、需求单与工作项、工时和提交内容</span></button><button className={workspace==="finance"?"selected":""} onClick={() => {setWorkspace("finance");setActive("cost")}}><WalletOutlined/><strong>商务财务</strong><span>报价、立项、收付款、成本与报销</span></button></div><div className="workspace-layout"><aside className="side-nav">{nav.map(([key,label,Icon,count]) => <button key={key} className={currentTab===key?"active":""} onClick={() => go(key)}><Icon/><span>{label}</span>{count && <em>{count}</em>}</button>)}</aside><main className="content"><div className="content-header"><div>{!(workspace === "finance" && ["cost", "expenses", "payments", "quote", "initiation"].includes(currentTab)) && <small>{workspace==="execution"?"项目执行":"商务财务"} / {nav.find(n=>n[0]===currentTab)?.[1]}</small>}<h2>{nav.find(n=>n[0]===currentTab)?.[1]}</h2>{workspace === "execution" && currentTab === "submissions" && <p className="content-subtitle">按需求单和工作项归拢提交；每组按最近提交时间排列，工作项内按版本倒序查看提交与反馈。</p>}</div></div>{content}</main></div></div></div></ConfigProvider>;
 }

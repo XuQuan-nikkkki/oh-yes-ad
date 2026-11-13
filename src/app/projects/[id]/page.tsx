@@ -970,6 +970,7 @@ const ProjectDetailPage = () => {
           <ProjectDetailWorkspaceComparison
             projectId={projectId}
             projectName={project.name ?? ""}
+            project={project}
             startDate={project.startDate}
             endDate={project.endDate}
             costSourceMode={project.costSourceMode}
@@ -977,6 +978,9 @@ const ProjectDetailPage = () => {
             latestCostEstimation={project.latestCostEstimation}
             onCostEstimationSaved={handleCostEstimationSaved}
             latestInitiation={project.latestInitiation}
+            onInitiationSaved={handleInitiationSaved}
+            financialStructureRefreshKey={financialStructureRefreshKey}
+            onFinancialStructureSaved={handleFinancialStructureSaved}
             workdayAdjustments={workdayAdjustments}
             costTrackingActions={realtimeCostActions}
             onCostDownloadReady={handleRealtimeCostDownloadReady}
@@ -990,6 +994,7 @@ const ProjectDetailPage = () => {
             employees={employees}
             canManageProject={canManageProject}
             canManageReimbursements={canManageReimbursements}
+            canCollectReceivable={canCollectReceivable}
             onMembersChanged={fetchProject}
             onOpenActualWorkCreate={() => setActiveModal({ type: "actual-work", editing: null })}
             canManageActualWorkEntry={(entry) =>

@@ -24,6 +24,9 @@ import ProjectWorkspaceSubmissions from "./ProjectWorkspaceSubmissions";
 import ProjectWorkspaceReimbursements from "./ProjectWorkspaceReimbursements";
 import ProjectCostEstimationCard from "./ProjectCostEstimationCard";
 import ProjectPricingStrategyCard from "./ProjectPricingStrategyCard";
+import ProjectInitiationCard from "./ProjectInitiationCard";
+import ProjectFinancialStructureCard from "./ProjectFinancialStructureCard";
+import ProjectWorkspacePayments from "./ProjectWorkspacePayments";
 import styles from "./ProjectDetailWorkspaceComparison.module.css";
 
 type Workspace = "execution" | "finance";
@@ -33,6 +36,7 @@ type LegacyDestination = { step: number; tab: string };
 type Props = {
   projectId: string;
   projectName: string;
+  project: Project;
   startDate?: Project["startDate"];
   endDate?: Project["endDate"];
   costSourceMode?: Project["costSourceMode"];
@@ -40,6 +44,9 @@ type Props = {
   latestCostEstimation?: Project["latestCostEstimation"];
   onCostEstimationSaved?: (latest: Project["latestCostEstimation"]) => void;
   latestInitiation?: Project["latestInitiation"];
+  onInitiationSaved?: (latest: Project["latestInitiation"]) => void | Promise<void>;
+  financialStructureRefreshKey?: number;
+  onFinancialStructureSaved?: () => void | Promise<void>;
   workdayAdjustments?: WorkdayAdjustment[];
   costTrackingActions?: ReactNode;
   onCostDownloadReady?: (downloadFn: (() => void) | null) => void;
@@ -53,6 +60,7 @@ type Props = {
   employees: Employee[];
   canManageProject: boolean;
   canManageReimbursements: boolean;
+  canCollectReceivable: boolean;
   onMembersChanged: () => Promise<void> | void;
   onOpenActualWorkCreate: () => void;
   onEditActualWork: (entry: NonNullable<Project["actualWorkEntries"]>[number]) => void;
@@ -70,11 +78,11 @@ const executionLinks = [
 ];
 
 const financeLinks = [
-  { label: "报价测算", detail: "项目成本测算、报价参考", icon: FileTextOutlined, step: 0, tab: "cost-estimation" },
-  { label: "项目立项", detail: "立项申请、项目财务结构", icon: BankOutlined, step: 1, tab: "project-initiation" },
-  { label: "收付款", detail: "项目收款、项目付款", icon: WalletOutlined, step: 3, tab: "receivable" },
-  { label: "成本追踪", detail: "收入、税费、成本明细与利润分配", icon: DollarOutlined, step: 4, tab: "realtime-cost" },
-  { label: "项目报销记录", detail: "查看和登记项目报销", icon: FileTextOutlined, step: 4, tab: "expense-records" },
+  { label: "项目成本追踪", icon: DollarOutlined, tab: "realtime-cost" },
+  { label: "测算&报价", icon: FileTextOutlined, tab: "cost-estimation" },
+  { label: "立项&财务结构", icon: BankOutlined, tab: "project-initiation" },
+  { label: "收付款", icon: WalletOutlined, tab: "receivable" },
+  { label: "项目报销记录", icon: FileTextOutlined, tab: "expense-records" },
 ];
 
 const statusLabels: Record<string, string> = {
@@ -103,6 +111,7 @@ const milestoneDate = (milestone: NonNullable<Project["milestones"]>[number]) =>
 export default function ProjectDetailWorkspaceComparison({
   projectId,
   projectName,
+  project,
   startDate,
   endDate,
   costSourceMode,
@@ -110,6 +119,9 @@ export default function ProjectDetailWorkspaceComparison({
   latestCostEstimation,
   onCostEstimationSaved,
   latestInitiation,
+  onInitiationSaved,
+  financialStructureRefreshKey,
+  onFinancialStructureSaved,
   workdayAdjustments,
   costTrackingActions,
   onCostDownloadReady,
@@ -123,6 +135,7 @@ export default function ProjectDetailWorkspaceComparison({
   employees,
   canManageProject,
   canManageReimbursements,
+  canCollectReceivable,
   onMembersChanged,
   onOpenActualWorkCreate,
   onEditActualWork,
@@ -132,8 +145,9 @@ export default function ProjectDetailWorkspaceComparison({
 }: Props) {
   const [workspace, setWorkspace] = useState<Workspace>("execution");
   const [activeExecution, setActiveExecution] = useState<ExecutionTab>("overview");
-  const [activeFinance, setActiveFinance] = useState<"overview" | "quote" | "cost" | "expenses">("overview");
+  const [activeFinance, setActiveFinance] = useState<"quote" | "initiation" | "payments" | "cost" | "expenses">("cost");
   const [activeQuoteTab, setActiveQuoteTab] = useState<"cost-estimation" | "pricing-reference">("cost-estimation");
+  const [activeInitiationTab, setActiveInitiationTab] = useState<"project-initiation" | "project-financial-structure">("project-initiation");
   const [financeCounts, setFinanceCounts] = useState<{ receivable: number | null; payable: number | null; reimbursements: number | null }>({ receivable: null, payable: null, reimbursements: null });
   const loadFinanceCounts = useCallback(async () => {
     const count = async (url: string) => {
@@ -209,7 +223,7 @@ export default function ProjectDetailWorkspaceComparison({
           <AppstoreOutlined /><strong>项目执行</strong><span>人员、供应商、里程碑、需求单与工作项、工时和提交内容</span>
         </button>
         <button type="button" className={workspace === "finance" ? styles.selected : ""}
-          aria-pressed={workspace === "finance"} onClick={() => { if (workspace === "finance") void loadFinanceCounts(); setWorkspace("finance"); setActiveFinance("overview"); }}>
+          aria-pressed={workspace === "finance"} onClick={() => { if (workspace === "finance") void loadFinanceCounts(); setWorkspace("finance"); setActiveFinance("cost"); }}>
           <WalletOutlined /><strong>商务财务</strong><span>报价、立项、收付款、成本与报销</span>
         </button>
       </div>
@@ -234,21 +248,23 @@ export default function ProjectDetailWorkspaceComparison({
                 <Icon /><span>{label}</span>{tab === "vendors" && <em>{vendors.length}</em>}{tab === "milestones" && <em>{milestones.length}</em>}{tab === "progress" && <em>{briefs.length} / {workItemCount}</em>}{tab === "work" && <em>{actualWorkEntries.length}</em>}{tab === "submissions" && <em>{submissionCount}</em>}
               </button>
             ))}
-          </> : financeLinks.map(({ label, icon: Icon, step, tab }) => (
-            <button type="button" key={tab} className={(tab === "cost-estimation" && activeFinance === "quote") || (tab === "expense-records" && activeFinance === "expenses") || (tab === "realtime-cost" && activeFinance === "cost") ? styles.activeItem : ""}
-              aria-current={(tab === "cost-estimation" && activeFinance === "quote") || (tab === "expense-records" && activeFinance === "expenses") || (tab === "realtime-cost" && activeFinance === "cost") ? "page" : undefined}
+          </> : financeLinks.map(({ label, icon: Icon, tab }) => (
+            <button type="button" key={tab} className={(tab === "cost-estimation" && activeFinance === "quote") || (tab === "project-initiation" && activeFinance === "initiation") || (tab === "receivable" && activeFinance === "payments") || (tab === "expense-records" && activeFinance === "expenses") || (tab === "realtime-cost" && activeFinance === "cost") ? styles.activeItem : ""}
+              aria-current={(tab === "cost-estimation" && activeFinance === "quote") || (tab === "project-initiation" && activeFinance === "initiation") || (tab === "receivable" && activeFinance === "payments") || (tab === "expense-records" && activeFinance === "expenses") || (tab === "realtime-cost" && activeFinance === "cost") ? "page" : undefined}
               onClick={() => {
                 if (tab === "expense-records") setActiveFinance("expenses");
                 else if (tab === "realtime-cost") setActiveFinance("cost");
                 else if (tab === "cost-estimation") setActiveFinance("quote");
-                else { setActiveFinance("overview"); onOpenLegacy({ step, tab }); }
+                else if (tab === "project-initiation") setActiveFinance("initiation");
+                else if (tab === "receivable") setActiveFinance("payments");
+                else setActiveFinance("cost");
               }}>
               <Icon /><span>{label}</span>{financeBadge(tab) && <em>{financeBadge(tab)}</em>}
             </button>
           ))}
         </nav>
 
-        <section className={styles.content} aria-label={workspace === "execution" ? ({ overview: "执行概览", members: "人员信息", vendors: "供应商", milestones: "里程碑", progress: "需求单 / 工作项", work: "工时", submissions: "项目提交内容" }[activeExecution]) : activeFinance === "expenses" ? "项目报销记录" : activeFinance === "cost" ? "成本追踪" : activeFinance === "quote" ? "报价测算" : "商务财务导航"}>
+        <section className={styles.content} aria-label={workspace === "execution" ? ({ overview: "执行概览", members: "人员信息", vendors: "供应商", milestones: "里程碑", progress: "需求单 / 工作项", work: "工时", submissions: "项目提交内容" }[activeExecution]) : activeFinance === "expenses" ? "项目报销记录" : activeFinance === "cost" ? "项目成本追踪" : activeFinance === "quote" ? "测算&报价" : activeFinance === "initiation" ? "立项&财务结构" : "收付款"}>
           {workspace === "execution" ? <>
             {activeExecution === "overview" ? <div><h2 className={styles.overviewTitle}>执行概览</h2><div className={styles.overview}>
               <div className={styles.overviewMain}>
@@ -311,7 +327,7 @@ export default function ProjectDetailWorkspaceComparison({
               <ProjectWorkspaceWork entries={actualWorkEntries} members={members} onCreate={onOpenActualWorkCreate}
                 onEdit={onEditActualWork} onDelete={onDeleteActualWork} canManageEntry={canManageActualWorkEntry} />}
           </> : activeFinance === "quote" ? <div className={styles.quotePage}>
-            <h2>报价测算</h2>
+            <h2>测算&报价</h2>
             <div className={styles.quoteToolbar}>
               <Segmented
                 value={activeQuoteTab}
@@ -355,24 +371,84 @@ export default function ProjectDetailWorkspaceComparison({
                 latestCostEstimation={latestCostEstimation}
               />
             )}
-          </div> : activeFinance === "cost" ? <div className={styles.costPage}>
-            <div className={styles.costPageHeader}><h2>成本追踪</h2>{costTrackingActions}</div>
+          </div> : activeFinance === "initiation" ? <div className={styles.quotePage}>
+            <h2>立项&财务结构</h2>
+            <div className={styles.quoteToolbar}>
+              <Segmented
+                value={activeInitiationTab}
+                onChange={(value) => setActiveInitiationTab(value as "project-initiation" | "project-financial-structure")}
+                options={[{ label: "立项申请", value: "project-initiation" }, { label: "项目财务结构", value: "project-financial-structure" }]}
+              />
+              {activeInitiationTab === "project-initiation" ? (
+                <ProjectInitiationCard
+                  mode="actions"
+                  projectId={projectId}
+                  projectName={projectName}
+                  projectMembers={members}
+                  canManageProject={canManageProject}
+                  latestInitiation={latestInitiation}
+                  modalPrefillInitiation={latestCostEstimation}
+                  syncSummarySourceInitiation={latestCostEstimation}
+                  employees={employees}
+                  showProjectInBasicInfo={false}
+                  showContractAmountInBasicInfo
+                  includeQuoteAmountInSyncSummary
+                  onSaved={onInitiationSaved}
+                />
+              ) : (
+                <ProjectFinancialStructureCard
+                  mode="actions"
+                  projectId={projectId}
+                  projectName={projectName}
+                  canManageProject={canManageProject}
+                  latestInitiation={latestInitiation}
+                  refreshKey={financialStructureRefreshKey}
+                  onSaved={onFinancialStructureSaved}
+                />
+              )}
+            </div>
+            {activeInitiationTab === "project-initiation" ? (
+              <ProjectInitiationCard
+                mode="content"
+                projectId={projectId}
+                projectName={projectName}
+                projectMembers={members}
+                canManageProject={canManageProject}
+                latestInitiation={latestInitiation}
+                modalPrefillInitiation={latestCostEstimation}
+                syncSummarySourceInitiation={latestCostEstimation}
+                employees={employees}
+                showProjectInBasicInfo={false}
+                showContractAmountInBasicInfo
+                includeQuoteAmountInSyncSummary
+              />
+            ) : (
+              <ProjectFinancialStructureCard
+                mode="content"
+                projectId={projectId}
+                projectName={projectName}
+                canManageProject={canManageProject}
+                latestInitiation={latestInitiation}
+                refreshKey={financialStructureRefreshKey}
+              />
+            )}
+          </div> : activeFinance === "payments" ? <ProjectWorkspacePayments
+            projectId={projectId}
+            project={project}
+            canManageProject={canManageProject}
+            canCollectReceivable={canCollectReceivable}
+            canManageBadDebtRecords={canManageReimbursements}
+            onPlansChanged={loadFinanceCounts}
+          /> : activeFinance === "cost" ? <div className={styles.costPage}>
+            <div className={styles.costPageHeader}><h2>项目成本追踪</h2>{costTrackingActions}</div>
             <ProjectRealtimeCostTrackingTable projectId={projectId} projectName={projectName}
               startDate={startDate} endDate={endDate} costSourceMode={costSourceMode}
               manualCost={manualCost} latestInitiation={latestInitiation} members={members}
               actualWorkEntries={actualWorkEntries} workdayAdjustments={workdayAdjustments}
               onDownloadReady={onCostDownloadReady} embedded />
-          </div> : activeFinance === "expenses" ? <ProjectWorkspaceReimbursements projectId={projectId} projectName={projectName}
+          </div> : <ProjectWorkspaceReimbursements projectId={projectId} projectName={projectName}
             employees={members.map((member) => ({ id: member.id, name: member.name }))}
-            canManageReimbursements={canManageReimbursements} /> : <>
-            <div className={styles.financeGrid}>
-              {financeLinks.map(({ label, detail, icon: Icon, step, tab }) => (
-                <button type="button" key={tab} onClick={() => tab === "cost-estimation" ? setActiveFinance("quote") : tab === "expense-records" ? setActiveFinance("expenses") : tab === "realtime-cost" ? setActiveFinance("cost") : onOpenLegacy({ step, tab })}>
-                  <Icon /><span><strong>{label}</strong><small>{detail}</small></span><span className={styles.linkText}>{tab === "cost-estimation" || tab === "realtime-cost" || tab === "expense-records" ? "进入 →" : "查看现有内容 →"}</span>
-                </button>
-              ))}
-            </div>
-          </>}
+            canManageReimbursements={canManageReimbursements} />}
         </section>
       </div>
     </>
