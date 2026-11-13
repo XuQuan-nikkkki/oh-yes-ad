@@ -40,6 +40,7 @@ import ProjectMilestoneSectionActions from "@/components/project-detail/ProjectM
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useProjectsStore } from "@/stores/projectsStore";
+import { useAuthStore } from "@/stores/authStore";
 
 dayjs.extend(isoWeek);
 
@@ -316,6 +317,7 @@ const compareDisplayNames = (left?: string | null, right?: string | null) => {
 };
 
 function SchedulePageContent() {
+  const currentUser = useAuthStore((state) => state.currentUser);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
