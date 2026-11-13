@@ -24,6 +24,7 @@ import WorkItemEditModal from "@/components/project-detail/WorkItemEditModal";
 import ProjectActualWorkRecordsContent from "@/components/project-detail/ProjectActualWorkRecordsContent";
 import ProjectManualCostModal from "@/components/project-detail/ProjectManualCostModal";
 import ProjectStatusValue from "@/components/project-detail/ProjectStatusValue";
+import ProjectTypeValue from "@/components/project-detail/ProjectTypeValue";
 import {
   ProjectActualWorkAction,
   ProjectMilestoneAction,
@@ -518,8 +519,15 @@ const ProjectDetailPage = () => {
             <span className={projectInfoStyles.titleName}>
               {project.name || "项目信息"}
             </span>
+            <span className={projectInfoStyles.titleTag}>
+              <ProjectTypeValue
+                projectId={project.id}
+                type={project.type}
+                typeOption={project.typeOption}
+              />
+            </span>
             {!isInternalProject && (
-              <span className={projectInfoStyles.titleStatus}>
+              <span className={projectInfoStyles.titleTag}>
                 <ProjectStatusValue
                   projectId={project.id}
                   status={project.status}

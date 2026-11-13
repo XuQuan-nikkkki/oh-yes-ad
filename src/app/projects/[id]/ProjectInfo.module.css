@@ -12,7 +12,7 @@
   white-space: nowrap;
 }
 
-.titleStatus {
+.titleTag {
   flex: none;
   font-size: 14px;
   font-weight: 400;
@@ -21,15 +21,9 @@
 .facts {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.8fr);
-  gap: 18px;
+  column-gap: 18px;
+  row-gap: 8px;
   padding: 4px 0;
-}
-
-.column {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
 }
 
 .fact {
@@ -47,6 +41,7 @@
 }
 
 .fact a,
+.value,
 .period {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -60,8 +55,10 @@
   .facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
 
-  .column:last-child {
-    grid-column: 1 / -1;
+@media (max-width: 600px) {
+  .facts {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
