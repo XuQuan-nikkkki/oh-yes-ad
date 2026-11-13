@@ -3,6 +3,10 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
 import { DEFAULT_COLOR } from "@/lib/constants";
+import {
+  buildProjectSegmentScalarUpdate,
+  hasProjectSegmentStatusUpdate,
+} from "@/lib/project-segment-update";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -14,8 +18,14 @@ type RouteContext = {
   params: Promise<{ id: string; segmentId: string }>;
 };
 
-const upsertSelectOption = async (field: string, value?: string | null) => {
-  const normalized = value?.trim();
+const upsertSelectOption = async (field: string, value: unknown) => {
+  const rawValue =
+    typeof value === "string"
+      ? value
+      : value && typeof value === "object" && "value" in value && typeof value.value === "string"
+        ? value.value
+        : "";
+  const normalized = rawValue.trim();
   if (!normalized) return null;
 
   const option = await prisma.selectOption.upsert({
@@ -64,26 +74,17 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
 
   const body = await req.json();
-  const statusOptionId = await upsertSelectOption(
-    "projectSegment.status",
-    body.status ?? null,
-  );
+  const data = buildProjectSegmentScalarUpdate(body);
+  if (hasProjectSegmentStatusUpdate(body)) {
+    data.statusOptionId = await upsertSelectOption(
+      "projectSegment.status",
+      body.status,
+    );
+  }
 
   const segment = await prisma.projectSegment.update({
     where: { id: segmentId },
-    data: {
-      name: body.name,
-      statusOptionId,
-      ownerId: body.ownerId ?? null,
-      startDate:
-        typeof body.startDate === "string" && body.startDate
-          ? new Date(body.startDate)
-          : null,
-      endDate:
-        typeof (body.endDate ?? body.dueDate) === "string" && (body.endDate ?? body.dueDate)
-          ? new Date(body.endDate ?? body.dueDate)
-          : null,
-    },
+    data,
     include: {
       owner: { select: { id: true, name: true } },
       statusOption: { select: { value: true, color: true } },

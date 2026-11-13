@@ -3,6 +3,10 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { DEFAULT_COLOR } from "@/lib/constants";
 import { requireProjectWritePermission } from "@/lib/api-permissions";
+import {
+  buildProjectSegmentScalarUpdate,
+  hasProjectSegmentStatusUpdate,
+} from "@/lib/project-segment-update";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -111,27 +115,17 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     });
     if (!project) return new Response("Project not found", { status: 400 });
   }
-  const statusOptionId = await upsertSelectOption(
-    "projectSegment.status",
-    body.status ?? null,
-  );
+  const data = buildProjectSegmentScalarUpdate(body);
+  if (hasProjectSegmentStatusUpdate(body)) {
+    data.statusOptionId = await upsertSelectOption(
+      "projectSegment.status",
+      body.status,
+    );
+  }
 
   const item = await prisma.projectSegment.update({
     where: { id },
-    data: {
-      name: body.name,
-      statusOptionId,
-      startDate:
-        typeof body.startDate === "string" && body.startDate
-          ? new Date(body.startDate)
-          : null,
-      endDate:
-        typeof (body.endDate ?? body.dueDate) === "string" && (body.endDate ?? body.dueDate)
-          ? new Date(body.endDate ?? body.dueDate)
-          : null,
-      projectId: body.projectId,
-      ownerId: body.ownerId ?? null,
-    },
+    data,
     include: {
       project: { select: { id: true, name: true } },
       owner: { select: { id: true, name: true } },

@@ -8,6 +8,7 @@
     "build": "prisma generate && prisma db push --accept-data-loss && tsx scripts/backfill-estimation-execution-cost-items.ts && tsx scripts/backfill-initiation-execution-cost-items.ts && tsx scripts/backfill-project-service-content.ts --execute && prisma db seed && next build && tsx scripts/auto-migrate-on-deploy.ts",
     "start": "next start",
     "lint": "eslint",
+    "test:project-segment-update": "node --import tsx --test src/lib/project-segment-update.test.ts",
     "db:seed": "prisma db seed",
     "backfill:project-service-content": "tsx scripts/backfill-project-service-content.ts",
     "db:sync-prod-to-test": "bash scripts/sync-prod-to-test-db.sh",
