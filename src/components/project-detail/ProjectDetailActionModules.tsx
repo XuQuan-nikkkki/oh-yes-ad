@@ -370,7 +370,7 @@ export const ProjectPlannedWorkModal = ({
         editing
           ? {
               id: editing.id,
-              deliverableId: editing.deliverableId,
+              workItemId: editing.workItemId,
               yearOption:
                 typeof editing.year === "number"
                   ? String(editing.year)

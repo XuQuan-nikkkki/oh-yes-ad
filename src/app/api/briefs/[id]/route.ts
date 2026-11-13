@@ -7,11 +7,12 @@ import {
 import { prisma } from "@/lib/prisma";
 import { briefInclude } from "@/lib/brief-query";
 
-const FORMAT_OPTION_FIELD = "briefDeliverable.format";
-const CATEGORY_SCENE_OPTION_FIELD = "briefDeliverable.categoryOrScene";
+const FORMAT_OPTION_FIELD = "briefWorkItem.format";
+const CATEGORY_SCENE_OPTION_FIELD = "briefWorkItem.categoryOrScene";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-type DeliverableInput = {
+type WorkItemInput = {
+  sourceFilePolicy: "REQUIRED" | "OPTIONAL";
   id?: string;
   type: "DESIGN" | "COPY" | "PROJECT_MANAGEMENT" | "NEW_MEDIA";
   title: string;
@@ -19,8 +20,8 @@ type DeliverableInput = {
   specification?: string;
   reviewerId: string;
   assigneeId?: string;
-  firstDraftAt: string;
-  revisionAt: string;
+  firstDraftAt?: string;
+  revisionAt?: string;
   finalAt: string;
   formatOptionIds: string[];
   categoryOrSceneOptionIds: string[];
@@ -39,6 +40,8 @@ const stringArray = (value: unknown) =>
     : [];
 
 const parseDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
+const isOptionalDate = (value: unknown) =>
+  value == null || value === "" || (typeof value === "string" && DATE_PATTERN.test(value));
 
 export async function GET(
   _req: NextRequest,
@@ -75,18 +78,21 @@ export async function PATCH(
     typeof body.description !== "string" ||
     !body.description.trim() ||
     typeof body.ownerId !== "string" ||
-    !Array.isArray(body.deliverables) ||
-    body.deliverables.length === 0
+    !Array.isArray(body.workItems) ||
+    body.workItems.length === 0
   ) {
     return new Response("需求单数据不完整", { status: 400 });
   }
 
-  const deliverables: DeliverableInput[] = [];
-  for (const raw of body.deliverables) {
+  const workItems: WorkItemInput[] = [];
+  for (const raw of body.workItems) {
     if (!raw || typeof raw !== "object") {
-      return new Response("交付物数据无效", { status: 400 });
+      return new Response("工作项数据无效", { status: 400 });
     }
     const item = raw as Record<string, unknown>;
+    if (!["REQUIRED", "OPTIONAL"].includes(String(item.sourceFilePolicy))) {
+      return new Response("请选择是否必须提交源文件", { status: 400 });
+    }
     if (
       !["DESIGN", "COPY", "PROJECT_MANAGEMENT", "NEW_MEDIA"].includes(String(item.type)) ||
       typeof item.title !== "string" ||
@@ -95,18 +101,17 @@ export async function PATCH(
       !item.description.trim() ||
       typeof item.reviewerId !== "string" ||
       !item.reviewerId ||
-      typeof item.firstDraftAt !== "string" ||
-      !DATE_PATTERN.test(item.firstDraftAt) ||
-      typeof item.revisionAt !== "string" ||
-      !DATE_PATTERN.test(item.revisionAt) ||
+      !isOptionalDate(item.firstDraftAt) ||
+      !isOptionalDate(item.revisionAt) ||
       typeof item.finalAt !== "string" ||
       !DATE_PATTERN.test(item.finalAt)
     ) {
-      return new Response("交付物必填项不完整", { status: 400 });
+      return new Response("工作项必填项不完整", { status: 400 });
     }
-    deliverables.push({
+    workItems.push({
       id: typeof item.id === "string" && item.id ? item.id : undefined,
-      type: item.type as DeliverableInput["type"],
+      type: item.type as WorkItemInput["type"],
+      sourceFilePolicy: item.sourceFilePolicy as WorkItemInput["sourceFilePolicy"],
       title: item.title.trim(),
       description: item.description.trim(),
       specification:
@@ -118,8 +123,8 @@ export async function PATCH(
         typeof item.assigneeId === "string" && item.assigneeId
           ? item.assigneeId
           : undefined,
-      firstDraftAt: item.firstDraftAt,
-      revisionAt: item.revisionAt,
+      firstDraftAt: typeof item.firstDraftAt === "string" && item.firstDraftAt ? item.firstDraftAt : undefined,
+      revisionAt: typeof item.revisionAt === "string" && item.revisionAt ? item.revisionAt : undefined,
       finalAt: item.finalAt,
       formatOptionIds: stringArray(item.formatOptionIds),
       categoryOrSceneOptionIds: stringArray(item.categoryOrSceneOptionIds),
@@ -132,27 +137,27 @@ export async function PATCH(
       id: true,
       projectId: true,
       status: true,
-      deliverables: { select: { id: true, assigneeId: true } },
+      workItems: { select: { id: true, assigneeId: true } },
     },
   });
   if (!brief) return new Response("需求单不存在", { status: 404 });
 
-  const submittedIds = deliverables
+  const submittedIds = workItems
     .map((item) => item.id)
     .filter((value): value is string => Boolean(value));
   const existingById = new Map(
-    brief.deliverables.map((item) => [item.id, item]),
+    brief.workItems.map((item) => [item.id, item]),
   );
   if (
     new Set(submittedIds).size !== submittedIds.length ||
-    submittedIds.some((deliverableId) => !existingById.has(deliverableId))
+    submittedIds.some((workItemId) => !existingById.has(workItemId))
   ) {
-    return new Response("交付物不属于当前需求单", { status: 400 });
+    return new Response("工作项不属于当前需求单", { status: 400 });
   }
 
   const optionIds = Array.from(
     new Set(
-      deliverables.flatMap((item) => [
+      workItems.flatMap((item) => [
         ...item.formatOptionIds,
         ...item.categoryOrSceneOptionIds,
       ]),
@@ -161,7 +166,7 @@ export async function PATCH(
   const employeeIds = Array.from(
     new Set([
       body.ownerId,
-      ...deliverables.flatMap((item) =>
+      ...workItems.flatMap((item) =>
         [item.reviewerId, item.assigneeId].filter(Boolean) as string[],
       ),
     ]),
@@ -185,7 +190,7 @@ export async function PATCH(
     options.map((option) => [option.id, option.field]),
   );
   if (
-    deliverables.some(
+    workItems.some(
       (item) =>
         item.formatOptionIds.some(
           (optionId) =>
@@ -197,68 +202,69 @@ export async function PATCH(
         ),
     )
   ) {
-    return new Response("交付物选项无效", { status: 400 });
+    return new Response("工作项选项无效", { status: 400 });
   }
 
   const keepIds = new Set(submittedIds);
-  const deleteIds = brief.deliverables
+  const deleteIds = brief.workItems
     .map((item) => item.id)
-    .filter((deliverableId) => !keepIds.has(deliverableId));
+    .filter((workItemId) => !keepIds.has(workItemId));
   const status = ["paused", "completed"].includes(brief.status)
     ? brief.status
-    : deliverables.every((item) => Boolean(item.assigneeId))
+    : workItems.every((item) => Boolean(item.assigneeId))
       ? "in_progress"
       : "waiting_assignment";
 
-  const clearedAssignedDeliverable = deliverables.find(
+  const clearedAssignedWorkItem = workItems.find(
     (item) => item.id && existingById.get(item.id)?.assigneeId && !item.assigneeId,
   );
-  if (clearedAssignedDeliverable) {
-    return new Response("已指派的交付物不能清空执行人，请改派给其他人", { status: 400 });
+  if (clearedAssignedWorkItem) {
+    return new Response("已指派的工作项不能清空执行人，请改派给其他人", { status: 400 });
   }
 
   await prisma.$transaction(async (tx) => {
     if (deleteIds.length) {
-      await tx.deliverable.deleteMany({ where: { id: { in: deleteIds } } });
+      await tx.workItem.deleteMany({ where: { id: { in: deleteIds } } });
     }
 
-    for (const item of deliverables) {
+    for (const item of workItems) {
       const data = {
         type: item.type,
+        sourceFilePolicy: item.sourceFilePolicy,
         title: item.title,
         description: item.description,
         specification: item.specification,
         reviewerId: item.reviewerId,
         assigneeId: item.assigneeId,
-        firstDraftAt: parseDate(item.firstDraftAt),
-        revisionAt: parseDate(item.revisionAt),
+        firstDraftAt: item.firstDraftAt ? parseDate(item.firstDraftAt) : null,
+        revisionAt: item.revisionAt ? parseDate(item.revisionAt) : null,
         finalAt: parseDate(item.finalAt),
       };
 
       if (item.id) {
         const previous = existingById.get(item.id);
-        await tx.deliverable.update({ where: { id: item.id }, data });
+        await tx.workItem.update({ where: { id: item.id }, data });
         await Promise.all([
-          tx.deliverableFormatOption.deleteMany({
-            where: { deliverableId: item.id },
+          tx.workItemFormatOption.deleteMany({
+            where: { workItemId: item.id },
           }),
-          tx.deliverableCategoryOrSceneOption.deleteMany({
-            where: { deliverableId: item.id },
+          tx.workItemCategoryOrSceneOption.deleteMany({
+            where: { workItemId: item.id },
           }),
         ]);
         await Promise.all([
           item.formatOptionIds.length
-            ? tx.deliverableFormatOption.createMany({
+            ? tx.workItemFormatOption.createMany({
                 data: item.formatOptionIds.map((optionId) => ({
-                  deliverableId: item.id!,
+                  workItemId: item.id!,
                   optionId,
                 })),
               })
             : Promise.resolve(),
           item.categoryOrSceneOptionIds.length
-            ? tx.deliverableCategoryOrSceneOption.createMany({
+            ? tx.workItemCategoryOrSceneOption.createMany({
                 data: item.categoryOrSceneOptionIds.map((optionId) => ({
-                  deliverableId: item.id!,
+                  workItemId: item.id!,
                   optionId,
                 })),
               })
@@ -267,9 +273,9 @@ export async function PATCH(
 
         if (previous?.assigneeId !== item.assigneeId) {
           if (item.assigneeId) {
-            await tx.deliverableAssignmentChange.create({
+            await tx.workItemAssignmentChange.create({
               data: {
-                deliverableId: item.id,
+                workItemId: item.id,
                 fromAssigneeId: previous?.assigneeId,
                 toAssigneeId: item.assigneeId,
                 changedById: auth.employee.id,
@@ -278,7 +284,7 @@ export async function PATCH(
           }
         }
       } else {
-        await tx.deliverable.create({
+        await tx.workItem.create({
           data: {
             ...data,
             briefId: id,
@@ -334,7 +340,7 @@ export async function DELETE(
   });
   if (!brief) return new Response("需求单不存在", { status: 404 });
 
-  // 数据库级联删除交付物及其选项关联、指派历史，保证整体原子删除。
+  // 数据库级联删除工作项及其选项关联、指派历史，保证整体原子删除。
   await prisma.brief.delete({ where: { id } });
   return new Response(null, { status: 204 });
 }

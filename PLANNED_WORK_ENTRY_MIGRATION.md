@@ -1,3 +1,5 @@
+> 历史迁移记录：本文中的 Deliverable / deliverableId 是当时使用的名称。2026-09-08 已统一改为 WorkItem / workItemId；当前数据库操作请参阅 [工作项重命名说明](WORK_ITEM_RENAME.md)，不要在已改名数据库上直接执行下方旧 SQL。
+
 # 计划工时归属迁移说明
 
 ## 目标数据模型

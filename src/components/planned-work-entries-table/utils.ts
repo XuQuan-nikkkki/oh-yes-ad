@@ -61,7 +61,7 @@ export const getNameText = (row: PlannedWorkEntryRow): string => {
   const week =
     row.weekNumberOption?.value ??
     (row.weekNumber != null ? String(row.weekNumber) : "");
-  const ownerName = row.deliverable?.assignee?.name ?? row.task?.owner?.name ?? "";
+  const ownerName = row.workItem?.assignee?.name ?? row.task?.owner?.name ?? "";
   if (!week || !ownerName) return "-";
   return `W${week} 工时记录@${ownerName}`;
 };

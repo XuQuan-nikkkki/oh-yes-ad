@@ -73,9 +73,9 @@ type Props = {
   extra?: ReactNode;
 };
 
-type WeeklyDeliverableCard = {
-  deliverableId: string;
-  deliverableName: string;
+type WeeklyWorkItemCard = {
+  workItemId: string;
+  workItemName: string;
   projectId: string;
   projectName: string;
   plannedDays: number;
@@ -159,10 +159,10 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
     useState(false);
   const [workLogInitialValues, setWorkLogInitialValues] =
     useState<WorkLogFormInitialValues | null>(null);
-  const [weeklyDeliverables, setWeeklyDeliverables] = useState<
-    WeeklyDeliverableCard[]
+  const [weeklyWorkItems, setWeeklyWorkItems] = useState<
+    WeeklyWorkItemCard[]
   >([]);
-  const [weeklyDeliverablesLoading, setWeeklyDeliverablesLoading] =
+  const [weeklyWorkItemsLoading, setWeeklyWorkItemsLoading] =
     useState(false);
   const lastCalendarClickRef = useRef<{ key: string; ts: number } | null>(null);
   const lastCalendarDateRef = useRef<{ date: Date; allDay: boolean } | null>(
@@ -389,10 +389,10 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
   useEffect(() => {
     (async () => {
       if (!employee?.id) {
-        setWeeklyDeliverables([]);
+        setWeeklyWorkItems([]);
         return;
       }
-      setWeeklyDeliverablesLoading(true);
+      setWeeklyWorkItemsLoading(true);
       try {
         const params = new URLSearchParams({
           page: "1",
@@ -410,10 +410,10 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
             ? payload
             : [];
 
-        const deliverableMap = new Map<string, WeeklyDeliverableCard>();
+        const workItemMap = new Map<string, WeeklyWorkItemCard>();
         for (const row of rows as Array<{
           plannedDays?: number | null;
-          deliverable?: {
+          workItem?: {
             id?: string;
             title?: string | null;
             assignee?: { id?: string | null } | null;
@@ -422,44 +422,44 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
             } | null;
           } | null;
         }>) {
-          const deliverable = row.deliverable;
-          const project = deliverable?.brief?.project;
+          const workItem = row.workItem;
+          const project = workItem?.brief?.project;
           if (
-            !deliverable?.id ||
-            !deliverable.title ||
+            !workItem?.id ||
+            !workItem.title ||
             !project?.id ||
             !project.name
           ) {
             continue;
           }
-          if (deliverable.assignee?.id !== employee.id) continue;
-          const existing = deliverableMap.get(deliverable.id);
+          if (workItem.assignee?.id !== employee.id) continue;
+          const existing = workItemMap.get(workItem.id);
           if (existing) {
             existing.plannedDays += Number(row.plannedDays ?? 0);
             continue;
           }
-          deliverableMap.set(deliverable.id, {
-            deliverableId: deliverable.id,
-            deliverableName: deliverable.title,
+          workItemMap.set(workItem.id, {
+            workItemId: workItem.id,
+            workItemName: workItem.title,
             projectId: project.id,
             projectName: project.name,
             plannedDays: Number(row.plannedDays ?? 0),
           });
         }
 
-        setWeeklyDeliverables(
-          Array.from(deliverableMap.values()).sort((left, right) => {
+        setWeeklyWorkItems(
+          Array.from(workItemMap.values()).sort((left, right) => {
             if (right.plannedDays !== left.plannedDays) {
               return right.plannedDays - left.plannedDays;
             }
-            return left.deliverableName.localeCompare(
-              right.deliverableName,
+            return left.workItemName.localeCompare(
+              right.workItemName,
               "zh-CN",
             );
           }),
         );
       } finally {
-        setWeeklyDeliverablesLoading(false);
+        setWeeklyWorkItemsLoading(false);
       }
     })();
   }, [employee?.id]);
@@ -714,8 +714,8 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
     setWorkLogModalOpen(true);
   };
 
-  const openCreateWorkLogFromDeliverable = (
-    deliverable: WeeklyDeliverableCard,
+  const openCreateWorkLogFromWorkItem = (
+    workItem: WeeklyWorkItemCard,
   ) => {
     if (!employee || !canEditWorkLogs) return;
     void ensureWorkLogProjectOptionsLoaded();
@@ -724,12 +724,12 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
 
     setWorkLogMode("create");
     setEditingWorkLogId(null);
-    setWorkLogSelectedProjectId(deliverable.projectId);
+    setWorkLogSelectedProjectId(workItem.projectId);
     setWorkLogDisableProjectSelect(true);
     setWorkLogInitialValues({
-      id: `new-deliverable-${deliverable.deliverableId}-${Date.now()}`,
-      projectId: deliverable.projectId,
-      title: deliverable.deliverableName,
+      id: `new-work-item-${workItem.workItemId}-${Date.now()}`,
+      projectId: workItem.projectId,
+      title: workItem.workItemName,
       employeeId: employee.id,
       startDate: start.toISOString(),
       endDate: end.toISOString(),
@@ -935,9 +935,9 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
   return (
     <>
       {contextHolder}
-      <Card title="本周交付物" type="inner" style={{ marginBottom: 16 }}>
-        <Spin spinning={weeklyDeliverablesLoading}>
-          {weeklyDeliverables.length > 0 ? (
+      <Card title="本周工作项" type="inner" style={{ marginBottom: 16 }}>
+        <Spin spinning={weeklyWorkItemsLoading}>
+          {weeklyWorkItems.length > 0 ? (
             <div
               style={{
                 display: "grid",
@@ -945,13 +945,13 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
                 gap: 12,
               }}
             >
-              {weeklyDeliverables.map((deliverable) => (
+              {weeklyWorkItems.map((workItem) => (
                 <Card
-                  key={deliverable.deliverableId}
+                  key={workItem.workItemId}
                   hoverable={canEditWorkLogs}
                   size="small"
-                  title={deliverable.deliverableName}
-                  onClick={canEditWorkLogs ? () => openCreateWorkLogFromDeliverable(deliverable) : undefined}
+                  title={workItem.workItemName}
+                  onClick={canEditWorkLogs ? () => openCreateWorkLogFromWorkItem(workItem) : undefined}
                   extra={canEditWorkLogs ? (
                     <span style={{ color: "rgba(0,0,0,0.45)", fontSize: 12 }}>
                       点击记录工时
@@ -959,17 +959,17 @@ const WorkLogsCalendar = ({ employee, title, extra }: Props) => {
                   ) : null}
                 >
                   <div style={{ color: "rgba(0,0,0,0.65)", marginBottom: 4 }}>
-                    {deliverable.projectName}
+                    {workItem.projectName}
                   </div>
                   <div style={{ color: "rgba(0,0,0,0.45)", fontSize: 12 }}>
-                    计划工时 {formatSummaryNumber(deliverable.plannedDays)}d
+                    计划工时 {formatSummaryNumber(workItem.plannedDays)}d
                   </div>
                 </Card>
               ))}
             </div>
           ) : (
             <Empty
-              description="本周暂无交付物"
+              description="本周暂无工作项"
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             />
           )}

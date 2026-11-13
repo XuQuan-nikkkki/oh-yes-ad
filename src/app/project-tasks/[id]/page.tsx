@@ -60,7 +60,7 @@ type Detail = {
   creator?: { id: string; name: string } | null;
 };
 
-type PlannedEntryInitialValues = Omit<PlannedWorkEntryFormPayload, "deliverableId"> & { id: string; deliverableId?: string };
+type PlannedEntryInitialValues = Omit<PlannedWorkEntryFormPayload, "workItemId"> & { id: string; workItemId?: string };
 
 export default function ProjectTaskDetailPage() {
   const params = useParams();
@@ -244,7 +244,7 @@ export default function ProjectTaskDetailPage() {
     row: PlannedWorkEntryRow,
   ): PlannedEntryInitialValues => ({
     id: row.id,
-    deliverableId: row.deliverable?.id,
+    workItemId: row.workItem?.id,
     yearOption:
       row.yearOption?.value ??
       (row.year !== null && row.year !== undefined ? String(row.year) : ""),

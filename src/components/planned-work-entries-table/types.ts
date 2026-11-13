@@ -21,7 +21,7 @@ export type PlannedWorkEntryRow = {
     owner?: { id: string; name: string } | null;
     segment?: { id: string; name: string; project?: { id: string; name: string } };
   };
-  deliverable?: {
+  workItem?: {
     id: string;
     title: string;
     assignee?: { id: string; name: string } | null;
@@ -37,7 +37,7 @@ export type PlannedWorkColumnKey =
   | "name"
   | "projectName"
   | "briefName"
-  | "deliverableName"
+  | "workItemName"
   | "ownerName"
   | "year"
   | "month"
@@ -54,7 +54,7 @@ export type PlannedWorkEntriesTableProps = {
     filters: {
       projectName?: string;
       briefName?: string;
-      deliverableName?: string;
+      workItemName?: string;
       ownerName?: string;
       year?: string;
       weekNumber?: string;
@@ -70,7 +70,7 @@ export type PlannedWorkEntriesTableProps = {
   actionsDisabled?: boolean;
   projectFilterOptions?: RawFilterOption[];
   briefFilterOptions?: RawFilterOption[];
-  deliverableFilterOptions?: RawFilterOption[];
+  workItemFilterOptions?: RawFilterOption[];
   ownerFilterOptions?: RawFilterOption[];
   yearFilterOptions?: RawFilterOption[];
   weekNumberFilterOptions?: RawFilterOption[];

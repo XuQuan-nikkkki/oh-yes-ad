@@ -32,7 +32,7 @@ type WeeklyPlannedEntry = {
   friday: boolean;
   saturday: boolean;
   sunday: boolean;
-  deliverable?: {
+  workItem?: {
     id: string;
     title: string;
     assignee?: {
@@ -54,18 +54,18 @@ type WeeklyPlannedEntry = {
   } | null;
 };
 
-type WeeklyDeliverableItem = {
+type WeeklyWorkItemItem = {
   clientName: string;
-  deliverableName: string;
+  workItemName: string;
 };
 
 type WeeklyProjectSummary = {
   projectId: string | null;
   projectName: string;
   days: number;
-  deliverables: Array<{
-    deliverableId: string;
-    deliverableName: string;
+  workItems: Array<{
+    workItemId: string;
+    workItemName: string;
     days: number;
   }>;
 };
@@ -86,7 +86,7 @@ type WeeklyEmployeeRow = {
     | "friday"
     | "saturday"
     | "sunday",
-    WeeklyDeliverableItem[]
+    WeeklyWorkItemItem[]
   >;
 };
 
@@ -95,8 +95,8 @@ type WeeklyMetricRow = {
     | "function"
     | "totalDays"
     | "distribution"
-    | "projectDeliverableDistribution"
-    | "dailyDeliverables";
+    | "projectWorkItemDistribution"
+    | "dailyWorkItems";
   metricLabel: string;
 };
 
@@ -209,7 +209,7 @@ const WeeklyTasksPanel = ({
   const weeklyEntriesByEmployee = useMemo(() => {
     const map = new Map<string, WeeklyPlannedEntry[]>();
     for (const entry of entries) {
-      const ownerId = entry.deliverable?.assignee?.id;
+      const ownerId = entry.workItem?.assignee?.id;
       if (!ownerId) continue;
       const list = map.get(ownerId) ?? [];
       list.push(entry);
@@ -228,7 +228,7 @@ const WeeklyTasksPanel = ({
         );
         const dailyMap: Record<
           (typeof DAY_KEYS)[number],
-          WeeklyDeliverableItem[]
+          WeeklyWorkItemItem[]
         > = {
           monday: [],
           tuesday: [],
@@ -242,44 +242,44 @@ const WeeklyTasksPanel = ({
 
         for (const entry of employeeEntries) {
           const clientName =
-            entry.deliverable?.brief?.project?.client?.name ?? "内部项目";
-          const deliverableName =
-            entry.deliverable?.title ?? "未命名交付物";
+            entry.workItem?.brief?.project?.client?.name ?? "内部项目";
+          const workItemName =
+            entry.workItem?.title ?? "未命名工作项";
           const projectId =
-            entry.deliverable?.brief?.project?.id ?? "unknown-project";
+            entry.workItem?.brief?.project?.id ?? "unknown-project";
           const projectName =
-            entry.deliverable?.brief?.project?.name ?? "未命名项目";
+            entry.workItem?.brief?.project?.name ?? "未命名项目";
           const days = entry.plannedDays ?? 0;
 
           if (!projectMap.has(projectId)) {
             projectMap.set(projectId, {
-              projectId: entry.deliverable?.brief?.project?.id ?? null,
+              projectId: entry.workItem?.brief?.project?.id ?? null,
               projectName,
               days: 0,
-              deliverables: [],
+              workItems: [],
             });
           }
 
           const projectSummary = projectMap.get(projectId)!;
           projectSummary.days += days;
-          const deliverableId = entry.deliverable!.id;
-          const existingDeliverable = projectSummary.deliverables.find(
-            (deliverable) => deliverable.deliverableId === deliverableId,
+          const workItemId = entry.workItem!.id;
+          const existingWorkItem = projectSummary.workItems.find(
+            (workItem) => workItem.workItemId === workItemId,
           );
 
-          if (existingDeliverable) {
-            existingDeliverable.days += days;
+          if (existingWorkItem) {
+            existingWorkItem.days += days;
           } else {
-            projectSummary.deliverables.push({
-              deliverableId,
-              deliverableName,
+            projectSummary.workItems.push({
+              workItemId,
+              workItemName,
               days,
             });
           }
 
           for (const dayKey of DAY_KEYS) {
             if (entry[dayKey]) {
-              dailyMap[dayKey].push({ clientName, deliverableName });
+              dailyMap[dayKey].push({ clientName, workItemName });
             }
           }
         }
@@ -340,10 +340,10 @@ const WeeklyTasksPanel = ({
     { key: "totalDays", metricLabel: "总工时" },
     { key: "distribution", metricLabel: "工时分布" },
     {
-      key: "projectDeliverableDistribution",
-      metricLabel: "项目 & 交付物分布",
+      key: "projectWorkItemDistribution",
+      metricLabel: "项目 & 工作项分布",
     },
-    { key: "dailyDeliverables", metricLabel: "每日交付物情况" },
+    { key: "dailyWorkItems", metricLabel: "每日工作项情况" },
   ];
 
   const renderWeeklyEmployeeMetric = (
@@ -409,11 +409,11 @@ const WeeklyTasksPanel = ({
       );
     }
 
-    if (metricKey === "projectDeliverableDistribution") {
+    if (metricKey === "projectWorkItemDistribution") {
       return employeeRow.hasSchedule ? (
         employeeRow.projectSummaries.length === 0 ? (
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            未安排交付物
+            未安排工作项
           </Typography.Text>
         ) : (
           <Space orientation="vertical" size={2} style={{ width: "100%" }}>
@@ -446,8 +446,8 @@ const WeeklyTasksPanel = ({
                   </Tag>
                 </Space>
                 <div style={{ marginTop: 1, lineHeight: "14px" }}>
-                  {projectSummary.deliverables.map((deliverable) => (
-                    <div key={deliverable.deliverableId}>
+                  {projectSummary.workItems.map((workItem) => (
+                    <div key={workItem.workItemId}>
                       <Typography.Text
                         style={{
                           fontSize: 12,
@@ -455,7 +455,7 @@ const WeeklyTasksPanel = ({
                           fontWeight: 500,
                         }}
                       >
-                        - {deliverable.deliverableName}{" "}
+                        - {workItem.workItemName}{" "}
                         <Tag
                           style={{
                             marginInlineEnd: 0,
@@ -466,7 +466,7 @@ const WeeklyTasksPanel = ({
                           }}
                           color="gold"
                         >
-                          {toDisplayDays(deliverable.days)}
+                          {toDisplayDays(workItem.days)}
                         </Tag>
                       </Typography.Text>
                     </div>
@@ -486,34 +486,34 @@ const WeeklyTasksPanel = ({
     return employeeRow.hasSchedule ? (
       <div>
         {DAY_KEYS.filter((dayKey) => {
-          const deliverables = employeeRow.dailyMap[dayKey];
+          const workItems = employeeRow.dailyMap[dayKey];
           return !(
-            WEEKEND_DAY_KEYS.has(dayKey) && deliverables.length === 0
+            WEEKEND_DAY_KEYS.has(dayKey) && workItems.length === 0
           );
         }).map((dayKey) => {
-          const deliverables = employeeRow.dailyMap[dayKey];
+          const workItems = employeeRow.dailyMap[dayKey];
           return (
             <div key={`${employeeRow.key}-daily-${dayKey}`}>
               <Tag
-                color={deliverables.length ? "green" : "default"}
+                color={workItems.length ? "green" : "default"}
                 style={{ fontSize: 10, fontWeight: 600 }}
               >
                 {DAY_LABELS[dayKey]}
               </Tag>
-              {deliverables.length === 0 ? (
+              {workItems.length === 0 ? (
                 <div>
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    - 未安排交付物
+                    - 未安排工作项
                   </Typography.Text>
                 </div>
               ) : (
-                deliverables.map((item, index) => (
+                workItems.map((item, index) => (
                   <div
-                    key={`${employeeRow.key}-${dayKey}-${item.clientName}-${item.deliverableName}-${index}`}
+                    key={`${employeeRow.key}-${dayKey}-${item.clientName}-${item.workItemName}-${index}`}
                     style={{ lineHeight: "14px" }}
                   >
                     <Typography.Text style={{ fontSize: 12 }}>
-                      - [{item.clientName}] {item.deliverableName}
+                      - [{item.clientName}] {item.workItemName}
                     </Typography.Text>
                   </div>
                 ))

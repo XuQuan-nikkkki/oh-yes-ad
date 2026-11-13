@@ -1,6 +1,6 @@
 import type {
   ProjectBrief,
-  ProjectBriefDeliverable,
+  ProjectBriefWorkItem,
 } from "@/components/project-detail/ProjectBriefProgressContent";
 
 export type BriefDetail = ProjectBrief & {
@@ -12,7 +12,7 @@ export type BriefDetail = ProjectBrief & {
   };
 };
 
-export type DeliverableDetail = ProjectBriefDeliverable & {
+export type WorkItemDetail = ProjectBriefWorkItem & {
   createdAt: string;
   updatedAt: string;
   creator: { id: string; name: string };

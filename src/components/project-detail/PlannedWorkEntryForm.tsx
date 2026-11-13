@@ -10,7 +10,7 @@ import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 dayjs.extend(isoWeek);
 
 export type PlannedWorkEntryFormPayload = {
-  deliverableId: string;
+  workItemId: string;
   yearOption: string;
   weekNumberOption: string;
   plannedDays: number;
@@ -23,7 +23,7 @@ export type PlannedWorkEntryFormPayload = {
   sunday: boolean;
 };
 
-export type PlannedWorkEntryDeliverableContext = {
+export type PlannedWorkEntryWorkItemContext = {
   id: string;
   title: string;
   briefId: string;
@@ -34,9 +34,9 @@ export type PlannedWorkEntryDeliverableContext = {
   assigneeName?: string | null;
 };
 
-type InitialValues = Omit<PlannedWorkEntryFormPayload, "deliverableId"> & {
+type InitialValues = Omit<PlannedWorkEntryFormPayload, "workItemId"> & {
   id: string;
-  deliverableId?: string;
+  workItemId?: string;
   year?: number | null;
   weekNumber?: number | null;
 };
@@ -44,16 +44,16 @@ type InitialValues = Omit<PlannedWorkEntryFormPayload, "deliverableId"> & {
 type Props = {
   selectedProjectId?: string;
   disableProjectSelect?: boolean;
-  defaultDeliverableId?: string;
+  defaultWorkItemId?: string;
   initialValues?: InitialValues | null;
-  deliverableContext?: PlannedWorkEntryDeliverableContext;
+  workItemContext?: PlannedWorkEntryWorkItemContext;
   onSubmit: (payload: PlannedWorkEntryFormPayload) => Promise<void> | void;
 };
 
 type FormValues = {
   projectId?: string;
   briefId?: string;
-  deliverableId?: string;
+  workItemId?: string;
   yearOption?: string;
   weekNumberOption?: string;
   plannedDays: number;
@@ -70,22 +70,22 @@ const weekdays = [
 export default function PlannedWorkEntryForm({
   selectedProjectId,
   disableProjectSelect = false,
-  defaultDeliverableId,
+  defaultWorkItemId,
   initialValues,
-  deliverableContext,
+  workItemContext,
   onSubmit,
 }: Props) {
   const [form] = Form.useForm<FormValues>();
   const [messageApi, contextHolder] = message.useMessage();
   const { submitting, runWithSubmitLock } = useSubmitLock();
-  const [deliverables, setDeliverables] = useState<PlannedWorkEntryDeliverableContext[]>(deliverableContext ? [deliverableContext] : []);
-  const [loading, setLoading] = useState(!deliverableContext);
+  const [workItems, setWorkItems] = useState<PlannedWorkEntryWorkItemContext[]>(workItemContext ? [workItemContext] : []);
+  const [loading, setLoading] = useState(!workItemContext);
   const fetchAllOptions = useSelectOptionsStore((state) => state.fetchAllOptions);
   const optionsByField = useSelectOptionsStore((state) => state.optionsByField);
 
   useEffect(() => { void fetchAllOptions(); }, [fetchAllOptions]);
   useEffect(() => {
-    if (deliverableContext) return;
+    if (workItemContext) return;
     let active = true;
     void fetch("/api/briefs", { cache: "no-store" })
       .then(async (response) => {
@@ -94,8 +94,8 @@ export default function PlannedWorkEntryForm({
       })
       .then((rows) => {
         if (!active) return;
-        setDeliverables(Array.isArray(rows) ? rows.flatMap((brief) =>
-          Array.isArray(brief.deliverables) ? brief.deliverables.map((item: { id: string; title: string; assignee?: { id: string; name: string } | null }) => ({
+        setWorkItems(Array.isArray(rows) ? rows.flatMap((brief) =>
+          Array.isArray(brief.workItems) ? brief.workItems.map((item: { id: string; title: string; assignee?: { id: string; name: string } | null }) => ({
             id: item.id,
             title: item.title,
             briefId: brief.id,
@@ -107,45 +107,45 @@ export default function PlannedWorkEntryForm({
           })) : [],
         ) : []);
       })
-      .catch((error) => { if (active) messageApi.error(error instanceof Error ? error.message : "加载需求单和交付物失败"); })
+      .catch((error) => { if (active) messageApi.error(error instanceof Error ? error.message : "加载需求单和工作项失败"); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [deliverableContext, messageApi]);
+  }, [workItemContext, messageApi]);
 
-  const deliverableId = initialValues?.deliverableId ?? defaultDeliverableId ?? deliverableContext?.id;
-  const initialDeliverable = deliverables.find((item) => item.id === deliverableId) ?? deliverableContext;
-  const projectId = selectedProjectId ?? initialDeliverable?.projectId;
-  const briefId = initialDeliverable?.briefId;
+  const workItemId = initialValues?.workItemId ?? defaultWorkItemId ?? workItemContext?.id;
+  const initialWorkItem = workItems.find((item) => item.id === workItemId) ?? workItemContext;
+  const projectId = selectedProjectId ?? initialWorkItem?.projectId;
+  const briefId = initialWorkItem?.briefId;
   const watchedProjectId = Form.useWatch("projectId", form) ?? projectId;
   const watchedBriefId = Form.useWatch("briefId", form) ?? briefId;
-  const watchedDeliverableId = Form.useWatch("deliverableId", form) ?? deliverableId;
+  const watchedWorkItemId = Form.useWatch("workItemId", form) ?? workItemId;
 
-  const projects = useMemo(() => Array.from(new Map(deliverables.map((item) => [item.projectId, item.projectName])), ([id, name]) => ({ id, name })), [deliverables]);
-  const briefs = useMemo(() => Array.from(new Map(deliverables.filter((item) => !watchedProjectId || item.projectId === watchedProjectId).map((item) => [item.briefId, item.briefTitle])), ([id, title]) => ({ id, title })), [deliverables, watchedProjectId]);
-  const visibleDeliverables = useMemo(() => deliverables.filter((item) => item.projectId === watchedProjectId && item.briefId === watchedBriefId), [deliverables, watchedBriefId, watchedProjectId]);
-  const selectedDeliverable = deliverables.find((item) => item.id === watchedDeliverableId);
+  const projects = useMemo(() => Array.from(new Map(workItems.map((item) => [item.projectId, item.projectName])), ([id, name]) => ({ id, name })), [workItems]);
+  const briefs = useMemo(() => Array.from(new Map(workItems.filter((item) => !watchedProjectId || item.projectId === watchedProjectId).map((item) => [item.briefId, item.briefTitle])), ([id, title]) => ({ id, title })), [workItems, watchedProjectId]);
+  const visibleWorkItems = useMemo(() => workItems.filter((item) => item.projectId === watchedProjectId && item.briefId === watchedBriefId), [workItems, watchedBriefId, watchedProjectId]);
+  const selectedWorkItem = workItems.find((item) => item.id === watchedWorkItemId);
 
   useEffect(() => {
-    if (loading || !deliverableId) return;
-    const item = deliverables.find((candidate) => candidate.id === deliverableId);
+    if (loading || !workItemId) return;
+    const item = workItems.find((candidate) => candidate.id === workItemId);
     if (!item) return;
     form.setFieldsValue({
       projectId: selectedProjectId ?? item.projectId,
       briefId: item.briefId,
-      deliverableId: item.id,
+      workItemId: item.id,
     });
-  }, [deliverableId, deliverables, form, loading, selectedProjectId]);
+  }, [workItemId, workItems, form, loading, selectedProjectId]);
 
   useEffect(() => {
     if (loading) return;
     const current = form.getFieldValue("briefId");
-    if (current && !briefs.some((item) => item.id === current)) form.setFieldsValue({ briefId: undefined, deliverableId: undefined });
+    if (current && !briefs.some((item) => item.id === current)) form.setFieldsValue({ briefId: undefined, workItemId: undefined });
   }, [briefs, form, loading]);
   useEffect(() => {
     if (loading) return;
-    const current = form.getFieldValue("deliverableId");
-    if (current && !visibleDeliverables.some((item) => item.id === current)) form.setFieldValue("deliverableId", undefined);
-  }, [form, loading, visibleDeliverables]);
+    const current = form.getFieldValue("workItemId");
+    if (current && !visibleWorkItems.some((item) => item.id === current)) form.setFieldValue("workItemId", undefined);
+  }, [form, loading, visibleWorkItems]);
 
   const yearOptions = optionsByField["plannedWorkEntry.year"] ?? [];
   const weekOptions = useMemo(() => [...(optionsByField["plannedWorkEntry.weekNumber"] ?? [])].sort((a, b) => Number(a.value) - Number(b.value)), [optionsByField]);
@@ -159,11 +159,11 @@ export default function PlannedWorkEntryForm({
       form={form}
       key={initialValues?.id ?? "new"}
       layout="vertical"
-      initialValues={{ projectId, briefId, deliverableId, yearOption: initialYear, weekNumberOption: initialWeek, plannedDays: initialValues?.plannedDays ?? 0, weekdays: initialWeekdays }}
+      initialValues={{ projectId, briefId, workItemId, yearOption: initialYear, weekNumberOption: initialWeek, plannedDays: initialValues?.plannedDays ?? 0, weekdays: initialWeekdays }}
       onFinish={(values) => runWithSubmitLock(async () => {
         const selectedDays = new Set(values.weekdays ?? []);
         await onSubmit({
-          deliverableId: values.deliverableId as string,
+          workItemId: values.workItemId as string,
           yearOption: String(values.yearOption),
           weekNumberOption: String(values.weekNumberOption),
           plannedDays: values.plannedDays,
@@ -174,12 +174,12 @@ export default function PlannedWorkEntryForm({
       })}
     >
       <Row gutter={16}>
-        <Col span={12}><Form.Item label="所属项目" name="projectId" rules={[{ required: true, message: "请选择项目" }]}><Select loading={loading} disabled={disableProjectSelect || Boolean(deliverableContext)} placeholder="请选择项目" options={projects.map((item) => ({ label: item.name, value: item.id }))} /></Form.Item></Col>
-        <Col span={12}><Form.Item label="所属需求单" name="briefId" rules={[{ required: true, message: "请选择需求单" }]}><Select loading={loading} disabled={Boolean(deliverableContext)} placeholder="请选择需求单" options={briefs.map((item) => ({ label: item.title, value: item.id }))} /></Form.Item></Col>
+        <Col span={12}><Form.Item label="所属项目" name="projectId" rules={[{ required: true, message: "请选择项目" }]}><Select loading={loading} disabled={disableProjectSelect || Boolean(workItemContext)} placeholder="请选择项目" options={projects.map((item) => ({ label: item.name, value: item.id }))} /></Form.Item></Col>
+        <Col span={12}><Form.Item label="所属需求单" name="briefId" rules={[{ required: true, message: "请选择需求单" }]}><Select loading={loading} disabled={Boolean(workItemContext)} placeholder="请选择需求单" options={briefs.map((item) => ({ label: item.title, value: item.id }))} /></Form.Item></Col>
       </Row>
       <Row gutter={16}>
-        <Col span={12}><Form.Item label="所属交付物" name="deliverableId" rules={[{ required: true, message: "请选择交付物" }]}><Select loading={loading} disabled={Boolean(deliverableContext)} placeholder="请选择交付物" options={visibleDeliverables.map((item) => ({ label: item.title, value: item.id }))} /></Form.Item></Col>
-        <Col span={12}><Form.Item label="交付物负责人"><Input disabled value={selectedDeliverable?.assigneeName ?? ""} placeholder="待指派执行人" /></Form.Item></Col>
+        <Col span={12}><Form.Item label="所属工作项" name="workItemId" rules={[{ required: true, message: "请选择工作项" }]}><Select loading={loading} disabled={Boolean(workItemContext)} placeholder="请选择工作项" options={visibleWorkItems.map((item) => ({ label: item.title, value: item.id }))} /></Form.Item></Col>
+        <Col span={12}><Form.Item label="工作项负责人"><Input disabled value={selectedWorkItem?.assigneeName ?? ""} placeholder="待指派执行人" /></Form.Item></Col>
       </Row>
       <Row gutter={16}>
         <Col span={6}><Form.Item label="年份" name="yearOption" rules={[{ required: true, message: "请选择年份" }]}><Select showSearch options={yearOptions.map((item) => ({ label: item.value, value: item.value }))} /></Form.Item></Col>

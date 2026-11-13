@@ -62,7 +62,7 @@ const serializeEntry = (
 const internalProjectWhere: Prisma.PlannedWorkEntryWhereInput = {
   OR: [
     { task: { segment: { project: { typeOption: { value: { in: [...INTERNAL_PROJECT_TYPE_VALUES] } } } } } },
-    { deliverable: { brief: { project: { typeOption: { value: { in: [...INTERNAL_PROJECT_TYPE_VALUES] } } } } } },
+    { workItem: { brief: { project: { typeOption: { value: { in: [...INTERNAL_PROJECT_TYPE_VALUES] } } } } } },
   ],
 };
 
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
   const page = Number(searchParams.get("page"));
   const pageSize = Number(searchParams.get("pageSize"));
   const taskName = searchParams.get("taskName")?.trim() ?? "";
-  const deliverableName = searchParams.get("deliverableName")?.trim() ?? "";
+  const workItemName = searchParams.get("workItemName")?.trim() ?? "";
   const ownerName = searchParams.get("ownerName")?.trim() ?? "";
   const projectName = searchParams.get("projectName")?.trim() ?? "";
   const segmentName = searchParams.get("segmentName")?.trim() ?? "";
@@ -89,19 +89,19 @@ export async function GET(req: NextRequest) {
     AND: [
       taskId ? { taskId } : {},
       taskName ? { task: { name: { contains: taskName, mode: "insensitive" } } } : {},
-      deliverableName ? { deliverable: { title: { contains: deliverableName, mode: "insensitive" } } } : {},
+      workItemName ? { workItem: { title: { contains: workItemName, mode: "insensitive" } } } : {},
       ownerName ? {
         OR: [
           { task: { owner: { name: { contains: ownerName, mode: "insensitive" } } } },
-          { deliverable: { assignee: { name: { contains: ownerName, mode: "insensitive" } } } },
+          { workItem: { assignee: { name: { contains: ownerName, mode: "insensitive" } } } },
         ],
       } : {},
       segmentName ? { task: { segment: { name: { contains: segmentName, mode: "insensitive" } } } } : {},
-      briefName ? { deliverable: { brief: { title: { contains: briefName, mode: "insensitive" } } } } : {},
+      briefName ? { workItem: { brief: { title: { contains: briefName, mode: "insensitive" } } } } : {},
       projectName ? {
         OR: [
           { task: { segment: { project: { name: { contains: projectName, mode: "insensitive" } } } } },
-          { deliverable: { brief: { project: { name: { contains: projectName, mode: "insensitive" } } } } },
+          { workItem: { brief: { project: { name: { contains: projectName, mode: "insensitive" } } } } },
         ],
       } : {},
       isInternalOnly(projectType) ? internalProjectWhere : {},
@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
               },
             },
           },
-          deliverable: {
+          workItem: {
             select: {
               id: true,
               title: true,
@@ -204,7 +204,7 @@ export async function GET(req: NextRequest) {
           },
         },
       },
-      deliverable: {
+      workItem: {
         select: {
           id: true,
           title: true,
@@ -236,14 +236,14 @@ export async function POST(req: NextRequest) {
 
   const body = await sanitizeRequestBody(req);
   const projectType = req.nextUrl.searchParams.get("projectType");
-  if (!body?.deliverableId || typeof body.deliverableId !== "string") {
-    return new Response("请选择交付物", { status: 400 });
+  if (!body?.workItemId || typeof body.workItemId !== "string") {
+    return new Response("请选择工作项", { status: 400 });
   }
 
-  const deliverable = await prisma.deliverable.findFirst({
+  const workItem = await prisma.workItem.findFirst({
     where: isInternalOnly(projectType)
       ? {
-          id: body.deliverableId,
+          id: body.workItemId,
           brief: {
             project: {
               typeOption: {
@@ -252,10 +252,10 @@ export async function POST(req: NextRequest) {
             },
           },
         }
-      : { id: body.deliverableId },
+      : { id: body.workItemId },
     select: { id: true },
   });
-  if (!deliverable) return new Response("交付物不存在", { status: 400 });
+  if (!workItem) return new Response("工作项不存在", { status: 400 });
 
   const year = normalizeInteger(body.yearOption ?? body.year);
   const weekNumber = normalizeInteger(body.weekNumberOption ?? body.weekNumber);
@@ -269,7 +269,7 @@ export async function POST(req: NextRequest) {
 
   const item = await prisma.plannedWorkEntry.create({
     data: {
-      deliverableId: body.deliverableId,
+      workItemId: body.workItemId,
       yearOptionId,
       weekNumberOptionId,
       plannedDays: Number(body.plannedDays ?? 0),
@@ -304,7 +304,7 @@ export async function POST(req: NextRequest) {
           },
         },
       },
-      deliverable: {
+      workItem: {
         select: {
           id: true,
           title: true,

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="300" viewBox="0 0 480 300">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#173b67"/><stop offset="1" stop-color="#77b9df"/></linearGradient></defs>
+  <rect width="480" height="300" rx="18" fill="url(#g)"/>
+  <circle cx="386" cy="54" r="72" fill="#f7c85d" opacity=".9"/>
+  <path d="M0 244C100 190 164 290 268 220s142-10 212-52v132H0z" fill="#eef7fa" opacity=".92"/>
+  <text x="38" y="88" fill="white" font-size="20" font-family="sans-serif">AUTUMN</text>
+  <text x="38" y="132" fill="white" font-size="38" font-weight="700" font-family="sans-serif">品牌活动</text>
+  <text x="40" y="164" fill="#e8f4fb" font-size="16" font-family="sans-serif">主视觉海报</text>
+</svg>

@@ -110,8 +110,8 @@ model SelectOption {
   plannedWorkEntriesByWeekNumber              PlannedWorkEntry[]                           @relation("PlannedWorkEntryWeekNumber")
   projectReceivableNodesByStage               ProjectReceivableNode[]                      @relation("ProjectReceivableNodeStage")
   projectPayableNodesByStage                  ProjectPayableNode[]                         @relation("ProjectPayableNodeStage")
-  deliverableFormatOptions                    DeliverableFormatOption[]
-  deliverableCategoryOrSceneOptions           DeliverableCategoryOrSceneOption[]
+  workItemFormatOptions                    WorkItemFormatOption[]
+  workItemCategoryOrSceneOptions           WorkItemCategoryOrSceneOption[]
 
   @@unique([field, value])
   @@index([field, order])
@@ -326,12 +326,16 @@ model Employee {
   projectSegments               ProjectSegment[]
   ownedBriefs                   Brief[]                                    @relation("BriefOwner")
   createdBriefs                 Brief[]                                    @relation("BriefCreator")
-  reviewedDeliverables          Deliverable[]                              @relation("DeliverableReviewer")
-  assignedDeliverables          Deliverable[]                              @relation("DeliverableAssignee")
-  createdDeliverables           Deliverable[]                              @relation("DeliverableCreator")
-  deliverableAssignmentsFrom    DeliverableAssignmentChange[]              @relation("DeliverableAssignmentFrom")
-  deliverableAssignmentsTo      DeliverableAssignmentChange[]              @relation("DeliverableAssignmentTo")
-  changedDeliverableAssignments DeliverableAssignmentChange[]              @relation("DeliverableAssignmentActor")
+  reviewedWorkItems          WorkItem[]                              @relation("WorkItemReviewer")
+  assignedWorkItems          WorkItem[]                              @relation("WorkItemAssignee")
+  createdWorkItems           WorkItem[]                              @relation("WorkItemCreator")
+  workItemAssignmentsFrom    WorkItemAssignmentChange[]              @relation("WorkItemAssignmentFrom")
+  workItemAssignmentsTo      WorkItemAssignmentChange[]              @relation("WorkItemAssignmentTo")
+  changedWorkItemAssignments WorkItemAssignmentChange[]              @relation("WorkItemAssignmentActor")
+  submittedWorkItems          WorkItemSubmission[]                   @relation("WorkItemSubmissionSubmitter")
+  uploadedSubmissionResources    WorkItemSubmissionResource[]           @relation("WorkItemSubmissionResourceUploader")
+  recordedWorkItemFeedbacks   WorkItemFeedback[]                     @relation("WorkItemFeedbackRecorder")
+  checkedWorkItemAdjustments  WorkItemAdjustmentCheck[]              @relation("WorkItemAdjustmentChecker")
   ownedTasks                    ProjectTask[]                              @relation("TaskOwner")
   createdTasks                  ProjectTask[]                              @relation("TaskCreator")
   milestones                    ProjectMilestone[]                         @relation("MilestoneInternalParticipants")
@@ -893,18 +897,29 @@ model Brief {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  deliverables Deliverable[]
+  workItems WorkItem[]
 
   @@index([projectId])
   @@index([ownerId])
   @@index([creatorId])
 }
 
-model Deliverable {
+enum SourceFilePolicy {
+  REQUIRED
+  OPTIONAL
+}
+
+enum WorkItemSubmissionResourceKind {
+  OUTPUT
+  SOURCE
+}
+
+model WorkItem {
   id String @id @default(uuid())
 
   // 旧项目任务迁移来源，用于追溯和防止重复迁移
   legacyTaskId String? @unique
+  sourceFilePolicy SourceFilePolicy @default(OPTIONAL)
 
   type          String
   status        String  @default("pending")
@@ -920,18 +935,19 @@ model Deliverable {
   brief   Brief  @relation(fields: [briefId], references: [id], onDelete: Cascade)
 
   reviewerId String
-  reviewer   Employee @relation("DeliverableReviewer", fields: [reviewerId], references: [id])
+  reviewer   Employee @relation("WorkItemReviewer", fields: [reviewerId], references: [id])
 
   assigneeId String?
-  assignee   Employee? @relation("DeliverableAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignee   Employee? @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
 
   creatorId String
-  creator   Employee @relation("DeliverableCreator", fields: [creatorId], references: [id])
+  creator   Employee @relation("WorkItemCreator", fields: [creatorId], references: [id])
 
-  formatOptions          DeliverableFormatOption[]
-  categoryOrSceneOptions DeliverableCategoryOrSceneOption[]
-  assignmentChanges      DeliverableAssignmentChange[]
+  formatOptions          WorkItemFormatOption[]
+  categoryOrSceneOptions WorkItemCategoryOrSceneOption[]
+  assignmentChanges      WorkItemAssignmentChange[]
   plannedWorkEntries     PlannedWorkEntry[]
+  submissions            WorkItemSubmission[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -942,47 +958,185 @@ model Deliverable {
   @@index([creatorId])
 }
 
-model DeliverableFormatOption {
-  deliverableId String
-  deliverable   Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
-
-  optionId String
-  option   SelectOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
-
-  @@id([deliverableId, optionId])
-  @@index([optionId])
-}
-
-model DeliverableCategoryOrSceneOption {
-  deliverableId String
-  deliverable   Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
-
-  optionId String
-  option   SelectOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
-
-  @@id([deliverableId, optionId])
-  @@index([optionId])
-}
-
-model DeliverableAssignmentChange {
+model WorkItemSubmission {
   id String @id @default(uuid())
 
-  deliverableId String
-  deliverable   Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  workItemId String
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  versionNumber Int
+  versionTitle  String?
+  contentText   String? @db.Text
+  isFinal       Boolean @default(false)
+
+  submittedById String
+  submittedBy   Employee @relation("WorkItemSubmissionSubmitter", fields: [submittedById], references: [id])
+  submittedAt   DateTime @default(now())
+
+  resources        WorkItemSubmissionResource[]
+  feedback         WorkItemFeedback?
+  adjustmentChecks WorkItemAdjustmentCheck[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workItemId, versionNumber])
+  @@index([workItemId, isFinal])
+  @@index([submittedById])
+}
+
+model WorkItemSubmissionResource {
+  id String @id @default(uuid())
+
+  submissionId String
+  submission   WorkItemSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  kind         WorkItemSubmissionResourceKind
+  url          String                              @db.Text
+  name         String?
+  mimeType     String?
+  thumbnailUrl String?                             @db.Text
+  sortOrder    Int                                 @default(0)
+
+  uploadedById String
+  uploadedBy   Employee @relation("WorkItemSubmissionResourceUploader", fields: [uploadedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([submissionId, kind, sortOrder])
+  @@index([uploadedById])
+}
+
+model WorkItemFeedback {
+  id String @id @default(uuid())
+
+  submissionId String                @unique
+  submission   WorkItemSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  content String? @db.Text
+
+  recordedById String
+  recordedBy   Employee @relation("WorkItemFeedbackRecorder", fields: [recordedById], references: [id])
+  recordedAt   DateTime @default(now())
+
+  images          WorkItemFeedbackImage[]
+  adjustmentItems WorkItemAdjustmentItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([recordedById])
+}
+
+model WorkItemFeedbackImage {
+  id String @id @default(uuid())
+
+  feedbackId String
+  feedback   WorkItemFeedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+
+  url       String  @db.Text
+  name      String?
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([feedbackId, sortOrder])
+}
+
+model WorkItemAdjustmentItem {
+  id String @id @default(uuid())
+
+  feedbackId String
+  feedback   WorkItemFeedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+
+  title     String
+  content   String? @db.Text
+  sortOrder Int     @default(0)
+
+  images WorkItemAdjustmentItemImage[]
+  checks WorkItemAdjustmentCheck[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([feedbackId, sortOrder])
+}
+
+model WorkItemAdjustmentItemImage {
+  id String @id @default(uuid())
+
+  adjustmentItemId String
+  adjustmentItem   WorkItemAdjustmentItem @relation(fields: [adjustmentItemId], references: [id], onDelete: Cascade)
+
+  url       String  @db.Text
+  name      String?
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([adjustmentItemId, sortOrder])
+}
+
+model WorkItemAdjustmentCheck {
+  id String @id @default(uuid())
+
+  submissionId String
+  submission   WorkItemSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  adjustmentItemId String
+  adjustmentItem   WorkItemAdjustmentItem @relation(fields: [adjustmentItemId], references: [id], onDelete: Cascade)
+
+  checkedById String
+  checkedBy   Employee @relation("WorkItemAdjustmentChecker", fields: [checkedById], references: [id])
+  checkedAt   DateTime @default(now())
+
+  @@unique([submissionId, adjustmentItemId])
+  @@index([adjustmentItemId])
+  @@index([checkedById])
+}
+
+model WorkItemFormatOption {
+  workItemId String
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  optionId String
+  option   SelectOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@id([workItemId, optionId])
+  @@index([optionId])
+}
+
+model WorkItemCategoryOrSceneOption {
+  workItemId String
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  optionId String
+  option   SelectOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@id([workItemId, optionId])
+  @@index([optionId])
+}
+
+model WorkItemAssignmentChange {
+  id String @id @default(uuid())
+
+  workItemId String
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
 
   fromAssigneeId String?
-  fromAssignee   Employee? @relation("DeliverableAssignmentFrom", fields: [fromAssigneeId], references: [id])
+  fromAssignee   Employee? @relation("WorkItemAssignmentFrom", fields: [fromAssigneeId], references: [id])
 
   toAssigneeId String
-  toAssignee   Employee @relation("DeliverableAssignmentTo", fields: [toAssigneeId], references: [id])
+  toAssignee   Employee @relation("WorkItemAssignmentTo", fields: [toAssigneeId], references: [id])
 
   changedById String
-  changedBy   Employee @relation("DeliverableAssignmentActor", fields: [changedById], references: [id])
+  changedBy   Employee @relation("WorkItemAssignmentActor", fields: [changedById], references: [id])
 
   remarks   String?
   changedAt DateTime @default(now())
 
-  @@index([deliverableId, changedAt])
+  @@index([workItemId, changedAt])
   @@index([fromAssigneeId])
   @@index([toAssigneeId])
   @@index([changedById])
@@ -1130,8 +1284,8 @@ model PlannedWorkEntry {
   taskId String?
   task   ProjectTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-  deliverableId String?
-  deliverable   Deliverable? @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  workItemId String?
+  workItem   WorkItem? @relation(fields: [workItemId], references: [id], onDelete: Cascade)
 
   yearOptionId       String?
   yearOption         SelectOption? @relation("PlannedWorkEntryYear", fields: [yearOptionId], references: [id])
@@ -1150,7 +1304,7 @@ model PlannedWorkEntry {
   updatedAt DateTime @updatedAt
 
   @@index([taskId])
-  @@index([deliverableId])
+  @@index([workItemId])
 }
 
 model ActualWorkEntry {

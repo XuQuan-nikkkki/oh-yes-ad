@@ -34,9 +34,9 @@ type MigrationStats = {
   segments: number;
   tasks: number;
   briefsToCreate: number;
-  deliverablesToCreate: number;
+  workItemsToCreate: number;
   existingBriefs: number;
-  existingDeliverables: number;
+  existingWorkItems: number;
   segmentOwnersToBackfill: number;
   briefsWithoutTasks: number;
   tasksWithoutAssignee: number;
@@ -57,41 +57,26 @@ const dateOnly = (value: Date) =>
 const main = async () => {
   if (setupSchema && execute) {
     await prisma.$executeRawUnsafe(
-      'ALTER TABLE "Deliverable" ADD COLUMN IF NOT EXISTS "legacyTaskId" TEXT',
+      'ALTER TABLE "WorkItem" ADD COLUMN IF NOT EXISTS "legacyTaskId" TEXT',
     );
     await prisma.$executeRawUnsafe(
-      'CREATE UNIQUE INDEX IF NOT EXISTS "Deliverable_legacyTaskId_key" ON "Deliverable"("legacyTaskId")',
+      'CREATE UNIQUE INDEX IF NOT EXISTS "WorkItem_legacyTaskId_key" ON "WorkItem"("legacyTaskId")',
     );
     await prisma.$executeRawUnsafe(
-      'ALTER TABLE "Deliverable" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT \'pending\'',
+      'ALTER TABLE "WorkItem" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT \'pending\'',
     );
     await prisma.$executeRawUnsafe(
-      'ALTER TABLE "Deliverable" ALTER COLUMN "firstDraftAt" DROP NOT NULL',
+      'ALTER TABLE "WorkItem" ALTER COLUMN "firstDraftAt" DROP NOT NULL',
     );
     await prisma.$executeRawUnsafe(
-      'ALTER TABLE "Deliverable" ALTER COLUMN "revisionAt" DROP NOT NULL',
+      'ALTER TABLE "WorkItem" ALTER COLUMN "revisionAt" DROP NOT NULL',
     );
-    await prisma.$executeRawUnsafe(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'Deliverable_new_record_dates_required'
-        ) THEN
-          ALTER TABLE "Deliverable"
-          ADD CONSTRAINT "Deliverable_new_record_dates_required"
-          CHECK (
-            "legacyTaskId" IS NOT NULL
-            OR ("firstDraftAt" IS NOT NULL AND "revisionAt" IS NOT NULL)
-          );
-        END IF;
-      END
-      $$
-    `);
+    await prisma.$executeRawUnsafe(
+      'ALTER TABLE "WorkItem" DROP CONSTRAINT IF EXISTS "WorkItem_new_record_dates_required"',
+    );
   }
 
-  const [segments, existingBriefs, existingDeliverables] = await Promise.all([
+  const [segments, existingBriefs, existingWorkItems] = await Promise.all([
     prisma.projectSegment.findMany({
       orderBy: { createdAt: "asc" },
       include: {
@@ -110,7 +95,7 @@ const main = async () => {
       where: { legacySegmentId: { not: null } },
       select: { id: true, legacySegmentId: true },
     }),
-    prisma.deliverable.findMany({
+    prisma.workItem.findMany({
       where: { legacyTaskId: { not: null } },
       select: { legacyTaskId: true },
     }),
@@ -120,15 +105,15 @@ const main = async () => {
     existingBriefs.map((brief) => [brief.legacySegmentId!, brief.id]),
   );
   const migratedTaskIds = new Set(
-    existingDeliverables.map((item) => item.legacyTaskId!),
+    existingWorkItems.map((item) => item.legacyTaskId!),
   );
   const stats: MigrationStats = {
     segments: segments.length,
     tasks: segments.reduce((sum, segment) => sum + segment.projectTasks.length, 0),
     briefsToCreate: 0,
-    deliverablesToCreate: 0,
+    workItemsToCreate: 0,
     existingBriefs: existingBriefs.length,
-    existingDeliverables: existingDeliverables.length,
+    existingWorkItems: existingWorkItems.length,
     segmentOwnersToBackfill: 0,
     briefsWithoutTasks: 0,
     tasksWithoutAssignee: 0,
@@ -176,7 +161,7 @@ const main = async () => {
         stats.blockingTasks.push({
           id: task.id,
           name: task.name,
-          reason: "任务没有负责人，无法判断交付物类型",
+          reason: "任务没有负责人，无法判断工作项类型",
         });
       } else {
         const functionName = task.owner?.functionOption?.value;
@@ -185,7 +170,7 @@ const main = async () => {
           stats.blockingTasks.push({
             id: task.id,
             name: task.name,
-            reason: `负责人职能「${functionName ?? "未设置"}」没有交付物类型映射`,
+            reason: `负责人职能「${functionName ?? "未设置"}」没有工作项类型映射`,
           });
         }
         if (functionName === "项目组" && !segment.project.ownerId) {
@@ -193,7 +178,7 @@ const main = async () => {
           stats.blockingTasks.push({
             id: task.id,
             name: task.name,
-            reason: "项目管理交付物所属项目没有负责人，无法确定审核人",
+            reason: "项目管理工作项所属项目没有负责人，无法确定审核人",
           });
         }
       }
@@ -202,7 +187,7 @@ const main = async () => {
         stats.blockingTasks.push({
           id: task.id,
           name: task.name,
-          reason: `任务状态「${task.statusOption?.value ?? "未设置"}」没有交付物状态映射`,
+          reason: `任务状态「${task.statusOption?.value ?? "未设置"}」没有工作项状态映射`,
         });
       }
       if (!task.dueDate) {
@@ -217,7 +202,7 @@ const main = async () => {
       else if (segment.startDate) stats.datesFromSegmentStartDate += 1;
       else stats.datesFromCreatedAt += 1;
       if (segmentBlocked || taskBlocked || migratedTaskIds.has(task.id)) continue;
-      stats.deliverablesToCreate += 1;
+      stats.workItemsToCreate += 1;
     }
   }
 
@@ -276,9 +261,9 @@ const main = async () => {
         select: { id: true, name: true },
       }),
     ]);
-    if (!designReviewer) throw new Error("找不到在职美术指导，无法迁移设计交付物");
-    if (!copyReviewer) throw new Error("找不到在职品牌组文案策划，无法迁移文案交付物");
-    if (!newMediaReviewer) throw new Error("找不到在职新媒体职能员工，无法迁移新媒体交付物");
+    if (!designReviewer) throw new Error("找不到在职美术指导，无法迁移设计工作项");
+    if (!copyReviewer) throw new Error("找不到在职品牌组文案策划，无法迁移文案工作项");
+    if (!newMediaReviewer) throw new Error("找不到在职新媒体职能员工，无法迁移新媒体工作项");
 
     for (const segment of segments) {
       const effectiveSegmentOwnerId = segment.ownerId ?? segment.project.ownerId;
@@ -357,7 +342,7 @@ const main = async () => {
           task.dueDate ?? segment.endDate ?? segment.startDate ?? task.createdAt,
         );
 
-        const deliverable = await tx.deliverable.upsert({
+        const workItem = await tx.workItem.upsert({
           where: { legacyTaskId: task.id },
           update: {},
           create: {
@@ -379,14 +364,14 @@ const main = async () => {
         });
         await tx.plannedWorkEntry.updateMany({
           where: { taskId: task.id },
-          data: { deliverableId: deliverable.id },
+          data: { workItemId: workItem.id },
         });
       }
     }
   });
 
   console.log(
-    `\n迁移完成：回填 ${stats.segmentOwnersToBackfill} 个环节负责人，新增 ${stats.briefsToCreate} 张需求单、${stats.deliverablesToCreate} 个交付物；跳过 ${stats.blockingSegments.length} 个问题环节、${stats.blockingTasks.length} 个问题任务。`,
+    `\n迁移完成：回填 ${stats.segmentOwnersToBackfill} 个环节负责人，新增 ${stats.briefsToCreate} 张需求单、${stats.workItemsToCreate} 个工作项；跳过 ${stats.blockingSegments.length} 个问题环节、${stats.blockingTasks.length} 个问题任务。`,
   );
 };
 

@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  CheckOutlined,
   ExclamationCircleOutlined,
   PlusOutlined,
   SwapOutlined,
@@ -20,9 +19,9 @@ import {
   Empty,
   Flex,
   Modal,
-  Progress,
   Space,
   Tag,
+  Tabs,
   Typography,
   message,
 } from "antd";
@@ -35,15 +34,21 @@ import PlannedWorkEntriesTable, {
 import PlannedWorkEntryForm, {
   type PlannedWorkEntryFormPayload,
 } from "@/components/project-detail/PlannedWorkEntryForm";
+import PlannedWorkEntryCreateAction from "@/components/project-detail/PlannedWorkEntryCreateAction";
 import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
 import {
-  DeliverableAssignmentHistory,
-  DeliverableAssignmentModal,
-  type DeliverableAssignmentChangeItem,
-} from "@/components/project-detail/DeliverableAssignmentChange";
+  WorkItemAssignmentHistory,
+  WorkItemAssignmentModal,
+  type WorkItemAssignmentChangeItem,
+} from "@/components/project-detail/WorkItemAssignmentChange";
 import { useEmployeesStore } from "@/stores/employeesStore";
+import {
+  useWorkItemSubmissionManager,
+  type WorkItemSubmission,
+} from "@/components/project-detail/WorkItemSubmissions";
 
-export type ProjectBriefDeliverable = {
+export type ProjectBriefWorkItem = {
+  sourceFilePolicy?: "REQUIRED" | "OPTIONAL";
   id: string;
   type: "DESIGN" | "COPY" | string;
   status: "pending" | "in_progress" | "completed" | "paused" | string;
@@ -55,7 +60,7 @@ export type ProjectBriefDeliverable = {
   finalAt: string;
   reviewer?: { id: string; name: string } | null;
   assignee?: { id: string; name: string } | null;
-  assignmentChanges?: DeliverableAssignmentChangeItem[];
+  assignmentChanges?: WorkItemAssignmentChangeItem[];
   formatOptions?: Array<{
     option: { id: string; value: string; color?: string | null };
   }>;
@@ -76,6 +81,7 @@ export type ProjectBriefDeliverable = {
     sunday: boolean;
     updatedAt?: string;
   }>;
+  submissions?: WorkItemSubmission[];
 };
 
 export type ProjectBrief = {
@@ -86,7 +92,7 @@ export type ProjectBrief = {
   createdAt: string;
   owner?: { id: string; name: string } | null;
   creator?: { id: string; name: string } | null;
-  deliverables?: ProjectBriefDeliverable[];
+  workItems?: ProjectBriefWorkItem[];
 };
 
 type Props = {
@@ -95,11 +101,12 @@ type Props = {
   canManagePlannedWork?: boolean;
   onEditBrief?: (brief: ProjectBrief) => void;
   onDeleteBrief?: (brief: ProjectBrief) => void;
-  onEditDeliverable?: (deliverable: ProjectBriefDeliverable) => void;
-  onDeleteDeliverable?: (deliverable: ProjectBriefDeliverable) => void;
-  onAddDeliverable?: (brief: ProjectBrief) => void;
+  onEditWorkItem?: (workItem: ProjectBriefWorkItem) => void;
+  onDeleteWorkItem?: (workItem: ProjectBriefWorkItem) => void;
+  onAddWorkItem?: (brief: ProjectBrief) => void;
   onAfterPlannedWorkChange?: () => Promise<void> | void;
   onAfterAssignmentChange?: () => Promise<void> | void;
+  onAfterSubmissionChange?: () => Promise<void> | void;
 };
 
 const briefStatusMeta: Record<
@@ -122,68 +129,47 @@ const briefStatusOrder: Record<string, number> = {
 const formatDate = (value?: string | null) =>
   value && dayjs(value).isValid() ? dayjs(value).format("MM/DD") : "-";
 
-const DeliverableTimeline = ({ item }: { item: ProjectBriefDeliverable }) => {
-  const today = dayjs().startOf("day");
-  const dates = [item.firstDraftAt, item.revisionAt, item.finalAt].map(dayjs);
-  const nextIndex = dates.findIndex((date) => !date.isBefore(today, "day"));
-  const activeIndex = nextIndex === -1 ? 2 : nextIndex;
-  const nodes = [
-    { label: "初稿", value: item.firstDraftAt },
-    { label: "修改", value: item.revisionAt },
-    { label: "定稿", value: item.finalAt },
-  ];
-
-  return (
-    <div className="brief-deliverable-timeline">
-      {nodes.map((node, index) => (
-        <div key={node.label} className="brief-deliverable-timeline-node">
-          {index > 0 ? (
-            <span
-              className={`brief-deliverable-timeline-line${index <= activeIndex ? " is-active" : ""}`}
-            />
-          ) : null}
-          <i className={index <= activeIndex ? "is-active" : ""}>
-            {index < activeIndex ? <CheckOutlined /> : null}
-          </i>
-          <Typography.Text
-            style={{ color: index === activeIndex ? "#1677ff" : undefined }}
-          >
-            {node.label}
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            {formatDate(node.value)}
-          </Typography.Text>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const DeliverableDetails = ({
+const WorkItemDetails = ({
   item,
   plannedWorkSection,
+  plannedWorkAction,
+  totalPlannedDays,
+  onAssignment,
+  canManage,
+  onSubmissionChange,
 }: {
-  item: ProjectBriefDeliverable;
+  item: ProjectBriefWorkItem;
   plannedWorkSection?: ReactNode;
+  plannedWorkAction?: ReactNode;
+  totalPlannedDays: number;
+  onAssignment?: () => void;
+  canManage: boolean;
+  onSubmissionChange?: () => Promise<void> | void;
 }) => {
+  const [activeTab, setActiveTab] = useState("submissions");
+  const submissions = useWorkItemSubmissionManager({
+    workItem: item,
+    canManage,
+    onChanged: onSubmissionChange,
+  });
   return (
     <>
-    <div className="brief-deliverable-detail">
-      <div className="brief-deliverable-section brief-deliverable-fields">
-        <Typography.Text className="brief-deliverable-section-title">
-          交付描述
+    <div className="brief-work-item-detail">
+      <div className="brief-work-item-section brief-work-item-fields">
+        <Typography.Text className="brief-work-item-section-title">
+          工作描述
         </Typography.Text>
-        <div className="brief-deliverable-description">
+        <div className="brief-work-item-description">
           <Typography.Paragraph style={{ margin: 0 }}>
             {item.description}
           </Typography.Paragraph>
         </div>
       </div>
-      <div className="brief-deliverable-section brief-deliverable-properties">
-        <Typography.Text className="brief-deliverable-section-title">
-          交付属性
+      <div className="brief-work-item-section brief-work-item-properties">
+        <Typography.Text className="brief-work-item-section-title">
+          工作属性
         </Typography.Text>
-        <div className="brief-deliverable-meta">
+        <div className="brief-work-item-meta">
           <div>
             <Typography.Text type="secondary">格式</Typography.Text>
             <Flex gap={6} align="center" wrap>
@@ -218,15 +204,59 @@ const DeliverableDetails = ({
           </div>
         </div>
       </div>
-      <div className="brief-deliverable-section brief-deliverable-plan">
-        <Typography.Text className="brief-deliverable-section-title">
-          交付时间
+      <div className="brief-work-item-section brief-work-item-plan">
+        <Typography.Text className="brief-work-item-section-title">
+          计划交付时间
         </Typography.Text>
-        <DeliverableTimeline item={item} />
+        <div className="brief-work-item-dates">
+          {[
+            ["初稿", item.firstDraftAt],
+            ["修改", item.revisionAt],
+            ["定稿", item.finalAt],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <Typography.Text type="secondary">{label}</Typography.Text>
+              <Typography.Text>{formatDate(value)}</Typography.Text>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
-    <DeliverableAssignmentHistory changes={item.assignmentChanges} />
-    {plannedWorkSection}
+    <div className="brief-work-item-records">
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        tabBarExtraContent={activeTab === "submissions" ? submissions.extra :
+          activeTab === "planned-work" ? plannedWorkAction :
+          activeTab === "assignment" && onAssignment ? (
+            <Button variant="text" color="primary" icon={<SwapOutlined />} onClick={onAssignment}>
+              {item.assignee ? "交接执行人" : "指派执行人"}
+            </Button>
+          ) : null}
+        items={[
+          {
+            key: "submissions",
+            label: `提交与反馈${item.submissions?.length ? ` · ${item.submissions.length}版` : ""}`,
+            children: submissions.content,
+          },
+          { key: "planned-work", label: `计划工时 · ${Number(totalPlannedDays.toFixed(4))}d`, children: plannedWorkSection },
+          {
+            key: "assignment",
+            label: `执行人交接 · ${item.assignmentChanges?.length ?? 0}次`,
+            children: (
+              <div className="brief-work-item-assignment-panel">
+                {item.assignmentChanges?.length ? (
+                  <WorkItemAssignmentHistory changes={item.assignmentChanges} variant="detail" />
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无执行人交接记录" />
+                )}
+              </div>
+            ),
+          },
+        ]}
+      />
+    </div>
+    {submissions.modal}
     </>
   );
 };
@@ -237,19 +267,20 @@ const ProjectBriefProgressContent = ({
   canManagePlannedWork = false,
   onEditBrief,
   onDeleteBrief,
-  onEditDeliverable,
-  onDeleteDeliverable,
-  onAddDeliverable,
+  onEditWorkItem,
+  onDeleteWorkItem,
+  onAddWorkItem,
   onAfterPlannedWorkChange,
   onAfterAssignmentChange,
+  onAfterSubmissionChange,
 }: Props) => {
   const [messageApi, contextHolder] = message.useMessage();
   const [plannedWorkModal, setPlannedWorkModal] = useState<{
     brief: ProjectBrief;
-    deliverable: ProjectBriefDeliverable;
+    workItem: ProjectBriefWorkItem;
     entry?: PlannedWorkEntryRow;
   } | null>(null);
-  const [assignmentDeliverable, setAssignmentDeliverable] = useState<ProjectBriefDeliverable | null>(null);
+  const [assignmentWorkItem, setAssignmentWorkItem] = useState<ProjectBriefWorkItem | null>(null);
   const fetchEmployees = useEmployeesStore((state) => state.fetchEmployees);
   const workdayAdjustments = useWorkdayAdjustmentsStore(
     (state) => state.adjustments,
@@ -269,6 +300,38 @@ const ProjectBriefProgressContent = ({
     [briefs],
   );
 
+  const workItemKeys = JSON.stringify(
+    sortedBriefs.map((brief) => [brief.id, (brief.workItems ?? []).map((item) => item.id)]),
+  );
+  const [expansion, setExpansion] = useState<{
+    snapshot: string;
+    known: Record<string, string[]>;
+    workItems: Record<string, string[]>;
+    briefs: Record<string, string[]>;
+  }>({ snapshot: "", known: {}, workItems: {}, briefs: {} });
+
+  if (expansion.snapshot !== workItemKeys) {
+    const known: Record<string, string[]> = {};
+    const expandedWorkItems: Record<string, string[]> = {};
+    const expandedBriefs: Record<string, string[]> = {};
+    sortedBriefs.forEach((brief, index) => {
+      const ids = (brief.workItems ?? []).map((item) => item.id);
+      const previousIds = expansion.known[brief.id];
+      const added = previousIds ? ids.filter((id) => !previousIds.includes(id)) : [];
+      const newestId = added.at(-1);
+      known[brief.id] = ids;
+      expandedWorkItems[brief.id] = newestId
+        ? [newestId]
+        : previousIds
+          ? (expansion.workItems[brief.id] ?? []).filter((id) => ids.includes(id))
+          : ids.slice(0, 1);
+      expandedBriefs[brief.id] = newestId
+        ? [brief.id]
+        : expansion.briefs[brief.id] ?? (index === 0 ? [brief.id] : []);
+    });
+    setExpansion({ snapshot: workItemKeys, known, workItems: expandedWorkItems, briefs: expandedBriefs });
+  }
+
   useEffect(() => {
     void fetchWorkdayAdjustments();
   }, [fetchWorkdayAdjustments]);
@@ -280,11 +343,11 @@ const ProjectBriefProgressContent = ({
   }
 
   const handleDeletePlannedWork = async (
-    deliverable: ProjectBriefDeliverable,
+    workItem: ProjectBriefWorkItem,
     entryId: string,
   ) => {
     const response = await fetch(
-      `/api/deliverables/${deliverable.id}/planned-work-entries/${entryId}`,
+      `/api/work-items/${workItem.id}/planned-work-entries/${entryId}`,
       { method: "DELETE" },
     );
     if (!response.ok) {
@@ -299,15 +362,11 @@ const ProjectBriefProgressContent = ({
     <>
     {contextHolder}
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-      {sortedBriefs.map((brief, briefIndex) => {
-        const deliverables = brief.deliverables ?? [];
-        const assignedCount = deliverables.filter(
+      {sortedBriefs.map((brief) => {
+        const workItems = brief.workItems ?? [];
+        const assignedCount = workItems.filter(
           (item) => item.assignee,
         ).length;
-        const waitingCount = deliverables.length - assignedCount;
-        const progress = deliverables.length
-          ? Math.round((assignedCount / deliverables.length) * 100)
-          : 0;
         const statusMeta = briefStatusMeta[brief.status] ?? {
           label: brief.status,
           color: "default",
@@ -321,7 +380,11 @@ const ProjectBriefProgressContent = ({
             style={
               { "--brief-status-rail": statusMeta.rail } as CSSProperties
             }
-            defaultActiveKey={briefIndex === 0 ? [brief.id] : []}
+            activeKey={expansion.briefs[brief.id] ?? []}
+            onChange={(keys) => setExpansion((current) => ({
+              ...current,
+              briefs: { ...current.briefs, [brief.id]: Array.isArray(keys) ? keys : [keys] },
+            }))}
             items={[
               {
                 key: brief.id,
@@ -356,7 +419,7 @@ const ProjectBriefProgressContent = ({
                       className="brief-display-assignment-summary"
                     >
                       指派进度：<strong>{assignedCount}</strong>
-                       / {deliverables.length} 个交付物
+                       / {workItems.length} 个工作项
                     </Typography.Text>
                     <div className="brief-display-actions">
                       <TableActions
@@ -371,11 +434,11 @@ const ProjectBriefProgressContent = ({
                             icon={<PlusOutlined />}
                             onClick={(event) => {
                               event.stopPropagation();
-                              onAddDeliverable?.(brief);
+                              onAddWorkItem?.(brief);
                             }}
                             styles={{ root: { padding: 6 } }}
                           >
-                            添加交付物
+                            添加工作项
                           </Button>
                         }
                         deleteTitle={`确定删除需求单“${brief.title}”？`}
@@ -386,7 +449,7 @@ const ProjectBriefProgressContent = ({
                 children: (
                   <div className="brief-display-body">
                     <div className="brief-display-summary">
-                      <div>
+                      <div className="brief-display-description">
                         <Typography.Text strong style={{ fontSize: 16 }}>
                           需求描述
                         </Typography.Text>
@@ -394,54 +457,37 @@ const ProjectBriefProgressContent = ({
                           {brief.description}
                         </Typography.Paragraph>
                       </div>
-                      <div className="brief-display-progress">
-                        <Flex
-                          justify="space-around"
-                          style={{ textAlign: "center" }}
-                        >
-                          <div>
-                            <Typography.Text type="secondary">
-                              交付物
-                            </Typography.Text>
-                            <strong>{deliverables.length}</strong>
-                          </div>
-                          <div>
-                            <Typography.Text type="secondary">
-                              已分配
-                            </Typography.Text>
-                            <strong style={{ color: "#1677ff" }}>
-                              {assignedCount}
-                            </strong>
-                          </div>
-                          <div>
-                            <Typography.Text type="secondary">
-                              待指派执行人
-                            </Typography.Text>
-                            <strong style={{ color: "#fa8c16" }}>
-                              {waitingCount}
-                            </strong>
-                          </div>
-                        </Flex>
-                        <Progress
-                          percent={progress}
-                          strokeColor="#1677ff"
-                          railColor="#e8ebf0"
-                        />
+                      <Divider orientation="vertical" className="brief-display-summary-divider" />
+                      <div className="brief-display-counts">
+                        <div>
+                          <strong>{workItems.length}</strong>
+                          <Typography.Text type="secondary">工作项</Typography.Text>
+                        </div>
+                        <div>
+                          <strong style={{ color: "#1677ff" }}>
+                            {assignedCount} / {workItems.length}
+                          </strong>
+                          <Typography.Text type="secondary">已分配执行人</Typography.Text>
+                        </div>
                       </div>
                     </div>
-                    <div className="brief-display-deliverables">
-                      {deliverables.length === 0 ? (
+                    <div className="brief-display-work-items">
+                      {workItems.length === 0 ? (
                         <Empty
                           image={Empty.PRESENTED_IMAGE_SIMPLE}
-                          description="暂无交付物"
+                          description="暂无工作项"
                         />
                       ) : (
-                        <div className="brief-deliverable-table">
+                        <div className="brief-work-item-table">
                           <Collapse
                             bordered={false}
-                            defaultActiveKey={[deliverables[0]?.id]}
-                            items={deliverables.map((item, itemIndex) => {
-                              // TODO: 在交付物展示模块中展示 status 状态标签。
+                            activeKey={expansion.workItems[brief.id] ?? []}
+                            onChange={(keys) => setExpansion((current) => ({
+                              ...current,
+                              workItems: { ...current.workItems, [brief.id]: Array.isArray(keys) ? keys : [keys] },
+                            }))}
+                            items={workItems.map((item, itemIndex) => {
+                              // TODO: 在工作项展示模块中展示 status 状态标签。
                               const typeMeta = {
                                 DESIGN: { label: "设计", color: "blue" },
                                 COPY: { label: "文案", color: "orange" },
@@ -456,13 +502,13 @@ const ProjectBriefProgressContent = ({
                               return {
                                 key: item.id,
                                 label: (
-                                  <div className="brief-deliverable-row">
-                                    <div className="brief-deliverable-title">
-                                      <span className="brief-deliverable-index">
+                                  <div className="brief-work-item-row">
+                                    <div className="brief-work-item-title">
+                                      <span className="brief-work-item-index">
                                         {itemIndex + 1}
                                       </span>
                                       <Typography.Text strong>
-                                        <AppLink href={`/brief-deliverables/${item.id}`} onClick={(event) => event.stopPropagation()}>
+                                        <AppLink href={`/brief-work-items/${item.id}`} onClick={(event) => event.stopPropagation()}>
                                           {item.title}
                                         </AppLink>
                                       </Typography.Text>
@@ -471,7 +517,7 @@ const ProjectBriefProgressContent = ({
                                       </Tag>
                                     </div>
                                     <Space
-                                      className="brief-deliverable-row-meta"
+                                      className="brief-work-item-row-meta"
                                       size={8}
                                       separator={<Divider orientation="vertical" />}
                                       wrap
@@ -500,21 +546,6 @@ const ProjectBriefProgressContent = ({
                                           </Tag>
                                         )}
                                       </Typography.Text>
-                                      {onAfterAssignmentChange ? (
-                                        <Button
-                                          variant="text"
-                                          color="primary"
-                                          icon={<SwapOutlined />}
-                                          styles={{ root: { padding: 6 } }}
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            setAssignmentDeliverable(item);
-                                            void fetchEmployees();
-                                          }}
-                                        >
-                                          {item.assignee ? "交接执行人" : "指派执行人"}
-                                        </Button>
-                                      ) : null}
                                       <Typography.Text type="secondary">
                                         计划工时：
                                         <strong style={{ color: "#1677ff" }}>
@@ -525,23 +556,46 @@ const ProjectBriefProgressContent = ({
                                       </Typography.Text>
                                       <TableActions
                                         onEdit={() =>
-                                          onEditDeliverable?.(item)
+                                          onEditWorkItem?.(item)
                                         }
                                         onDelete={() =>
-                                          onDeleteDeliverable?.(item)
+                                          onDeleteWorkItem?.(item)
                                         }
-                                        editText="修复交付物"
-                                        deleteText="删除交付物"
-                                        deleteTitle={`确定删除交付物“${item.title}”？`}
+                                        editText="修改"
+                                        deleteText="删除"
+                                        deleteTitle={`确定删除工作项“${item.title}”？`}
                                       />
                                     </Space>
                                   </div>
                                 ),
                                 children: (
-                                  <DeliverableDetails
+                                  <WorkItemDetails
                                     item={item}
+                                    canManage={canManagePlannedWork}
+                                    onSubmissionChange={onAfterSubmissionChange}
+                                    totalPlannedDays={totalPlannedDays}
+                                    plannedWorkAction={canManagePlannedWork && project ? (
+                                      <PlannedWorkEntryCreateAction
+                                        key={item.id}
+                                        workItemContext={{
+                                          id: item.id,
+                                          title: item.title,
+                                          briefId: brief.id,
+                                          briefTitle: brief.title,
+                                          projectId: project.id,
+                                          projectName: project.name,
+                                          assigneeId: item.assignee?.id,
+                                          assigneeName: item.assignee?.name,
+                                        }}
+                                        onSaved={onAfterPlannedWorkChange}
+                                      />
+                                    ) : null}
+                                    onAssignment={onAfterAssignmentChange ? () => {
+                                      setAssignmentWorkItem(item);
+                                      void fetchEmployees();
+                                    } : undefined}
                                     plannedWorkSection={
-                                      <div className="brief-deliverable-planned-work">
+                                      <div className="brief-work-item-planned-work">
                                         <PlannedWorkEntriesTable
                                           compact
                                           requestData={async () => ({
@@ -551,7 +605,7 @@ const ProjectBriefProgressContent = ({
                                           onEdit={(entry) =>
                                             setPlannedWorkModal({
                                               brief,
-                                              deliverable: item,
+                                              workItem: item,
                                               entry,
                                             })
                                           }
@@ -561,37 +615,7 @@ const ProjectBriefProgressContent = ({
                                               entryId,
                                             );
                                           }}
-                                          headerTitle={
-                                            <Space size={8}>
-                                              <Typography.Text className="brief-deliverable-section-title">
-                                                计划工时
-                                              </Typography.Text>
-                                              <Typography.Text type="secondary">
-                                                合计 {totalPlannedDays}d
-                                              </Typography.Text>
-                                            </Space>
-                                          }
-                                          toolbarActions={
-                                            canManagePlannedWork
-                                              ? [
-                                                  <Button
-                                                    key="add"
-                                                    variant="text"
-                                                    color="primary"
-                                                    icon={<PlusOutlined />}
-                                                    styles={{ root: { padding: 6 } }}
-                                                    onClick={() =>
-                                                      setPlannedWorkModal({
-                                                        brief,
-                                                        deliverable: item,
-                                                      })
-                                                    }
-                                                  >
-                                                    新增计划工时
-                                                  </Button>,
-                                                ]
-                                              : []
-                                          }
+                                          headerTitle={false}
                                           workdayAdjustments={workdayAdjustments}
                                           refreshKey={plannedEntries.reduce(
                                             (latest, entry) =>
@@ -629,9 +653,9 @@ const ProjectBriefProgressContent = ({
         );
       })}
     </Space>
-      <DeliverableAssignmentModal
-        deliverable={assignmentDeliverable}
-        onClose={() => setAssignmentDeliverable(null)}
+      <WorkItemAssignmentModal
+        workItem={assignmentWorkItem}
+        onClose={() => setAssignmentWorkItem(null)}
         onSaved={async () => { await onAfterAssignmentChange?.(); }}
       />
       <Modal
@@ -655,23 +679,23 @@ const ProjectBriefProgressContent = ({
                   }
                 : null
             }
-            deliverableContext={{
-              id: plannedWorkModal.deliverable.id,
-              title: plannedWorkModal.deliverable.title,
+            workItemContext={{
+              id: plannedWorkModal.workItem.id,
+              title: plannedWorkModal.workItem.title,
               briefId: plannedWorkModal.brief.id,
               briefTitle: plannedWorkModal.brief.title,
               projectId: project.id,
               projectName: project.name,
-              assigneeId: plannedWorkModal.deliverable.assignee?.id,
-              assigneeName: plannedWorkModal.deliverable.assignee?.name,
+              assigneeId: plannedWorkModal.workItem.assignee?.id,
+              assigneeName: plannedWorkModal.workItem.assignee?.name,
             }}
             onSubmit={async (
               payload: PlannedWorkEntryFormPayload,
             ) => {
               const entryId = plannedWorkModal.entry?.id;
               const endpoint = entryId
-                ? `/api/deliverables/${payload.deliverableId}/planned-work-entries/${entryId}`
-                : `/api/deliverables/${payload.deliverableId}/planned-work-entries`;
+                ? `/api/work-items/${payload.workItemId}/planned-work-entries/${entryId}`
+                : `/api/work-items/${payload.workItemId}/planned-work-entries`;
               const response = await fetch(endpoint, {
                 method: entryId ? "PATCH" : "POST",
                 headers: { "Content-Type": "application/json" },

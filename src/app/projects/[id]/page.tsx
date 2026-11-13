@@ -21,10 +21,10 @@ import ProjectDetailMilestonesContent from "@/components/project-detail/ProjectD
 import ProjectDetailMembersContent from "@/components/project-detail/ProjectDetailMembersContent";
 import ProjectBriefProgressContent, {
   type ProjectBrief,
-  type ProjectBriefDeliverable,
+  type ProjectBriefWorkItem,
 } from "@/components/project-detail/ProjectBriefProgressContent";
 import BriefFormModal from "@/components/project-detail/BriefFormModal";
-import DeliverableEditModal from "@/components/project-detail/DeliverableEditModal";
+import WorkItemEditModal from "@/components/project-detail/WorkItemEditModal";
 import ProjectActualWorkRecordsContent from "@/components/project-detail/ProjectActualWorkRecordsContent";
 import ProjectCostEstimationCard from "@/components/project-detail/ProjectCostEstimationCard";
 import ProjectInitiationCard from "@/components/project-detail/ProjectInitiationCard";
@@ -100,9 +100,9 @@ const ProjectDetailPage = () => {
   const [messageApi, messageContextHolder] = message.useMessage();
   const [editingBrief, setEditingBrief] = useState<ProjectBrief | null>(null);
   const [briefModalOpen, setBriefModalOpen] = useState(false);
-  const [editingDeliverable, setEditingDeliverable] = useState<{
+  const [editingWorkItem, setEditingWorkItem] = useState<{
     briefId?: string;
-    deliverable?: ProjectBriefDeliverable;
+    workItem?: ProjectBriefWorkItem;
   } | null>(null);
   const [clientContacts, setClientContacts] = useState<ClientContact[]>([]);
   const [contactsLoadedClientId, setContactsLoadedClientId] = useState<
@@ -627,6 +627,7 @@ const ProjectDetailPage = () => {
       canManagePlannedWork={canManageProject}
       onAfterPlannedWorkChange={fetchProject}
       onAfterAssignmentChange={canManageProject ? fetchProject : undefined}
+      onAfterSubmissionChange={canManageProject ? fetchProject : undefined}
       onEditBrief={canManageProject ? (brief) => {
         if (!project.client) {
           messageApi.error("当前项目未关联客户");
@@ -635,11 +636,11 @@ const ProjectDetailPage = () => {
         setEditingBrief(brief);
         setBriefModalOpen(true);
       } : undefined}
-      onEditDeliverable={canManageProject ? (deliverable) => {
-        setEditingDeliverable({ deliverable });
+      onEditWorkItem={canManageProject ? (workItem) => {
+        setEditingWorkItem({ workItem });
       } : undefined}
-      onAddDeliverable={canManageProject ? (brief) => {
-        setEditingDeliverable({ briefId: brief.id });
+      onAddWorkItem={canManageProject ? (brief) => {
+        setEditingWorkItem({ briefId: brief.id });
       } : undefined}
       onDeleteBrief={canManageProject ? async (brief) => {
         const response = await fetch(`/api/briefs/${brief.id}`, { method: "DELETE" });
@@ -650,13 +651,13 @@ const ProjectDetailPage = () => {
         messageApi.success("需求单已删除");
         await fetchProject();
       } : undefined}
-      onDeleteDeliverable={canManageProject ? async (deliverable) => {
-        const response = await fetch(`/api/deliverables/${deliverable.id}`, { method: "DELETE" });
+      onDeleteWorkItem={canManageProject ? async (workItem) => {
+        const response = await fetch(`/api/work-items/${workItem.id}`, { method: "DELETE" });
         if (!response.ok) {
-          messageApi.error((await response.text()) || "删除交付物失败");
+          messageApi.error((await response.text()) || "删除工作项失败");
           return;
         }
-        messageApi.success("交付物已删除");
+        messageApi.success("工作项已删除");
         await fetchProject();
       } : undefined}
     />
@@ -793,7 +794,7 @@ const ProjectDetailPage = () => {
               },
               {
                 key: "progress",
-                label: `需求单${project.briefs?.length ?? 0}/交付物${(project.briefs ?? []).reduce((sum, brief) => sum + (brief.deliverables?.length ?? 0), 0)}`,
+                label: `需求单${project.briefs?.length ?? 0}/工作项${(project.briefs ?? []).reduce((sum, brief) => sum + (brief.workItems?.length ?? 0), 0)}`,
                 children: briefProgressContent,
               },
               {
@@ -1232,7 +1233,7 @@ const ProjectDetailPage = () => {
                   },
                   {
                     key: "progress",
-                    label: `需求单${project.briefs?.length ?? 0}/交付物${(project.briefs ?? []).reduce((sum, brief) => sum + (brief.deliverables?.length ?? 0), 0)}`,
+                    label: `需求单${project.briefs?.length ?? 0}/工作项${(project.briefs ?? []).reduce((sum, brief) => sum + (brief.workItems?.length ?? 0), 0)}`,
                     children: briefProgressContent,
                   },
                   {
@@ -1605,7 +1606,7 @@ const ProjectDetailPage = () => {
             setBriefModalOpen(false);
             setEditingBrief(null);
           }}
-          project={{ id: project.id, name: project.name }}
+          project={{ id: project.id, name: project.name, ownerId: project.ownerId ?? project.owner?.id }}
           client={project.client}
           creator={editingBrief?.creator ?? currentUser}
           initialBrief={editingBrief ?? undefined}
@@ -1633,31 +1634,38 @@ const ProjectDetailPage = () => {
         />
       ) : null}
 
-      {editingDeliverable ? (
-        <DeliverableEditModal
+      {editingWorkItem ? (
+        <WorkItemEditModal
           open
-          deliverable={editingDeliverable.deliverable}
+          workItem={editingWorkItem.workItem}
+          projectOwnerId={project.ownerId ?? project.owner?.id}
           employees={employees}
-          onCancel={() => setEditingDeliverable(null)}
+          onCancel={() => setEditingWorkItem(null)}
           onSubmit={async (payload) => {
-            const isEditing = Boolean(editingDeliverable.deliverable);
-            const endpoint = isEditing
-              ? `/api/deliverables/${editingDeliverable.deliverable!.id}`
-              : `/api/briefs/${editingDeliverable.briefId}/deliverables`;
-            const response = await fetch(endpoint, {
-              method: isEditing ? "PATCH" : "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
-            if (!response.ok) {
-              throw new Error(
-                (await response.text()) ||
-                  (isEditing ? "更新交付物失败" : "添加交付物失败"),
+            try {
+              const isEditing = Boolean(editingWorkItem.workItem);
+              const endpoint = isEditing
+                ? `/api/work-items/${editingWorkItem.workItem!.id}`
+                : `/api/briefs/${editingWorkItem.briefId}/workItems`;
+              const response = await fetch(endpoint, {
+                method: isEditing ? "PATCH" : "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              });
+              if (!response.ok) {
+                throw new Error(
+                  (await response.text()) ||
+                    (isEditing ? "更新工作项失败" : "添加工作项失败"),
+                );
+              }
+              messageApi.success(isEditing ? "工作项已更新" : "工作项已添加");
+              setEditingWorkItem(null);
+              await fetchProject();
+            } catch (error) {
+              messageApi.error(
+                error instanceof Error ? error.message : "保存工作项失败，请重试",
               );
             }
-            messageApi.success(isEditing ? "交付物已更新" : "交付物已添加");
-            setEditingDeliverable(null);
-            await fetchProject();
           }}
         />
       ) : null}

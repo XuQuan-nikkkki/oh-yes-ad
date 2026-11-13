@@ -22,25 +22,25 @@ const main = async () => {
       SELECT 1 FROM information_schema.columns
       WHERE table_schema = 'public'
         AND table_name = 'PlannedWorkEntry'
-        AND column_name = 'deliverableId'
+        AND column_name = 'workItemId'
     ) AS "exists"
   `);
-  const hasDeliverableId = columnRows[0]?.exists ?? false;
+  const hasWorkItemId = columnRows[0]?.exists ?? false;
 
   await prisma.$transaction(async (tx) => {
-    if (hasDeliverableId) {
+    if (hasWorkItemId) {
       await tx.$executeRawUnsafe(
-        'UPDATE "PlannedWorkEntry" SET "deliverableId" = NULL WHERE "deliverableId" IS NOT NULL',
+        'UPDATE "PlannedWorkEntry" SET "workItemId" = NULL WHERE "workItemId" IS NOT NULL',
       );
     }
     await tx.$executeRawUnsafe(
-      'ALTER TABLE "PlannedWorkEntry" DROP CONSTRAINT IF EXISTS "PlannedWorkEntry_deliverableId_fkey"',
+      'ALTER TABLE "PlannedWorkEntry" DROP CONSTRAINT IF EXISTS "PlannedWorkEntry_work_itemId_fkey"',
     );
     await tx.$executeRawUnsafe(
-      'DROP INDEX IF EXISTS "PlannedWorkEntry_deliverableId_idx"',
+      'DROP INDEX IF EXISTS "PlannedWorkEntry_work_itemId_idx"',
     );
     await tx.$executeRawUnsafe(
-      'ALTER TABLE "PlannedWorkEntry" DROP COLUMN IF EXISTS "deliverableId"',
+      'ALTER TABLE "PlannedWorkEntry" DROP COLUMN IF EXISTS "workItemId"',
     );
     await tx.$executeRawUnsafe(
       'ALTER TABLE "PlannedWorkEntry" DROP CONSTRAINT IF EXISTS "PlannedWorkEntry_taskId_fkey"',
@@ -58,15 +58,15 @@ const main = async () => {
       ON DELETE RESTRICT ON UPDATE CASCADE
     `);
 
-    await tx.$executeRawUnsafe('DROP TABLE IF EXISTS "DeliverableFormatOption" CASCADE');
-    await tx.$executeRawUnsafe('DROP TABLE IF EXISTS "DeliverableCategoryOrSceneOption" CASCADE');
-    await tx.$executeRawUnsafe('DROP TABLE IF EXISTS "DeliverableAssignmentHistory" CASCADE');
-    await tx.$executeRawUnsafe('DROP TABLE IF EXISTS "Deliverable" CASCADE');
+    await tx.$executeRawUnsafe('DROP TABLE IF EXISTS "WorkItemFormatOption" CASCADE');
+    await tx.$executeRawUnsafe('DROP TABLE IF EXISTS "WorkItemCategoryOrSceneOption" CASCADE');
+    await tx.$executeRawUnsafe('DROP TABLE IF EXISTS "WorkItemAssignmentHistory" CASCADE');
+    await tx.$executeRawUnsafe('DROP TABLE IF EXISTS "WorkItem" CASCADE');
     await tx.$executeRawUnsafe('DROP TABLE IF EXISTS "Brief" CASCADE');
   });
 
   console.log(
-    "测试库已恢复到迁移前结构：已删除需求单/交付物表，原环节、任务和原计划工时已保留。",
+    "测试库已恢复到迁移前结构：已删除需求单/工作项表，原环节、任务和原计划工时已保留。",
   );
 };
 

@@ -119,6 +119,12 @@ const employeePublicSelect: Prisma.EmployeeSelect = {
 const employeeListSelect = {
   id: true,
   name: true,
+  position: true,
+  positionOption: {
+    select: {
+      value: true,
+    },
+  },
   phone: true,
   fullName: true,
   roles: {

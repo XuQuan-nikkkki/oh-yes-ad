@@ -1,0 +1,2 @@
+ALTER TABLE "Deliverable" ALTER COLUMN "firstDraftAt" DROP NOT NULL;
+ALTER TABLE "Deliverable" ALTER COLUMN "revisionAt" DROP NOT NULL;

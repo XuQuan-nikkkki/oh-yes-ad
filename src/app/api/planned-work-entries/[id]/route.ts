@@ -79,7 +79,7 @@ const whereByScope = (id: string, internalOnly: boolean) =>
             },
           },
           {
-            deliverable: {
+            workItem: {
               brief: {
                 project: {
                   typeOption: {
@@ -129,7 +129,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
           },
         },
       },
-      deliverable: {
+      workItem: {
         select: {
           id: true,
           title: true,
@@ -187,11 +187,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     });
     if (!task) return new Response("Task not found", { status: 400 });
   }
-  if (body.deliverableId) {
-    const deliverable = await prisma.deliverable.findFirst({
+  if (body.workItemId) {
+    const workItem = await prisma.workItem.findFirst({
       where: internalOnly
         ? {
-            id: body.deliverableId,
+            id: body.workItemId,
             brief: {
               project: {
                 typeOption: {
@@ -200,10 +200,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
               },
             },
           }
-        : { id: body.deliverableId },
+        : { id: body.workItemId },
       select: { id: true },
     });
-    if (!deliverable) return new Response("交付物不存在", { status: 400 });
+    if (!workItem) return new Response("工作项不存在", { status: 400 });
   }
 
   const year = normalizeInteger(body.yearOption ?? body.year);
@@ -219,8 +219,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const item = await prisma.plannedWorkEntry.update({
     where: { id },
     data: {
-      taskId: body.deliverableId ? null : body.taskId,
-      deliverableId: body.taskId ? null : body.deliverableId,
+      taskId: body.workItemId ? null : body.taskId,
+      workItemId: body.taskId ? null : body.workItemId,
       yearOptionId,
       weekNumberOptionId,
       plannedDays:
@@ -265,7 +265,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
           },
         },
       },
-      deliverable: {
+      workItem: {
         select: {
           id: true,
           title: true,

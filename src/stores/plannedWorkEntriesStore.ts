@@ -7,7 +7,7 @@ type PlannedWorkQuery = {
   filters: {
     projectName?: string;
     briefName?: string;
-    deliverableName?: string;
+    workItemName?: string;
     ownerName?: string;
     year?: string;
     weekNumber?: string;
@@ -56,7 +56,7 @@ export const usePlannedWorkEntriesStore = create<PlannedWorkEntriesStore>((set, 
       });
       if (query.filters.projectName) params.set("projectName", query.filters.projectName);
       if (query.filters.briefName) params.set("briefName", query.filters.briefName);
-      if (query.filters.deliverableName) params.set("deliverableName", query.filters.deliverableName);
+      if (query.filters.workItemName) params.set("workItemName", query.filters.workItemName);
       if (query.filters.ownerName) params.set("ownerName", query.filters.ownerName);
       if (query.filters.year) params.set("year", query.filters.year);
       if (query.filters.weekNumber) params.set("weekNumber", query.filters.weekNumber);

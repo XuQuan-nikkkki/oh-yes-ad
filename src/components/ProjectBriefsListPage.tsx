@@ -8,21 +8,21 @@ import AppLink from "@/components/AppLink";
 import ListPageContainer from "@/components/ListPageContainer";
 import ProTableHeaderTitle from "@/components/ProTableHeaderTitle";
 import TableActions from "@/components/TableActions";
-import type { ProjectBrief, ProjectBriefDeliverable } from "@/components/project-detail/ProjectBriefProgressContent";
+import type { ProjectBrief, ProjectBriefWorkItem } from "@/components/project-detail/ProjectBriefProgressContent";
 import type { BriefFormPayload } from "@/components/project-detail/BriefForm";
-import type { DeliverableEditPayload } from "@/components/project-detail/DeliverableEditForm";
+import type { WorkItemEditPayload } from "@/components/project-detail/WorkItemEditForm";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { formatDate } from "@/lib/date";
 
 const BriefFormModal = dynamic(() => import("@/components/project-detail/BriefFormModal"));
-const DeliverableEditModal = dynamic(() => import("@/components/project-detail/DeliverableEditModal"));
+const WorkItemEditModal = dynamic(() => import("@/components/project-detail/WorkItemEditModal"));
 
 type BriefRow = ProjectBrief & {
   project: { id: string; name: string; client?: { id: string; name: string } | null };
 };
-type DeliverableRow = ProjectBriefDeliverable & { brief: BriefRow };
+type WorkItemRow = ProjectBriefWorkItem & { brief: BriefRow };
 
 const statusLabels: Record<string, string> = {
   draft: "草稿",
@@ -47,14 +47,14 @@ function filterColumn<T>(rows: T[], getValue: (row: T) => string): Pick<ProColum
   };
 }
 
-export default function ProjectBriefsListPage({ mode }: { mode: "briefs" | "deliverables" }) {
+export default function ProjectBriefsListPage({ mode }: { mode: "briefs" | "workItems" }) {
   const [briefs, setBriefs] = useState<BriefRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editingBrief, setEditingBrief] = useState<BriefRow | null>(null);
   const [deletingBriefId, setDeletingBriefId] = useState<string | null>(null);
-  const [editingDeliverable, setEditingDeliverable] = useState<DeliverableRow | null>(null);
-  const [deletingDeliverableId, setDeletingDeliverableId] = useState<string | null>(null);
+  const [editingWorkItem, setEditingWorkItem] = useState<WorkItemRow | null>(null);
+  const [deletingWorkItemId, setDeletingWorkItemId] = useState<string | null>(null);
   const [messageApi, contextHolder] = message.useMessage();
   const { canManageProject } = useProjectPermission();
   const currentUser = useAuthStore((state) => state.currentUser);
@@ -82,12 +82,12 @@ export default function ProjectBriefsListPage({ mode }: { mode: "briefs" | "deli
     return () => controller.abort();
   }, [refresh]);
 
-  const deliverables = useMemo(
-    () => briefs.flatMap((brief) => (brief.deliverables ?? []).map((item) => ({ ...item, brief }))),
+  const workItems = useMemo(
+    () => briefs.flatMap((brief) => (brief.workItems ?? []).map((item) => ({ ...item, brief }))),
     [briefs],
   );
 
-  const save = async (url: string, payload: BriefFormPayload | DeliverableEditPayload) => {
+  const save = async (url: string, payload: BriefFormPayload | WorkItemEditPayload) => {
     if (!canManageProject) return;
     try {
       const response = await fetch(url, {
@@ -97,7 +97,7 @@ export default function ProjectBriefsListPage({ mode }: { mode: "briefs" | "deli
       });
       if (!response.ok) throw new Error((await response.text()) || "保存失败");
       setEditingBrief(null);
-      setEditingDeliverable(null);
+      setEditingWorkItem(null);
       messageApi.success("保存成功");
       await refresh();
     } catch (cause) {
@@ -111,7 +111,7 @@ export default function ProjectBriefsListPage({ mode }: { mode: "briefs" | "deli
     try {
       const response = await fetch(`/api/briefs/${id}`, { method: "DELETE" });
       if (!response.ok) throw new Error((await response.text()) || "删除失败");
-      messageApi.success("需求单及关联交付物已删除");
+      messageApi.success("需求单及关联工作项已删除");
       await refresh();
     } catch (cause) {
       messageApi.error(cause instanceof Error ? cause.message : "删除失败，请重试");
@@ -120,18 +120,18 @@ export default function ProjectBriefsListPage({ mode }: { mode: "briefs" | "deli
     }
   };
 
-  const deleteDeliverable = async (id: string) => {
-    if (!canManageProject || deletingDeliverableId) return;
-    setDeletingDeliverableId(id);
+  const deleteWorkItem = async (id: string) => {
+    if (!canManageProject || deletingWorkItemId) return;
+    setDeletingWorkItemId(id);
     try {
-      const response = await fetch(`/api/deliverables/${id}`, { method: "DELETE" });
+      const response = await fetch(`/api/work-items/${id}`, { method: "DELETE" });
       if (!response.ok) throw new Error((await response.text()) || "删除失败");
       messageApi.success("删除成功");
       await refresh();
     } catch (cause) {
       messageApi.error(cause instanceof Error ? cause.message : "删除失败，请重试");
     } finally {
-      setDeletingDeliverableId(null);
+      setDeletingWorkItemId(null);
     }
   };
 
@@ -144,26 +144,26 @@ export default function ProjectBriefsListPage({ mode }: { mode: "briefs" | "deli
     { title: "负责人", key: "owner", ...filterColumn(briefs, (row) => row.owner?.name ?? ""), render: (_, row) => row.owner?.name ?? "-" },
     { title: "创建人", key: "creator", ...filterColumn(briefs, (row) => row.creator?.name ?? ""), render: (_, row) => row.creator?.name ?? "-" },
     { title: "创建日期", dataIndex: "createdAt", sorter: (a, b) => a.createdAt.localeCompare(b.createdAt), render: (_, row) => formatDate(row.createdAt, "YYYY-MM-DD") },
-    { title: "操作", valueType: "option", render: (_, row) => <TableActions disabled={!canManageProject || deletingBriefId !== null} onEdit={() => { void fetchEmployees(); setEditingBrief(row); }} onDelete={() => void deleteBrief(row.id)} deleteLoading={deletingBriefId === row.id} deleteTitle={`确定删除需求单“${row.title}”？关联交付物将一并删除，且无法恢复。`} /> },
+    { title: "操作", valueType: "option", render: (_, row) => <TableActions disabled={!canManageProject || deletingBriefId !== null} onEdit={() => { void fetchEmployees(); setEditingBrief(row); }} onDelete={() => void deleteBrief(row.id)} deleteLoading={deletingBriefId === row.id} deleteTitle={`确定删除需求单“${row.title}”？关联工作项将一并删除，且无法恢复。`} /> },
   ];
 
-  const deliverableColumns: ProColumns<DeliverableRow>[] = [
-    { title: "交付物名称", dataIndex: "title", width: 180, ellipsis: true, ...filterColumn(deliverables, (row) => row.title), render: (_, row) => <AppLink href={`/brief-deliverables/${row.id}`}>{row.title}</AppLink> },
+  const workItemColumns: ProColumns<WorkItemRow>[] = [
+    { title: "工作项名称", dataIndex: "title", width: 180, ellipsis: true, ...filterColumn(workItems, (row) => row.title), render: (_, row) => <AppLink href={`/brief-work-items/${row.id}`}>{row.title}</AppLink> },
     { title: "描述", dataIndex: "description", width: 220, render: (_, row) => <div style={{ width: 220, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{row.description || "-"}</div> },
-    { title: "类型", key: "type", ...filterColumn(deliverables, (row) => ({ DESIGN: "设计", COPY: "文案", PROJECT_MANAGEMENT: "项目管理", NEW_MEDIA: "新媒体" }[row.type] ?? row.type)), render: (_, row) => { const meta = ({ DESIGN: ["设计", "blue"], COPY: ["文案", "orange"], PROJECT_MANAGEMENT: ["项目管理", "purple"], NEW_MEDIA: ["新媒体", "cyan"] } as Record<string, [string, string]>)[row.type] ?? [row.type, "default"]; return <Tag color={meta[1]}>{meta[0]}</Tag>; } },
-    { title: "所属项目", key: "project", width: 200, ...filterColumn(deliverables, (row) => row.brief.project.name), render: (_, row) => <AppLink href={`/projects/${row.brief.project.id}`}>{row.brief.project.name}</AppLink> },
-    { title: "所属需求单", key: "brief", width: 180, ...filterColumn(deliverables, (row) => row.brief.title), render: (_, row) => <AppLink href={`/project-briefs/${row.brief.id}`}>{row.brief.title}</AppLink> },
-    { title: "审核人", key: "reviewer", ...filterColumn(deliverables, (row) => row.reviewer?.name ?? ""), render: (_, row) => row.reviewer?.name ?? "-" },
-    { title: "执行人", key: "assignee", ...filterColumn(deliverables, (row) => row.assignee?.name ?? "待指派执行人"), render: (_, row) => row.assignee?.name ?? <Tag color="orange">待指派执行人</Tag> },
+    { title: "类型", key: "type", ...filterColumn(workItems, (row) => ({ DESIGN: "设计", COPY: "文案", PROJECT_MANAGEMENT: "项目管理", NEW_MEDIA: "新媒体" }[row.type] ?? row.type)), render: (_, row) => { const meta = ({ DESIGN: ["设计", "blue"], COPY: ["文案", "orange"], PROJECT_MANAGEMENT: ["项目管理", "purple"], NEW_MEDIA: ["新媒体", "cyan"] } as Record<string, [string, string]>)[row.type] ?? [row.type, "default"]; return <Tag color={meta[1]}>{meta[0]}</Tag>; } },
+    { title: "所属项目", key: "project", width: 200, ...filterColumn(workItems, (row) => row.brief.project.name), render: (_, row) => <AppLink href={`/projects/${row.brief.project.id}`}>{row.brief.project.name}</AppLink> },
+    { title: "所属需求单", key: "brief", width: 180, ...filterColumn(workItems, (row) => row.brief.title), render: (_, row) => <AppLink href={`/project-briefs/${row.brief.id}`}>{row.brief.title}</AppLink> },
+    { title: "审核人", key: "reviewer", ...filterColumn(workItems, (row) => row.reviewer?.name ?? ""), render: (_, row) => row.reviewer?.name ?? "-" },
+    { title: "执行人", key: "assignee", ...filterColumn(workItems, (row) => row.assignee?.name ?? "待指派执行人"), render: (_, row) => row.assignee?.name ?? <Tag color="orange">待指派执行人</Tag> },
     { title: "格式", key: "formatOptions", width: 180, render: (_, row) => row.formatOptions?.length ? row.formatOptions.map(({ option }) => <Tag key={option.id} color={option.color ?? undefined}>{option.value}</Tag>) : "-" },
     { title: "类别/场景", key: "categoryOrSceneOptions", width: 200, render: (_, row) => row.categoryOrSceneOptions?.length ? row.categoryOrSceneOptions.map(({ option }) => <Tag key={option.id} color={option.color ?? undefined}>{option.value}</Tag>) : "-" },
     { title: "规格", dataIndex: "specification", width: 180, ellipsis: true, render: (_, row) => row.specification || "-" },
-    ...([['firstDraftAt', '初稿日期'], ['revisionAt', '修改日期'], ['finalAt', '定稿日期']] as const).map(([key, title]): ProColumns<DeliverableRow> => ({
+    ...([['firstDraftAt', '初稿日期'], ['revisionAt', '修改日期'], ['finalAt', '定稿日期']] as const).map(([key, title]): ProColumns<WorkItemRow> => ({
       title, dataIndex: key, width: 120,
       sorter: (a, b) => (a[key] ?? "").localeCompare(b[key] ?? ""),
       render: (_, row) => formatDate(row[key], "YYYY-MM-DD"),
     })),
-    { title: "操作", valueType: "option", render: (_, row) => <TableActions disabled={!canManageProject || deletingDeliverableId !== null} onEdit={() => { void fetchEmployees(); setEditingDeliverable(row); }} onDelete={() => void deleteDeliverable(row.id)} deleteLoading={deletingDeliverableId === row.id} deleteTitle={`确定删除交付物“${row.title}”？删除后无法恢复。`} /> },
+    { title: "操作", valueType: "option", render: (_, row) => <TableActions disabled={!canManageProject || deletingWorkItemId !== null} onEdit={() => { void fetchEmployees(); setEditingWorkItem(row); }} onDelete={() => void deleteWorkItem(row.id)} deleteLoading={deletingWorkItemId === row.id} deleteTitle={`确定删除工作项“${row.title}”？删除后无法恢复。`} /> },
   ];
 
   const tableProps = {
@@ -189,9 +189,9 @@ export default function ProjectBriefsListPage({ mode }: { mode: "briefs" | "deli
           locale={{ emptyText: "暂无项目需求单" }}
         />
       ) : (
-        <ProTable<DeliverableRow>
+        <ProTable<WorkItemRow>
           {...tableProps}
-          columns={deliverableColumns}
+          columns={workItemColumns}
           columnsState={{
             defaultValue: {
               formatOptions: { show: false },
@@ -202,13 +202,13 @@ export default function ProjectBriefsListPage({ mode }: { mode: "briefs" | "deli
               finalAt: { show: false },
             },
           }}
-          dataSource={deliverables}
-          headerTitle={<ProTableHeaderTitle>需求交付物</ProTableHeaderTitle>}
-          locale={{ emptyText: "暂无需求交付物" }}
+          dataSource={workItems}
+          headerTitle={<ProTableHeaderTitle>需求工作项</ProTableHeaderTitle>}
+          locale={{ emptyText: "暂无需求工作项" }}
         />
       )}
       {editingBrief && currentUser ? <BriefFormModal open project={editingBrief.project} client={editingBrief.project.client ?? { id: "", name: "内部项目" }} creator={editingBrief.creator ?? currentUser} initialBrief={editingBrief} employees={employees} onCancel={() => setEditingBrief(null)} onSubmit={(payload) => save(`/api/briefs/${editingBrief.id}`, payload)} /> : null}
-      {editingDeliverable ? <DeliverableEditModal open deliverable={editingDeliverable} employees={employees} onCancel={() => setEditingDeliverable(null)} onSubmit={(payload) => save(`/api/deliverables/${editingDeliverable.id}`, payload)} /> : null}
+      {editingWorkItem ? <WorkItemEditModal open workItem={editingWorkItem} employees={employees} onCancel={() => setEditingWorkItem(null)} onSubmit={(payload) => save(`/api/work-items/${editingWorkItem.id}`, payload)} /> : null}
     </ListPageContainer>
   );
 }

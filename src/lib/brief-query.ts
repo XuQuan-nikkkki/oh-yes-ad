@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 const personSelect = { id: true, name: true } as const;
 const optionSelect = { id: true, value: true, color: true } as const;
 
-export const deliverableInclude = {
+export const workItemInclude = {
   reviewer: { select: personSelect },
   assignee: { select: personSelect },
   creator: { select: personSelect },
@@ -37,7 +37,68 @@ export const deliverableInclude = {
     },
     orderBy: { createdAt: "asc" },
   },
-} satisfies Prisma.DeliverableInclude;
+  submissions: {
+    select: {
+      id: true,
+      versionNumber: true,
+      versionTitle: true,
+      contentText: true,
+      isFinal: true,
+      submittedBy: { select: personSelect },
+      submittedAt: true,
+      updatedAt: true,
+      resources: {
+        select: {
+          id: true,
+          kind: true,
+          url: true,
+          name: true,
+          mimeType: true,
+          thumbnailUrl: true,
+          sortOrder: true,
+          uploadedBy: { select: personSelect },
+          updatedAt: true,
+        },
+        orderBy: { sortOrder: "asc" },
+      },
+      feedback: {
+        select: {
+          id: true,
+          content: true,
+          recordedBy: { select: personSelect },
+          recordedAt: true,
+          updatedAt: true,
+          images: {
+            select: { id: true, url: true, name: true, sortOrder: true },
+            orderBy: { sortOrder: "asc" },
+          },
+          adjustmentItems: {
+            select: {
+              id: true,
+              title: true,
+              content: true,
+              sortOrder: true,
+              images: {
+                select: { id: true, url: true, name: true, sortOrder: true },
+                orderBy: { sortOrder: "asc" },
+              },
+            },
+            orderBy: { sortOrder: "asc" },
+          },
+        },
+      },
+      adjustmentChecks: {
+        select: {
+          id: true,
+          adjustmentItemId: true,
+          checkedBy: { select: personSelect },
+          checkedAt: true,
+        },
+      },
+    },
+    orderBy: { versionNumber: "desc" },
+  },
+} satisfies Prisma.WorkItemInclude;
 
 export const briefInclude = {
   project: {
@@ -45,8 +106,8 @@ export const briefInclude = {
   },
   owner: { select: personSelect },
   creator: { select: personSelect },
-  deliverables: {
-    include: deliverableInclude,
+  workItems: {
+    include: workItemInclude,
     orderBy: { createdAt: "asc" },
   },
 } satisfies Prisma.BriefInclude;

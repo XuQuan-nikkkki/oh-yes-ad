@@ -744,10 +744,11 @@ const projectDetailInclude = {
       createdAt: true,
       owner: { select: { id: true, name: true } },
       creator: { select: { id: true, name: true } },
-      deliverables: {
+      workItems: {
         select: {
           id: true,
           type: true,
+          sourceFilePolicy: true,
           title: true,
           description: true,
           specification: true,
@@ -793,6 +794,77 @@ const projectDetailInclude = {
               updatedAt: true,
             },
             orderBy: { createdAt: "asc" as const },
+          },
+          submissions: {
+            select: {
+              id: true,
+              versionNumber: true,
+              versionTitle: true,
+              contentText: true,
+              isFinal: true,
+              submittedBy: { select: { id: true, name: true } },
+              submittedAt: true,
+              updatedAt: true,
+              resources: {
+                select: {
+                  id: true,
+                  kind: true,
+                  url: true,
+                  name: true,
+                  mimeType: true,
+                  thumbnailUrl: true,
+                  sortOrder: true,
+                  uploadedBy: { select: { id: true, name: true } },
+                  updatedAt: true,
+                },
+                orderBy: { sortOrder: "asc" as const },
+              },
+              feedback: {
+                select: {
+                  id: true,
+                  content: true,
+                  recordedBy: { select: { id: true, name: true } },
+                  recordedAt: true,
+                  updatedAt: true,
+                  images: {
+                    select: {
+                      id: true,
+                      url: true,
+                      name: true,
+                      sortOrder: true,
+                    },
+                    orderBy: { sortOrder: "asc" as const },
+                  },
+                  adjustmentItems: {
+                    select: {
+                      id: true,
+                      title: true,
+                      content: true,
+                      sortOrder: true,
+                      images: {
+                        select: {
+                          id: true,
+                          url: true,
+                          name: true,
+                          sortOrder: true,
+                        },
+                        orderBy: { sortOrder: "asc" as const },
+                      },
+                    },
+                    orderBy: { sortOrder: "asc" as const },
+                  },
+                },
+              },
+              adjustmentChecks: {
+                select: {
+                  id: true,
+                  adjustmentItemId: true,
+                  checkedBy: { select: { id: true, name: true } },
+                  checkedAt: true,
+                },
+              },
+            },
+            orderBy: { versionNumber: "desc" as const },
           },
         },
         orderBy: { createdAt: "asc" as const },

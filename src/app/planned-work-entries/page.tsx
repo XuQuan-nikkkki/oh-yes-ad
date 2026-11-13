@@ -32,7 +32,7 @@ export default function Page() {
       id: string;
       title: string;
       project: { id: string; name: string };
-      deliverables: { id: string; title: string; assignee?: { id: string; name: string } | null }[];
+      workItems: { id: string; title: string; assignee?: { id: string; name: string } | null }[];
     }[]
   >([]);
   const [formOptionsLoaded, setFormOptionsLoaded] = useState(false);
@@ -69,11 +69,11 @@ export default function Page() {
             id: brief.id,
             title: brief.title,
             project: brief.project,
-            deliverables: Array.isArray(brief.deliverables)
-              ? brief.deliverables.map((deliverable: { id: string; title: string; assignee?: { id: string; name: string } | null }) => ({
-                  id: deliverable.id,
-                  title: deliverable.title,
-                  assignee: deliverable.assignee,
+            workItems: Array.isArray(brief.workItems)
+              ? brief.workItems.map((workItem: { id: string; title: string; assignee?: { id: string; name: string } | null }) => ({
+                  id: workItem.id,
+                  title: workItem.title,
+                  assignee: workItem.assignee,
                 }))
               : [],
           }))
@@ -110,7 +110,7 @@ export default function Page() {
       filters: {
         projectName?: string;
         briefName?: string;
-        deliverableName?: string;
+        workItemName?: string;
         ownerName?: string;
         year?: string;
         weekNumber?: string;
@@ -124,8 +124,8 @@ export default function Page() {
         query.set("projectName", params.filters.projectName);
       if (params.filters.briefName)
         query.set("briefName", params.filters.briefName);
-      if (params.filters.deliverableName)
-        query.set("deliverableName", params.filters.deliverableName);
+      if (params.filters.workItemName)
+        query.set("workItemName", params.filters.workItemName);
       if (params.filters.ownerName)
         query.set("ownerName", params.filters.ownerName);
       if (params.filters.year) query.set("year", params.filters.year);
@@ -139,7 +139,7 @@ export default function Page() {
           filters: {
             projectName: query.get("projectName") ?? undefined,
             briefName: query.get("briefName") ?? undefined,
-            deliverableName: query.get("deliverableName") ?? undefined,
+            workItemName: query.get("workItemName") ?? undefined,
             ownerName: query.get("ownerName") ?? undefined,
             year: query.get("year") ?? undefined,
             weekNumber: query.get("weekNumber") ?? undefined,
@@ -184,11 +184,11 @@ export default function Page() {
     projects.map((project) => project.name),
   );
   const briefFilterOptions = buildFilterOptions(briefs.map((brief) => brief.title));
-  const deliverableFilterOptions = buildFilterOptions(
-    briefs.flatMap((brief) => brief.deliverables.map((deliverable) => deliverable.title)),
+  const workItemFilterOptions = buildFilterOptions(
+    briefs.flatMap((brief) => brief.workItems.map((workItem) => workItem.title)),
   );
   const ownerFilterOptions = buildFilterOptions(
-    briefs.flatMap((brief) => brief.deliverables.map((deliverable) => deliverable.assignee?.name)),
+    briefs.flatMap((brief) => brief.workItems.map((workItem) => workItem.assignee?.name)),
   );
   const yearFilterOptions = buildNumericFilterOptions(
     (optionsByField["plannedWorkEntry.year"] ?? []).map((option) => option.value),
@@ -296,7 +296,7 @@ export default function Page() {
         workdayAdjustments={workdayAdjustments}
         projectFilterOptions={projectFilterOptions}
         briefFilterOptions={briefFilterOptions}
-        deliverableFilterOptions={deliverableFilterOptions}
+        workItemFilterOptions={workItemFilterOptions}
         ownerFilterOptions={ownerFilterOptions}
         yearFilterOptions={yearFilterOptions}
         weekNumberFilterOptions={weekNumberFilterOptions}
@@ -385,7 +385,7 @@ export default function Page() {
             editing
               ? {
                   id: editing.id,
-                  deliverableId: editing.deliverable?.id ?? "",
+                  workItemId: editing.workItem?.id ?? "",
                   yearOption:
                     editing.yearOption?.value ?? String(editing.year ?? ""),
                   weekNumberOption:

@@ -21,7 +21,7 @@ const PlannedWorkEntriesTable = ({
   actionsDisabled = false,
   projectFilterOptions = [],
   briefFilterOptions = [],
-  deliverableFilterOptions = [],
+  workItemFilterOptions = [],
   ownerFilterOptions = [],
   yearFilterOptions = [],
   weekNumberFilterOptions = [],
@@ -29,7 +29,7 @@ const PlannedWorkEntriesTable = ({
     "name",
     "projectName",
     "briefName",
-    "deliverableName",
+    "workItemName",
     "ownerName",
     "year",
     "month",
@@ -46,7 +46,7 @@ const PlannedWorkEntriesTable = ({
     columnKeys,
     normalizedProjectFilterOptions: normalizeFilterOptions(projectFilterOptions),
     normalizedBriefFilterOptions: normalizeFilterOptions(briefFilterOptions),
-    normalizedDeliverableFilterOptions: normalizeFilterOptions(deliverableFilterOptions),
+    normalizedWorkItemFilterOptions: normalizeFilterOptions(workItemFilterOptions),
     normalizedOwnerFilterOptions: normalizeFilterOptions(ownerFilterOptions),
     normalizedYearFilterOptions: normalizeFilterOptions(yearFilterOptions),
     normalizedWeekNumberFilterOptions: normalizeFilterOptions(weekNumberFilterOptions),
@@ -74,7 +74,7 @@ const PlannedWorkEntriesTable = ({
           filters: {
             projectName: getSingleFilterValue(f, "projectName"),
             briefName: getSingleFilterValue(f, "briefName"),
-            deliverableName: getSingleFilterValue(f, "deliverableName"),
+            workItemName: getSingleFilterValue(f, "workItemName"),
             ownerName: getSingleFilterValue(f, "ownerName"),
             year: getSingleFilterValue(f, "year"),
             weekNumber:
@@ -110,7 +110,9 @@ const PlannedWorkEntriesTable = ({
           "暂无计划工时"
         ),
       }}
-      toolBarRender={() => toolbarActions}
+      toolBarRender={headerTitle === false && !toolbarActions.length && !showTableOptions
+        ? false
+        : () => toolbarActions}
       params={{ refreshKey }}
     />
   );

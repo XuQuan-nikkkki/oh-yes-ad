@@ -61,7 +61,7 @@ const main = async () => {
         JOIN "ProjectSegment" s ON s.id = b."legacySegmentId"
         LEFT JOIN "SelectOption" status ON status.id = s."statusOptionId"
       ),
-      deliverable_check AS (
+      workItem_check AS (
         SELECT d.*, task.name AS source_name, task."ownerId" AS source_owner,
           task."creatorId" AS source_creator, task."dueDate",
           task."createdAt" AS source_created, task."updatedAt" AS source_updated,
@@ -85,7 +85,7 @@ const main = async () => {
             WHEN function.value = '新媒体' THEN reviewers.new_media_id
             ELSE project."ownerId"
           END AS expected_reviewer
-        FROM "Deliverable" d
+        FROM "WorkItem" d
         JOIN "ProjectTask" task ON task.id = d."legacyTaskId"
         JOIN "ProjectSegment" segment ON segment.id = task."segmentId"
         JOIN "Project" project ON project.id = segment."projectId"
@@ -96,13 +96,13 @@ const main = async () => {
       )
       SELECT
         (SELECT COUNT(*) FROM "Brief") AS briefs,
-        (SELECT COUNT(*) FROM "Deliverable") AS deliverables,
+        (SELECT COUNT(*) FROM "WorkItem") AS workItems,
         (SELECT COUNT(*) FROM brief_check WHERE
           title <> source_name OR description <> '' OR "ownerId" <> source_owner
           OR "projectId" <> source_project OR status <> expected_status
           OR "createdAt" <> source_created OR "updatedAt" <> source_updated
         ) AS brief_field_mismatches,
-        (SELECT COUNT(*) FROM deliverable_check WHERE
+        (SELECT COUNT(*) FROM workItem_check WHERE
           title <> source_name OR description <> '' OR "assigneeId" <> source_owner
           OR type <> expected_type OR status <> expected_status
           OR "reviewerId" <> expected_reviewer
@@ -110,23 +110,23 @@ const main = async () => {
           OR "createdAt" <> source_created OR "updatedAt" <> source_updated
           OR "finalAt" <> COALESCE("dueDate", "endDate", "startDate", source_created)::date
           OR "firstDraftAt" IS NOT NULL OR "revisionAt" IS NOT NULL
-        ) AS deliverable_field_mismatches,
+        ) AS workItem_field_mismatches,
         (SELECT COUNT(*) FROM "PlannedWorkEntry" work
           JOIN "ProjectTask" task ON task.id = work."taskId"
-          LEFT JOIN "Deliverable" d ON d."legacyTaskId" = task.id
-          WHERE (d.id IS NOT NULL AND work."deliverableId" IS DISTINCT FROM d.id)
-             OR (d.id IS NULL AND work."deliverableId" IS NOT NULL)
+          LEFT JOIN "WorkItem" d ON d."legacyTaskId" = task.id
+          WHERE (d.id IS NOT NULL AND work."workItemId" IS DISTINCT FROM d.id)
+             OR (d.id IS NULL AND work."workItemId" IS NOT NULL)
         ) AS work_entry_link_mismatches,
-        (SELECT COUNT(*) FROM "DeliverableAssignmentHistory") AS assignment_histories,
-        (SELECT COUNT(*) FROM "DeliverableFormatOption") AS format_options,
-        (SELECT COUNT(*) FROM "DeliverableCategoryOrSceneOption") AS category_options,
+        (SELECT COUNT(*) FROM "WorkItemAssignmentHistory") AS assignment_histories,
+        (SELECT COUNT(*) FROM "WorkItemFormatOption") AS format_options,
+        (SELECT COUNT(*) FROM "WorkItemCategoryOrSceneOption") AS category_options,
         (SELECT COUNT(*) FROM "Brief" b WHERE NOT EXISTS (
-          SELECT 1 FROM "Deliverable" d WHERE d."briefId" = b.id
+          SELECT 1 FROM "WorkItem" d WHERE d."briefId" = b.id
         )) AS empty_briefs,
         (SELECT COUNT(*) FROM "Brief" WHERE "legacySegmentId" IS NULL) AS briefs_without_legacy_id,
-        (SELECT COUNT(*) FROM "Deliverable" WHERE "legacyTaskId" IS NULL) AS deliverables_without_legacy_id,
+        (SELECT COUNT(*) FROM "WorkItem" WHERE "legacyTaskId" IS NULL) AS workItems_without_legacy_id,
         (SELECT COUNT(*) - COUNT(DISTINCT "legacySegmentId") FROM "Brief") AS duplicate_legacy_segments,
-        (SELECT COUNT(*) - COUNT(DISTINCT "legacyTaskId") FROM "Deliverable") AS duplicate_legacy_tasks
+        (SELECT COUNT(*) - COUNT(DISTINCT "legacyTaskId") FROM "WorkItem") AS duplicate_legacy_tasks
     `);
     console.log(JSON.stringify(result.rows[0], null, 2));
   } finally {

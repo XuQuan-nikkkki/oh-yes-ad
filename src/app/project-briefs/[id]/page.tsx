@@ -9,18 +9,18 @@ import AppLink from "@/components/AppLink";
 import DetailPageContainer from "@/components/DetailPageContainer";
 import TableActions from "@/components/TableActions";
 import type { BriefFormPayload } from "@/components/project-detail/BriefForm";
-import type { DeliverableEditPayload } from "@/components/project-detail/DeliverableEditForm";
-import type { ProjectBriefDeliverable } from "@/components/project-detail/ProjectBriefProgressContent";
+import type { WorkItemEditPayload } from "@/components/project-detail/WorkItemEditForm";
+import type { ProjectBriefWorkItem } from "@/components/project-detail/ProjectBriefProgressContent";
 import { useBriefDetail } from "@/hooks/useBriefDetail";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { formatDate } from "@/lib/date";
 import { useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import type { BriefDetail } from "@/types/brief";
-import { DeliverableAssignmentHistory } from "@/components/project-detail/DeliverableAssignmentChange";
+import { WorkItemAssignmentHistory } from "@/components/project-detail/WorkItemAssignmentChange";
 
 const BriefFormModal = dynamic(() => import("@/components/project-detail/BriefFormModal"));
-const DeliverableEditModal = dynamic(() => import("@/components/project-detail/DeliverableEditModal"));
+const WorkItemEditModal = dynamic(() => import("@/components/project-detail/WorkItemEditModal"));
 const statusLabels: Record<string, string> = {
   draft: "草稿",
   waiting_assignment: "待分配任务",
@@ -37,11 +37,11 @@ export default function BriefDetailPage() {
   const router = useRouter();
   const { data, loading, error, notFound, refresh } = useBriefDetail<BriefDetail>(`/api/briefs/${id}`);
   const [open, setOpen] = useState(false);
-  const [deliverableTab, setDeliverableTab] = useState("overview");
+  const [workItemTab, setWorkItemTab] = useState("overview");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [editingDeliverable, setEditingDeliverable] = useState<ProjectBriefDeliverable | null>(null);
-  const [deletingDeliverableId, setDeletingDeliverableId] = useState<string | null>(null);
+  const [editingWorkItem, setEditingWorkItem] = useState<ProjectBriefWorkItem | null>(null);
+  const [deletingWorkItemId, setDeletingWorkItemId] = useState<string | null>(null);
   const [messageApi, contextHolder] = message.useMessage();
   const { canManageProject } = useProjectPermission();
   const currentUser = useAuthStore((state) => state.currentUser);
@@ -72,7 +72,7 @@ export default function BriefDetailPage() {
       const response = await fetch(`/api/briefs/${id}`, { method: "DELETE" });
       if (!response.ok) throw new Error((await response.text()) || "删除失败");
       setDeleteConfirmOpen(false);
-      messageApi.success("需求单及关联交付物已删除");
+      messageApi.success("需求单及关联工作项已删除");
       router.replace("/project-briefs");
     } catch (cause) {
       messageApi.error(cause instanceof Error ? cause.message : "删除失败，请重试");
@@ -80,39 +80,39 @@ export default function BriefDetailPage() {
     }
   };
 
-  const saveDeliverable = async (payload: DeliverableEditPayload) => {
-    if (!canManageProject || !editingDeliverable || deleting) return;
+  const saveWorkItem = async (payload: WorkItemEditPayload) => {
+    if (!canManageProject || !editingWorkItem || deleting) return;
     try {
-      const response = await fetch(`/api/deliverables/${editingDeliverable.id}`, {
+      const response = await fetch(`/api/work-items/${editingWorkItem.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (!response.ok) throw new Error((await response.text()) || "保存失败");
-      setEditingDeliverable(null);
-      messageApi.success("交付物已保存");
+      setEditingWorkItem(null);
+      messageApi.success("工作项已保存");
       await refresh();
     } catch (cause) {
       messageApi.error(cause instanceof Error ? cause.message : "保存失败，请重试");
     }
   };
 
-  const deleteDeliverable = async (deliverable: ProjectBriefDeliverable) => {
-    if (!canManageProject || deleting || deletingDeliverableId) return;
-    if ((data?.deliverables?.length ?? 0) <= 1) {
-      messageApi.warning("需求单至少需要保留一个交付物");
+  const deleteWorkItem = async (workItem: ProjectBriefWorkItem) => {
+    if (!canManageProject || deleting || deletingWorkItemId) return;
+    if ((data?.workItems?.length ?? 0) <= 1) {
+      messageApi.warning("需求单至少需要保留一个工作项");
       return;
     }
-    setDeletingDeliverableId(deliverable.id);
+    setDeletingWorkItemId(workItem.id);
     try {
-      const response = await fetch(`/api/deliverables/${deliverable.id}`, { method: "DELETE" });
+      const response = await fetch(`/api/work-items/${workItem.id}`, { method: "DELETE" });
       if (!response.ok) throw new Error((await response.text()) || "删除失败");
-      messageApi.success("交付物已删除");
+      messageApi.success("工作项已删除");
       await refresh();
     } catch (cause) {
       messageApi.error(cause instanceof Error ? cause.message : "删除失败，请重试");
     } finally {
-      setDeletingDeliverableId(null);
+      setDeletingWorkItemId(null);
     }
   };
 
@@ -129,9 +129,9 @@ export default function BriefDetailPage() {
     );
   }
 
-  const deliverables = data.deliverables ?? [];
-  const activeDeliverable = deliverables.find((item) => item.id === deliverableTab);
-  const activeDeliverableTab = activeDeliverable ? deliverableTab : "overview";
+  const workItems = data.workItems ?? [];
+  const activeWorkItem = workItems.find((item) => item.id === workItemTab);
+  const activeWorkItemTab = activeWorkItem ? workItemTab : "overview";
   return (
     <DetailPageContainer>
       {contextHolder}
@@ -145,7 +145,7 @@ export default function BriefDetailPage() {
             }}>编辑</Button>
             <Popconfirm
               title={`确定删除需求单“${data.title}”？`}
-              description="关联的全部交付物及其选项关联、指派历史将一并删除，此操作不可恢复。"
+              description="关联的全部工作项及其选项关联、指派历史将一并删除，此操作不可恢复。"
               open={deleteConfirmOpen}
               onOpenChange={(nextOpen) => {
                 if (!deleting) setDeleteConfirmOpen(nextOpen);
@@ -186,52 +186,52 @@ export default function BriefDetailPage() {
         </Descriptions>
       </Card>
       <Card
-        title="需求交付物"
+        title="需求工作项"
         tabProps={{ type: "card", size: "middle", style: { marginTop: 12 } }}
-        activeTabKey={activeDeliverableTab}
-        onTabChange={setDeliverableTab}
-        tabBarExtraContent={activeDeliverable ? (
+        activeTabKey={activeWorkItemTab}
+        onTabChange={setWorkItemTab}
+        tabBarExtraContent={activeWorkItem ? (
           <TableActions
-            key={activeDeliverable.id}
-            disabled={!canManageProject || deleting || Boolean(deletingDeliverableId)}
-            deleteLoading={deletingDeliverableId === activeDeliverable.id}
-            deleteTitle={`确定删除交付物“${activeDeliverable.title}”？此操作不可恢复。`}
+            key={activeWorkItem.id}
+            disabled={!canManageProject || deleting || Boolean(deletingWorkItemId)}
+            deleteLoading={deletingWorkItemId === activeWorkItem.id}
+            deleteTitle={`确定删除工作项“${activeWorkItem.title}”？此操作不可恢复。`}
             onEdit={() => {
               void fetchEmployees();
-              setEditingDeliverable(activeDeliverable);
+              setEditingWorkItem(activeWorkItem);
             }}
-            onDelete={() => void deleteDeliverable(activeDeliverable)}
+            onDelete={() => void deleteWorkItem(activeWorkItem)}
           />
         ) : undefined}
         tabList={[
           { key: "overview", label: "总览" },
-          ...deliverables.map((deliverable) => ({
-            key: deliverable.id,
+          ...workItems.map((workItem) => ({
+            key: workItem.id,
             label: (
               <Space>
-                <span>{deliverable.title}</span>
-                <Tag color={({ DESIGN: "blue", COPY: "orange", PROJECT_MANAGEMENT: "purple", NEW_MEDIA: "cyan" } as Record<string, string>)[deliverable.type] ?? "default"}>
-                  {({ DESIGN: "设计", COPY: "文案", PROJECT_MANAGEMENT: "项目管理", NEW_MEDIA: "新媒体" } as Record<string, string>)[deliverable.type] ?? deliverable.type}
+                <span>{workItem.title}</span>
+                <Tag color={({ DESIGN: "blue", COPY: "orange", PROJECT_MANAGEMENT: "purple", NEW_MEDIA: "cyan" } as Record<string, string>)[workItem.type] ?? "default"}>
+                  {({ DESIGN: "设计", COPY: "文案", PROJECT_MANAGEMENT: "项目管理", NEW_MEDIA: "新媒体" } as Record<string, string>)[workItem.type] ?? workItem.type}
                 </Tag>
               </Space>
             ),
           })),
         ]}
       >
-        {activeDeliverableTab === "overview" ? (
-          <Table<ProjectBriefDeliverable>
+        {activeWorkItemTab === "overview" ? (
+          <Table<ProjectBriefWorkItem>
             rowKey="id"
-            dataSource={deliverables}
+            dataSource={workItems}
             scroll={{ x: "max-content" }}
             pagination={false}
-            locale={{ emptyText: "暂无交付物" }}
+            locale={{ emptyText: "暂无工作项" }}
             columns={[
               {
                 title: "标题",
                 dataIndex: "title",
                 render: (_, row) => (
                   <Space>
-                    <AppLink href={`/brief-deliverables/${row.id}`}>{row.title}</AppLink>
+                    <AppLink href={`/brief-work-items/${row.id}`}>{row.title}</AppLink>
                     <Tag color={({ DESIGN: "blue", COPY: "orange", PROJECT_MANAGEMENT: "purple", NEW_MEDIA: "cyan" } as Record<string, string>)[row.type] ?? "default"}>{({ DESIGN: "设计", COPY: "文案", PROJECT_MANAGEMENT: "项目管理", NEW_MEDIA: "新媒体" } as Record<string, string>)[row.type] ?? row.type}</Tag>
                   </Space>
                 ),
@@ -253,62 +253,62 @@ export default function BriefDetailPage() {
                 width: 160,
                 render: (_, row) => (
                   <TableActions
-                    disabled={!canManageProject || deleting || Boolean(deletingDeliverableId)}
-                    deleteLoading={deletingDeliverableId === row.id}
-                    deleteTitle={`确定删除交付物“${row.title}”？此操作不可恢复。`}
+                    disabled={!canManageProject || deleting || Boolean(deletingWorkItemId)}
+                    deleteLoading={deletingWorkItemId === row.id}
+                    deleteTitle={`确定删除工作项“${row.title}”？此操作不可恢复。`}
                     onEdit={() => {
                       void fetchEmployees();
-                      setEditingDeliverable(row);
+                      setEditingWorkItem(row);
                     }}
-                    onDelete={() => void deleteDeliverable(row)}
+                    onDelete={() => void deleteWorkItem(row)}
                   />
                 ),
               },
             ]}
           />
-        ) : activeDeliverable ? (
+        ) : activeWorkItem ? (
           <div>
           <Descriptions column={3} size="small">
-            <Descriptions.Item label="交付物描述" span={3}>
+            <Descriptions.Item label="工作项描述" span={3}>
               <Typography.Paragraph style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: 0 }}>
-                {activeDeliverable.description || "-"}
+                {activeWorkItem.description || "-"}
               </Typography.Paragraph>
             </Descriptions.Item>
             <Descriptions.Item label="格式">
-              {activeDeliverable.formatOptions?.length
-                ? activeDeliverable.formatOptions.map(({ option }) => <Tag key={option.id} color={option.color ?? undefined}>{option.value}</Tag>)
+              {activeWorkItem.formatOptions?.length
+                ? activeWorkItem.formatOptions.map(({ option }) => <Tag key={option.id} color={option.color ?? undefined}>{option.value}</Tag>)
                 : "-"}
             </Descriptions.Item>
             <Descriptions.Item label="类别">
-              {activeDeliverable.categoryOrSceneOptions?.length
-                ? activeDeliverable.categoryOrSceneOptions.map(({ option }) => <Tag key={option.id} color={option.color ?? undefined}>{option.value}</Tag>)
+              {activeWorkItem.categoryOrSceneOptions?.length
+                ? activeWorkItem.categoryOrSceneOptions.map(({ option }) => <Tag key={option.id} color={option.color ?? undefined}>{option.value}</Tag>)
                 : "-"}
             </Descriptions.Item>
             <Descriptions.Item label="规格">
-              <span style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{activeDeliverable.specification || "-"}</span>
+              <span style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{activeWorkItem.specification || "-"}</span>
             </Descriptions.Item>
           </Descriptions>
           <Descriptions column={3} size="small" style={{ marginTop: 24 }}>
             <Descriptions.Item label="审核人">
-              {activeDeliverable.reviewer ? <AppLink href={`/employees/${activeDeliverable.reviewer.id}`}>{activeDeliverable.reviewer.name}</AppLink> : "-"}
+              {activeWorkItem.reviewer ? <AppLink href={`/employees/${activeWorkItem.reviewer.id}`}>{activeWorkItem.reviewer.name}</AppLink> : "-"}
             </Descriptions.Item>
             <Descriptions.Item label="执行人">
-              {activeDeliverable.assignee ? <AppLink href={`/employees/${activeDeliverable.assignee.id}`}>{activeDeliverable.assignee.name}</AppLink> : <Tag color="orange">待指派执行人</Tag>}
+              {activeWorkItem.assignee ? <AppLink href={`/employees/${activeWorkItem.assignee.id}`}>{activeWorkItem.assignee.name}</AppLink> : <Tag color="orange">待指派执行人</Tag>}
             </Descriptions.Item>
             <Descriptions.Item>{null}</Descriptions.Item>
           </Descriptions>
           <Descriptions column={3} size="small" style={{ marginTop: 24 }}>
-            <Descriptions.Item label="初稿日期">{formatDate(activeDeliverable.firstDraftAt, "YYYY-MM-DD")}</Descriptions.Item>
-            <Descriptions.Item label="修改日期">{formatDate(activeDeliverable.revisionAt, "YYYY-MM-DD")}</Descriptions.Item>
-            <Descriptions.Item label="定稿日期">{formatDate(activeDeliverable.finalAt, "YYYY-MM-DD")}</Descriptions.Item>
+            <Descriptions.Item label="初稿日期">{formatDate(activeWorkItem.firstDraftAt, "YYYY-MM-DD")}</Descriptions.Item>
+            <Descriptions.Item label="修改日期">{formatDate(activeWorkItem.revisionAt, "YYYY-MM-DD")}</Descriptions.Item>
+            <Descriptions.Item label="定稿日期">{formatDate(activeWorkItem.finalAt, "YYYY-MM-DD")}</Descriptions.Item>
           </Descriptions>
-          {activeDeliverable.assignmentChanges?.length ? (
+          {activeWorkItem.assignmentChanges?.length ? (
             <div style={{ marginTop: 28 }}>
               <Typography.Title level={5} style={{ marginBottom: 20 }}>
                 执行人交接记录
               </Typography.Title>
-              <DeliverableAssignmentHistory
-                changes={activeDeliverable.assignmentChanges}
+              <WorkItemAssignmentHistory
+                changes={activeWorkItem.assignmentChanges}
                 variant="detail"
               />
             </div>
@@ -316,13 +316,13 @@ export default function BriefDetailPage() {
           </div>
         ) : null}
       </Card>
-      {editingDeliverable ? (
-        <DeliverableEditModal
+      {editingWorkItem ? (
+        <WorkItemEditModal
           open
-          deliverable={editingDeliverable}
+          workItem={editingWorkItem}
           employees={employees}
-          onCancel={() => setEditingDeliverable(null)}
-          onSubmit={saveDeliverable}
+          onCancel={() => setEditingWorkItem(null)}
+          onSubmit={saveWorkItem}
         />
       ) : null}
       {open && currentUser ? (

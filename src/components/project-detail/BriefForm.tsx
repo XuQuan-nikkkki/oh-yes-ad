@@ -13,11 +13,12 @@ import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import { DEFAULT_COLOR } from "@/lib/constants";
 
-export type DeliverableType = "DESIGN" | "COPY" | "PROJECT_MANAGEMENT" | "NEW_MEDIA";
+export type WorkItemType = "DESIGN" | "COPY" | "PROJECT_MANAGEMENT" | "NEW_MEDIA";
 
-export type BriefDeliverablePayload = {
+export type BriefWorkItemPayload = {
   id?: string;
-  type: DeliverableType;
+  type: WorkItemType;
+  sourceFilePolicy: "REQUIRED" | "OPTIONAL";
   title: string;
   description: string;
   formatOptionIds?: string[];
@@ -37,11 +38,11 @@ export type BriefFormPayload = {
   projectId: string;
   ownerId: string;
   creatorId: string;
-  deliverables: BriefDeliverablePayload[];
+  workItems: BriefWorkItemPayload[];
 };
 
-type DeliverableFormValue = Omit<
-  BriefDeliverablePayload,
+type WorkItemFormValue = Omit<
+  BriefWorkItemPayload,
   "creatorId" | "firstDraftAt" | "revisionAt" | "finalAt"
 > & {
   uiKey: string;
@@ -66,10 +67,10 @@ type FormValues = {
   projectId: string;
   ownerId: string;
   creatorId: string;
-  deliverables: DeliverableFormValue[];
+  workItems: WorkItemFormValue[];
 };
 type Props = {
-  project: { id: string; name: string };
+  project: { id: string; name: string; ownerId?: string | null };
   client: { id: string; name: string };
   creator: { id: string; name: string };
   initialBrief?: {
@@ -77,9 +78,10 @@ type Props = {
     description: string;
     owner?: { id: string } | null;
     creator?: { id: string; name: string } | null;
-    deliverables?: Array<{
+    workItems?: Array<{
       id: string;
       type: string;
+      sourceFilePolicy?: "REQUIRED" | "OPTIONAL";
       title: string;
       description: string;
       specification?: string | null;
@@ -96,15 +98,15 @@ type Props = {
   onSubmit: (payload: BriefFormPayload) => Promise<void> | void;
 };
 
-const typeMeta: Record<DeliverableType, { label: string; color: string; reviewerLabel: string }> = {
+const typeMeta: Record<WorkItemType, { label: string; color: string; reviewerLabel: string }> = {
   DESIGN: { label: "设计", color: "blue", reviewerLabel: "设计审核人" },
   COPY: { label: "文案", color: "orange", reviewerLabel: "文案审核人" },
   PROJECT_MANAGEMENT: { label: "项目管理", color: "purple", reviewerLabel: "项目管理审核人" },
   NEW_MEDIA: { label: "新媒体", color: "cyan", reviewerLabel: "新媒体审核人" },
 };
 
-export const FORMAT_OPTION_FIELD = "briefDeliverable.format";
-export const CATEGORY_SCENE_OPTION_FIELD = "briefDeliverable.categoryOrScene";
+export const FORMAT_OPTION_FIELD = "briefWorkItem.format";
+export const CATEGORY_SCENE_OPTION_FIELD = "briefWorkItem.categoryOrScene";
 
 export const MultipleOptionSelect = ({
   field,
@@ -235,7 +237,7 @@ export const MultipleOptionSelect = ({
 
 const buildFunctionGroupedOptions = (
   employees: BriefEmployee[],
-  type: DeliverableType,
+  type: WorkItemType,
   selectedId?: string,
 ) => {
   const groups = new Map<string, Array<{ label: string; value: string }>>();
@@ -281,9 +283,10 @@ const buildFunctionGroupedOptions = (
     });
 };
 
-export const getDefaultDeliverableReviewerId = (
+export const getDefaultWorkItemReviewerId = (
   employees: BriefEmployee[],
-  type: DeliverableType,
+  type: WorkItemType,
+  projectOwnerId?: string | null,
 ) => {
   const activeEmployees = employees.filter((employee) => {
     const status =
@@ -296,33 +299,32 @@ export const getDefaultDeliverableReviewerId = (
       return position === "美术指导";
     })?.id;
   }
+  if (type === "PROJECT_MANAGEMENT") return projectOwnerId ?? undefined;
+  if (type === "NEW_MEDIA") {
+    return activeEmployees.find((employee) =>
+      (employee.functionOption?.value ?? employee.function)?.trim() === "新媒体",
+    )?.id;
+  }
   if (type !== "COPY") return undefined;
-  const brandGroupEmployees = activeEmployees.filter((employee) => {
-    const functionName = employee.functionOption?.value ?? employee.function;
-    return functionName === "品牌组";
-  });
-  return (
-    brandGroupEmployees.find((employee) => {
-      const position = employee.positionOption?.value ?? employee.position;
-      return position === "文案策划";
-    })?.id ?? brandGroupEmployees[0]?.id
-  );
+  return activeEmployees.find((employee) => employee.name.trim() === "诗敏")?.id;
 };
 
-export const DeliverableFormFields = ({
+export const WorkItemFormFields = ({
   fieldName,
   employees,
+  projectOwnerId,
 }: {
   fieldName?: number;
+  projectOwnerId?: string | null;
   employees: BriefEmployee[];
 }) => {
   const form = Form.useFormInstance();
   const itemName = (name: string) =>
     fieldName === undefined ? name : [fieldName, name];
   const watchName = (name: string) =>
-    fieldName === undefined ? name : ["deliverables", fieldName, name];
+    fieldName === undefined ? name : ["workItems", fieldName, name];
   const type =
-    (Form.useWatch(watchName("type"), form) as DeliverableType | undefined) ??
+    (Form.useWatch(watchName("type"), form) as WorkItemType | undefined) ??
     "DESIGN";
   const reviewerId = Form.useWatch(watchName("reviewerId"), form) as
     | string
@@ -330,18 +332,34 @@ export const DeliverableFormFields = ({
   const assigneeId = Form.useWatch(watchName("assigneeId"), form) as
     | string
     | undefined;
+  useEffect(() => {
+    const reviewerPath = fieldName === undefined
+      ? "reviewerId"
+      : ["workItems", fieldName, "reviewerId"];
+    const typePath = fieldName === undefined
+      ? "type"
+      : ["workItems", fieldName, "type"];
+    if (form.getFieldValue(reviewerPath) || form.isFieldTouched(reviewerPath)) return;
+    const currentType = form.getFieldValue(typePath) as WorkItemType | undefined;
+    if (!currentType) return;
+    const defaultReviewerId = getDefaultWorkItemReviewerId(employees, currentType, projectOwnerId);
+    if (defaultReviewerId) form.setFieldValue(reviewerPath, defaultReviewerId);
+  }, [employees, fieldName, form, type, projectOwnerId]);
   const meta = typeMeta[type];
   const reviewerOptions = buildFunctionGroupedOptions(employees, type, reviewerId);
   const assigneeOptions = buildFunctionGroupedOptions(employees, type, assigneeId);
   return (
-    <Row gutter={16}>
+    <Row className="brief-work-item-form-fields" gutter={16}>
       {fieldName === undefined ? null : (
         <Form.Item name={[fieldName, "uiKey"]} hidden><Input /></Form.Item>
       )}
-      <Col xs={24} md={8}>
-        <Form.Item label="交付物类型" name={itemName("type")} rules={[{ required: true, message: "请选择交付物类型" }]}>
+      <Col span={24}>
+        <Typography.Text className="brief-work-item-form-section-title">基本信息</Typography.Text>
+      </Col>
+      <Col xs={24} md={10}>
+        <Form.Item label="工作项类型" name={itemName("type")} rules={[{ required: true, message: "请选择工作项类型" }]}>
           <Radio.Group
-            className="brief-deliverable-type-radio"
+            className="brief-work-item-type-radio"
             optionType="button"
             options={[
               { label: "设计", value: "DESIGN" },
@@ -350,24 +368,58 @@ export const DeliverableFormFields = ({
               { label: "新媒体", value: "NEW_MEDIA" },
             ]}
             onChange={(event) => {
-              const nextType = event.target.value as DeliverableType;
+              const nextType = event.target.value as WorkItemType;
+              form.setFieldValue(
+                watchName("sourceFilePolicy"),
+                nextType === "DESIGN" ? "REQUIRED" : "OPTIONAL",
+              );
               form.setFieldValue(
                 watchName("reviewerId"),
-                getDefaultDeliverableReviewerId(employees, nextType),
+                getDefaultWorkItemReviewerId(employees, nextType, projectOwnerId),
               );
             }}
           />
         </Form.Item>
       </Col>
-      <Col xs={24} md={16}>
-        <Form.Item label="交付物标题" name={itemName("title")} rules={[{ required: true, whitespace: true, message: "请输入交付物标题" }]}>
-          <Input placeholder="请输入交付物标题" />
+      <Col xs={24} md={14}>
+        <Form.Item label="工作项标题" name={itemName("title")} rules={[{ required: true, whitespace: true, message: "请输入工作项标题" }]}>
+          <Input placeholder="请输入工作项标题" />
         </Form.Item>
       </Col>
       <Col span={24}>
-        <Form.Item label="交付物描述" name={itemName("description")} rules={[{ required: true, whitespace: true, message: "请输入交付物描述" }]}>
-          <Input.TextArea rows={3} placeholder="请输入交付要求、内容范围及验收说明" />
+        <Typography.Text className="brief-work-item-form-section-title">工作要求</Typography.Text>
+      </Col>
+      <Col span={24}>
+        <Form.Item label="工作项描述" name={itemName("description")} rules={[{ required: true, whitespace: true, message: "请输入工作项描述" }]}>
+          <Input.TextArea rows={3} placeholder="请输入工作要求、内容范围及验收说明" />
         </Form.Item>
+      </Col>
+      <Col span={24}>
+        <Typography.Text className="brief-work-item-form-section-title">工作项属性</Typography.Text>
+      </Col>
+      <Col xs={24} md={6}>
+        <Form.Item label="格式" name={itemName("formatOptionIds")}>
+          <MultipleOptionSelect field={FORMAT_OPTION_FIELD} placeholder="请选择格式" />
+        </Form.Item>
+      </Col>
+      <Col xs={24} md={6}>
+        <Form.Item label="类别/场景" name={itemName("categoryOrSceneOptionIds")}>
+          <MultipleOptionSelect field={CATEGORY_SCENE_OPTION_FIELD} placeholder="请选择类别或场景" />
+        </Form.Item>
+      </Col>
+      <Col xs={24} md={6}>
+        <Form.Item label="规格" name={itemName("specification")}><Input placeholder="如：1920 × 1080 px" /></Form.Item>
+      </Col>
+      <Col xs={24} md={6}>
+        <Form.Item label="源文件" name={itemName("sourceFilePolicy")} rules={[{ required: true, message: "请选择源文件要求" }]}>
+          <Radio.Group className="brief-source-file-policy-radio" optionType="button" buttonStyle="outline" options={[
+            { label: "必须提交", value: "REQUIRED" },
+            { label: "无需提交", value: "OPTIONAL" },
+          ]} />
+        </Form.Item>
+      </Col>
+      <Col span={24}>
+        <Typography.Text className="brief-work-item-form-section-title">人员与时间</Typography.Text>
       </Col>
       <Col xs={24} md={12}>
         <Form.Item
@@ -384,25 +436,12 @@ export const DeliverableFormFields = ({
         </Form.Item>
       </Col>
       <Col xs={24} md={8}>
-        <Form.Item label="格式" name={itemName("formatOptionIds")}>
-          <MultipleOptionSelect field={FORMAT_OPTION_FIELD} placeholder="请选择格式" />
-        </Form.Item>
-      </Col>
-      <Col xs={24} md={8}>
-        <Form.Item label="类别/场景" name={itemName("categoryOrSceneOptionIds")}>
-          <MultipleOptionSelect field={CATEGORY_SCENE_OPTION_FIELD} placeholder="请选择类别或场景" />
-        </Form.Item>
-      </Col>
-      <Col xs={24} md={8}>
-        <Form.Item label="规格" name={itemName("specification")}><Input placeholder="如：1920 × 1080 px" /></Form.Item>
-      </Col>
-      <Col xs={24} md={8}>
-        <Form.Item label="初稿时间" name={itemName("firstDraftAt")} rules={[{ required: true, message: "请选择初稿时间" }]}>
+        <Form.Item label="初稿时间" name={itemName("firstDraftAt")}>
           <DatePicker style={{ width: "100%" }} placeholder="请选择初稿日期" />
         </Form.Item>
       </Col>
       <Col xs={24} md={8}>
-        <Form.Item label="修改时间" name={itemName("revisionAt")} rules={[{ required: true, message: "请选择修改时间" }]}>
+        <Form.Item label="修改时间" name={itemName("revisionAt")}>
           <DatePicker style={{ width: "100%" }} placeholder="请选择修改日期" />
         </Form.Item>
       </Col>
@@ -426,15 +465,15 @@ const BriefForm = ({
   const [form] = Form.useForm<FormValues>();
   const [step, setStep] = useState(0);
   const [activeKeys, setActiveKeys] = useState<string[]>([]);
-  const nextDeliverableKey = useRef(0);
+  const nextWorkItemKey = useRef(0);
   const { submitting, runWithSubmitLock } = useSubmitLock();
   const employeeOptions = employees.map(({ id, name }) => ({ label: name, value: id }));
-  const defaultDesignReviewerId = getDefaultDeliverableReviewerId(
+  const defaultDesignReviewerId = getDefaultWorkItemReviewerId(
     employees,
     "DESIGN",
   );
-  const watchedDeliverables = Form.useWatch("deliverables", form);
-  const knownDeliverableKeys = useRef<Set<string>>(new Set());
+  const watchedWorkItems = Form.useWatch("workItems", form);
+  const knownWorkItemKeys = useRef<Set<string>>(new Set());
   const initialValues: FormValues = {
     title: initialBrief?.title ?? "",
     description: initialBrief?.description ?? "",
@@ -442,11 +481,12 @@ const BriefForm = ({
     clientId: client.id,
     creatorId: initialBrief?.creator?.id ?? creator.id,
     ownerId: initialBrief?.owner?.id ?? creator.id,
-    deliverables: (initialBrief?.deliverables ?? []).map((item) => ({
+    workItems: (initialBrief?.workItems ?? []).map((item) => ({
       id: item.id,
       uiKey: item.id,
-      type: (["DESIGN", "COPY", "PROJECT_MANAGEMENT", "NEW_MEDIA"] as const).includes(item.type as DeliverableType)
-        ? item.type as DeliverableType
+      sourceFilePolicy: item.sourceFilePolicy ?? (item.type === "DESIGN" ? "REQUIRED" : "OPTIONAL"),
+      type: (["DESIGN", "COPY", "PROJECT_MANAGEMENT", "NEW_MEDIA"] as const).includes(item.type as WorkItemType)
+        ? item.type as WorkItemType
         : "DESIGN",
       title: item.title,
       description: item.description,
@@ -464,20 +504,20 @@ const BriefForm = ({
   };
 
   useEffect(() => {
-    const currentKeys = (watchedDeliverables ?? [])
+    const currentKeys = (watchedWorkItems ?? [])
       .map((item) => item?.uiKey)
       .filter((key): key is string => Boolean(key));
     const addedKeys = currentKeys.filter(
-      (key) => !knownDeliverableKeys.current.has(key),
+      (key) => !knownWorkItemKeys.current.has(key),
     );
 
     if (addedKeys.length > 0) {
       setActiveKeys(addedKeys);
     }
-    knownDeliverableKeys.current = new Set(currentKeys);
-  }, [watchedDeliverables]);
+    knownWorkItemKeys.current = new Set(currentKeys);
+  }, [watchedWorkItems]);
 
-  const goToDeliverables = async () => {
+  const goToWorkItems = async () => {
     await form.validateFields(["title", "description", "projectId", "clientId", "creatorId", "ownerId"]);
     setStep(1);
   };
@@ -489,17 +529,17 @@ const BriefForm = ({
         layout="vertical"
         initialValues={initialValues}
         onFinish={(values) => runWithSubmitLock(async () => {
-          const deliverables = (values.deliverables ?? []).filter(
-            (item): item is DeliverableFormValue => Boolean(item),
+          const workItems = (values.workItems ?? []).filter(
+            (item): item is WorkItemFormValue => Boolean(item),
           );
-          if (deliverables.length === 0) {
-            message.error("请至少添加一个需求交付物");
+          if (workItems.length === 0) {
+            message.error("请至少添加一个需求工作项");
             return;
           }
           await onSubmit({
             title: values.title.trim(), description: values.description.trim(), projectId: values.projectId,
             ownerId: values.ownerId, creatorId: values.creatorId,
-            deliverables: deliverables.map(({ uiKey: _uiKey, ...item }) => {
+            workItems: workItems.map(({ uiKey: _uiKey, ...item }) => {
               void _uiKey;
               return {
                 ...item, title: item.title.trim(), description: item.description.trim(),
@@ -516,7 +556,7 @@ const BriefForm = ({
           });
         })}
       >
-        <Steps current={step} responsive={false} style={{ maxWidth: 760, margin: "8px auto 28px" }} items={[{ title: "需求信息" }, { title: "需求交付物" }]} />
+        <Steps current={step} responsive={false} style={{ maxWidth: 760, margin: "8px auto 28px" }} items={[{ title: "需求信息" }, { title: "需求工作项" }]} />
 
         <div style={{ display: step === 0 ? "block" : "none" }}>
           <Form.Item label="需求标题" name="title" rules={[{ required: true, whitespace: true, message: "请输入需求标题" }]}>
@@ -533,18 +573,19 @@ const BriefForm = ({
             <Col span={12}><Form.Item label="发起人" name="creatorId" rules={[{ required: true }]}><Select disabled options={[{ label: creator.name, value: creator.id }]} /></Form.Item></Col>
             <Col span={12}><Form.Item label="负责人" name="ownerId" rules={[{ required: true, message: "请选择负责人" }]}><Select showSearch optionFilterProp="label" placeholder="请选择负责人" options={employeeOptions} /></Form.Item></Col>
           </Row>
-          <Flex className="brief-form-footer-actions" justify="flex-end"><Button type="primary" onClick={goToDeliverables}>下一步</Button></Flex>
+          <Flex className="brief-form-footer-actions" justify="flex-end"><Button type="primary" onClick={goToWorkItems}>下一步</Button></Flex>
         </div>
 
         <div style={{ display: step === 1 ? "block" : "none" }}>
-          <Form.List name="deliverables" rules={[{ validator: async (_, value) => { if (!value?.length) throw new Error("请至少添加一个需求交付物"); } }]}>
+          <Form.List name="workItems" rules={[{ validator: async (_, value) => { if (!value?.length) throw new Error("请至少添加一个需求工作项"); } }]}>
             {(fields, { add, remove }, { errors }) => {
-              const addDeliverable = () => {
-                nextDeliverableKey.current += 1;
-                const uiKey = `deliverable-${nextDeliverableKey.current}`;
+              const addWorkItem = () => {
+                nextWorkItemKey.current += 1;
+                const uiKey = `work-item-${nextWorkItemKey.current}`;
                 const pendingFieldKey = String(fields.length);
                 add({
                   type: "DESIGN",
+                  sourceFilePolicy: "REQUIRED",
                   title: "",
                   description: "",
                   uiKey,
@@ -555,38 +596,38 @@ const BriefForm = ({
               return (
                 <>
                   <Flex justify="space-between" align="center" wrap gap={12} style={{ marginBottom: 12 }}>
-                    <Typography.Title level={4} style={{ margin: 0 }}>需求交付物（{fields.length}）</Typography.Title>
+                    <Typography.Title level={4} style={{ margin: 0 }}>需求工作项（{fields.length}）</Typography.Title>
                     {fields.length === 0 ? (
-                      <Button icon={<PlusOutlined />} onClick={addDeliverable}>
-                        添加交付物
+                      <Button icon={<PlusOutlined />} onClick={addWorkItem}>
+                        添加工作项
                       </Button>
                     ) : null}
                   </Flex>
                   {fields.length === 0 ? (
-                    <div style={{ border: "1px dashed #d9d9d9", borderRadius: 8, padding: "24px 12px" }}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请添加设计或文案交付物" /></div>
+                    <div style={{ border: "1px dashed #d9d9d9", borderRadius: 8, padding: "24px 12px" }}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请添加设计或文案工作项" /></div>
                   ) : (
                     <>
                       <Collapse
-                        className="brief-deliverables-collapse"
+                        className="brief-work-items-collapse"
                         activeKey={activeKeys}
                         onChange={(keys) => setActiveKeys(Array.isArray(keys) ? keys.map(String) : [String(keys)])}
                         style={{ background: "#fff" }}
                         items={fields.map((field) => {
-                          const item = watchedDeliverables?.[field.name] as DeliverableFormValue | undefined;
+                          const item = watchedWorkItems?.[field.name] as WorkItemFormValue | undefined;
                           const type = item?.type ?? "DESIGN";
                           const meta = typeMeta[type];
                           const assigneeName = employeeOptions.find((option) => option.value === item?.assigneeId)?.label;
                           return {
                             key: item?.uiKey ?? String(field.name),
-                            label: <Space size={12} align="center" wrap><Typography.Text strong>{item?.title?.trim() || `未命名${meta.label}交付物`}</Typography.Text><Tag color={meta.color}>{meta.label}</Tag><Typography.Text type="secondary">执行人：{assigneeName || "待指派执行人"}</Typography.Text></Space>,
-                            extra: <Button type="text" danger aria-label="删除交付物" icon={<DeleteOutlined />} onClick={(event) => { event.stopPropagation(); remove(field.name); }} />,
-                            children: <DeliverableFormFields fieldName={field.name} employees={employees} />,
+                            label: <Space size={12} align="center" wrap><Typography.Text strong>{item?.title?.trim() || `未命名${meta.label}工作项`}</Typography.Text><Tag color={meta.color}>{meta.label}</Tag><Typography.Text type="secondary">执行人：{assigneeName || "待指派执行人"}</Typography.Text></Space>,
+                            extra: <Button type="text" danger aria-label="删除工作项" icon={<DeleteOutlined />} onClick={(event) => { event.stopPropagation(); remove(field.name); }} />,
+                            children: <WorkItemFormFields fieldName={field.name} employees={employees} projectOwnerId={project.ownerId} />,
                           };
                         })}
                       />
                       <Flex justify="flex-end" style={{ marginTop: 12 }}>
-                        <Button icon={<PlusOutlined />} onClick={addDeliverable}>
-                          添加交付物
+                        <Button icon={<PlusOutlined />} onClick={addWorkItem}>
+                          添加工作项
                         </Button>
                       </Flex>
                     </>

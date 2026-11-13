@@ -302,7 +302,7 @@ export type Employee = {
 export type PlannedWorkRow = {
   id: string;
   taskId: string;
-  deliverableId?: string;
+  workItemId?: string;
   taskDisplayName?: string;
   taskOwnerName?: string;
   year?: number;

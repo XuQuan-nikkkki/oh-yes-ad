@@ -69,7 +69,7 @@ type Detail = {
       project?: { id: string; name: string };
     };
   };
-  deliverable?: {
+  workItem?: {
     id: string;
     title: string;
     status: string;
@@ -86,7 +86,7 @@ type Detail = {
   };
 };
 
-const deliverableStatusLabels: Record<string, string> = {
+const workItemStatusLabels: Record<string, string> = {
   pending: "待处理",
   in_progress: "进行中",
   pending_review: "待审核",
@@ -95,7 +95,7 @@ const deliverableStatusLabels: Record<string, string> = {
   paused: "暂停",
 };
 
-const deliverableStatusColors: Record<string, string> = {
+const workItemStatusColors: Record<string, string> = {
   pending: "default",
   in_progress: "green",
   pending_review: "orange",
@@ -267,7 +267,7 @@ export default function Page() {
     <DetailPageContainer>
       {contextHolder}
       <Card
-        title={data.deliverable?.title || "计划工时详情"}
+        title={data.workItem?.title || "计划工时详情"}
         extra={
           <Space>
             <Button
@@ -293,39 +293,39 @@ export default function Page() {
       >
         <Space orientation="vertical" size={24} style={{ width: "100%" }}>
           <div>
-            <h4 style={{ margin: "0 0 12px" }}>交付物信息</h4>
+            <h4 style={{ margin: "0 0 12px" }}>工作项信息</h4>
             <Descriptions column={2} size="small">
               <Descriptions.Item label="所属项目">
-                {data.deliverable?.brief.project ? (
-                  <AppLink href={`/projects/${data.deliverable.brief.project.id}`}>
-                    {data.deliverable.brief.project.name}
+                {data.workItem?.brief.project ? (
+                  <AppLink href={`/projects/${data.workItem.brief.project.id}`}>
+                    {data.workItem.brief.project.name}
                   </AppLink>
                 ) : (
                   "-"
                 )}
               </Descriptions.Item>
               <Descriptions.Item label="所属需求单">
-                {data.deliverable?.brief ? (
-                  <AppLink href={`/project-briefs/${data.deliverable.brief.id}`}>
-                    {data.deliverable.brief.title}
+                {data.workItem?.brief ? (
+                  <AppLink href={`/project-briefs/${data.workItem.brief.id}`}>
+                    {data.workItem.brief.title}
                   </AppLink>
                 ) : (
                   "-"
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="所属交付物">
-                {data.deliverable ? (
-                  <AppLink href={`/brief-deliverables/${data.deliverable.id}`}>
-                    {data.deliverable.title}
+              <Descriptions.Item label="所属工作项">
+                {data.workItem ? (
+                  <AppLink href={`/brief-work-items/${data.workItem.id}`}>
+                    {data.workItem.title}
                   </AppLink>
                 ) : (
                   "-"
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="交付物状态">
-                <Tag color={deliverableStatusColors[data.deliverable?.status ?? ""]}>
-                  {data.deliverable?.status
-                    ? deliverableStatusLabels[data.deliverable.status] ?? data.deliverable.status
+              <Descriptions.Item label="工作项状态">
+                <Tag color={workItemStatusColors[data.workItem?.status ?? ""]}>
+                  {data.workItem?.status
+                    ? workItemStatusLabels[data.workItem.status] ?? data.workItem.status
                     : "-"}
                 </Tag>
               </Descriptions.Item>
@@ -333,12 +333,12 @@ export default function Page() {
           </div>
 
           <div>
-            <h4 style={{ margin: "0 0 12px" }}>交付物负责人</h4>
+            <h4 style={{ margin: "0 0 12px" }}>工作项负责人</h4>
             <Descriptions column={2} size="small">
               <Descriptions.Item label="负责人">
-                {data.deliverable?.assignee ? (
-                  <AppLink href={`/employees/${data.deliverable.assignee.id}`}>
-                    {data.deliverable.assignee.name}
+                {data.workItem?.assignee ? (
+                  <AppLink href={`/employees/${data.workItem.assignee.id}`}>
+                    {data.workItem.assignee.name}
                   </AppLink>
                 ) : (
                   "-"
@@ -346,9 +346,9 @@ export default function Page() {
               </Descriptions.Item>
               <Descriptions.Item label="负责人职能">
                 <Tag
-                  color={data.deliverable?.assignee?.functionOption?.color ?? undefined}
+                  color={data.workItem?.assignee?.functionOption?.color ?? undefined}
                 >
-                  {data.deliverable?.assignee?.functionOption?.value ?? "-"}
+                  {data.workItem?.assignee?.functionOption?.value ?? "-"}
                 </Tag>
               </Descriptions.Item>
             </Descriptions>
@@ -460,7 +460,7 @@ export default function Page() {
         <PlannedWorkEntryForm
           initialValues={{
             id: data.id,
-            deliverableId: data.deliverable?.id ?? "",
+            workItemId: data.workItem?.id ?? "",
             yearOption: data.yearOption?.value ?? String(data.year ?? ""),
             weekNumberOption:
               data.weekNumberOption?.value ?? String(data.weekNumber ?? ""),
@@ -475,17 +475,17 @@ export default function Page() {
             saturday: data.saturday,
             sunday: data.sunday,
           }}
-          deliverableContext={
-            data.deliverable
+          workItemContext={
+            data.workItem
               ? {
-                  id: data.deliverable.id,
-                  title: data.deliverable.title,
-                  briefId: data.deliverable.brief.id,
-                  briefTitle: data.deliverable.brief.title,
-                  projectId: data.deliverable.brief.project.id,
-                  projectName: data.deliverable.brief.project.name,
-                  assigneeId: data.deliverable.assignee?.id,
-                  assigneeName: data.deliverable.assignee?.name,
+                  id: data.workItem.id,
+                  title: data.workItem.title,
+                  briefId: data.workItem.brief.id,
+                  briefTitle: data.workItem.brief.title,
+                  projectId: data.workItem.brief.project.id,
+                  projectName: data.workItem.brief.project.name,
+                  assigneeId: data.workItem.assignee?.id,
+                  assigneeName: data.workItem.assignee?.name,
                 }
               : undefined
           }

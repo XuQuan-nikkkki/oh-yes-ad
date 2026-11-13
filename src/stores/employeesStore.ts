@@ -9,6 +9,8 @@ export type EmployeeListItem = {
   employmentStatusOption?: { value?: string | null } | null;
   function?: string | null;
   functionOption?: { value?: string | null } | null;
+  position?: string | null;
+  positionOption?: { value?: string | null } | null;
   [key: string]: unknown;
 };
 

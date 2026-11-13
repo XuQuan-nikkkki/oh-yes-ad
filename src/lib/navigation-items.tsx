@@ -90,9 +90,9 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
         label: "项目任务",
       },
       {
-        key: "/brief-deliverables",
+        key: "/brief-work-items",
         icon: <ProfileOutlined />,
-        label: "需求交付物",
+        label: "需求工作项",
         forbiddenRoles: ["HR", "FINANCE"],
       },
       {
@@ -231,7 +231,7 @@ export const NAVIGATION_PATH_PREFIXES = [
   "/project-segments",
   "/project-briefs",
   "/project-tasks",
-  "/brief-deliverables",
+  "/brief-work-items",
   "/project-milestones",
   "/project-receivable-payable",
   "/project-receivable-delays",

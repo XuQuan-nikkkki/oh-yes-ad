@@ -37,7 +37,7 @@ type ColumnContext = {
   columnKeys: PlannedWorkColumnKey[];
   normalizedProjectFilterOptions: NormalizedFilterOption[];
   normalizedBriefFilterOptions: NormalizedFilterOption[];
-  normalizedDeliverableFilterOptions: NormalizedFilterOption[];
+  normalizedWorkItemFilterOptions: NormalizedFilterOption[];
   normalizedOwnerFilterOptions: NormalizedFilterOption[];
   normalizedYearFilterOptions: NormalizedFilterOption[];
   normalizedWeekNumberFilterOptions: NormalizedFilterOption[];
@@ -97,7 +97,7 @@ export const buildPlannedWorkColumns = ({
   columnKeys,
   normalizedProjectFilterOptions,
   normalizedBriefFilterOptions,
-  normalizedDeliverableFilterOptions,
+  normalizedWorkItemFilterOptions,
   normalizedOwnerFilterOptions,
   normalizedYearFilterOptions,
   normalizedWeekNumberFilterOptions,
@@ -133,9 +133,9 @@ export const buildPlannedWorkColumns = ({
       filters: normalizedProjectFilterOptions,
       filterSearch: true,
       render: (_, row) =>
-        row.deliverable?.brief?.project ?? row.task?.segment?.project ? (
-          <AppLink href={`/projects/${(row.deliverable?.brief?.project ?? row.task?.segment?.project)!.id}`}>
-            {(row.deliverable?.brief?.project ?? row.task?.segment?.project)!.name}
+        row.workItem?.brief?.project ?? row.task?.segment?.project ? (
+          <AppLink href={`/projects/${(row.workItem?.brief?.project ?? row.task?.segment?.project)!.id}`}>
+            {(row.workItem?.brief?.project ?? row.task?.segment?.project)!.name}
           </AppLink>
         ) : (
           "-"
@@ -150,25 +150,25 @@ export const buildPlannedWorkColumns = ({
       filters: normalizedBriefFilterOptions,
       filterSearch: true,
       render: (_, row) =>
-        row.deliverable?.brief ? (
-          <AppLink href={`/project-briefs/${row.deliverable.brief.id}`}>
-            {row.deliverable.brief.title}
+        row.workItem?.brief ? (
+          <AppLink href={`/project-briefs/${row.workItem.brief.id}`}>
+            {row.workItem.brief.title}
           </AppLink>
         ) : (
           "-"
         ),
     },
-    deliverableName: {
-      key: "deliverableName",
-      title: "交付物",
+    workItemName: {
+      key: "workItemName",
+      title: "工作项",
       width: 200,
       ellipsis: true,
       onCell: () => ({ style: { maxWidth: 200 } }),
-      filters: normalizedDeliverableFilterOptions,
+      filters: normalizedWorkItemFilterOptions,
       filterSearch: true,
       render: (_, row) =>
-        row.deliverable ? (
-          <AppLink href={`/brief-deliverables/${row.deliverable.id}`}>{row.deliverable.title}</AppLink>
+        row.workItem ? (
+          <AppLink href={`/brief-work-items/${row.workItem.id}`}>{row.workItem.title}</AppLink>
         ) : (
           "-"
         ),
@@ -178,7 +178,7 @@ export const buildPlannedWorkColumns = ({
       title: "任务责任人",
       filters: normalizedOwnerFilterOptions,
       filterSearch: true,
-      render: (_, row) => row.deliverable?.assignee?.name ?? row.task?.owner?.name ?? "-",
+      render: (_, row) => row.workItem?.assignee?.name ?? row.task?.owner?.name ?? "-",
     },
     year: {
       key: "year",

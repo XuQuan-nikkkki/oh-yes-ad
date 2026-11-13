@@ -28,10 +28,10 @@ import ProjectDetailProgressContent from "@/components/project-detail/ProjectDet
 import ProjectBriefProgressContent from "@/components/project-detail/ProjectBriefProgressContent";
 import type {
   ProjectBrief,
-  ProjectBriefDeliverable,
+  ProjectBriefWorkItem,
 } from "@/components/project-detail/ProjectBriefProgressContent";
 import BriefFormModal from "@/components/project-detail/BriefFormModal";
-import DeliverableEditModal from "@/components/project-detail/DeliverableEditModal";
+import WorkItemEditModal from "@/components/project-detail/WorkItemEditModal";
 import PlannedWorkEntryForm, {
   PlannedWorkEntryFormPayload,
 } from "@/components/project-detail/PlannedWorkEntryForm";
@@ -130,7 +130,7 @@ type WeeklyPlannedEntry = {
   sunday: boolean;
   year?: number | null;
   weekNumber?: number | null;
-  deliverable?: {
+  workItem?: {
     id: string;
     title: string;
     assignee?: {
@@ -271,7 +271,7 @@ type TaskRow = {
 type TaskPlannedRow = {
   id: string;
   taskId: string;
-  deliverableId?: string;
+  workItemId?: string;
   year: number;
   weekNumber: number;
   plannedDays: number;
@@ -349,8 +349,8 @@ function SchedulePageContent() {
   const [briefProjectContext, setBriefProjectContext] =
     useState<BriefProjectContext | null>(null);
   const [editingBrief, setEditingBrief] = useState<ProjectBrief | null>(null);
-  const [editingDeliverable, setEditingDeliverable] = useState<{
-    deliverable?: ProjectBriefDeliverable;
+  const [editingWorkItem, setEditingWorkItem] = useState<{
+    workItem?: ProjectBriefWorkItem;
     briefId?: string;
     projectId: string;
   } | null>(null);
@@ -1230,6 +1230,13 @@ function SchedulePageContent() {
                   }
                 : undefined
             }
+            onAfterSubmissionChange={
+              canManageProject
+                ? async () => {
+                    refreshProjectDetails(project.id);
+                  }
+                : undefined
+            }
             onEditBrief={
               canManageProject
                 ? (brief) => {
@@ -1246,19 +1253,19 @@ function SchedulePageContent() {
                   }
                 : undefined
             }
-            onEditDeliverable={
+            onEditWorkItem={
               canManageProject
-                ? (deliverable) =>
-                    setEditingDeliverable({
-                      deliverable,
+                ? (workItem) =>
+                    setEditingWorkItem({
+                      workItem,
                       projectId: project.id,
                     })
                 : undefined
             }
-            onAddDeliverable={
+            onAddWorkItem={
               canManageProject
                 ? (brief) =>
-                    setEditingDeliverable({
+                    setEditingWorkItem({
                       briefId: brief.id,
                       projectId: project.id,
                     })
@@ -1281,20 +1288,20 @@ function SchedulePageContent() {
                   }
                 : undefined
             }
-            onDeleteDeliverable={
+            onDeleteWorkItem={
               canManageProject
-                ? async (deliverable) => {
+                ? async (workItem) => {
                     const response = await fetch(
-                      `/api/deliverables/${deliverable.id}`,
+                      `/api/work-items/${workItem.id}`,
                       { method: "DELETE" },
                     );
                     if (!response.ok) {
                       messageApi.error(
-                        (await response.text()) || "删除交付物失败",
+                        (await response.text()) || "删除工作项失败",
                       );
                       return;
                     }
-                    messageApi.success("交付物已删除");
+                    messageApi.success("工作项已删除");
                     refreshProjectDetails(project.id);
                   }
                 : undefined
@@ -1547,17 +1554,17 @@ function SchedulePageContent() {
         />
       ) : null}
 
-      {editingDeliverable ? (
-        <DeliverableEditModal
+      {editingWorkItem ? (
+        <WorkItemEditModal
           open
-          deliverable={editingDeliverable.deliverable}
+          workItem={editingWorkItem.workItem}
           employees={employees}
-          onCancel={() => setEditingDeliverable(null)}
+          onCancel={() => setEditingWorkItem(null)}
           onSubmit={async (payload) => {
-            const isEditing = Boolean(editingDeliverable.deliverable);
+            const isEditing = Boolean(editingWorkItem.workItem);
             const endpoint = isEditing
-              ? `/api/deliverables/${editingDeliverable.deliverable!.id}`
-              : `/api/briefs/${editingDeliverable.briefId}/deliverables`;
+              ? `/api/work-items/${editingWorkItem.workItem!.id}`
+              : `/api/briefs/${editingWorkItem.briefId}/workItems`;
             const response = await fetch(endpoint, {
                 method: isEditing ? "PATCH" : "POST",
                 headers: { "Content-Type": "application/json" },
@@ -1566,12 +1573,12 @@ function SchedulePageContent() {
             if (!response.ok) {
               throw new Error(
                 (await response.text()) ||
-                  (isEditing ? "更新交付物失败" : "添加交付物失败"),
+                  (isEditing ? "更新工作项失败" : "添加工作项失败"),
               );
             }
-            messageApi.success(isEditing ? "交付物已更新" : "交付物已添加");
-            const projectId = editingDeliverable.projectId;
-            setEditingDeliverable(null);
+            messageApi.success(isEditing ? "工作项已更新" : "工作项已添加");
+            const projectId = editingWorkItem.projectId;
+            setEditingWorkItem(null);
             refreshProjectDetails(projectId);
           }}
         />
@@ -1663,7 +1670,7 @@ function SchedulePageContent() {
               editingPlannedEntry
                 ? {
                     id: editingPlannedEntry.id,
-                    deliverableId: editingPlannedEntry.deliverableId,
+                    workItemId: editingPlannedEntry.workItemId,
                     year: editingPlannedEntry.year,
                     weekNumber: editingPlannedEntry.weekNumber,
                     yearOption: String(editingPlannedEntry.year),
