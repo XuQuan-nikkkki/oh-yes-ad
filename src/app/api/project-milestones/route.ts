@@ -108,7 +108,6 @@ export async function GET() {
       internalParticipants: { select: { id: true, name: true } },
       vendorParticipants: { select: { id: true, name: true } },
       clientParticipants: { select: { id: true, name: true } },
-      documents: { select: { id: true, name: true } },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -164,7 +163,6 @@ export async function POST(req: NextRequest) {
       internalParticipants: { select: { id: true, name: true } },
       vendorParticipants: { select: { id: true, name: true } },
       clientParticipants: { select: { id: true, name: true } },
-      documents: { select: { id: true, name: true } },
     },
   });
   return Response.json(serializeMilestone(item));

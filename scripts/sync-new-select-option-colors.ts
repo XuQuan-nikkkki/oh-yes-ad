@@ -19,7 +19,6 @@ const TARGET_FIELDS = [
   "project.status",
   "project.stage",
   "projectSegment.status",
-  "projectDocument.type",
   "projectMilestone.type",
   "projectMilestone.method",
   "plannedWorkEntry.year",

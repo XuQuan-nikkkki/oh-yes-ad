@@ -2,6 +2,7 @@ export type {
   WorkdayAdjustment,
   WorkdayAdjustmentRange,
 } from "@/types/workdayAdjustment";
+import type { ProjectBrief } from "@/components/project-detail/ProjectBriefProgressContent";
 
 export type PeriodInfo = {
   period: string;
@@ -235,6 +236,7 @@ export type Project = {
       }[];
     }[];
   }[];
+  briefs?: ProjectBrief[];
   actualWorkEntries?: {
     id: string;
     title: string;
@@ -265,19 +267,6 @@ export type Project = {
         color?: string | null;
       } | null;
     };
-  }[];
-  documents?: {
-    id: string;
-    name: string;
-    typeOption?: {
-      id?: string;
-      value?: string | null;
-      color?: string | null;
-    } | null;
-    date?: string | null;
-    isFinal: boolean;
-    internalLink?: string | null;
-    milestone?: { id: string; name: string } | null;
   }[];
   manualCost?: ProjectManualCost;
   latestCostEstimation?: ProjectCostEstimationSummary | null;

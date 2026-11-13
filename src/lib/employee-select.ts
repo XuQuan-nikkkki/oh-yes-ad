@@ -3,6 +3,10 @@ import type { DefaultOptionType } from "antd/es/select";
 type EmployeeLike = {
   id: string;
   name: string;
+  function?: string | null;
+  functionOption?: {
+    value?: string | null;
+  } | null;
   employmentStatus?: string | null;
   employmentStatusOption?: {
     value?: string | null;
@@ -47,6 +51,42 @@ export const buildFlatEmployeeOptions = (employees: EmployeeLike[]) =>
       value: employee.id,
     }))
     .sort(compareByLabel);
+
+export const buildFunctionGroupedEmployeeOptions = (
+  employees: EmployeeLike[],
+  options?: {
+    excludedEmployeeIds?: Iterable<string>;
+    preferredFunctionName?: string | null;
+  },
+) => {
+  const excludedEmployeeIds = new Set(options?.excludedEmployeeIds ?? []);
+  const groups = new Map<string, Array<{ label: string; value: string }>>();
+
+  employees.forEach((employee) => {
+    if (!isEmployeeActive(employee) || excludedEmployeeIds.has(employee.id)) return;
+    const functionName =
+      employee.functionOption?.value?.trim() ||
+      employee.function?.trim() ||
+      "未设置职能";
+    const group = groups.get(functionName) ?? [];
+    group.push({ label: employee.name, value: employee.id });
+    groups.set(functionName, group);
+  });
+
+  const preferredFunctionName = options?.preferredFunctionName?.trim();
+  return Array.from(groups.entries())
+    .map(([label, groupOptions]) => ({
+      label,
+      options: groupOptions.sort(compareByLabel),
+    }))
+    .sort((left, right) => {
+      if (preferredFunctionName) {
+        if (left.label === preferredFunctionName) return -1;
+        if (right.label === preferredFunctionName) return 1;
+      }
+      return left.label.localeCompare(right.label, "zh-CN");
+    }) satisfies DefaultOptionType[];
+};
 
 export const buildGroupedEmployeeOptions = (
   employees: EmployeeLike[],

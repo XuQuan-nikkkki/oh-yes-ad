@@ -97,7 +97,6 @@ model SelectOption {
   projectsByStage                             Project[]                                    @relation("ProjectStage")
   projectSegmentsByStatus                     ProjectSegment[]                             @relation("ProjectSegmentStatus")
   projectTasksByStatus                        ProjectTask[]                                @relation("ProjectTaskStatus")
-  projectDocumentsByType                      ProjectDocument[]                            @relation("ProjectDocumentType")
   projectMilestonesByType                     ProjectMilestone[]                           @relation("ProjectMilestoneType")
   projectMilestonesByMethod                   ProjectMilestone[]                           @relation("ProjectMilestoneMethod")
   projectCostEstimationsByExecutionCostType   ProjectCostEstimation[]                      @relation("ProjectCostEstimationExecutionCostTypes")
@@ -319,36 +318,37 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  leaveRecords                 LeaveRecord[]
-  ownedProjects                Project[]                                  @relation("ProjectOwner")
-  ownedProjectCostEstimations  ProjectCostEstimation[]                    @relation("ProjectCostEstimationOwner")
-  ownedProjectInitiations      ProjectInitiation[]                        @relation("ProjectInitiationOwner")
-  projects                     Project[]                                  @relation("ProjectMembers")
-  projectSegments              ProjectSegment[]
-  ownedBriefs                  Brief[]                                    @relation("BriefOwner")
-  createdBriefs                Brief[]                                    @relation("BriefCreator")
-  reviewedDeliverables         Deliverable[]                              @relation("DeliverableReviewer")
-  assignedDeliverables         Deliverable[]                              @relation("DeliverableAssignee")
-  createdDeliverables          Deliverable[]                              @relation("DeliverableCreator")
-  deliverableAssignments       DeliverableAssignmentHistory[]             @relation("DeliverableAssignmentAssignee")
-  assignedDeliverablesHistory  DeliverableAssignmentHistory[]             @relation("DeliverableAssignmentActor")
-  ownedTasks                   ProjectTask[]                              @relation("TaskOwner")
-  createdTasks                 ProjectTask[]                              @relation("TaskCreator")
-  milestones                   ProjectMilestone[]                         @relation("MilestoneInternalParticipants")
-  projectCostEstimations       ProjectCostEstimationMember[]
-  projectInitiationMembers     ProjectInitiationMember[]
-  actualWorkEntries            ActualWorkEntry[]
-  roles                        EmployeeRole[]
-  apiCallLogs                  ApiCallLog[]
-  ownedProjectReceivablePlans  ProjectReceivablePlan[]                    @relation("ProjectReceivablePlanOwner")
-  ownedProjectPayablePlans     ProjectPayablePlan[]                       @relation("ProjectPayablePlanOwner")
-  projectReimbursements        ProjectReimbursement[]                     @relation("ProjectReimbursementApplicant")
-  receivableExpectedDateEdits  ProjectReceivableNodeExpectedDateHistory[]
-  receivableBadDebtRecords     ProjectReceivableBadDebtRecord[]           @relation("ProjectReceivableBadDebtRecordCreatedBy")
-  payableAdjustmentRecords     ProjectPayableAdjustmentRecord[]           @relation("ProjectPayableAdjustmentRecordCreatedBy")
-  systemSettingHistories       SystemSettingHistory[]
-  compensationHistories        EmployeeCompensationHistory[]              @relation("EmployeeCompensationSubject")
-  changedCompensationHistories EmployeeCompensationHistory[]              @relation("EmployeeCompensationChangedBy")
+  leaveRecords                  LeaveRecord[]
+  ownedProjects                 Project[]                                  @relation("ProjectOwner")
+  ownedProjectCostEstimations   ProjectCostEstimation[]                    @relation("ProjectCostEstimationOwner")
+  ownedProjectInitiations       ProjectInitiation[]                        @relation("ProjectInitiationOwner")
+  projects                      Project[]                                  @relation("ProjectMembers")
+  projectSegments               ProjectSegment[]
+  ownedBriefs                   Brief[]                                    @relation("BriefOwner")
+  createdBriefs                 Brief[]                                    @relation("BriefCreator")
+  reviewedDeliverables          Deliverable[]                              @relation("DeliverableReviewer")
+  assignedDeliverables          Deliverable[]                              @relation("DeliverableAssignee")
+  createdDeliverables           Deliverable[]                              @relation("DeliverableCreator")
+  deliverableAssignmentsFrom    DeliverableAssignmentChange[]              @relation("DeliverableAssignmentFrom")
+  deliverableAssignmentsTo      DeliverableAssignmentChange[]              @relation("DeliverableAssignmentTo")
+  changedDeliverableAssignments DeliverableAssignmentChange[]              @relation("DeliverableAssignmentActor")
+  ownedTasks                    ProjectTask[]                              @relation("TaskOwner")
+  createdTasks                  ProjectTask[]                              @relation("TaskCreator")
+  milestones                    ProjectMilestone[]                         @relation("MilestoneInternalParticipants")
+  projectCostEstimations        ProjectCostEstimationMember[]
+  projectInitiationMembers      ProjectInitiationMember[]
+  actualWorkEntries             ActualWorkEntry[]
+  roles                         EmployeeRole[]
+  apiCallLogs                   ApiCallLog[]
+  ownedProjectReceivablePlans   ProjectReceivablePlan[]                    @relation("ProjectReceivablePlanOwner")
+  ownedProjectPayablePlans      ProjectPayablePlan[]                       @relation("ProjectPayablePlanOwner")
+  projectReimbursements         ProjectReimbursement[]                     @relation("ProjectReimbursementApplicant")
+  receivableExpectedDateEdits   ProjectReceivableNodeExpectedDateHistory[]
+  receivableBadDebtRecords      ProjectReceivableBadDebtRecord[]           @relation("ProjectReceivableBadDebtRecordCreatedBy")
+  payableAdjustmentRecords      ProjectPayableAdjustmentRecord[]           @relation("ProjectPayableAdjustmentRecordCreatedBy")
+  systemSettingHistories        SystemSettingHistory[]
+  compensationHistories         EmployeeCompensationHistory[]              @relation("EmployeeCompensationSubject")
+  changedCompensationHistories  EmployeeCompensationHistory[]              @relation("EmployeeCompensationChangedBy")
 }
 
 model EmployeeCompensationHistory {
@@ -469,7 +469,6 @@ model Project {
   segments ProjectSegment[]
   briefs   Brief[]
 
-  documents           ProjectDocument[]
   vendors             Vendor[]                    @relation("ProjectVendors")
   milestones          ProjectMilestone[]
   costEstimations     ProjectCostEstimation[]
@@ -915,7 +914,7 @@ model Deliverable {
 
   firstDraftAt DateTime? @db.Date
   revisionAt   DateTime? @db.Date
-  finalAt      DateTime @db.Date
+  finalAt      DateTime  @db.Date
 
   briefId String
   brief   Brief  @relation(fields: [briefId], references: [id], onDelete: Cascade)
@@ -931,7 +930,7 @@ model Deliverable {
 
   formatOptions          DeliverableFormatOption[]
   categoryOrSceneOptions DeliverableCategoryOrSceneOption[]
-  assignmentHistories    DeliverableAssignmentHistory[]
+  assignmentChanges      DeliverableAssignmentChange[]
   plannedWorkEntries     PlannedWorkEntry[]
 
   createdAt DateTime @default(now())
@@ -965,25 +964,28 @@ model DeliverableCategoryOrSceneOption {
   @@index([optionId])
 }
 
-model DeliverableAssignmentHistory {
+model DeliverableAssignmentChange {
   id String @id @default(uuid())
 
   deliverableId String
   deliverable   Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
 
-  assigneeId String
-  assignee   Employee @relation("DeliverableAssignmentAssignee", fields: [assigneeId], references: [id])
+  fromAssigneeId String?
+  fromAssignee   Employee? @relation("DeliverableAssignmentFrom", fields: [fromAssigneeId], references: [id])
 
-  assignedById String
-  assignedBy   Employee @relation("DeliverableAssignmentActor", fields: [assignedById], references: [id])
+  toAssigneeId String
+  toAssignee   Employee @relation("DeliverableAssignmentTo", fields: [toAssigneeId], references: [id])
 
-  assignedAt   DateTime  @default(now())
-  endedAt      DateTime?
-  changeReason String?
+  changedById String
+  changedBy   Employee @relation("DeliverableAssignmentActor", fields: [changedById], references: [id])
 
-  @@index([deliverableId])
-  @@index([assigneeId])
-  @@index([assignedById])
+  remarks   String?
+  changedAt DateTime @default(now())
+
+  @@index([deliverableId, changedAt])
+  @@index([fromAssigneeId])
+  @@index([toAssigneeId])
+  @@index([changedById])
 }
 
 model ProjectTask {
@@ -1016,31 +1018,6 @@ model ProjectTask {
   @@index([segmentId])
   @@index([statusOptionId])
   @@index([ownerId])
-}
-
-model ProjectDocument {
-  id           String  @id @default(uuid())
-  notionPageId String? @unique
-
-  // 基础字段
-  name         String
-  typeOptionId String?
-  typeOption   SelectOption? @relation("ProjectDocumentType", fields: [typeOptionId], references: [id])
-  date         DateTime?
-  isFinal      Boolean       @default(false)
-  internalLink String? // 内部盘链接
-
-  // 所属项目
-  projectId   String
-  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  milestoneId String?
-  milestone   ProjectMilestone? @relation("MilestoneDocuments", fields: [milestoneId], references: [id], onDelete: SetNull)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([projectId])
-  @@index([milestoneId])
 }
 
 model Vendor {
@@ -1139,9 +1116,6 @@ model ProjectMilestone {
   internalParticipants Employee[]      @relation("MilestoneInternalParticipants")
   vendorParticipants   Vendor[]        @relation("MilestoneVendorParticipants")
   clientParticipants   ClientContact[] @relation("MilestoneClientParticipants")
-
-  // 关联资料
-  documents ProjectDocument[] @relation("MilestoneDocuments")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

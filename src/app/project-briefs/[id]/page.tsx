@@ -17,6 +17,7 @@ import { formatDate } from "@/lib/date";
 import { useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import type { BriefDetail } from "@/types/brief";
+import { DeliverableAssignmentHistory } from "@/components/project-detail/DeliverableAssignmentChange";
 
 const BriefFormModal = dynamic(() => import("@/components/project-detail/BriefFormModal"));
 const DeliverableEditModal = dynamic(() => import("@/components/project-detail/DeliverableEditModal"));
@@ -301,6 +302,17 @@ export default function BriefDetailPage() {
             <Descriptions.Item label="修改日期">{formatDate(activeDeliverable.revisionAt, "YYYY-MM-DD")}</Descriptions.Item>
             <Descriptions.Item label="定稿日期">{formatDate(activeDeliverable.finalAt, "YYYY-MM-DD")}</Descriptions.Item>
           </Descriptions>
+          {activeDeliverable.assignmentChanges?.length ? (
+            <div style={{ marginTop: 28 }}>
+              <Typography.Title level={5} style={{ marginBottom: 20 }}>
+                执行人交接记录
+              </Typography.Title>
+              <DeliverableAssignmentHistory
+                changes={activeDeliverable.assignmentChanges}
+                variant="detail"
+              />
+            </div>
+          ) : null}
           </div>
         ) : null}
       </Card>

@@ -22,7 +22,7 @@ const DeliverableEditModal = ({ open, ...formProps }: Props) => (
     onCancel={formProps.onCancel}
     footer={null}
     destroyOnHidden
-    maskClosable={false}
+    mask={{ closable: false }}
     width={880}
   >
     <DeliverableEditForm {...formProps} />

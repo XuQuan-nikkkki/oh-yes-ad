@@ -459,6 +459,34 @@ a {
   background: #fff;
 }
 
+.brief-deliverable-assignment-history {
+  margin: 16px 20px 0 44px;
+  padding: 14px 16px 2px;
+  border: 1px solid #e8ebf0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.brief-deliverable-assignment-history-title {
+  margin-bottom: 14px;
+}
+
+.brief-deliverable-assignment-history .ant-timeline {
+  margin: 0;
+  padding-inline-start: 18px;
+}
+
+.brief-deliverable-assignment-history-item {
+  padding-bottom: 2px;
+}
+
+.brief-deliverable-assignment-history.is-detail {
+  margin: 0;
+  padding: 2px 0 0;
+  border: 0;
+  border-radius: 0;
+}
+
 .brief-deliverable-planned-work .ant-pro-table-list-toolbar-container {
   min-height: 48px;
   padding-block: 8px;
@@ -470,6 +498,10 @@ a {
 
 @container (max-width: 680px) {
   .brief-deliverable-planned-work {
+    margin-inline: 20px;
+  }
+
+  .brief-deliverable-assignment-history {
     margin-inline: 20px;
   }
 }

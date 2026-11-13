@@ -14,7 +14,6 @@ import {
   syncLeaveRecords,
 } from "./migrate-employees";
 import {
-  syncProjectDocuments,
   syncProjectMilestones,
   syncProjects,
   syncProjectSegments,
@@ -273,17 +272,6 @@ const NOTION_SELECT_OPTION_CONFIGS: SelectOptionDataSourceConfig[] = [
     ],
   },
   {
-    envVar: "NOTION_PROJECT_DOCUMENT_DB_ID",
-    label: "项目资料",
-    fields: [
-      {
-        optionField: "projectDocument.type",
-        notionNames: ["类型"],
-        supportedTypes: ["select"],
-      },
-    ],
-  },
-  {
     envVar: "NOTION_PROJECT_MILESTONE_DB_ID",
     label: "项目里程碑",
     fields: [
@@ -451,7 +439,6 @@ const resetDatabases = async () => {
     "LeaveRecord",
     "ActualWorkEntry",
     "PlannedWorkEntry",
-    "ProjectDocument",
     "ProjectMilestone",
     "ProjectTask",
     "ProjectSegment",
@@ -508,7 +495,6 @@ const runMigrate = async () => {
   await syncProjectSegments();
   await syncProjectTasks();
   await syncProjectMilestones();
-  await syncProjectDocuments();
   await syncPlannedWorkEntries();
   await syncActualWorkEntries();
   await syncWorkdayAdjustments();

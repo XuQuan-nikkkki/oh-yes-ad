@@ -6,6 +6,9 @@ export type EmployeeListItem = {
   fullName?: string | null;
   phone?: string | null;
   employmentStatus?: string | null;
+  employmentStatusOption?: { value?: string | null } | null;
+  function?: string | null;
+  functionOption?: { value?: string | null } | null;
   [key: string]: unknown;
 };
 

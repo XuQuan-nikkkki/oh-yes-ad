@@ -137,56 +137,6 @@ const includeDetailBase = {
   },
 } as const;
 
-const includeDetailV2 = {
-  ...includeDetailBase,
-  documents: {
-    select: {
-      id: true,
-      name: true,
-      typeOption: { select: { id: true, value: true, color: true } },
-      date: true,
-      isFinal: true,
-      internalLink: true,
-      project: { select: { id: true, name: true } },
-      milestone: { select: { id: true, name: true } },
-    },
-  },
-} as const;
-
-const includeDetailV1 = {
-  ...includeDetailBase,
-  documents: {
-    select: {
-      id: true,
-      name: true,
-      typeOption: { select: { id: true, value: true, color: true } },
-      date: true,
-      isFinal: true,
-      internalLink: true,
-      project: { select: { id: true, name: true } },
-      milestones: { select: { id: true, name: true } },
-    },
-  },
-} as const;
-
-const normalizeMilestoneDocumentShape = (item: Record<string, unknown>) => {
-  const documents = (item as { documents?: unknown[] }).documents;
-  return {
-    ...item,
-    documents: Array.isArray(documents)
-      ? documents.map((document) => {
-          if (!document || typeof document !== "object") return document;
-          if ("milestone" in document) return document;
-          const milestones = (document as { milestones?: unknown[] }).milestones;
-          return {
-            ...document,
-            milestone: Array.isArray(milestones) ? milestones[0] ?? null : null,
-          };
-        })
-      : [],
-  };
-};
-
 const serializeMilestone = (
   milestone: Record<string, unknown> & {
     typeOption?: { value?: string | null } | null;
@@ -252,21 +202,10 @@ const serializeMilestone = (
 
 export async function GET(_req: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-  let item: Record<string, unknown> | null = null;
-  try {
-    item = await prismaCompat.projectMilestone.findFirst({
-      where: { id },
-      include: includeDetailV2,
-    });
-  } catch {
-    item = await prismaCompat.projectMilestone.findFirst({
-      where: { id },
-      include: includeDetailV1,
-    });
-    if (item) {
-      item = normalizeMilestoneDocumentShape(item);
-    }
-  }
+  const item = await prismaCompat.projectMilestone.findFirst({
+    where: { id },
+    include: includeDetailBase,
+  });
   if (!item) return new Response("Not Found", { status: 404 });
   return Response.json(serializeMilestone(item));
 }
@@ -341,21 +280,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       : {}),
   };
 
-  let item: Record<string, unknown>;
-  try {
-    item = await prismaCompat.projectMilestone.update({
-      where: { id },
-      data: updateData,
-      include: includeDetailV2,
-    });
-  } catch {
-    item = await prismaCompat.projectMilestone.update({
-      where: { id },
-      data: updateData,
-      include: includeDetailV1,
-    });
-    item = normalizeMilestoneDocumentShape(item);
-  }
+  const item = await prismaCompat.projectMilestone.update({
+    where: { id },
+    data: updateData,
+    include: includeDetailBase,
+  });
   return Response.json(serializeMilestone(item));
 }
 

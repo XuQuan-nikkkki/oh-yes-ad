@@ -157,8 +157,8 @@ export async function POST(req: NextRequest) {
           finalAt: parseDate(item.finalAt),
           formatOptions: { create: item.formatOptionIds.map((optionId) => ({ optionId })) },
           categoryOrSceneOptions: { create: item.categoryOrSceneOptionIds.map((optionId) => ({ optionId })) },
-          assignmentHistories: item.assigneeId
-            ? { create: { assigneeId: item.assigneeId, assignedById: creatorId, changeReason: "创建时指派" } }
+          assignmentChanges: item.assigneeId
+            ? { create: { toAssigneeId: item.assigneeId, changedById: creatorId } }
             : undefined,
         })),
       },

@@ -13,6 +13,7 @@ import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { formatDate } from "@/lib/date";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import type { DeliverableDetail } from "@/types/brief";
+import { DeliverableAssignmentHistory } from "@/components/project-detail/DeliverableAssignmentChange";
 
 const DeliverableEditModal = dynamic(() => import("@/components/project-detail/DeliverableEditModal"));
 
@@ -151,6 +152,14 @@ export default function DeliverableDetailPage() {
           <Descriptions.Item label="定稿日期">{formatDate(data.finalAt, "YYYY-MM-DD")}</Descriptions.Item>
         </Descriptions>
       </Card>
+      {data.assignmentChanges?.length ? (
+        <Card title="执行人交接记录">
+          <DeliverableAssignmentHistory
+            changes={data.assignmentChanges}
+            variant="detail"
+          />
+        </Card>
+      ) : null}
       {open ? (
         <DeliverableEditModal
           open

@@ -1223,6 +1223,13 @@ function SchedulePageContent() {
             onAfterPlannedWorkChange={async () => {
               refreshProjectDetails(project.id);
             }}
+            onAfterAssignmentChange={
+              canManageProject
+                ? async () => {
+                    refreshProjectDetails(project.id);
+                  }
+                : undefined
+            }
             onEditBrief={
               canManageProject
                 ? (brief) => {

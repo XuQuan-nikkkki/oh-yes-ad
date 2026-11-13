@@ -10,9 +10,6 @@ import type { ProjectSegmentFormPayload } from "@/components/project-detail/Proj
 import ProjectSegmentFormModal from "@/components/project-detail/ProjectSegmentFormModal";
 import type { ProjectTaskFormPayload } from "@/components/project-detail/ProjectTaskForm";
 import ProjectTaskFormModal from "@/components/project-detail/ProjectTaskFormModal";
-import ProjectDocumentForm, {
-  type ProjectDocumentFormPayload,
-} from "@/components/project-detail/ProjectDocumentForm";
 import ActualWorkEntryForm, {
   type ActualWorkEntryFormPayload,
 } from "@/components/project-detail/ActualWorkEntryForm";
@@ -28,19 +25,6 @@ import type {
 } from "@/types/projectDetail";
 
 type ActualWorkView = "records" | "analysis";
-
-type EditingDocument = {
-  id: string;
-  name: string;
-  typeOption?: {
-    id?: string;
-    value?: string | null;
-    color?: string | null;
-  } | null;
-  date?: string | null;
-  isFinal: boolean;
-  internalLink?: string | null;
-} | null;
 
 type EditingActualWorkEntry = {
   id: string;
@@ -195,94 +179,6 @@ export const ProjectSegmentAction = ({
         await onSaved();
       }}
     />
-  </>
-);
-
-type DocumentActionProps = {
-  projectId: string;
-  project: Project | null;
-  canManageProject: boolean;
-  visible: boolean;
-  open: boolean;
-  editing: EditingDocument;
-  onOpenCreate: () => void;
-  onCancel: () => void;
-  onSaved: () => Promise<void>;
-};
-
-export const ProjectDocumentAction = ({
-  projectId,
-  project,
-  canManageProject,
-  visible,
-  open,
-  editing,
-  onOpenCreate,
-  onCancel,
-  onSaved,
-}: DocumentActionProps) => (
-  <>
-    {visible && canManageProject ? (
-      <Button
-        type="primary"
-        onClick={() => {
-          onOpenCreate();
-        }}
-      >
-        新增文档
-      </Button>
-    ) : null}
-    <Modal
-      title={editing ? "编辑文档" : "新增文档"}
-      open={open}
-      onCancel={onCancel}
-      footer={null}
-      width={860}
-      destroyOnHidden
-    >
-      <ProjectDocumentForm
-        showProjectField
-        showMilestoneField
-        projectOptions={
-          project
-            ? [
-                {
-                  id: project.id,
-                  name: project.name,
-                },
-              ]
-            : []
-        }
-        milestoneOptions={
-          project?.milestones?.map((milestone) => ({
-            id: milestone.id,
-            name: milestone.name,
-            projectId: project.id,
-          })) ?? []
-        }
-        selectedProjectId={project?.id}
-        disableProjectSelect={Boolean(project?.id)}
-        initialValues={editing}
-        onSubmit={async (payload: ProjectDocumentFormPayload) => {
-          if (!canManageProject) return;
-          if (editing) {
-            await fetch(`/api/projects/${projectId}/documents/${editing.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
-          } else {
-            await fetch(`/api/projects/${projectId}/documents`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
-          }
-          onCancel();
-          await onSaved();
-        }}
-      />
-    </Modal>
   </>
 );
 

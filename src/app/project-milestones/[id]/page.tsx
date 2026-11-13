@@ -23,12 +23,6 @@ import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
 import EmployeesTable, { type Employee } from "@/components/EmployeesTable";
 import ClientContactTable from "@/components/ClientContactTable";
 import VendorsTable, { type Vendor } from "@/components/VendorsTable";
-import ProjectDocumentsTable, {
-  type ProjectDocumentRow,
-} from "@/components/ProjectDocumentsTable";
-import ProjectDocumentForm, {
-  type ProjectDocumentFormPayload,
-} from "@/components/project-detail/ProjectDocumentForm";
 import ProjectMilestoneFormModal from "@/components/project-detail/ProjectMilestoneFormModal";
 import type { ProjectMilestoneFormPayload } from "@/components/project-detail/ProjectMilestoneForm";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
@@ -66,7 +60,6 @@ type MilestoneDetail = {
   internalParticipants?: Employee[];
   vendorParticipants?: Vendor[];
   clientParticipants?: ClientContact[];
-  documents?: ProjectDocumentRow[];
 };
 
 type ProjectContext = {
@@ -250,7 +243,6 @@ export default function Page() {
   const [internalAddOpen, setInternalAddOpen] = useState(false);
   const [clientAddOpen, setClientAddOpen] = useState(false);
   const [vendorAddOpen, setVendorAddOpen] = useState(false);
-  const [documentAddOpen, setDocumentAddOpen] = useState(false);
 
   const [pendingInternalIds, setPendingInternalIds] = useState<string[]>([]);
   const [pendingClientIds, setPendingClientIds] = useState<string[]>([]);
@@ -515,35 +507,6 @@ export default function Page() {
     }
   };
 
-  const onCreateDocument = async (payload: ProjectDocumentFormPayload) => {
-    if (!canManageProject) return;
-    const projectId = data?.project?.id;
-    if (!projectId) {
-      messageApi.error("当前里程碑缺少所属项目");
-      return;
-    }
-    const res = await fetch("/api/project-documents", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: payload.name,
-        projectId,
-        milestoneId: id,
-        typeOption: payload.typeOption ?? null,
-        date: payload.date ?? null,
-        isFinal: Boolean(payload.isFinal),
-        internalLink: payload.internalLink ?? null,
-      }),
-    });
-    if (!res.ok) {
-      messageApi.error("新建资料失败");
-      return;
-    }
-    messageApi.success("新建资料成功");
-    setDocumentAddOpen(false);
-    await refreshAll();
-  };
-
   return (
     <DetailPageContainer>
       {contextHolder}
@@ -786,54 +749,6 @@ export default function Page() {
         </Card>
       ) : null}
 
-      <Card styles={{ body: { padding: 2 } }}>
-        <ProjectDocumentsTable
-          rows={data?.documents ?? []}
-          loading={loading}
-          actionsDisabled={!canManageProject}
-          onDelete={(documentId) => {
-            if (!canManageProject) return;
-            void updateRelationWithLoading(async () => {
-              const res = await fetch(`/api/project-documents/${documentId}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ milestoneId: null }),
-              });
-              if (!res.ok) {
-                throw new Error("failed");
-              }
-              await refreshAll();
-            });
-          }}
-          actionDeleteText="移除"
-          actionDeleteTitle="确定移除该关联资料？"
-          columnKeys={[
-            "name",
-            "type",
-            "date",
-            "isFinal",
-            "internalLink",
-            "actions",
-          ]}
-          headerTitle={<h4 style={{ margin: 0 }}>相关资料</h4>}
-          showColumnSetting={false}
-          toolbarActions={[
-            ...(canManageProject
-              ? [
-                  <Button
-                    key="add-document"
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={() => setDocumentAddOpen(true)}
-                  >
-                    新建资料
-                  </Button>,
-                ]
-              : []),
-          ]}
-        />
-      </Card>
-
       <ProjectMilestoneFormModal
         title="编辑里程碑"
         open={open}
@@ -975,44 +890,6 @@ export default function Page() {
         />
       </Modal>
 
-      {documentAddOpen ? (
-        <Modal
-          title="新建资料"
-          open={documentAddOpen}
-          onCancel={() => {
-            setDocumentAddOpen(false);
-          }}
-          footer={null}
-          width={860}
-          destroyOnHidden
-        >
-          <ProjectDocumentForm
-            showProjectField
-            showMilestoneField
-            disableProjectSelect
-            disableMilestoneSelect
-            projectOptions={
-              data?.project
-                ? [{ id: data.project.id, name: data.project.name }]
-                : []
-            }
-            milestoneOptions={
-              data
-                ? [
-                    {
-                      id: data.id,
-                      name: data.name,
-                      projectId: data.project?.id ?? null,
-                    },
-                  ]
-                : []
-            }
-            selectedProjectId={data?.project?.id}
-            selectedMilestoneId={data?.id}
-            onSubmit={onCreateDocument}
-          />
-        </Modal>
-      ) : null}
     </DetailPageContainer>
   );
 }

@@ -132,12 +132,11 @@ export async function POST(
         categoryOrSceneOptions: {
           create: categoryOrSceneOptionIds.map((optionId) => ({ optionId })),
         },
-        assignmentHistories: assigneeId
+        assignmentChanges: assigneeId
           ? {
               create: {
-                assigneeId,
-                assignedById: auth.employee.id,
-                changeReason: "单独添加交付物时指派",
+                toAssigneeId: assigneeId,
+                changedById: auth.employee.id,
               },
             }
           : undefined,

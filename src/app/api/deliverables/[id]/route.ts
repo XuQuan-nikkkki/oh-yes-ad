@@ -84,6 +84,9 @@ export async function PATCH(
     typeof body.assigneeId === "string" && body.assigneeId
       ? body.assigneeId
       : undefined;
+  if (deliverable.assigneeId && !assigneeId) {
+    return new Response("已指派的交付物不能清空执行人，请改派给其他人", { status: 400 });
+  }
   const employeeIds = Array.from(
     new Set([body.reviewerId, assigneeId].filter(Boolean) as string[]),
   );
@@ -166,17 +169,13 @@ export async function PATCH(
     }
 
     if (deliverable.assigneeId !== assigneeId) {
-      await tx.deliverableAssignmentHistory.updateMany({
-        where: { deliverableId: id, endedAt: null },
-        data: { endedAt: new Date() },
-      });
       if (assigneeId) {
-        await tx.deliverableAssignmentHistory.create({
+        await tx.deliverableAssignmentChange.create({
           data: {
             deliverableId: id,
-            assigneeId,
-            assignedById: auth.employee.id,
-            changeReason: "编辑交付物时指派",
+            fromAssigneeId: deliverable.assigneeId,
+            toAssigneeId: assigneeId,
+            changedById: auth.employee.id,
           },
         });
       }

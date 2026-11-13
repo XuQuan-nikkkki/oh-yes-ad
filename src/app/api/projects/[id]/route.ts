@@ -133,9 +133,6 @@ type ProjectMilestonePayload = {
   methodOption?: NullableSelectOptionValue;
   internalParticipants?: EmployeePayload[];
 } & Record<string, unknown>;
-type ProjectDocumentPayload = {
-  typeOption?: NullableSelectOptionValue;
-} & Record<string, unknown>;
 type ProjectCostEstimationMemberPayload = {
   id: string;
   estimationId?: string;
@@ -195,7 +192,6 @@ type ProjectPayload = {
   members?: EmployeePayload[];
   milestones?: ProjectMilestonePayload[];
   segments?: ProjectSegmentPayload[];
-  documents?: ProjectDocumentPayload[];
   costEstimations?: ProjectCostEstimationPayload[];
   initiations?: ProjectCostEstimationPayload[];
   manualCost?: ProjectManualCostPayload | null;
@@ -501,11 +497,6 @@ const serializeProject = (project: ProjectPayload) => {
             : [],
         }))
       : [],
-    documents: Array.isArray(baseProject.documents)
-      ? baseProject.documents.map((document) => ({
-          ...document,
-        }))
-      : [],
     costSourceMode: baseProject.costSourceMode ?? "AUTO",
     manualCost: serializeManualCost(baseProject.manualCost),
     latestCostEstimation: Array.isArray(costEstimations)
@@ -734,22 +725,6 @@ const projectDetailInclude = {
     },
     orderBy: { startDate: "desc" as const },
   },
-  documents: {
-    select: {
-      id: true,
-      name: true,
-      typeOption: {
-        select: {
-          value: true,
-          color: true,
-        },
-      },
-      date: true,
-      isFinal: true,
-      internalLink: true,
-    },
-    orderBy: { date: "desc" as const },
-  },
   manualCost: true,
   costEstimations: {
     select: projectCostEstimationSelect,
@@ -781,6 +756,17 @@ const projectDetailInclude = {
           finalAt: true,
           reviewer: { select: { id: true, name: true } },
           assignee: { select: { id: true, name: true } },
+          assignmentChanges: {
+            select: {
+              id: true,
+              fromAssignee: { select: { id: true, name: true } },
+              toAssignee: { select: { id: true, name: true } },
+              changedBy: { select: { id: true, name: true } },
+              remarks: true,
+              changedAt: true,
+            },
+            orderBy: { changedAt: "asc" as const },
+          },
           formatOptions: {
             select: { option: { select: { id: true, value: true, color: true } } },
           },

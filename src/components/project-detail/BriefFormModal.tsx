@@ -15,7 +15,7 @@ const BriefFormModal = ({ open, onCancel, ...formProps }: Props) => (
     className="brief-form-modal"
     open={open}
     onCancel={onCancel}
-    maskClosable={false}
+    mask={{ closable: false }}
     keyboard={false}
     footer={null}
     destroyOnHidden

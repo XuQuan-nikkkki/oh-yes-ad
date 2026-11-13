@@ -209,7 +209,13 @@ export async function PATCH(
     : deliverables.every((item) => Boolean(item.assigneeId))
       ? "in_progress"
       : "waiting_assignment";
-  const now = new Date();
+
+  const clearedAssignedDeliverable = deliverables.find(
+    (item) => item.id && existingById.get(item.id)?.assigneeId && !item.assigneeId,
+  );
+  if (clearedAssignedDeliverable) {
+    return new Response("已指派的交付物不能清空执行人，请改派给其他人", { status: 400 });
+  }
 
   await prisma.$transaction(async (tx) => {
     if (deleteIds.length) {
@@ -260,17 +266,13 @@ export async function PATCH(
         ]);
 
         if (previous?.assigneeId !== item.assigneeId) {
-          await tx.deliverableAssignmentHistory.updateMany({
-            where: { deliverableId: item.id, endedAt: null },
-            data: { endedAt: now },
-          });
           if (item.assigneeId) {
-            await tx.deliverableAssignmentHistory.create({
+            await tx.deliverableAssignmentChange.create({
               data: {
                 deliverableId: item.id,
-                assigneeId: item.assigneeId,
-                assignedById: auth.employee.id,
-                changeReason: "编辑需求单时指派",
+                fromAssigneeId: previous?.assigneeId,
+                toAssigneeId: item.assigneeId,
+                changedById: auth.employee.id,
               },
             });
           }
@@ -289,12 +291,11 @@ export async function PATCH(
                 optionId,
               })),
             },
-            assignmentHistories: item.assigneeId
+            assignmentChanges: item.assigneeId
               ? {
                   create: {
-                    assigneeId: item.assigneeId,
-                    assignedById: auth.employee.id,
-                    changeReason: "编辑需求单时新增",
+                    toAssigneeId: item.assigneeId,
+                    changedById: auth.employee.id,
                   },
                 }
               : undefined,

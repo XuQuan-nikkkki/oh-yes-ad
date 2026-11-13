@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Button, Card, Modal, Popconfirm, Space, Steps, Typography } from "antd";
+import { Button, Card, Modal, Popconfirm, Space, Steps, Typography, message } from "antd";
 import {
   useParams,
   usePathname,
@@ -13,20 +13,19 @@ import DetailPageContainer from "@/components/DetailPageContainer";
 import ProjectFormModal from "@/components/ProjectFormModal";
 import dayjs from "dayjs";
 import { ProjectMilestoneRow } from "@/components/ProjectMilestonesTable";
-import { ProjectSegmentRow } from "@/components/project-detail/ProjectSegmentsTable";
-import type { ProjectTaskRow } from "@/components/project-detail/ProjectTasksTable";
-import type { ProjectTaskFormPayload } from "@/components/project-detail/ProjectTaskForm";
-import type { PlannedWorkEntryFormPayload } from "@/components/project-detail/PlannedWorkEntryForm";
 import ActualWorkAnalysisTable from "@/components/project-detail/ActualWorkAnalysisTable";
 import ActualWorkEntriesTable, {
   type ActualWorkEntryRow,
 } from "@/components/ActualWorkEntriesTable";
-import type { ProjectDocumentRow } from "@/components/ProjectDocumentsTable";
 import ProjectDetailMilestonesContent from "@/components/project-detail/ProjectDetailMilestonesContent";
 import ProjectDetailMembersContent from "@/components/project-detail/ProjectDetailMembersContent";
-import ProjectDetailProgressContent from "@/components/project-detail/ProjectDetailProgressContent";
+import ProjectBriefProgressContent, {
+  type ProjectBrief,
+  type ProjectBriefDeliverable,
+} from "@/components/project-detail/ProjectBriefProgressContent";
+import BriefFormModal from "@/components/project-detail/BriefFormModal";
+import DeliverableEditModal from "@/components/project-detail/DeliverableEditModal";
 import ProjectActualWorkRecordsContent from "@/components/project-detail/ProjectActualWorkRecordsContent";
-import ProjectDocumentsContent from "@/components/project-detail/ProjectDocumentsContent";
 import ProjectCostEstimationCard from "@/components/project-detail/ProjectCostEstimationCard";
 import ProjectInitiationCard from "@/components/project-detail/ProjectInitiationCard";
 import ProjectPricingStrategyCard from "@/components/project-detail/ProjectPricingStrategyCard";
@@ -39,11 +38,7 @@ import ProjectPayableInfo from "@/components/project-detail/ProjectPayableInfo";
 import ProjectReceivableInfo from "@/components/project-detail/ProjectReceivableInfo";
 import {
   ProjectActualWorkAction,
-  ProjectDocumentAction,
   ProjectMilestoneAction,
-  ProjectPlannedWorkModal,
-  ProjectSegmentAction,
-  ProjectTaskModal,
 } from "@/components/project-detail/ProjectDetailActionModules";
 import ProjectInfo from "./ProjectInfo";
 import ProjectPrimaryActions from "./ProjectPrimaryActions";
@@ -61,24 +56,9 @@ import { canManageProjectResources } from "@/lib/role-permissions";
 import type {
   ClientContact,
   Employee,
-  PlannedWorkRow,
   Project,
   WorkdayAdjustment,
 } from "@/types/projectDetail";
-import type { ProjectProgressSegmentRow } from "@/types/projectProgress";
-
-type EditingDocument = {
-  id: string;
-  name: string;
-  typeOption?: {
-    id?: string;
-    value?: string | null;
-    color?: string | null;
-  } | null;
-  date?: string | null;
-  isFinal: boolean;
-  internalLink?: string | null;
-} | null;
 
 type EditingActualWorkEntry = {
   id: string;
@@ -97,19 +77,7 @@ type ActiveModalState =
   | { type: null }
   | { type: "project-edit" }
   | { type: "milestone"; editing: ProjectMilestoneRow | null }
-  | { type: "segment"; editing: ProjectSegmentRow | null }
-  | {
-      type: "task";
-      editing: ProjectTaskRow | null;
-      defaultSegmentId?: string;
-    }
-  | { type: "document"; editing: EditingDocument }
   | { type: "actual-work"; editing: EditingActualWorkEntry }
-  | {
-      type: "planned-work";
-      editing: PlannedWorkRow | null;
-      defaultTaskId?: string;
-    }
   | { type: "analysis-detail"; target: AnalysisDetailTarget };
 
 const ProjectDetailPage = () => {
@@ -129,6 +97,13 @@ const ProjectDetailPage = () => {
   const [project, setProject] = useState<Project | null>(
     (cachedProject as Project | undefined) ?? null,
   );
+  const [messageApi, messageContextHolder] = message.useMessage();
+  const [editingBrief, setEditingBrief] = useState<ProjectBrief | null>(null);
+  const [briefModalOpen, setBriefModalOpen] = useState(false);
+  const [editingDeliverable, setEditingDeliverable] = useState<{
+    briefId?: string;
+    deliverable?: ProjectBriefDeliverable;
+  } | null>(null);
   const [clientContacts, setClientContacts] = useState<ClientContact[]>([]);
   const [contactsLoadedClientId, setContactsLoadedClientId] = useState<
     string | null
@@ -151,7 +126,7 @@ const ProjectDetailPage = () => {
     "project-initiation" | "project-financial-structure"
   >("project-initiation");
   const [executionTopTab, setExecutionTopTab] = useState<
-    "members" | "vendors" | "milestones" | "progress" | "work" | "documents"
+    "members" | "vendors" | "milestones" | "progress" | "work"
   >("members");
   const [financeTopTab, setFinanceTopTab] = useState<"receivable" | "payable">(
     "receivable",
@@ -210,7 +185,7 @@ const ProjectDetailPage = () => {
       ({
         0: ["cost-estimation", "pricing-reference"],
         1: ["project-initiation", "project-financial-structure"],
-        2: ["members", "vendors", "milestones", "progress", "work", "documents"],
+        2: ["members", "vendors", "milestones", "progress", "work"],
         3: ["receivable", "payable"],
         4: ["realtime-cost", "expense-records"],
       }) as const,
@@ -495,89 +470,6 @@ const ProjectDetailPage = () => {
   }, [fetchFinancialStructureExists, stepParam]);
 
   const milestoneCount = project?.milestones?.length ?? 0;
-  const segmentRows: ProjectSegmentRow[] = project?.segments ?? [];
-  const taskCount =
-    project?.segments?.reduce(
-      (sum, segment) => sum + (segment.projectTasks?.length ?? 0),
-      0,
-    ) ?? 0;
-  const progressRows: ProjectProgressSegmentRow[] =
-    project?.segments
-      ?.map((segment) => ({
-        id: segment.id,
-        name: segment.name,
-        status: segment.status,
-        statusOption: segment.statusOption?.value
-          ? {
-              id: segment.statusOption.id ?? "",
-              value: segment.statusOption.value,
-              color: segment.statusOption.color ?? null,
-            }
-          : null,
-        ownerName: segment.owner?.name ?? "-",
-        ownerId: segment.owner?.id ?? null,
-        dueDate: segment.dueDate,
-        tasks: (segment.projectTasks ?? [])
-          .filter((task) => !(task.status ?? "").includes("完成"))
-          .map((task) => ({
-            id: task.id,
-            segmentId: segment.id,
-            segmentName: segment.name,
-            name: task.name,
-            status: task.status,
-            statusOption: task.statusOption ?? null,
-            ownerName: task.owner?.name ?? "-",
-            ownerId: task.owner?.id ?? null,
-            dueDate: task.dueDate,
-            plannedEntries: (task.plannedWorkEntries ?? [])
-              .map((entry) => ({
-                id: entry.id,
-                taskId: task.id,
-                year: entry.year,
-                weekNumber: entry.weekNumber,
-                plannedDays: entry.plannedDays,
-                monday: entry.monday,
-                tuesday: entry.tuesday,
-                wednesday: entry.wednesday,
-                thursday: entry.thursday,
-                friday: entry.friday,
-                saturday: entry.saturday,
-                sunday: entry.sunday,
-              }))
-              .sort((left, right) => {
-                if (left.year !== right.year) return right.year - left.year;
-                return right.weekNumber - left.weekNumber;
-              }),
-          })),
-      }))
-      ?.sort((left, right) => {
-        const isLeftDone = (left.status ?? "").includes("完成");
-        const isRightDone = (right.status ?? "").includes("完成");
-        if (isLeftDone !== isRightDone) return isLeftDone ? 1 : -1;
-        return left.name.localeCompare(right.name, "zh-CN");
-      }) ?? [];
-  const projectDocumentRows: ProjectDocumentRow[] =
-    project?.documents?.map((doc) => ({
-      id: doc.id,
-      name: doc.name,
-      typeOption: doc.typeOption?.value
-        ? {
-            id: doc.typeOption.id ?? "",
-            value: doc.typeOption.value,
-            color: doc.typeOption.color ?? null,
-          }
-        : null,
-      date: doc.date ?? null,
-      isFinal: Boolean(doc.isFinal),
-      internalLink: doc.internalLink ?? null,
-      milestone: doc.milestone ?? null,
-      project: project
-        ? {
-            id: project.id,
-            name: project.name,
-          }
-        : null,
-    })) ?? [];
   const actualWorkEmployeeFilterOptions = useMemo(() => {
     const map = new Map<string, string>();
     for (const member of project?.members ?? []) {
@@ -610,42 +502,6 @@ const ProjectDetailPage = () => {
       );
   }, [analysisDetailTarget, project?.actualWorkEntries]);
 
-  const openTaskModalForSegment = (segment: { id: string; name: string }) => {
-    if (!canManageProject) return;
-    setActiveModal({
-      type: "task",
-      editing: null,
-      defaultSegmentId: segment.id,
-    });
-  };
-
-  const handleCreateTask = async (payload: ProjectTaskFormPayload) => {
-    if (!canManageProject) return;
-    await fetch(`/api/projects/${projectId}/tasks`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    setActiveModal({ type: null });
-    await fetchProject();
-  };
-
-  const openCreatePlannedWorkModal = (defaultTaskId?: string) => {
-    if (!canManageProject) return;
-    setActiveModal({
-      type: "planned-work",
-      editing: null,
-      defaultTaskId,
-    });
-  };
-
-  const openEditPlannedWorkModal = (record: PlannedWorkRow) => {
-    if (!canManageProject) return;
-    setActiveModal({
-      type: "planned-work",
-      editing: record,
-    });
-  };
 
   const replaceSearchParams = useCallback(
     (nextParams: URLSearchParams) => {
@@ -711,8 +567,7 @@ const ProjectDetailPage = () => {
             | "vendors"
             | "milestones"
             | "progress"
-            | "work"
-            | "documents",
+            | "work",
         );
       }
     } else if (stepParam === 3) {
@@ -756,23 +611,60 @@ const ProjectDetailPage = () => {
     );
   }
 
-  const handleCreatePlannedWorkEntry = async (
-    payload: PlannedWorkEntryFormPayload,
-  ) => {
-    const res = await fetch("/api/planned-work-entries", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      throw new Error(await res.text());
+  const openCreateBrief = () => {
+    if (!project.client) {
+      messageApi.error("当前项目未关联客户");
+      return;
     }
-    setActiveModal({ type: null });
-    await fetchProject();
+    setEditingBrief(null);
+    setBriefModalOpen(true);
   };
+
+  const briefProgressContent = (
+    <ProjectBriefProgressContent
+      briefs={project.briefs ?? []}
+      project={{ id: project.id, name: project.name }}
+      canManagePlannedWork={canManageProject}
+      onAfterPlannedWorkChange={fetchProject}
+      onAfterAssignmentChange={canManageProject ? fetchProject : undefined}
+      onEditBrief={canManageProject ? (brief) => {
+        if (!project.client) {
+          messageApi.error("当前项目未关联客户");
+          return;
+        }
+        setEditingBrief(brief);
+        setBriefModalOpen(true);
+      } : undefined}
+      onEditDeliverable={canManageProject ? (deliverable) => {
+        setEditingDeliverable({ deliverable });
+      } : undefined}
+      onAddDeliverable={canManageProject ? (brief) => {
+        setEditingDeliverable({ briefId: brief.id });
+      } : undefined}
+      onDeleteBrief={canManageProject ? async (brief) => {
+        const response = await fetch(`/api/briefs/${brief.id}`, { method: "DELETE" });
+        if (!response.ok) {
+          messageApi.error((await response.text()) || "删除需求单失败");
+          return;
+        }
+        messageApi.success("需求单已删除");
+        await fetchProject();
+      } : undefined}
+      onDeleteDeliverable={canManageProject ? async (deliverable) => {
+        const response = await fetch(`/api/deliverables/${deliverable.id}`, { method: "DELETE" });
+        if (!response.ok) {
+          messageApi.error((await response.text()) || "删除交付物失败");
+          return;
+        }
+        messageApi.success("交付物已删除");
+        await fetchProject();
+      } : undefined}
+    />
+  );
 
   return (
     <DetailPageContainer>
+      {messageContextHolder}
       <Card
         title={project.name || "项目信息"}
         loading={loading}
@@ -833,26 +725,11 @@ const ProjectDetailPage = () => {
                 </div>
               ) : executionTopTab === "progress" ? (
                 <div style={{ paddingRight: 16 }}>
-                  <ProjectSegmentAction
-                    projectId={projectId}
-                    project={project}
-                    visible
-                    canManageProject={canManageProject}
-                    open={activeModal.type === "segment"}
-                    editing={
-                      activeModal.type === "segment"
-                        ? activeModal.editing
-                        : null
-                    }
-                    employees={employees}
-                    onOpenCreate={() => {
-                      setActiveModal({ type: "segment", editing: null });
-                    }}
-                    onCancel={() => {
-                      setActiveModal({ type: null });
-                    }}
-                    onSaved={fetchProject}
-                  />
+                  {canManageProject ? (
+                    <Button type="primary" onClick={openCreateBrief}>
+                      创建需求单
+                    </Button>
+                  ) : null}
                 </div>
               ) : executionTopTab === "work" ? (
                 <div style={{ paddingRight: 16 }}>
@@ -881,28 +758,6 @@ const ProjectDetailPage = () => {
                     onSaved={fetchProject}
                   />
                 </div>
-              ) : executionTopTab === "documents" ? (
-                <div style={{ paddingRight: 16 }}>
-                  <ProjectDocumentAction
-                    projectId={projectId}
-                    project={project}
-                    canManageProject={canManageProject}
-                    visible
-                    open={activeModal.type === "document"}
-                    editing={
-                      activeModal.type === "document"
-                        ? activeModal.editing
-                        : null
-                    }
-                    onOpenCreate={() => {
-                      setActiveModal({ type: "document", editing: null });
-                    }}
-                    onCancel={() => {
-                      setActiveModal({ type: null });
-                    }}
-                    onSaved={fetchProject}
-                  />
-                </div>
               ) : null,
             onChange: (key) =>
               setExecutionTopTab(
@@ -910,8 +765,7 @@ const ProjectDetailPage = () => {
                   | "members"
                   | "milestones"
                   | "progress"
-                  | "work"
-                  | "documents",
+                  | "work",
               ),
             items: [
               {
@@ -939,62 +793,8 @@ const ProjectDetailPage = () => {
               },
               {
                 key: "progress",
-                label: `环节${segmentRows.length}/任务${taskCount}`,
-                children: (
-                  <ProjectDetailProgressContent
-                    projectId={projectId}
-                    projectName={project.name ?? ""}
-                    data={progressRows}
-                    segmentCount={segmentRows.length}
-                    taskCount={taskCount}
-                    actionsDisabled={!canManageProject}
-                    employees={employees}
-                    onAddTask={(segment) => openTaskModalForSegment(segment)}
-                    onEditSegment={(segment) => {
-                      if (!canManageProject) return;
-                      setActiveModal({
-                        type: "segment",
-                        editing: {
-                          id: segment.id,
-                          name: segment.name,
-                          status: segment.status ?? null,
-                          statusOption: segment.statusOption ?? null,
-                          dueDate: segment.dueDate ?? null,
-                          owner: segment.ownerId
-                            ? {
-                                id: segment.ownerId,
-                                name: segment.ownerName,
-                              }
-                            : null,
-                        },
-                      });
-                    }}
-                    onAddPlannedWork={(task) =>
-                      openCreatePlannedWorkModal(task.id)
-                    }
-                    onAfterUpdateTask={fetchProject}
-                    onEditPlannedWork={(entry) => {
-                      if (!canManageProject) return;
-                      openEditPlannedWorkModal({
-                        id: entry.id,
-                        taskId: entry.taskId,
-                        year: entry.year,
-                        weekNumber: entry.weekNumber,
-                        plannedDays: entry.plannedDays,
-                        monday: entry.monday,
-                        tuesday: entry.tuesday,
-                        wednesday: entry.wednesday,
-                        thursday: entry.thursday,
-                        friday: entry.friday,
-                        saturday: entry.saturday,
-                        sunday: entry.sunday,
-                      });
-                    }}
-                    onAfterDeletePlannedWork={fetchProject}
-                    onAfterDeleteSegment={fetchProject}
-                    onAfterDeleteTask={fetchProject}
-                  />
-                ),
+                label: `需求单${project.briefs?.length ?? 0}/交付物${(project.briefs ?? []).reduce((sum, brief) => sum + (brief.deliverables?.length ?? 0), 0)}`,
+                children: briefProgressContent,
               },
               {
                 key: "work",
@@ -1108,35 +908,6 @@ const ProjectDetailPage = () => {
                       }}
                     />
                   ),
-              },
-              {
-                key: "documents",
-                label: `资料(${projectDocumentRows.length})`,
-                children: (
-                  <ProjectDocumentsContent
-                    projectId={projectId}
-                    rows={projectDocumentRows}
-                    canManageProject={canManageProject}
-                    onEdit={(record) => {
-                      if (!canManageProject) return;
-                      setActiveModal({
-                        type: "document",
-                        editing: {
-                          id: record.id,
-                          name: record.name,
-                          typeOption: record.typeOption,
-                          date: record.date,
-                          isFinal: record.isFinal,
-                          internalLink:
-                            typeof record.internalLink === "string"
-                              ? record.internalLink
-                              : null,
-                        },
-                      });
-                    }}
-                    onAfterDelete={fetchProject}
-                  />
-                ),
               },
             ],
           }}
@@ -1366,26 +1137,11 @@ const ProjectDetailPage = () => {
                     </div>
                   ) : executionTopTab === "progress" ? (
                     <div style={{ paddingRight: 16 }}>
-                      <ProjectSegmentAction
-                        projectId={projectId}
-                        project={project}
-                        visible
-                        canManageProject={canManageProject}
-                        open={activeModal.type === "segment"}
-                        editing={
-                          activeModal.type === "segment"
-                            ? activeModal.editing
-                            : null
-                        }
-                        employees={employees}
-                        onOpenCreate={() => {
-                          setActiveModal({ type: "segment", editing: null });
-                        }}
-                        onCancel={() => {
-                          setActiveModal({ type: null });
-                        }}
-                        onSaved={fetchProject}
-                      />
+                      {canManageProject ? (
+                        <Button type="primary" onClick={openCreateBrief}>
+                          创建需求单
+                        </Button>
+                      ) : null}
                     </div>
                   ) : executionTopTab === "work" ? (
                     <div style={{ paddingRight: 16 }}>
@@ -1414,28 +1170,6 @@ const ProjectDetailPage = () => {
                         onSaved={fetchProject}
                       />
                     </div>
-                  ) : executionTopTab === "documents" ? (
-                    <div style={{ paddingRight: 16 }}>
-                      <ProjectDocumentAction
-                        projectId={projectId}
-                        project={project}
-                        canManageProject={canManageProject}
-                        visible
-                        open={activeModal.type === "document"}
-                        editing={
-                          activeModal.type === "document"
-                            ? activeModal.editing
-                            : null
-                        }
-                        onOpenCreate={() => {
-                          setActiveModal({ type: "document", editing: null });
-                        }}
-                        onCancel={() => {
-                          setActiveModal({ type: null });
-                        }}
-                        onSaved={fetchProject}
-                      />
-                    </div>
                   ) : null,
                 onChange: (key) => {
                   setExecutionTopTab(
@@ -1444,8 +1178,7 @@ const ProjectDetailPage = () => {
                       | "vendors"
                       | "milestones"
                       | "progress"
-                      | "work"
-                      | "documents",
+                      | "work",
                   );
                   handleStepTabChange(String(key));
                 },
@@ -1499,64 +1232,8 @@ const ProjectDetailPage = () => {
                   },
                   {
                     key: "progress",
-                    label: `环节${segmentRows.length}/任务${taskCount}`,
-                    children: (
-                      <ProjectDetailProgressContent
-                        projectId={projectId}
-                        projectName={project.name ?? ""}
-                        data={progressRows}
-                        segmentCount={segmentRows.length}
-                        taskCount={taskCount}
-                        actionsDisabled={!canManageProject}
-                        employees={employees}
-                        onAddTask={(segment) =>
-                          openTaskModalForSegment(segment)
-                        }
-                        onEditSegment={(segment) => {
-                          if (!canManageProject) return;
-                          setActiveModal({
-                            type: "segment",
-                            editing: {
-                              id: segment.id,
-                              name: segment.name,
-                              status: segment.status ?? null,
-                              statusOption: segment.statusOption ?? null,
-                              dueDate: segment.dueDate ?? null,
-                              owner: segment.ownerId
-                                ? {
-                                    id: segment.ownerId,
-                                    name: segment.ownerName,
-                                  }
-                                : null,
-                            },
-                          });
-                        }}
-                        onAddPlannedWork={(task) =>
-                          openCreatePlannedWorkModal(task.id)
-                        }
-                        onAfterUpdateTask={fetchProject}
-                        onEditPlannedWork={(entry) => {
-                          if (!canManageProject) return;
-                          openEditPlannedWorkModal({
-                            id: entry.id,
-                            taskId: entry.taskId,
-                            year: entry.year,
-                            weekNumber: entry.weekNumber,
-                            plannedDays: entry.plannedDays,
-                            monday: entry.monday,
-                            tuesday: entry.tuesday,
-                            wednesday: entry.wednesday,
-                            thursday: entry.thursday,
-                            friday: entry.friday,
-                            saturday: entry.saturday,
-                            sunday: entry.sunday,
-                          });
-                        }}
-                        onAfterDeletePlannedWork={fetchProject}
-                        onAfterDeleteSegment={fetchProject}
-                        onAfterDeleteTask={fetchProject}
-                      />
-                    ),
+                    label: `需求单${project.briefs?.length ?? 0}/交付物${(project.briefs ?? []).reduce((sum, brief) => sum + (brief.deliverables?.length ?? 0), 0)}`,
+                    children: briefProgressContent,
                   },
                   {
                     key: "work",
@@ -1678,35 +1355,6 @@ const ProjectDetailPage = () => {
                           }}
                         />
                       ),
-                  },
-                  {
-                    key: "documents",
-                    label: `资料(${projectDocumentRows.length})`,
-                    children: (
-                      <ProjectDocumentsContent
-                        projectId={projectId}
-                        rows={projectDocumentRows}
-                        canManageProject={canManageProject}
-                        onEdit={(record) => {
-                          if (!canManageProject) return;
-                          setActiveModal({
-                            type: "document",
-                            editing: {
-                              id: record.id,
-                              name: record.name,
-                              typeOption: record.typeOption,
-                              date: record.date,
-                              isFinal: record.isFinal,
-                              internalLink:
-                                typeof record.internalLink === "string"
-                                  ? record.internalLink
-                                  : null,
-                            },
-                          });
-                        }}
-                        onAfterDelete={fetchProject}
-                      />
-                    ),
                   },
                 ],
               }}
@@ -1950,37 +1598,69 @@ const ProjectDetailPage = () => {
           )}
         </>
       )}
-      <ProjectTaskModal
-        projectId={projectId}
-        projectName={project?.name}
-        canManageProject={canManageProject}
-        open={activeModal.type === "task"}
-        editing={activeModal.type === "task" ? activeModal.editing : null}
-        segmentRows={segmentRows}
-        defaultSegmentId={
-          activeModal.type === "task" ? activeModal.defaultSegmentId : undefined
-        }
-        employees={employees}
-        onCancel={() => {
-          setActiveModal({ type: null });
-        }}
-        onCreate={handleCreateTask}
-        onSaved={fetchProject}
-      />
+      {briefModalOpen && project.client && currentUser ? (
+        <BriefFormModal
+          open
+          onCancel={() => {
+            setBriefModalOpen(false);
+            setEditingBrief(null);
+          }}
+          project={{ id: project.id, name: project.name }}
+          client={project.client}
+          creator={editingBrief?.creator ?? currentUser}
+          initialBrief={editingBrief ?? undefined}
+          employees={employees}
+          onSubmit={async (payload) => {
+            const response = await fetch(
+              editingBrief ? `/api/briefs/${editingBrief.id}` : "/api/briefs",
+              {
+                method: editingBrief ? "PATCH" : "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              },
+            );
+            if (!response.ok) {
+              throw new Error(
+                (await response.text()) ||
+                  (editingBrief ? "更新需求单失败" : "创建需求单失败"),
+              );
+            }
+            messageApi.success(editingBrief ? "需求单已更新" : "需求单已创建");
+            setBriefModalOpen(false);
+            setEditingBrief(null);
+            await fetchProject();
+          }}
+        />
+      ) : null}
 
-      <ProjectPlannedWorkModal
-        projectId={projectId}
-        open={activeModal.type === "planned-work"}
-        project={project}
-        editing={
-          activeModal.type === "planned-work" ? activeModal.editing : null
-        }
-        onCancel={() => {
-          setActiveModal({ type: null });
-        }}
-        onCreate={handleCreatePlannedWorkEntry}
-        onSaved={fetchProject}
-      />
+      {editingDeliverable ? (
+        <DeliverableEditModal
+          open
+          deliverable={editingDeliverable.deliverable}
+          employees={employees}
+          onCancel={() => setEditingDeliverable(null)}
+          onSubmit={async (payload) => {
+            const isEditing = Boolean(editingDeliverable.deliverable);
+            const endpoint = isEditing
+              ? `/api/deliverables/${editingDeliverable.deliverable!.id}`
+              : `/api/briefs/${editingDeliverable.briefId}/deliverables`;
+            const response = await fetch(endpoint, {
+              method: isEditing ? "PATCH" : "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            if (!response.ok) {
+              throw new Error(
+                (await response.text()) ||
+                  (isEditing ? "更新交付物失败" : "添加交付物失败"),
+              );
+            }
+            messageApi.success(isEditing ? "交付物已更新" : "交付物已添加");
+            setEditingDeliverable(null);
+            await fetchProject();
+          }}
+        />
+      ) : null}
 
       <Modal
         title={

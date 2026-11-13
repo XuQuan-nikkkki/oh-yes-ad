@@ -1,10 +1,17 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import {
   CheckOutlined,
   ExclamationCircleOutlined,
   PlusOutlined,
+  SwapOutlined,
 } from "@ant-design/icons";
 import {
   Button,
@@ -29,6 +36,12 @@ import PlannedWorkEntryForm, {
   type PlannedWorkEntryFormPayload,
 } from "@/components/project-detail/PlannedWorkEntryForm";
 import { useWorkdayAdjustmentsStore } from "@/stores/workdayAdjustmentsStore";
+import {
+  DeliverableAssignmentHistory,
+  DeliverableAssignmentModal,
+  type DeliverableAssignmentChangeItem,
+} from "@/components/project-detail/DeliverableAssignmentChange";
+import { useEmployeesStore } from "@/stores/employeesStore";
 
 export type ProjectBriefDeliverable = {
   id: string;
@@ -42,6 +55,7 @@ export type ProjectBriefDeliverable = {
   finalAt: string;
   reviewer?: { id: string; name: string } | null;
   assignee?: { id: string; name: string } | null;
+  assignmentChanges?: DeliverableAssignmentChangeItem[];
   formatOptions?: Array<{
     option: { id: string; value: string; color?: string | null };
   }>;
@@ -85,6 +99,7 @@ type Props = {
   onDeleteDeliverable?: (deliverable: ProjectBriefDeliverable) => void;
   onAddDeliverable?: (brief: ProjectBrief) => void;
   onAfterPlannedWorkChange?: () => Promise<void> | void;
+  onAfterAssignmentChange?: () => Promise<void> | void;
 };
 
 const briefStatusMeta: Record<
@@ -95,6 +110,13 @@ const briefStatusMeta: Record<
   in_progress: { label: "进行中", color: "green", rail: "#22c55e" },
   paused: { label: "暂停", color: "gold", rail: "#eab308" },
   completed: { label: "已完成", color: "blue", rail: "#1677ff" },
+};
+
+const briefStatusOrder: Record<string, number> = {
+  in_progress: 0,
+  waiting_assignment: 1,
+  paused: 2,
+  completed: 3,
 };
 
 const formatDate = (value?: string | null) =>
@@ -203,6 +225,7 @@ const DeliverableDetails = ({
         <DeliverableTimeline item={item} />
       </div>
     </div>
+    <DeliverableAssignmentHistory changes={item.assignmentChanges} />
     {plannedWorkSection}
     </>
   );
@@ -218,6 +241,7 @@ const ProjectBriefProgressContent = ({
   onDeleteDeliverable,
   onAddDeliverable,
   onAfterPlannedWorkChange,
+  onAfterAssignmentChange,
 }: Props) => {
   const [messageApi, contextHolder] = message.useMessage();
   const [plannedWorkModal, setPlannedWorkModal] = useState<{
@@ -225,11 +249,24 @@ const ProjectBriefProgressContent = ({
     deliverable: ProjectBriefDeliverable;
     entry?: PlannedWorkEntryRow;
   } | null>(null);
+  const [assignmentDeliverable, setAssignmentDeliverable] = useState<ProjectBriefDeliverable | null>(null);
+  const fetchEmployees = useEmployeesStore((state) => state.fetchEmployees);
   const workdayAdjustments = useWorkdayAdjustmentsStore(
     (state) => state.adjustments,
   );
   const fetchWorkdayAdjustments = useWorkdayAdjustmentsStore(
     (state) => state.fetchAdjustments,
+  );
+  const sortedBriefs = useMemo(
+    () =>
+      [...briefs].sort((left, right) => {
+        const statusDifference =
+          (briefStatusOrder[left.status] ?? 1) -
+          (briefStatusOrder[right.status] ?? 1);
+        if (statusDifference !== 0) return statusDifference;
+        return dayjs(right.createdAt).valueOf() - dayjs(left.createdAt).valueOf();
+      }),
+    [briefs],
   );
 
   useEffect(() => {
@@ -262,7 +299,7 @@ const ProjectBriefProgressContent = ({
     <>
     {contextHolder}
     <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-      {briefs.map((brief, briefIndex) => {
+      {sortedBriefs.map((brief, briefIndex) => {
         const deliverables = brief.deliverables ?? [];
         const assignedCount = deliverables.filter(
           (item) => item.assignee,
@@ -463,6 +500,21 @@ const ProjectBriefProgressContent = ({
                                           </Tag>
                                         )}
                                       </Typography.Text>
+                                      {onAfterAssignmentChange ? (
+                                        <Button
+                                          variant="text"
+                                          color="primary"
+                                          icon={<SwapOutlined />}
+                                          styles={{ root: { padding: 6 } }}
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            setAssignmentDeliverable(item);
+                                            void fetchEmployees();
+                                          }}
+                                        >
+                                          {item.assignee ? "交接执行人" : "指派执行人"}
+                                        </Button>
+                                      ) : null}
                                       <Typography.Text type="secondary">
                                         计划工时：
                                         <strong style={{ color: "#1677ff" }}>
@@ -577,6 +629,11 @@ const ProjectBriefProgressContent = ({
         );
       })}
     </Space>
+      <DeliverableAssignmentModal
+        deliverable={assignmentDeliverable}
+        onClose={() => setAssignmentDeliverable(null)}
+        onSaved={async () => { await onAfterAssignmentChange?.(); }}
+      />
       <Modal
         title={plannedWorkModal?.entry ? "编辑计划工时" : "新增计划工时"}
         open={Boolean(plannedWorkModal)}

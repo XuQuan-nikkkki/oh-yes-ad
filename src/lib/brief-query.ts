@@ -9,6 +9,17 @@ export const deliverableInclude = {
   creator: { select: personSelect },
   formatOptions: { select: { option: { select: optionSelect } } },
   categoryOrSceneOptions: { select: { option: { select: optionSelect } } },
+  assignmentChanges: {
+    select: {
+      id: true,
+      fromAssignee: { select: personSelect },
+      toAssignee: { select: personSelect },
+      changedBy: { select: personSelect },
+      remarks: true,
+      changedAt: true,
+    },
+    orderBy: { changedAt: "asc" },
+  },
   plannedWorkEntries: {
     select: {
       id: true,
