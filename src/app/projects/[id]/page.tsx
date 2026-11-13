@@ -1,13 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Button, Card, Modal, Popconfirm, Space, Steps, Typography, message } from "antd";
-import {
-  useParams,
-  usePathname,
-  useRouter,
-  useSearchParams,
-} from "next/navigation";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { Button, Card, Modal, Popconfirm, Space, message } from "antd";
+import { useParams } from "next/navigation";
 import { ProCard } from "@ant-design/pro-components";
 import DetailPageContainer from "@/components/DetailPageContainer";
 import ProjectFormModal from "@/components/ProjectFormModal";
@@ -27,16 +22,7 @@ import ProjectBriefProgressContent, {
 import BriefFormModal from "@/components/project-detail/BriefFormModal";
 import WorkItemEditModal from "@/components/project-detail/WorkItemEditModal";
 import ProjectActualWorkRecordsContent from "@/components/project-detail/ProjectActualWorkRecordsContent";
-import ProjectCostEstimationCard from "@/components/project-detail/ProjectCostEstimationCard";
-import ProjectInitiationCard from "@/components/project-detail/ProjectInitiationCard";
-import ProjectPricingStrategyCard from "@/components/project-detail/ProjectPricingStrategyCard";
-import ProjectFinancialStructureCard from "@/components/project-detail/ProjectFinancialStructureCard";
 import ProjectManualCostModal from "@/components/project-detail/ProjectManualCostModal";
-import ProjectRealtimeCostTrackingTable from "@/components/project-detail/ProjectRealtimeCostTrackingTable";
-import ProjectReimbursementRecordsContent from "@/components/project-detail/ProjectReimbursementRecordsContent";
-import ProjectReimbursementCreateAction from "@/components/project-detail/ProjectReimbursementCreateAction";
-import ProjectPayableInfo from "@/components/project-detail/ProjectPayableInfo";
-import ProjectReceivableInfo from "@/components/project-detail/ProjectReceivableInfo";
 import ProjectStatusValue from "@/components/project-detail/ProjectStatusValue";
 import {
   ProjectActualWorkAction,
@@ -45,7 +31,6 @@ import {
 import ProjectInfo from "./ProjectInfo";
 import projectInfoStyles from "./ProjectInfo.module.css";
 import ProjectPrimaryActions from "./ProjectPrimaryActions";
-import AppLink from "@/components/AppLink";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useClientsStore } from "@/stores/clientsStore";
@@ -85,9 +70,6 @@ type ActiveModalState =
 
 const ProjectDetailPage = () => {
   const params = useParams();
-  const pathname = usePathname();
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const projectId = params.id as string;
   const cachedProject = useProjectsStore((state) => state.byId[projectId]);
   const upsertProjects = useProjectsStore((state) => state.upsertProjects);
@@ -122,54 +104,20 @@ const ProjectDetailPage = () => {
   });
   const [deletingProject, setDeletingProject] = useState(false);
   const [addingFunction, setAddingFunction] = useState<string | null>(null);
-  const [pricingTab, setPricingTab] = useState<
-    "cost-estimation" | "pricing-reference"
-  >("cost-estimation");
-  const [contractTopTab, setContractTopTab] = useState<
-    "project-initiation" | "project-financial-structure"
-  >("project-initiation");
   const [executionTopTab, setExecutionTopTab] = useState<
     "members" | "vendors" | "milestones" | "progress" | "work"
   >("members");
-  const [financeTopTab, setFinanceTopTab] = useState<"receivable" | "payable">(
-    "receivable",
-  );
-  const [costTrackingTab, setCostTrackingTab] = useState<
-    "expense-records" | "realtime-cost"
-  >("realtime-cost");
   const [realtimeCostDownload, setRealtimeCostDownload] = useState<
     (() => void) | null
   >(null);
   const [manualCostModalOpen, setManualCostModalOpen] = useState(false);
   const [deletingManualCost, setDeletingManualCost] = useState(false);
-  const [financialStructureExists, setFinancialStructureExists] = useState<
-    boolean | null
-  >(null);
   const [financialStructureRefreshKey, setFinancialStructureRefreshKey] =
     useState(0);
   const [actualWorkView, setActualWorkView] = useState<"records" | "analysis">(
     "records",
   );
   const [workEntriesRefreshKey, setWorkEntriesRefreshKey] = useState(0);
-  const [receivablePlanModalOpen, setReceivablePlanModalOpen] = useState(false);
-  const [receivablePlanModalMode, setReceivablePlanModalMode] = useState<
-    "create" | "edit"
-  >("create");
-  const [receivableNodeModalOpen, setReceivableNodeModalOpen] = useState(false);
-  const [receivableCurrentPlan, setReceivableCurrentPlan] = useState<{
-    id: string;
-  } | null>(null);
-  const receivableCardRef = useRef<{
-    handleDeletePlan: () => Promise<void>;
-  }>(null);
-  const [payablePlanModalOpen, setPayablePlanModalOpen] = useState(false);
-  const [payablePlanModalMode, setPayablePlanModalMode] = useState<
-    "create" | "edit"
-  >("create");
-  const [payableNodeModalOpen, setPayableNodeModalOpen] = useState(false);
-  const payableCardRef = useRef<{
-    handleDeletePlan: () => Promise<void>;
-  }>(null);
   const handleRealtimeCostDownloadReady = useCallback(
     (downloadFn: (() => void) | null) => {
       setRealtimeCostDownload(() => downloadFn);
@@ -178,22 +126,6 @@ const ProjectDetailPage = () => {
   );
   const analysisDetailTarget =
     activeModal.type === "analysis-detail" ? activeModal.target : null;
-  const stepParamRaw = Number(searchParams.get("step"));
-  const stepParam = Number.isFinite(stepParamRaw)
-    ? Math.min(4, Math.max(0, Math.trunc(stepParamRaw)))
-    : 2;
-  const tabParamRaw = searchParams.get("tab");
-  const stepTabKeys = useMemo(
-    () =>
-      ({
-        0: ["cost-estimation", "pricing-reference"],
-        1: ["project-initiation", "project-financial-structure"],
-        2: ["members", "vendors", "milestones", "progress", "work"],
-        3: ["receivable", "payable"],
-        4: ["realtime-cost", "expense-records"],
-      }) as const,
-    [],
-  );
   const isInternalProject =
     project?.type === "INTERNAL" ||
     project?.type === "内部项目" ||
@@ -320,28 +252,6 @@ const ProjectDetailPage = () => {
     }
   }, [fetchAdjustmentsFromStore]);
 
-  const fetchFinancialStructureExists = useCallback(async () => {
-    if (!projectId) {
-      setFinancialStructureExists(false);
-      return;
-    }
-    try {
-      const query = new URLSearchParams({ projectId });
-      const res = await fetch(
-        `/api/project-financial-structures?${query.toString()}`,
-        { cache: "no-store" },
-      );
-      if (!res.ok) {
-        setFinancialStructureExists(false);
-        return;
-      }
-      const rows = (await res.json()) as Array<{ id?: string }>;
-      setFinancialStructureExists(Array.isArray(rows) && rows.length > 0);
-    } catch {
-      setFinancialStructureExists(false);
-    }
-  }, [projectId]);
-
   const handleCostEstimationSaved = useCallback(
     (latestCostEstimation: Project["latestCostEstimation"]) => {
       setProject((prev) => {
@@ -374,8 +284,8 @@ const ProjectDetailPage = () => {
 
   const handleFinancialStructureSaved = useCallback(async () => {
     setFinancialStructureRefreshKey((prev) => prev + 1);
-    await Promise.all([fetchProject(), fetchFinancialStructureExists()]);
-  }, [fetchFinancialStructureExists, fetchProject]);
+    await fetchProject();
+  }, [fetchProject]);
 
   const handleManualCostSaved = useCallback(
     (savedProject: Project) => {
@@ -466,12 +376,6 @@ const ProjectDetailPage = () => {
     setExecutionTopTab("members");
   }, [executionTopTab, isInternalProject]);
 
-  useEffect(() => {
-    // "项目成本追踪" step
-    if (stepParam !== 4) return;
-    void fetchFinancialStructureExists();
-  }, [fetchFinancialStructureExists, stepParam]);
-
   const milestoneCount = project?.milestones?.length ?? 0;
   const actualWorkEmployeeFilterOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -505,102 +409,6 @@ const ProjectDetailPage = () => {
       );
   }, [analysisDetailTarget, project?.actualWorkEntries]);
 
-
-  const replaceSearchParams = useCallback(
-    (nextParams: URLSearchParams) => {
-      const nextQuery = nextParams.toString();
-      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
-        scroll: false,
-      });
-    },
-    [pathname, router],
-  );
-
-  const handleStepChange = useCallback(
-    (step: number) => {
-      const nextStep = Math.min(4, Math.max(0, Math.trunc(step))) as
-        | 0
-        | 1
-        | 2
-        | 3
-        | 4;
-      const nextParams = new URLSearchParams(searchParams.toString());
-      nextParams.set("step", String(nextStep));
-      nextParams.set("tab", stepTabKeys[nextStep][0]);
-      replaceSearchParams(nextParams);
-    },
-    [replaceSearchParams, searchParams, stepTabKeys],
-  );
-
-  const handleStepTabChange = useCallback(
-    (key: string) => {
-      const nextParams = new URLSearchParams(searchParams.toString());
-      nextParams.set("step", String(stepParam));
-      nextParams.set("tab", key);
-      replaceSearchParams(nextParams);
-    },
-    [replaceSearchParams, searchParams, stepParam],
-  );
-
-  useEffect(() => {
-    if (isInternalProject) return;
-
-    const stepIndex = stepParam as 0 | 1 | 2 | 3 | 4;
-    const validKeys = stepTabKeys[stepIndex] as readonly string[];
-    const normalizedTab =
-      tabParamRaw && validKeys.includes(tabParamRaw)
-        ? tabParamRaw
-        : validKeys[0];
-
-    if (stepParam === 0) {
-      if (pricingTab !== normalizedTab) {
-        setPricingTab(normalizedTab as "cost-estimation" | "pricing-reference");
-      }
-    } else if (stepParam === 1) {
-      if (contractTopTab !== normalizedTab) {
-        setContractTopTab(
-          normalizedTab as "project-initiation" | "project-financial-structure",
-        );
-      }
-    } else if (stepParam === 2) {
-      if (executionTopTab !== normalizedTab) {
-        setExecutionTopTab(
-          normalizedTab as
-            | "members"
-            | "vendors"
-            | "milestones"
-            | "progress"
-            | "work",
-        );
-      }
-    } else if (stepParam === 3) {
-      if (financeTopTab !== normalizedTab) {
-        setFinanceTopTab(normalizedTab as "receivable" | "payable");
-      }
-    } else if (stepParam === 4) {
-      if (costTrackingTab !== normalizedTab) {
-        setCostTrackingTab(normalizedTab as "expense-records" | "realtime-cost");
-      }
-    }
-
-    if (tabParamRaw !== normalizedTab) {
-      const nextParams = new URLSearchParams(searchParams.toString());
-      nextParams.set("tab", normalizedTab);
-      replaceSearchParams(nextParams);
-    }
-  }, [
-    contractTopTab,
-    costTrackingTab,
-    executionTopTab,
-    financeTopTab,
-    isInternalProject,
-    pricingTab,
-    replaceSearchParams,
-    searchParams,
-    stepParam,
-    stepTabKeys,
-    tabParamRaw,
-  ]);
 
   if (!project) {
     return (
@@ -1025,648 +833,7 @@ const ProjectDetailPage = () => {
                 messageApi.error("删除工时记录失败，请重试");
               }
             }}
-            onOpenLegacy={({ step, tab }) => {
-              const nextParams = new URLSearchParams(searchParams.toString());
-              nextParams.set("step", String(step));
-              nextParams.set("tab", tab);
-              replaceSearchParams(nextParams);
-              document.getElementById("project-detail-existing-steps")?.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-              });
-            }}
           />
-          <Card id="project-detail-existing-steps" styles={{ body: { paddingTop: 16, paddingBottom: 16 } }}>
-            <Steps
-              current={stepParam}
-              onChange={handleStepChange}
-              items={[
-                { title: "项目报价" },
-                { title: "项目立项" },
-                { title: "项目执行" },
-                { title: "项目收付款" },
-                { title: "项目成本追踪" },
-              ]}
-            />
-          </Card>
-
-          {stepParam === 0 && (
-            <ProCard
-              style={{ marginTop: 4 }}
-              tabs={{
-                type: "card",
-                activeKey: pricingTab,
-                onChange: (key) => {
-                  setPricingTab(key as "cost-estimation" | "pricing-reference");
-                  handleStepTabChange(String(key));
-                },
-                tabBarExtraContent:
-                  pricingTab === "cost-estimation" ? (
-                    <div style={{ paddingRight: 16 }}>
-                      <ProjectCostEstimationCard
-                        mode="actions"
-                        projectId={projectId}
-                        projectName={project.name ?? ""}
-                        projectMembers={project.members}
-                        latestCostEstimation={
-                          project.latestCostEstimation
-                        }
-                        employees={employees}
-                        showProjectInBasicInfo={false}
-                        includeQuoteAmountInSyncSummary={false}
-                        onSaved={handleCostEstimationSaved}
-                      />
-                    </div>
-                  ) : pricingTab === "pricing-reference" ? (
-                    <div style={{ paddingRight: 16 }}>
-                      <ProjectPricingStrategyCard
-                        mode="actions"
-                        projectId={projectId}
-                        projectName={project.name ?? ""}
-                        latestCostEstimation={
-                          project.latestCostEstimation
-                        }
-                      />
-                    </div>
-                  ) : null,
-                items: [
-                  {
-                    key: "cost-estimation",
-                    label: "项目成本测算",
-                    children: (
-                      <ProjectCostEstimationCard
-                        mode="content"
-                        projectId={projectId}
-                        projectName={project.name ?? ""}
-                        projectMembers={project.members}
-                        latestCostEstimation={
-                          project.latestCostEstimation
-                        }
-                        employees={employees}
-                        showProjectInBasicInfo={false}
-                        includeQuoteAmountInSyncSummary={false}
-                        onSaved={handleCostEstimationSaved}
-                      />
-                    ),
-                  },
-                  {
-                    key: "pricing-reference",
-                    label: "报价参考",
-                    children: (
-                      <ProjectPricingStrategyCard
-                        mode="content"
-                        projectId={projectId}
-                        projectName={project.name ?? ""}
-                        latestCostEstimation={
-                          project.latestCostEstimation
-                        }
-                      />
-                    ),
-                  },
-                ],
-              }}
-            />
-          )}
-
-          {stepParam === 1 && (
-            <ProCard
-              style={{ marginTop: 4 }}
-              tabs={{
-                type: "card",
-                activeKey: contractTopTab,
-                onChange: (key) => {
-                  setContractTopTab(
-                    key as "project-initiation" | "project-financial-structure",
-                  );
-                  handleStepTabChange(String(key));
-                },
-                tabBarExtraContent:
-                  contractTopTab === "project-initiation" ? (
-                    <div style={{ paddingRight: 16 }}>
-                      <ProjectInitiationCard
-                        mode="actions"
-                        projectId={projectId}
-                        projectName={project.name ?? ""}
-                        projectMembers={project.members}
-                        canManageProject={canManageProject}
-                        latestInitiation={
-                          project.latestInitiation
-                        }
-                        modalPrefillInitiation={project.latestCostEstimation}
-                        syncSummarySourceInitiation={
-                          project.latestCostEstimation
-                        }
-                        employees={employees}
-                        showProjectInBasicInfo={false}
-                        showContractAmountInBasicInfo
-                        includeQuoteAmountInSyncSummary
-                        onSaved={handleInitiationSaved}
-                      />
-                    </div>
-                  ) : contractTopTab === "project-financial-structure" ? (
-                    <div style={{ paddingRight: 16 }}>
-                      <ProjectFinancialStructureCard
-                        mode="actions"
-                        projectId={projectId}
-                        projectName={project.name ?? ""}
-                        canManageProject={canManageProject}
-                        latestInitiation={
-                          project.latestInitiation
-                        }
-                        refreshKey={financialStructureRefreshKey}
-                        onSaved={handleFinancialStructureSaved}
-                      />
-                    </div>
-                  ) : null,
-                items: [
-                  {
-                    key: "project-initiation",
-                    label: "立项申请",
-                    children: (
-                      <ProjectInitiationCard
-                        mode="content"
-                        projectId={projectId}
-                        projectName={project.name ?? ""}
-                        projectMembers={project.members}
-                        canManageProject={canManageProject}
-                        latestInitiation={
-                          project.latestInitiation
-                        }
-                        modalPrefillInitiation={project.latestCostEstimation}
-                        syncSummarySourceInitiation={
-                          project.latestCostEstimation
-                        }
-                        employees={employees}
-                        showProjectInBasicInfo={false}
-                        showContractAmountInBasicInfo
-                        includeQuoteAmountInSyncSummary
-                        onSaved={handleInitiationSaved}
-                      />
-                    ),
-                  },
-                  {
-                    key: "project-financial-structure",
-                    label: "项目财务结构",
-                    children: (
-                      <ProjectFinancialStructureCard
-                        mode="content"
-                        projectId={projectId}
-                        projectName={project.name ?? ""}
-                        canManageProject={canManageProject}
-                        latestInitiation={
-                          project.latestInitiation
-                        }
-                        refreshKey={financialStructureRefreshKey}
-                        onSaved={handleFinancialStructureSaved}
-                      />
-                    ),
-                  },
-                ],
-              }}
-            />
-          )}
-
-          {stepParam === 2 && (
-            <ProCard
-              style={{ marginTop: 4 }}
-              tabs={{
-                type: "card",
-                activeKey: executionTopTab,
-                tabBarExtraContent:
-                  executionTopTab === "milestones" ? (
-                    <div style={{ paddingRight: 16 }}>
-                      <ProjectMilestoneAction
-                        projectId={projectId}
-                        visible
-                        canManageProject={canManageProject}
-                        project={project}
-                        employees={employees}
-                        clientContacts={clientContacts}
-                        open={activeModal.type === "milestone"}
-                        editing={
-                          activeModal.type === "milestone"
-                            ? activeModal.editing
-                            : null
-                        }
-                        onOpenCreate={() => {
-                          setActiveModal({ type: "milestone", editing: null });
-                        }}
-                        onCancel={() => {
-                          setActiveModal({ type: null });
-                        }}
-                        onSaved={fetchProject}
-                      />
-                    </div>
-                  ) : executionTopTab === "progress" ? (
-                    <div style={{ paddingRight: 16 }}>
-                      {canManageProject ? (
-                        <Button type="primary" onClick={openCreateBrief}>
-                          创建需求单
-                        </Button>
-                      ) : null}
-                    </div>
-                  ) : executionTopTab === "work" ? (
-                    <div style={{ paddingRight: 16 }}>
-                      <ProjectActualWorkAction
-                        projectId={projectId}
-                        visible
-                        renderModal={false}
-                        actualWorkView={actualWorkView}
-                        onActualWorkViewChange={setActualWorkView}
-                        project={project}
-                        employees={employees}
-                        open={activeModal.type === "actual-work"}
-                        editing={
-                          activeModal.type === "actual-work"
-                            ? activeModal.editing
-                            : null
-                        }
-                        onOpenCreate={() => {
-                          setActiveModal({
-                            type: "actual-work",
-                            editing: null,
-                          });
-                        }}
-                        onCancel={() => {
-                          setActiveModal({ type: null });
-                        }}
-                        onSaved={fetchProject}
-                      />
-                    </div>
-                  ) : null,
-                onChange: (key) => {
-                  setExecutionTopTab(
-                    key as
-                      | "members"
-                      | "vendors"
-                      | "milestones"
-                      | "progress"
-                      | "work",
-                  );
-                  handleStepTabChange(String(key));
-                },
-                items: [
-                  {
-                    key: "members",
-                    label: `人员信息(${project.members?.length ?? 0})`,
-                    children: (
-                      <ProjectDetailMembersContent
-                        projectId={projectId}
-                        members={project.members ?? []}
-                        employees={employees}
-                        addingFunction={addingFunction}
-                        onSetAddingFunction={setAddingFunction}
-                        onMembersChanged={fetchProject}
-                      />
-                    ),
-                  },
-                  {
-                    key: "vendors",
-                    label: `供应商(${project.vendors?.length ?? 0})`,
-                    children: (
-                      <Card styles={{ body: { padding: 16 } }}>
-                        {(project.vendors?.length ?? 0) > 0 ? (
-                          <Space wrap size={[12, 12]}>
-                            {(project.vendors ?? []).map((vendor) => (
-                              <AppLink
-                                key={vendor.id}
-                                href={`/vendors/${vendor.id}`}
-                              >
-                                {vendor.name}
-                              </AppLink>
-                            ))}
-                          </Space>
-                        ) : (
-                          <Typography.Text type="secondary">
-                            暂无合作供应商
-                          </Typography.Text>
-                        )}
-                      </Card>
-                    ),
-                  },
-                  {
-                    key: "milestones",
-                    label: `里程碑(${milestoneCount})`,
-                    children: (
-                      <ProjectDetailMilestonesContent
-                        milestones={project.milestones ?? []}
-                      />
-                    ),
-                  },
-                  {
-                    key: "progress",
-                    label: `需求单${project.briefs?.length ?? 0}/工作项${(project.briefs ?? []).reduce((sum, brief) => sum + (brief.workItems?.length ?? 0), 0)}`,
-                    children: briefProgressContent,
-                  },
-                  {
-                    key: "work",
-                    label: `工时(${project.actualWorkEntries?.length ?? 0})`,
-                    children:
-                      actualWorkView === "records" ? (
-                        <ProjectActualWorkRecordsContent
-                          projectId={projectId}
-                          employeeFilterOptions={
-                            actualWorkEmployeeFilterOptions
-                          }
-                          refreshKey={workEntriesRefreshKey}
-                          requestData={async ({
-                            current,
-                            pageSize,
-                            filters,
-                          }) => {
-                            const normalizedTitle = filters.title?.trim() ?? "";
-                            const normalizedEmployee =
-                              filters.employeeName?.trim() ?? "";
-                            const normalizedDate =
-                              filters.startDate?.trim() ?? "";
-                            const normalizedDateFrom =
-                              filters.startDateFrom?.trim() ?? "";
-                            const normalizedDateTo =
-                              filters.startDateTo?.trim() ?? "";
-
-                            const rows = (project.actualWorkEntries ?? []).map(
-                              (entry) => ({
-                                ...entry,
-                                project: {
-                                  id: project.id,
-                                  name: project.name,
-                                },
-                              }),
-                            );
-                            const filtered = rows.filter((row) => {
-                              if (
-                                normalizedTitle &&
-                                !(row.title ?? "").includes(normalizedTitle)
-                              ) {
-                                return false;
-                              }
-                              if (
-                                normalizedEmployee &&
-                                !(row.employee?.name ?? "").includes(
-                                  normalizedEmployee,
-                                )
-                              ) {
-                                return false;
-                              }
-                              if (
-                                normalizedDate &&
-                                formatDate(row.startDate, DATE_FORMAT, "") !==
-                                  normalizedDate
-                              ) {
-                                return false;
-                              }
-                              if (normalizedDateFrom || normalizedDateTo) {
-                                const rowDate = dayjs(row.startDate);
-                                if (normalizedDateFrom) {
-                                  const from =
-                                    dayjs(normalizedDateFrom).startOf("day");
-                                  if (rowDate.isBefore(from)) return false;
-                                }
-                                if (normalizedDateTo) {
-                                  const to =
-                                    dayjs(normalizedDateTo).endOf("day");
-                                  if (rowDate.isAfter(to)) return false;
-                                }
-                              }
-                              return true;
-                            });
-                            const total = filtered.length;
-                            const currentPage = current || 1;
-                            const size = pageSize || 10;
-                            const start = (currentPage - 1) * size;
-                            const end = start + size;
-                            return {
-                              data: filtered.slice(start, end),
-                              total,
-                              success: true,
-                            };
-                          }}
-                          canManageRow={(entry) =>
-                            canManageAnyActualWorkEntry ||
-                            (Boolean(currentUser?.id) &&
-                              entry.employee?.id === currentUser?.id)
-                          }
-                          onEdit={(entry) => {
-                            if (
-                              !canManageAnyActualWorkEntry &&
-                              entry.employee?.id !== currentUser?.id
-                            ) {
-                              return;
-                            }
-                            setActiveModal({
-                              type: "actual-work",
-                              editing: {
-                                id: entry.id,
-                                title: entry.title,
-                                employeeId: entry.employee?.id ?? "",
-                                startDate: entry.startDate,
-                                endDate: entry.endDate,
-                              },
-                            });
-                          }}
-                          onAfterDelete={fetchProject}
-                        />
-                      ) : (
-                        <ActualWorkAnalysisTable
-                          entries={project.actualWorkEntries ?? []}
-                          members={project.members ?? []}
-                          onViewDetail={(target) => {
-                            setActiveModal({
-                              type: "analysis-detail",
-                              target,
-                            });
-                          }}
-                        />
-                      ),
-                  },
-                ],
-              }}
-            />
-          )}
-
-          {stepParam === 4 &&
-            (financialStructureExists === null ? (
-              <Card style={{ marginTop: 4 }} loading />
-            ) : (
-              <ProCard
-                style={{ marginTop: 4 }}
-                tabs={{
-                  type: "card",
-                  activeKey: costTrackingTab,
-                  tabBarExtraContent:
-                    costTrackingTab === "expense-records" ? (
-                      <div style={{ paddingRight: 16 }}>
-                        <ProjectReimbursementCreateAction
-                          projectId={projectId}
-                          projectName={project.name ?? ""}
-                          employees={(project.members ?? []).map((item) => ({
-                            id: item.id,
-                            name: item.name,
-                          }))}
-                          canManageProject={canManageReimbursements}
-                        />
-                      </div>
-                    ) : costTrackingTab === "realtime-cost" ? (
-                      <div style={{ paddingRight: 16 }}>{realtimeCostActions}</div>
-                    ) : null,
-                  onChange: (key) => {
-                    setCostTrackingTab(
-                      key as "expense-records" | "realtime-cost",
-                    );
-                    handleStepTabChange(String(key));
-                  },
-                  items: [
-                    {
-                      key: "realtime-cost",
-                      label: "实时成本",
-                      children: (
-                        <ProjectRealtimeCostTrackingTable
-                          projectId={projectId}
-                          projectName={project.name ?? ""}
-                          startDate={project.startDate}
-                          endDate={project.endDate}
-                          costSourceMode={project.costSourceMode}
-                          manualCost={project.manualCost}
-                          latestInitiation={
-                            project.latestInitiation
-                          }
-                          members={project.members}
-                          actualWorkEntries={project.actualWorkEntries}
-                          workdayAdjustments={workdayAdjustments}
-                          onDownloadReady={handleRealtimeCostDownloadReady}
-                        />
-                      ),
-                    },
-                    {
-                      key: "expense-records",
-                      label: "项目报销记录",
-                      children: (
-                        <ProjectReimbursementRecordsContent
-                          projectId={projectId}
-                          projectName={project.name ?? ""}
-                          employees={(project.members ?? []).map((item) => ({
-                            id: item.id,
-                            name: item.name,
-                          }))}
-                          canManageProject={canManageReimbursements}
-                        />
-                      ),
-                    },
-                  ],
-                }}
-              />
-            ))}
-
-          {stepParam === 3 && (
-            <ProCard
-              style={{ marginTop: 4 }}
-              tabs={{
-                type: "card",
-                activeKey: financeTopTab,
-                onChange: (key) => {
-                  setFinanceTopTab(key as "receivable" | "payable");
-                  handleStepTabChange(String(key));
-                },
-                tabBarExtraContent: (
-                  <div style={{ paddingRight: 16 }}>
-                    {financeTopTab === "receivable" ? (
-                      receivableCurrentPlan ? (
-                        <>
-                          <Button
-                            style={{ marginRight: 8 }}
-                            disabled={!canManageProject}
-                            onClick={() => {
-                              setReceivablePlanModalMode("edit");
-                              setReceivablePlanModalOpen(true);
-                            }}
-                          >
-                            修改
-                          </Button>
-                          <Popconfirm
-                            title="确定删除当前收款计划吗？删除后节点也会被删除。"
-                            okText="删除"
-                            cancelText="取消"
-                            okButtonProps={{ danger: true }}
-                            onConfirm={async () => {
-                              await receivableCardRef.current?.handleDeletePlan();
-                            }}
-                          >
-                            <Button danger disabled={!canManageProject}>
-                              删除
-                            </Button>
-                          </Popconfirm>
-                        </>
-                      ) : (
-                        <Button
-                          type="primary"
-                          disabled={!canManageProject}
-                          onClick={() => {
-                            setReceivablePlanModalMode("create");
-                            setReceivablePlanModalOpen(true);
-                          }}
-                        >
-                          新增收款计划
-                        </Button>
-                      )
-                    ) : (
-                      <Button
-                        type="primary"
-                        disabled={!canManageProject}
-                        onClick={() => {
-                          setPayablePlanModalMode("create");
-                          setPayablePlanModalOpen(true);
-                        }}
-                      >
-                        新增付款计划
-                      </Button>
-                    )}
-                  </div>
-                ),
-                items: [
-                  {
-                    key: "receivable",
-                    label: "项目收款",
-                    children: (
-                      <ProjectReceivableInfo
-                        ref={receivableCardRef}
-                        projectId={projectId}
-                        project={project}
-                        canManageProject={canManageProject}
-                        canManageReceivableNodes={canCollectReceivable}
-                        canCollectReceivable={canCollectReceivable}
-                        canManageBadDebtRecords={canManageReimbursements}
-                        planModalOpen={receivablePlanModalOpen}
-                        planModalMode={receivablePlanModalMode}
-                        onPlanModalOpenChange={setReceivablePlanModalOpen}
-                        onPlanModalModeChange={setReceivablePlanModalMode}
-                        onCurrentPlanChange={setReceivableCurrentPlan}
-                        nodeModalOpen={receivableNodeModalOpen}
-                        onNodeModalOpenChange={setReceivableNodeModalOpen}
-                      />
-                    ),
-                  },
-                  {
-                    key: "payable",
-                    label: "项目付款",
-                    children: (
-                      <ProjectPayableInfo
-                        ref={payableCardRef}
-                        projectId={projectId}
-                        project={project}
-                        canManageProject={canManageProject}
-                        planModalOpen={payablePlanModalOpen}
-                        planModalMode={payablePlanModalMode}
-                        onPlanModalOpenChange={setPayablePlanModalOpen}
-                        onPlanModalModeChange={setPayablePlanModalMode}
-                        nodeModalOpen={payableNodeModalOpen}
-                        onNodeModalOpenChange={setPayableNodeModalOpen}
-                      />
-                    ),
-                  },
-                ],
-              }}
-              />
-          )}
         </>
       )}
       {briefModalOpen && project.client && currentUser ? (

@@ -31,7 +31,6 @@ import styles from "./ProjectDetailWorkspaceComparison.module.css";
 
 type Workspace = "execution" | "finance";
 type ExecutionTab = "overview" | "members" | "vendors" | "milestones" | "progress" | "work" | "submissions";
-type LegacyDestination = { step: number; tab: string };
 
 type Props = {
   projectId: string;
@@ -66,7 +65,6 @@ type Props = {
   onEditActualWork: (entry: NonNullable<Project["actualWorkEntries"]>[number]) => void;
   onDeleteActualWork: (entry: NonNullable<Project["actualWorkEntries"]>[number]) => Promise<void>;
   canManageActualWorkEntry: (entry: NonNullable<Project["actualWorkEntries"]>[number]) => boolean;
-  onOpenLegacy: (destination: LegacyDestination) => void;
 };
 
 const executionLinks = [
@@ -141,7 +139,6 @@ export default function ProjectDetailWorkspaceComparison({
   onEditActualWork,
   onDeleteActualWork,
   canManageActualWorkEntry,
-  onOpenLegacy,
 }: Props) {
   const [workspace, setWorkspace] = useState<Workspace>("execution");
   const [activeExecution, setActiveExecution] = useState<ExecutionTab>("overview");
@@ -242,9 +239,7 @@ export default function ProjectDetailWorkspaceComparison({
             {executionLinks.map(({ label, icon: Icon, tab }) => (
               <button type="button" key={tab} className={tab === activeExecution ? styles.activeItem : ""}
                 aria-current={tab === activeExecution ? "page" : undefined}
-                onClick={() => tab === "vendors" || tab === "milestones" || tab === "progress" || tab === "work" || tab === "submissions"
-                  ? setActiveExecution(tab)
-                  : onOpenLegacy({ step: 2, tab })}>
+                onClick={() => setActiveExecution(tab as ExecutionTab)}>
                 <Icon /><span>{label}</span>{tab === "vendors" && <em>{vendors.length}</em>}{tab === "milestones" && <em>{milestones.length}</em>}{tab === "progress" && <em>{briefs.length} / {workItemCount}</em>}{tab === "work" && <em>{actualWorkEntries.length}</em>}{tab === "submissions" && <em>{submissionCount}</em>}
               </button>
             ))}
