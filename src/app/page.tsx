@@ -32,19 +32,21 @@ function HomePageContent() {
   const currentUser = useAuthStore((state) => state.currentUser);
   const setNavigating = useNavigationStore((state) => state.setNavigating);
   const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
+  const hideProjectHomeTabs =
+    !roleCodes.includes("ADMIN") &&
+    (roleCodes.includes("HR") || roleCodes.includes("FINANCE"));
   const canViewOwnedProjectsTab =
-    roleCodes.includes("PROJECT_MANAGER") ||
-    roleCodes.includes("HR") ||
-    roleCodes.includes("FINANCE");
+    roleCodes.includes("PROJECT_MANAGER") && !hideProjectHomeTabs;
   const availableHomeTabs = useMemo(
     () => [
       HOME_TAB_SITE_MAP,
       ...(canViewOwnedProjectsTab ? [HOME_TAB_OWNED_PROJECTS] : []),
-      HOME_TAB_PARTICIPATION,
-      HOME_TAB_PARTICIPATION_MILESTONES,
+      ...(!hideProjectHomeTabs
+        ? [HOME_TAB_PARTICIPATION, HOME_TAB_PARTICIPATION_MILESTONES]
+        : []),
       HOME_TAB_WORK_LOGS,
     ],
-    [canViewOwnedProjectsTab],
+    [canViewOwnedProjectsTab, hideProjectHomeTabs],
   );
   const urlActiveTab = validHomeTab(searchParams.get("tab"), availableHomeTabs);
   const [activeTab, setActiveTab] = useState(urlActiveTab);
@@ -95,7 +97,9 @@ function HomePageContent() {
                 },
               ]
             : []),
-          {
+          ...(!hideProjectHomeTabs
+            ? [
+                {
                   key: HOME_TAB_PARTICIPATION,
                   label: "参与项目",
                   children: (
@@ -113,11 +117,13 @@ function HomePageContent() {
                     />
                   ),
                 },
-                {
-                  key: HOME_TAB_WORK_LOGS,
-                  label: "工时记录",
-                  children: <WorkLogsPanel />,
-                },
+              ]
+            : []),
+          {
+            key: HOME_TAB_WORK_LOGS,
+            label: "工时记录",
+            children: <WorkLogsPanel />,
+          },
         ]}
       />
     </Card>
