@@ -25,6 +25,13 @@ import ProjectMilestoneFormModal from "@/components/project-detail/ProjectMilest
 import ProjectSegmentFormModal from "@/components/project-detail/ProjectSegmentFormModal";
 import ProjectTaskFormModal from "@/components/project-detail/ProjectTaskFormModal";
 import ProjectDetailProgressContent from "@/components/project-detail/ProjectDetailProgressContent";
+import ProjectBriefProgressContent from "@/components/project-detail/ProjectBriefProgressContent";
+import type {
+  ProjectBrief,
+  ProjectBriefDeliverable,
+} from "@/components/project-detail/ProjectBriefProgressContent";
+import BriefFormModal from "@/components/project-detail/BriefFormModal";
+import DeliverableEditModal from "@/components/project-detail/DeliverableEditModal";
 import PlannedWorkEntryForm, {
   PlannedWorkEntryFormPayload,
 } from "@/components/project-detail/PlannedWorkEntryForm";
@@ -55,6 +62,13 @@ type ProjectListItem = {
   } | null;
 };
 
+type BriefProjectContext = ProjectListItem & {
+  client: {
+    id: string;
+    name: string;
+  };
+};
+
 type Participant = {
   id: string;
   name: string;
@@ -71,6 +85,12 @@ type EmployeeListItem = {
   } | null;
   employmentStatus?: string | null;
   employmentStatusOption?: {
+    id: string;
+    value: string;
+    color?: string | null;
+  } | null;
+  position?: string | null;
+  positionOption?: {
     id: string;
     value: string;
     color?: string | null;
@@ -110,16 +130,16 @@ type WeeklyPlannedEntry = {
   sunday: boolean;
   year?: number | null;
   weekNumber?: number | null;
-  task?: {
+  deliverable?: {
     id: string;
-    name: string;
-    owner?: {
+    title: string;
+    assignee?: {
       id: string;
       name: string;
     } | null;
-    segment?: {
+    brief?: {
       id: string;
-      name: string;
+      title: string;
       project?: {
         id: string;
         name: string;
@@ -211,6 +231,7 @@ type ProjectDetail = {
       plannedWorkEntries?: PlannedWorkEntry[];
     }[];
   }[];
+  briefs?: ProjectBrief[];
 };
 
 type SegmentRow = {
@@ -250,6 +271,7 @@ type TaskRow = {
 type TaskPlannedRow = {
   id: string;
   taskId: string;
+  deliverableId?: string;
   year: number;
   weekNumber: number;
   plannedDays: number;
@@ -324,8 +346,17 @@ function SchedulePageContent() {
   );
   const [segmentProjectContext, setSegmentProjectContext] =
     useState<ProjectListItem | null>(null);
+  const [briefProjectContext, setBriefProjectContext] =
+    useState<BriefProjectContext | null>(null);
+  const [editingBrief, setEditingBrief] = useState<ProjectBrief | null>(null);
+  const [editingDeliverable, setEditingDeliverable] = useState<{
+    deliverable?: ProjectBriefDeliverable;
+    briefId?: string;
+    projectId: string;
+  } | null>(null);
   const [milestoneModalOpen, setMilestoneModalOpen] = useState(false);
   const [segmentModalOpen, setSegmentModalOpen] = useState(false);
+  const [briefModalOpen, setBriefModalOpen] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [plannedWorkModalOpen, setPlannedWorkModalOpen] = useState(false);
   const [milestoneSubmitting, setMilestoneSubmitting] = useState(false);
@@ -366,7 +397,7 @@ function SchedulePageContent() {
   const [taskDefaultSegmentId, setTaskDefaultSegmentId] = useState<
     string | undefined
   >(undefined);
-  const [plannedDefaultTaskId, setPlannedDefaultTaskId] = useState<
+  const [, setPlannedDefaultTaskId] = useState<
     string | undefined
   >(undefined);
   const [taskProjectContext, setTaskProjectContext] =
@@ -421,9 +452,7 @@ function SchedulePageContent() {
       const nextEmployees =
         employeesLoadedFull && employeesFullFromStore.length > 0
           ? employeesFullFromStore
-          : employeesLoaded && employeesFromStore.length > 0
-            ? employeesFromStore
-            : await fetchEmployeesFromStore({ full: true });
+          : await fetchEmployeesFromStore({ full: true });
 
       if (cancelled) return;
       setEmployees(Array.isArray(nextEmployees) ? (nextEmployees as EmployeeListItem[]) : []);
@@ -632,14 +661,6 @@ function SchedulePageContent() {
     [plannedWorkProjectContext?.id, selectedClientProject?.id],
   );
 
-  const activePlannedWorkProjectDetail = useMemo(
-    () =>
-      activePlannedWorkProjectId
-        ? (projectDetails[activePlannedWorkProjectId] ?? null)
-        : null,
-    [activePlannedWorkProjectId, projectDetails],
-  );
-
   const selectedProjectSegmentOptions = useMemo(
     () =>
       (activeTaskProjectDetail?.segments ?? []).map((segment) => ({
@@ -654,20 +675,6 @@ function SchedulePageContent() {
       selectedClientProject?.name,
       taskProjectContext?.name,
     ],
-  );
-
-  const selectedProjectTaskOptions = useMemo(
-    () =>
-      (activePlannedWorkProjectDetail?.segments ?? []).flatMap((segment) =>
-        (segment.projectTasks ?? []).map((task) => ({
-          id: task.id,
-          projectId: activePlannedWorkProjectId ?? "",
-          segmentId: segment.id,
-          segmentName: segment.name,
-          name: task.name,
-        })),
-      ),
-    [activePlannedWorkProjectDetail, activePlannedWorkProjectId],
   );
 
   useEffect(() => {
@@ -1170,6 +1177,123 @@ function SchedulePageContent() {
             }}
           />
         </Card>
+        <Card
+          title="项目需求单"
+          extra={
+            canManageProject ? (
+              <Button
+                type="primary"
+                onClick={() => {
+                  if (!detail.client) {
+                    messageApi.error("当前项目未关联客户");
+                    return;
+                  }
+                  setBriefProjectContext({
+                    ...project,
+                    client: detail.client,
+                  });
+                  setEditingBrief(null);
+                  setBriefModalOpen(true);
+                }}
+              >
+                创建需求单
+              </Button>
+            ) : null
+          }
+          style={{
+            width: "100%",
+            minWidth: 0,
+            maxWidth: "100%",
+            overflow: "hidden",
+          }}
+          styles={{
+            body: {
+              width: "100%",
+              minWidth: 0,
+              overflowX: "auto",
+            },
+          }}
+        >
+          <ProjectBriefProgressContent
+            briefs={(detail.briefs ?? []).filter(
+              (brief) => brief.status !== "completed",
+            )}
+            project={{ id: project.id, name: project.name }}
+            canManagePlannedWork={canManageProject}
+            onAfterPlannedWorkChange={async () => {
+              refreshProjectDetails(project.id);
+            }}
+            onEditBrief={
+              canManageProject
+                ? (brief) => {
+                    if (!detail.client) {
+                      messageApi.error("当前项目未关联客户");
+                      return;
+                    }
+                    setBriefProjectContext({
+                      ...project,
+                      client: detail.client,
+                    });
+                    setEditingBrief(brief);
+                    setBriefModalOpen(true);
+                  }
+                : undefined
+            }
+            onEditDeliverable={
+              canManageProject
+                ? (deliverable) =>
+                    setEditingDeliverable({
+                      deliverable,
+                      projectId: project.id,
+                    })
+                : undefined
+            }
+            onAddDeliverable={
+              canManageProject
+                ? (brief) =>
+                    setEditingDeliverable({
+                      briefId: brief.id,
+                      projectId: project.id,
+                    })
+                : undefined
+            }
+            onDeleteBrief={
+              canManageProject
+                ? async (brief) => {
+                    const response = await fetch(`/api/briefs/${brief.id}`, {
+                      method: "DELETE",
+                    });
+                    if (!response.ok) {
+                      messageApi.error(
+                        (await response.text()) || "删除需求单失败",
+                      );
+                      return;
+                    }
+                    messageApi.success("需求单已删除");
+                    refreshProjectDetails(project.id);
+                  }
+                : undefined
+            }
+            onDeleteDeliverable={
+              canManageProject
+                ? async (deliverable) => {
+                    const response = await fetch(
+                      `/api/deliverables/${deliverable.id}`,
+                      { method: "DELETE" },
+                    );
+                    if (!response.ok) {
+                      messageApi.error(
+                        (await response.text()) || "删除交付物失败",
+                      );
+                      return;
+                    }
+                    messageApi.success("交付物已删除");
+                    refreshProjectDetails(project.id);
+                  }
+                : undefined
+            }
+          />
+        </Card>
       </div>
     );
   };
@@ -1379,6 +1503,73 @@ function SchedulePageContent() {
         />
       ) : null}
 
+      {briefModalOpen && briefProjectContext && currentUser ? (
+        <BriefFormModal
+          open={briefModalOpen}
+          onCancel={() => {
+            setBriefModalOpen(false);
+            setBriefProjectContext(null);
+            setEditingBrief(null);
+          }}
+          project={briefProjectContext}
+          client={briefProjectContext.client}
+          creator={editingBrief?.creator ?? currentUser}
+          initialBrief={editingBrief ?? undefined}
+          employees={employees}
+          onSubmit={async (payload) => {
+            const response = await fetch(
+              editingBrief ? `/api/briefs/${editingBrief.id}` : "/api/briefs",
+              {
+              method: editingBrief ? "PATCH" : "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+              },
+            );
+            if (!response.ok) {
+              throw new Error(
+                (await response.text()) ||
+                  (editingBrief ? "更新需求单失败" : "创建需求单失败"),
+              );
+            }
+            messageApi.success(editingBrief ? "需求单已更新" : "需求单已创建");
+            setBriefModalOpen(false);
+            setBriefProjectContext(null);
+            setEditingBrief(null);
+            refreshProjectDetails(payload.projectId);
+          }}
+        />
+      ) : null}
+
+      {editingDeliverable ? (
+        <DeliverableEditModal
+          open
+          deliverable={editingDeliverable.deliverable}
+          employees={employees}
+          onCancel={() => setEditingDeliverable(null)}
+          onSubmit={async (payload) => {
+            const isEditing = Boolean(editingDeliverable.deliverable);
+            const endpoint = isEditing
+              ? `/api/deliverables/${editingDeliverable.deliverable!.id}`
+              : `/api/briefs/${editingDeliverable.briefId}/deliverables`;
+            const response = await fetch(endpoint, {
+                method: isEditing ? "PATCH" : "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            if (!response.ok) {
+              throw new Error(
+                (await response.text()) ||
+                  (isEditing ? "更新交付物失败" : "添加交付物失败"),
+              );
+            }
+            messageApi.success(isEditing ? "交付物已更新" : "交付物已添加");
+            const projectId = editingDeliverable.projectId;
+            setEditingDeliverable(null);
+            refreshProjectDetails(projectId);
+          }}
+        />
+      ) : null}
+
       {milestoneModalOpen ? (
         <ProjectMilestoneFormModal
           title="新增里程碑"
@@ -1459,27 +1650,13 @@ function SchedulePageContent() {
           destroyOnHidden
         >
           <PlannedWorkEntryForm
-            projectOptions={
-              activePlannedWorkProjectId && activePlannedWorkProjectDetail
-                ? [
-                    {
-                      id: activePlannedWorkProjectId,
-                      name: activePlannedWorkProjectDetail.name,
-                    },
-                  ]
-                : []
-            }
             selectedProjectId={activePlannedWorkProjectId ?? undefined}
             disableProjectSelect
-            disableSegmentSelect={Boolean(editingPlannedEntry)}
-            disableTaskSelect={Boolean(editingPlannedEntry)}
-            taskOptions={selectedProjectTaskOptions}
-            defaultTaskId={plannedDefaultTaskId}
             initialValues={
               editingPlannedEntry
                 ? {
                     id: editingPlannedEntry.id,
-                    taskId: editingPlannedEntry.taskId,
+                    deliverableId: editingPlannedEntry.deliverableId,
                     year: editingPlannedEntry.year,
                     weekNumber: editingPlannedEntry.weekNumber,
                     yearOption: String(editingPlannedEntry.year),

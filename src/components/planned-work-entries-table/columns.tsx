@@ -36,8 +36,8 @@ type NormalizedFilterOption = { text: string; value: string };
 type ColumnContext = {
   columnKeys: PlannedWorkColumnKey[];
   normalizedProjectFilterOptions: NormalizedFilterOption[];
-  normalizedSegmentFilterOptions: NormalizedFilterOption[];
-  normalizedTaskFilterOptions: NormalizedFilterOption[];
+  normalizedBriefFilterOptions: NormalizedFilterOption[];
+  normalizedDeliverableFilterOptions: NormalizedFilterOption[];
   normalizedOwnerFilterOptions: NormalizedFilterOption[];
   normalizedYearFilterOptions: NormalizedFilterOption[];
   normalizedWeekNumberFilterOptions: NormalizedFilterOption[];
@@ -96,8 +96,8 @@ const createTimeRenderer = (workdayAdjustments: WorkdayAdjustmentRange[]) => {
 export const buildPlannedWorkColumns = ({
   columnKeys,
   normalizedProjectFilterOptions,
-  normalizedSegmentFilterOptions,
-  normalizedTaskFilterOptions,
+  normalizedBriefFilterOptions,
+  normalizedDeliverableFilterOptions,
   normalizedOwnerFilterOptions,
   normalizedYearFilterOptions,
   normalizedWeekNumberFilterOptions,
@@ -133,42 +133,42 @@ export const buildPlannedWorkColumns = ({
       filters: normalizedProjectFilterOptions,
       filterSearch: true,
       render: (_, row) =>
-        row.task?.segment?.project ? (
-          <AppLink href={`/projects/${row.task.segment.project.id}`}>
-            {row.task.segment.project.name}
+        row.deliverable?.brief?.project ?? row.task?.segment?.project ? (
+          <AppLink href={`/projects/${(row.deliverable?.brief?.project ?? row.task?.segment?.project)!.id}`}>
+            {(row.deliverable?.brief?.project ?? row.task?.segment?.project)!.name}
           </AppLink>
         ) : (
           "-"
         ),
     },
-    segmentName: {
-      key: "segmentName",
-      title: "所属环节",
+    briefName: {
+      key: "briefName",
+      title: "所属需求单",
       width: 200,
       ellipsis: true,
       onCell: () => ({ style: { maxWidth: 200 } }),
-      filters: normalizedSegmentFilterOptions,
+      filters: normalizedBriefFilterOptions,
       filterSearch: true,
       render: (_, row) =>
-        row.task?.segment ? (
-          <AppLink href={`/project-segments/${row.task.segment.id}`}>
-            {row.task.segment.name}
+        row.deliverable?.brief ? (
+          <AppLink href={`/project-briefs/${row.deliverable.brief.id}`}>
+            {row.deliverable.brief.title}
           </AppLink>
         ) : (
           "-"
         ),
     },
-    taskName: {
-      key: "taskName",
-      title: "任务",
+    deliverableName: {
+      key: "deliverableName",
+      title: "交付物",
       width: 200,
       ellipsis: true,
       onCell: () => ({ style: { maxWidth: 200 } }),
-      filters: normalizedTaskFilterOptions,
+      filters: normalizedDeliverableFilterOptions,
       filterSearch: true,
       render: (_, row) =>
-        row.task ? (
-          <AppLink href={`/planned-work-entries/${row.id}`}>{row.task.name}</AppLink>
+        row.deliverable ? (
+          <AppLink href={`/brief-deliverables/${row.deliverable.id}`}>{row.deliverable.title}</AppLink>
         ) : (
           "-"
         ),
@@ -178,7 +178,7 @@ export const buildPlannedWorkColumns = ({
       title: "任务责任人",
       filters: normalizedOwnerFilterOptions,
       filterSearch: true,
-      render: (_, row) => row.task?.owner?.name ?? "-",
+      render: (_, row) => row.deliverable?.assignee?.name ?? row.task?.owner?.name ?? "-",
     },
     year: {
       key: "year",

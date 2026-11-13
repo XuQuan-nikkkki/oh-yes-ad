@@ -2,6 +2,7 @@
 
 import type { Key } from "react";
 import { ProTable } from "@ant-design/pro-components";
+import { Empty } from "antd";
 import { buildPlannedWorkColumns } from "./planned-work-entries-table/columns";
 import { normalizeFilterOptions } from "./planned-work-entries-table/utils";
 import type { PlannedWorkEntriesTableProps } from "./planned-work-entries-table/types";
@@ -19,16 +20,16 @@ const PlannedWorkEntriesTable = ({
   showTableOptions = false,
   actionsDisabled = false,
   projectFilterOptions = [],
-  segmentFilterOptions = [],
-  taskFilterOptions = [],
+  briefFilterOptions = [],
+  deliverableFilterOptions = [],
   ownerFilterOptions = [],
   yearFilterOptions = [],
   weekNumberFilterOptions = [],
   columnKeys = [
     "name",
     "projectName",
-    "segmentName",
-    "taskName",
+    "briefName",
+    "deliverableName",
     "ownerName",
     "year",
     "month",
@@ -39,12 +40,13 @@ const PlannedWorkEntriesTable = ({
   renderYearCell,
   monthTitle = "月份",
   renderMonthCell,
+  compact = false,
 }: PlannedWorkEntriesTableProps) => {
   const columns = buildPlannedWorkColumns({
     columnKeys,
     normalizedProjectFilterOptions: normalizeFilterOptions(projectFilterOptions),
-    normalizedSegmentFilterOptions: normalizeFilterOptions(segmentFilterOptions),
-    normalizedTaskFilterOptions: normalizeFilterOptions(taskFilterOptions),
+    normalizedBriefFilterOptions: normalizeFilterOptions(briefFilterOptions),
+    normalizedDeliverableFilterOptions: normalizeFilterOptions(deliverableFilterOptions),
     normalizedOwnerFilterOptions: normalizeFilterOptions(ownerFilterOptions),
     normalizedYearFilterOptions: normalizeFilterOptions(yearFilterOptions),
     normalizedWeekNumberFilterOptions: normalizeFilterOptions(weekNumberFilterOptions),
@@ -71,8 +73,8 @@ const PlannedWorkEntriesTable = ({
           pageSize: params.pageSize ?? 10,
           filters: {
             projectName: getSingleFilterValue(f, "projectName"),
-            segmentName: getSingleFilterValue(f, "segmentName"),
-            taskName: getSingleFilterValue(f, "taskName"),
+            briefName: getSingleFilterValue(f, "briefName"),
+            deliverableName: getSingleFilterValue(f, "deliverableName"),
             ownerName: getSingleFilterValue(f, "ownerName"),
             year: getSingleFilterValue(f, "year"),
             weekNumber:
@@ -88,10 +90,26 @@ const PlannedWorkEntriesTable = ({
           ? { reload: false, density: false, fullScreen: false }
           : false
       }
-      pagination={{ defaultPageSize: 10, showSizeChanger: true }}
+      pagination={
+        compact ? false : { defaultPageSize: 10, showSizeChanger: true }
+      }
+      size={compact ? "small" : undefined}
       tableLayout="auto"
       scroll={{ x: "max-content" }}
-      locale={{ emptyText: "暂无计划工时" }}
+      locale={{
+        emptyText: compact ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            styles={{
+              image: { height: 28, marginBottom: 4 },
+              root: { marginBlock: 8 },
+            }}
+            description="暂无计划工时"
+          />
+        ) : (
+          "暂无计划工时"
+        ),
+      }}
       toolBarRender={() => toolbarActions}
       params={{ refreshKey }}
     />

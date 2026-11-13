@@ -32,16 +32,16 @@ type WeeklyPlannedEntry = {
   friday: boolean;
   saturday: boolean;
   sunday: boolean;
-  task?: {
+  deliverable?: {
     id: string;
-    name: string;
-    owner?: {
+    title: string;
+    assignee?: {
       id: string;
       name: string;
     } | null;
-    segment?: {
+    brief?: {
       id: string;
-      name: string;
+      title: string;
       project?: {
         id: string;
         name: string;
@@ -54,18 +54,18 @@ type WeeklyPlannedEntry = {
   } | null;
 };
 
-type WeeklyTaskItem = {
+type WeeklyDeliverableItem = {
   clientName: string;
-  taskName: string;
+  deliverableName: string;
 };
 
 type WeeklyProjectSummary = {
   projectId: string | null;
   projectName: string;
   days: number;
-  tasks: Array<{
-    taskId: string | null;
-    taskName: string;
+  deliverables: Array<{
+    deliverableId: string;
+    deliverableName: string;
     days: number;
   }>;
 };
@@ -86,7 +86,7 @@ type WeeklyEmployeeRow = {
     | "friday"
     | "saturday"
     | "sunday",
-    WeeklyTaskItem[]
+    WeeklyDeliverableItem[]
   >;
 };
 
@@ -95,8 +95,8 @@ type WeeklyMetricRow = {
     | "function"
     | "totalDays"
     | "distribution"
-    | "projectTaskDistribution"
-    | "dailyTasks";
+    | "projectDeliverableDistribution"
+    | "dailyDeliverables";
   metricLabel: string;
 };
 
@@ -209,7 +209,7 @@ const WeeklyTasksPanel = ({
   const weeklyEntriesByEmployee = useMemo(() => {
     const map = new Map<string, WeeklyPlannedEntry[]>();
     for (const entry of entries) {
-      const ownerId = entry.task?.owner?.id;
+      const ownerId = entry.deliverable?.assignee?.id;
       if (!ownerId) continue;
       const list = map.get(ownerId) ?? [];
       list.push(entry);
@@ -226,7 +226,10 @@ const WeeklyTasksPanel = ({
           (sum, entry) => sum + (entry.plannedDays ?? 0),
           0,
         );
-        const dailyMap: Record<(typeof DAY_KEYS)[number], WeeklyTaskItem[]> = {
+        const dailyMap: Record<
+          (typeof DAY_KEYS)[number],
+          WeeklyDeliverableItem[]
+        > = {
           monday: [],
           tuesday: [],
           wednesday: [],
@@ -239,43 +242,44 @@ const WeeklyTasksPanel = ({
 
         for (const entry of employeeEntries) {
           const clientName =
-            entry.task?.segment?.project?.client?.name ?? "内部项目";
-          const taskName = entry.task?.name ?? "未命名任务";
+            entry.deliverable?.brief?.project?.client?.name ?? "内部项目";
+          const deliverableName =
+            entry.deliverable?.title ?? "未命名交付物";
           const projectId =
-            entry.task?.segment?.project?.id ?? "unknown-project";
+            entry.deliverable?.brief?.project?.id ?? "unknown-project";
           const projectName =
-            entry.task?.segment?.project?.name ?? "未命名项目";
+            entry.deliverable?.brief?.project?.name ?? "未命名项目";
           const days = entry.plannedDays ?? 0;
 
           if (!projectMap.has(projectId)) {
             projectMap.set(projectId, {
-              projectId: entry.task?.segment?.project?.id ?? null,
+              projectId: entry.deliverable?.brief?.project?.id ?? null,
               projectName,
               days: 0,
-              tasks: [],
+              deliverables: [],
             });
           }
 
           const projectSummary = projectMap.get(projectId)!;
           projectSummary.days += days;
-          const taskId = entry.task?.id ?? null;
-          const existingTask = projectSummary.tasks.find(
-            (task) => task.taskId === taskId,
+          const deliverableId = entry.deliverable!.id;
+          const existingDeliverable = projectSummary.deliverables.find(
+            (deliverable) => deliverable.deliverableId === deliverableId,
           );
 
-          if (existingTask) {
-            existingTask.days += days;
+          if (existingDeliverable) {
+            existingDeliverable.days += days;
           } else {
-            projectSummary.tasks.push({
-              taskId,
-              taskName,
+            projectSummary.deliverables.push({
+              deliverableId,
+              deliverableName,
               days,
             });
           }
 
           for (const dayKey of DAY_KEYS) {
             if (entry[dayKey]) {
-              dailyMap[dayKey].push({ clientName, taskName });
+              dailyMap[dayKey].push({ clientName, deliverableName });
             }
           }
         }
@@ -335,8 +339,11 @@ const WeeklyTasksPanel = ({
     { key: "function", metricLabel: "职能" },
     { key: "totalDays", metricLabel: "总工时" },
     { key: "distribution", metricLabel: "工时分布" },
-    { key: "projectTaskDistribution", metricLabel: "项目 & 任务分布" },
-    { key: "dailyTasks", metricLabel: "每日任务情况" },
+    {
+      key: "projectDeliverableDistribution",
+      metricLabel: "项目 & 交付物分布",
+    },
+    { key: "dailyDeliverables", metricLabel: "每日交付物情况" },
   ];
 
   const renderWeeklyEmployeeMetric = (
@@ -402,11 +409,11 @@ const WeeklyTasksPanel = ({
       );
     }
 
-    if (metricKey === "projectTaskDistribution") {
+    if (metricKey === "projectDeliverableDistribution") {
       return employeeRow.hasSchedule ? (
         employeeRow.projectSummaries.length === 0 ? (
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            未安排任务
+            未安排交付物
           </Typography.Text>
         ) : (
           <Space orientation="vertical" size={2} style={{ width: "100%" }}>
@@ -439,8 +446,8 @@ const WeeklyTasksPanel = ({
                   </Tag>
                 </Space>
                 <div style={{ marginTop: 1, lineHeight: "14px" }}>
-                  {projectSummary.tasks.map((task) => (
-                    <div key={task.taskId}>
+                  {projectSummary.deliverables.map((deliverable) => (
+                    <div key={deliverable.deliverableId}>
                       <Typography.Text
                         style={{
                           fontSize: 12,
@@ -448,7 +455,7 @@ const WeeklyTasksPanel = ({
                           fontWeight: 500,
                         }}
                       >
-                        - {task.taskName}{" "}
+                        - {deliverable.deliverableName}{" "}
                         <Tag
                           style={{
                             marginInlineEnd: 0,
@@ -459,7 +466,7 @@ const WeeklyTasksPanel = ({
                           }}
                           color="gold"
                         >
-                          {toDisplayDays(task.days)}
+                          {toDisplayDays(deliverable.days)}
                         </Tag>
                       </Typography.Text>
                     </div>
@@ -479,32 +486,34 @@ const WeeklyTasksPanel = ({
     return employeeRow.hasSchedule ? (
       <div>
         {DAY_KEYS.filter((dayKey) => {
-          const tasks = employeeRow.dailyMap[dayKey];
-          return !(WEEKEND_DAY_KEYS.has(dayKey) && tasks.length === 0);
+          const deliverables = employeeRow.dailyMap[dayKey];
+          return !(
+            WEEKEND_DAY_KEYS.has(dayKey) && deliverables.length === 0
+          );
         }).map((dayKey) => {
-          const tasks = employeeRow.dailyMap[dayKey];
+          const deliverables = employeeRow.dailyMap[dayKey];
           return (
             <div key={`${employeeRow.key}-daily-${dayKey}`}>
               <Tag
-                color={tasks.length ? "green" : "default"}
+                color={deliverables.length ? "green" : "default"}
                 style={{ fontSize: 10, fontWeight: 600 }}
               >
                 {DAY_LABELS[dayKey]}
               </Tag>
-              {tasks.length === 0 ? (
+              {deliverables.length === 0 ? (
                 <div>
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    - 未安排任务
+                    - 未安排交付物
                   </Typography.Text>
                 </div>
               ) : (
-                tasks.map((item, index) => (
+                deliverables.map((item, index) => (
                   <div
-                    key={`${employeeRow.key}-${dayKey}-${item.clientName}-${item.taskName}-${index}`}
+                    key={`${employeeRow.key}-${dayKey}-${item.clientName}-${item.deliverableName}-${index}`}
                     style={{ lineHeight: "14px" }}
                   >
                     <Typography.Text style={{ fontSize: 12 }}>
-                      - [{item.clientName}] {item.taskName}
+                      - [{item.clientName}] {item.deliverableName}
                     </Typography.Text>
                   </div>
                 ))
@@ -528,7 +537,7 @@ const WeeklyTasksPanel = ({
       title: "维度",
       dataIndex: "metricLabel",
       fixed: "left",
-      width: 120,
+      width: 140,
       render: (value: string) => (
         <Typography.Text strong style={{ fontSize: 12 }}>
           {value}

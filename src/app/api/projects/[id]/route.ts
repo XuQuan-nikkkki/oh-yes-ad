@@ -760,6 +760,60 @@ const projectDetailInclude = {
     select: projectInitiationSelect,
     orderBy: { version: "desc" as const },
   },
+  briefs: {
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      status: true,
+      createdAt: true,
+      owner: { select: { id: true, name: true } },
+      creator: { select: { id: true, name: true } },
+      deliverables: {
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          description: true,
+          specification: true,
+          firstDraftAt: true,
+          revisionAt: true,
+          finalAt: true,
+          reviewer: { select: { id: true, name: true } },
+          assignee: { select: { id: true, name: true } },
+          formatOptions: {
+            select: { option: { select: { id: true, value: true, color: true } } },
+          },
+          categoryOrSceneOptions: {
+            select: { option: { select: { id: true, value: true, color: true } } },
+          },
+          plannedWorkEntries: {
+            select: {
+              id: true,
+              yearOption: {
+                select: { id: true, value: true, color: true },
+              },
+              weekNumberOption: {
+                select: { id: true, value: true, color: true },
+              },
+              plannedDays: true,
+              monday: true,
+              tuesday: true,
+              wednesday: true,
+              thursday: true,
+              friday: true,
+              saturday: true,
+              sunday: true,
+              updatedAt: true,
+            },
+            orderBy: { createdAt: "asc" as const },
+          },
+        },
+        orderBy: { createdAt: "asc" as const },
+      },
+    },
+    orderBy: { createdAt: "desc" as const },
+  },
 } as const;
 
 export async function GET(req: Request) {

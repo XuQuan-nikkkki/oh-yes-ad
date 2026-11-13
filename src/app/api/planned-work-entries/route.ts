@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -59,16 +59,11 @@ const serializeEntry = (
   };
 };
 
-const internalProjectWhere = {
-  task: {
-    segment: {
-      project: {
-        typeOption: {
-          value: { in: INTERNAL_PROJECT_TYPE_VALUES as unknown as string[] },
-        },
-      },
-    },
-  },
+const internalProjectWhere: Prisma.PlannedWorkEntryWhereInput = {
+  OR: [
+    { task: { segment: { project: { typeOption: { value: { in: [...INTERNAL_PROJECT_TYPE_VALUES] } } } } } },
+    { deliverable: { brief: { project: { typeOption: { value: { in: [...INTERNAL_PROJECT_TYPE_VALUES] } } } } } },
+  ],
 };
 
 const isInternalOnly = (projectType?: string | null) =>
@@ -80,79 +75,40 @@ export async function GET(req: NextRequest) {
   const page = Number(searchParams.get("page"));
   const pageSize = Number(searchParams.get("pageSize"));
   const taskName = searchParams.get("taskName")?.trim() ?? "";
+  const deliverableName = searchParams.get("deliverableName")?.trim() ?? "";
   const ownerName = searchParams.get("ownerName")?.trim() ?? "";
   const projectName = searchParams.get("projectName")?.trim() ?? "";
   const segmentName = searchParams.get("segmentName")?.trim() ?? "";
+  const briefName = searchParams.get("briefName")?.trim() ?? "";
   const year = searchParams.get("year")?.trim() ?? "";
   const weekNumber = searchParams.get("weekNumber")?.trim() ?? "";
   const taskId = searchParams.get("taskId")?.trim() ?? "";
   const paged = Number.isFinite(page) && page > 0 && Number.isFinite(pageSize) && pageSize > 0;
 
-  const where = {
-    task: {
-      ...(taskName
-        ? {
-            name: {
-              contains: taskName,
-              mode: "insensitive" as const,
-            },
-          }
-        : {}),
-      ...(taskId ? { id: taskId } : {}),
-      ...(ownerName
-        ? {
-            owner: {
-              name: {
-                contains: ownerName,
-                mode: "insensitive" as const,
-              },
-            },
-          }
-        : {}),
-      segment: {
-        ...(segmentName
-          ? {
-              name: {
-                contains: segmentName,
-                mode: "insensitive" as const,
-              },
-            }
-          : {}),
-        project: {
-          ...(isInternalOnly(projectType)
-            ? {
-                typeOption: {
-                  value: { in: INTERNAL_PROJECT_TYPE_VALUES as unknown as string[] },
-                },
-              }
-            : {}),
-          ...(projectName
-            ? {
-                name: {
-                  contains: projectName,
-                  mode: "insensitive" as const,
-                },
-              }
-            : {}),
-        },
-      },
-    },
-    ...(year
-      ? {
-          yearOption: {
-            value: year,
-          },
-        }
-      : {}),
-    ...(weekNumber
-      ? {
-          weekNumberOption: {
-            value: weekNumber,
-          },
-        }
-      : {}),
+  const where: Prisma.PlannedWorkEntryWhereInput = {
+    AND: [
+      taskId ? { taskId } : {},
+      taskName ? { task: { name: { contains: taskName, mode: "insensitive" } } } : {},
+      deliverableName ? { deliverable: { title: { contains: deliverableName, mode: "insensitive" } } } : {},
+      ownerName ? {
+        OR: [
+          { task: { owner: { name: { contains: ownerName, mode: "insensitive" } } } },
+          { deliverable: { assignee: { name: { contains: ownerName, mode: "insensitive" } } } },
+        ],
+      } : {},
+      segmentName ? { task: { segment: { name: { contains: segmentName, mode: "insensitive" } } } } : {},
+      briefName ? { deliverable: { brief: { title: { contains: briefName, mode: "insensitive" } } } } : {},
+      projectName ? {
+        OR: [
+          { task: { segment: { project: { name: { contains: projectName, mode: "insensitive" } } } } },
+          { deliverable: { brief: { project: { name: { contains: projectName, mode: "insensitive" } } } } },
+        ],
+      } : {},
+      isInternalOnly(projectType) ? internalProjectWhere : {},
+      year ? { yearOption: { value: year } } : {},
+      weekNumber ? { weekNumberOption: { value: weekNumber } } : {},
+    ],
   };
-
   if (paged) {
     const [items, total] = await Promise.all([
       prisma.plannedWorkEntry.findMany({
@@ -173,6 +129,26 @@ export async function GET(req: NextRequest) {
                 select: {
                   id: true,
                   name: true,
+                  project: {
+                    select: {
+                      id: true,
+                      name: true,
+                      client: { select: { id: true, name: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          deliverable: {
+            select: {
+              id: true,
+              title: true,
+              assignee: { select: { id: true, name: true } },
+              brief: {
+                select: {
+                  id: true,
+                  title: true,
                   project: {
                     select: {
                       id: true,
@@ -228,6 +204,26 @@ export async function GET(req: NextRequest) {
           },
         },
       },
+      deliverable: {
+        select: {
+          id: true,
+          title: true,
+          assignee: { select: { id: true, name: true } },
+          brief: {
+            select: {
+              id: true,
+              title: true,
+              project: {
+                select: {
+                  id: true,
+                  name: true,
+                  client: { select: { id: true, name: true } },
+                },
+              },
+            },
+          },
+        },
+      },
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -240,15 +236,15 @@ export async function POST(req: NextRequest) {
 
   const body = await sanitizeRequestBody(req);
   const projectType = req.nextUrl.searchParams.get("projectType");
-  if (!body?.taskId || typeof body.taskId !== "string") {
-    return new Response("Invalid task ID", { status: 400 });
+  if (!body?.deliverableId || typeof body.deliverableId !== "string") {
+    return new Response("请选择交付物", { status: 400 });
   }
 
-  const task = await prisma.projectTask.findFirst({
+  const deliverable = await prisma.deliverable.findFirst({
     where: isInternalOnly(projectType)
       ? {
-          id: body.taskId,
-          segment: {
+          id: body.deliverableId,
+          brief: {
             project: {
               typeOption: {
                 value: { in: INTERNAL_PROJECT_TYPE_VALUES as unknown as string[] },
@@ -256,10 +252,10 @@ export async function POST(req: NextRequest) {
             },
           },
         }
-      : { id: body.taskId },
+      : { id: body.deliverableId },
     select: { id: true },
   });
-  if (!task) return new Response("Task not found", { status: 400 });
+  if (!deliverable) return new Response("交付物不存在", { status: 400 });
 
   const year = normalizeInteger(body.yearOption ?? body.year);
   const weekNumber = normalizeInteger(body.weekNumberOption ?? body.weekNumber);
@@ -273,7 +269,7 @@ export async function POST(req: NextRequest) {
 
   const item = await prisma.plannedWorkEntry.create({
     data: {
-      taskId: body.taskId,
+      deliverableId: body.deliverableId,
       yearOptionId,
       weekNumberOptionId,
       plannedDays: Number(body.plannedDays ?? 0),
@@ -304,6 +300,20 @@ export async function POST(req: NextRequest) {
                   client: { select: { id: true, name: true } },
                 },
               },
+            },
+          },
+        },
+      },
+      deliverable: {
+        select: {
+          id: true,
+          title: true,
+          assignee: { select: { id: true, name: true } },
+          brief: {
+            select: {
+              id: true,
+              title: true,
+              project: { select: { id: true, name: true } },
             },
           },
         },

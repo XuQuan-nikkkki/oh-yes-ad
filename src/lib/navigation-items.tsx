@@ -80,9 +80,21 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
         label: "项目环节",
       },
       {
+        key: "/project-briefs",
+        icon: <AppstoreOutlined />,
+        label: "项目需求单",
+        forbiddenRoles: ["HR", "FINANCE"],
+      },
+      {
         key: "/project-tasks",
         icon: <ProfileOutlined />,
         label: "项目任务",
+      },
+      {
+        key: "/brief-deliverables",
+        icon: <ProfileOutlined />,
+        label: "需求交付物",
+        forbiddenRoles: ["HR", "FINANCE"],
       },
       {
         key: "/project-milestones",
@@ -223,7 +235,9 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
 
 export const NAVIGATION_PATH_PREFIXES = [
   "/project-segments",
+  "/project-briefs",
   "/project-tasks",
+  "/brief-deliverables",
   "/project-milestones",
   "/project-documents",
   "/project-receivable-payable",

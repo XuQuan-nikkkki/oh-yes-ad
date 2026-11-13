@@ -27,14 +27,12 @@ export default function Page() {
     [roleCodes],
   );
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [tasks, setTasks] = useState<
+  const [briefs, setBriefs] = useState<
     {
       id: string;
-      name: string;
-      projectId: string;
-      segmentId?: string;
-      segmentName?: string;
-      ownerName?: string;
+      title: string;
+      project: { id: string; name: string };
+      deliverables: { id: string; title: string; assignee?: { id: string; name: string } | null }[];
     }[]
   >([]);
   const [formOptionsLoaded, setFormOptionsLoaded] = useState(false);
@@ -63,46 +61,28 @@ export default function Page() {
   }, [fetchAdjustmentsFromStore]);
 
   const fetchFormOptions = useCallback(async () => {
-    const tasksRes = await fetch("/api/project-tasks");
-    const taskList = await tasksRes.json();
-    const nextTasks = Array.isArray(taskList)
-      ? taskList
-          .filter(
-            (item): item is {
-              id: string;
-              name: string;
-              segment?: {
-                id?: string;
-                name?: string;
-                project?: { id?: string; name?: string };
-              };
-              owner?: { id?: string; name?: string };
-            } => Boolean(item?.id && item?.name),
-          )
-          .map((t) => ({
-            id: t.id,
-            name: t.name,
-            projectId: t.segment?.project?.id ?? "",
-            segmentId: t.segment?.id,
-            segmentName: t.segment?.name,
-            projectName: t.segment?.project?.name ?? "",
-            ownerName: t.owner?.name ?? "",
+    const briefsRes = await fetch("/api/briefs");
+    const briefList = await briefsRes.json();
+    setBriefs(
+      Array.isArray(briefList)
+          ? briefList.map((brief) => ({
+            id: brief.id,
+            title: brief.title,
+            project: brief.project,
+            deliverables: Array.isArray(brief.deliverables)
+              ? brief.deliverables.map((deliverable: { id: string; title: string; assignee?: { id: string; name: string } | null }) => ({
+                  id: deliverable.id,
+                  title: deliverable.title,
+                  assignee: deliverable.assignee,
+                }))
+              : [],
           }))
-      : [];
-    setTasks(
-      nextTasks.map((task) => ({
-        id: task.id,
-        name: task.name,
-        projectId: task.projectId,
-        segmentId: task.segmentId,
-        segmentName: task.segmentName,
-        ownerName: task.ownerName,
-      })),
+        : [],
     );
     const projectMap = new Map<string, string>();
-    nextTasks.forEach((task) => {
-      if (!task.projectId || !task.projectName) return;
-      projectMap.set(task.projectId, task.projectName);
+    (Array.isArray(briefList) ? briefList : []).forEach((brief) => {
+      if (!brief?.project?.id || !brief.project.name) return;
+      projectMap.set(brief.project.id, brief.project.name);
     });
     setProjects(
       Array.from(projectMap.entries()).map(([id, name]) => ({
@@ -129,8 +109,8 @@ export default function Page() {
       pageSize: number;
       filters: {
         projectName?: string;
-        segmentName?: string;
-        taskName?: string;
+        briefName?: string;
+        deliverableName?: string;
         ownerName?: string;
         year?: string;
         weekNumber?: string;
@@ -142,9 +122,10 @@ export default function Page() {
       });
       if (params.filters.projectName)
         query.set("projectName", params.filters.projectName);
-      if (params.filters.segmentName)
-        query.set("segmentName", params.filters.segmentName);
-      if (params.filters.taskName) query.set("taskName", params.filters.taskName);
+      if (params.filters.briefName)
+        query.set("briefName", params.filters.briefName);
+      if (params.filters.deliverableName)
+        query.set("deliverableName", params.filters.deliverableName);
       if (params.filters.ownerName)
         query.set("ownerName", params.filters.ownerName);
       if (params.filters.year) query.set("year", params.filters.year);
@@ -157,8 +138,8 @@ export default function Page() {
           pageSize: params.pageSize,
           filters: {
             projectName: query.get("projectName") ?? undefined,
-            segmentName: query.get("segmentName") ?? undefined,
-            taskName: query.get("taskName") ?? undefined,
+            briefName: query.get("briefName") ?? undefined,
+            deliverableName: query.get("deliverableName") ?? undefined,
             ownerName: query.get("ownerName") ?? undefined,
             year: query.get("year") ?? undefined,
             weekNumber: query.get("weekNumber") ?? undefined,
@@ -202,12 +183,12 @@ export default function Page() {
   const projectFilterOptions = buildFilterOptions(
     projects.map((project) => project.name),
   );
-  const segmentFilterOptions = buildFilterOptions(
-    tasks.map((task) => task.segmentName),
+  const briefFilterOptions = buildFilterOptions(briefs.map((brief) => brief.title));
+  const deliverableFilterOptions = buildFilterOptions(
+    briefs.flatMap((brief) => brief.deliverables.map((deliverable) => deliverable.title)),
   );
-  const taskFilterOptions = buildFilterOptions(tasks.map((task) => task.name));
   const ownerFilterOptions = buildFilterOptions(
-    tasks.map((task) => task.ownerName),
+    briefs.flatMap((brief) => brief.deliverables.map((deliverable) => deliverable.assignee?.name)),
   );
   const yearFilterOptions = buildNumericFilterOptions(
     (optionsByField["plannedWorkEntry.year"] ?? []).map((option) => option.value),
@@ -314,8 +295,8 @@ export default function Page() {
         ]}
         workdayAdjustments={workdayAdjustments}
         projectFilterOptions={projectFilterOptions}
-        segmentFilterOptions={segmentFilterOptions}
-        taskFilterOptions={taskFilterOptions}
+        briefFilterOptions={briefFilterOptions}
+        deliverableFilterOptions={deliverableFilterOptions}
         ownerFilterOptions={ownerFilterOptions}
         yearFilterOptions={yearFilterOptions}
         weekNumberFilterOptions={weekNumberFilterOptions}
@@ -400,13 +381,11 @@ export default function Page() {
         destroyOnHidden
       >
         <PlannedWorkEntryForm
-          projectOptions={projects}
-          taskOptions={tasks}
           initialValues={
             editing
               ? {
                   id: editing.id,
-                  taskId: editing.task?.id ?? "",
+                  deliverableId: editing.deliverable?.id ?? "",
                   yearOption:
                     editing.yearOption?.value ?? String(editing.year ?? ""),
                   weekNumberOption:

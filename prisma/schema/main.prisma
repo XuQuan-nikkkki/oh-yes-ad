@@ -111,6 +111,8 @@ model SelectOption {
   plannedWorkEntriesByWeekNumber              PlannedWorkEntry[]                           @relation("PlannedWorkEntryWeekNumber")
   projectReceivableNodesByStage               ProjectReceivableNode[]                      @relation("ProjectReceivableNodeStage")
   projectPayableNodesByStage                  ProjectPayableNode[]                         @relation("ProjectPayableNodeStage")
+  deliverableFormatOptions                    DeliverableFormatOption[]
+  deliverableCategoryOrSceneOptions           DeliverableCategoryOrSceneOption[]
 
   @@unique([field, value])
   @@index([field, order])
@@ -323,6 +325,13 @@ model Employee {
   ownedProjectInitiations      ProjectInitiation[]                        @relation("ProjectInitiationOwner")
   projects                     Project[]                                  @relation("ProjectMembers")
   projectSegments              ProjectSegment[]
+  ownedBriefs                  Brief[]                                    @relation("BriefOwner")
+  createdBriefs                Brief[]                                    @relation("BriefCreator")
+  reviewedDeliverables         Deliverable[]                              @relation("DeliverableReviewer")
+  assignedDeliverables         Deliverable[]                              @relation("DeliverableAssignee")
+  createdDeliverables          Deliverable[]                              @relation("DeliverableCreator")
+  deliverableAssignments       DeliverableAssignmentHistory[]             @relation("DeliverableAssignmentAssignee")
+  assignedDeliverablesHistory  DeliverableAssignmentHistory[]             @relation("DeliverableAssignmentActor")
   ownedTasks                   ProjectTask[]                              @relation("TaskOwner")
   createdTasks                 ProjectTask[]                              @relation("TaskCreator")
   milestones                   ProjectMilestone[]                         @relation("MilestoneInternalParticipants")
@@ -431,12 +440,12 @@ model Project {
   serviceContent String?
   costSourceMode ProjectCostSourceMode @default(AUTO)
   typeOptionId   String?
-  typeOption     SelectOption? @relation("ProjectType", fields: [typeOptionId], references: [id])
+  typeOption     SelectOption?         @relation("ProjectType", fields: [typeOptionId], references: [id])
   statusOptionId String?
-  statusOption   SelectOption? @relation("ProjectStatus", fields: [statusOptionId], references: [id])
+  statusOption   SelectOption?         @relation("ProjectStatus", fields: [statusOptionId], references: [id])
   stageOptionId  String?
-  stageOption    SelectOption? @relation("ProjectStage", fields: [stageOptionId], references: [id])
-  isArchived     Boolean       @default(false)
+  stageOption    SelectOption?         @relation("ProjectStage", fields: [stageOptionId], references: [id])
+  isArchived     Boolean               @default(false)
 
   startDate DateTime?
   endDate   DateTime?
@@ -458,6 +467,7 @@ model Project {
   updatedAt DateTime @updatedAt
 
   segments ProjectSegment[]
+  briefs   Brief[]
 
   documents           ProjectDocument[]
   vendors             Vendor[]                    @relation("ProjectVendors")
@@ -481,18 +491,18 @@ model ProjectManualCost {
   projectId String  @unique
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  agencyFeeAmount       Decimal?
-  agencyFeeRemark       String?
-  outsourceAmount       Decimal?
-  outsourceRemark       String?
-  laborAmount           Decimal?
-  laborRemark           String?
-  rentAmount            Decimal?
-  rentRemark            String?
-  middleOfficeAmount    Decimal?
-  middleOfficeRemark    String?
-  executionAmount       Decimal?
-  executionRemark       String?
+  agencyFeeAmount    Decimal?
+  agencyFeeRemark    String?
+  outsourceAmount    Decimal?
+  outsourceRemark    String?
+  laborAmount        Decimal?
+  laborRemark        String?
+  rentAmount         Decimal?
+  rentRemark         String?
+  middleOfficeAmount Decimal?
+  middleOfficeRemark String?
+  executionAmount    Decimal?
+  executionRemark    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -864,6 +874,118 @@ model ProjectSegment {
   @@index([projectId])
 }
 
+model Brief {
+  id String @id @default(uuid())
+
+  title           String
+  description     String
+  status          String  @default("draft")
+  legacySegmentId String? @unique
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  ownerId String
+  owner   Employee @relation("BriefOwner", fields: [ownerId], references: [id])
+
+  creatorId String
+  creator   Employee @relation("BriefCreator", fields: [creatorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deliverables Deliverable[]
+
+  @@index([projectId])
+  @@index([ownerId])
+  @@index([creatorId])
+}
+
+model Deliverable {
+  id String @id @default(uuid())
+
+  // 旧项目任务迁移来源，用于追溯和防止重复迁移
+  legacyTaskId String? @unique
+
+  type          String
+  status        String  @default("pending")
+  title         String
+  description   String
+  specification String?
+
+  firstDraftAt DateTime? @db.Date
+  revisionAt   DateTime? @db.Date
+  finalAt      DateTime @db.Date
+
+  briefId String
+  brief   Brief  @relation(fields: [briefId], references: [id], onDelete: Cascade)
+
+  reviewerId String
+  reviewer   Employee @relation("DeliverableReviewer", fields: [reviewerId], references: [id])
+
+  assigneeId String?
+  assignee   Employee? @relation("DeliverableAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  creatorId String
+  creator   Employee @relation("DeliverableCreator", fields: [creatorId], references: [id])
+
+  formatOptions          DeliverableFormatOption[]
+  categoryOrSceneOptions DeliverableCategoryOrSceneOption[]
+  assignmentHistories    DeliverableAssignmentHistory[]
+  plannedWorkEntries     PlannedWorkEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([briefId])
+  @@index([reviewerId])
+  @@index([assigneeId])
+  @@index([creatorId])
+}
+
+model DeliverableFormatOption {
+  deliverableId String
+  deliverable   Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+
+  optionId String
+  option   SelectOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@id([deliverableId, optionId])
+  @@index([optionId])
+}
+
+model DeliverableCategoryOrSceneOption {
+  deliverableId String
+  deliverable   Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+
+  optionId String
+  option   SelectOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@id([deliverableId, optionId])
+  @@index([optionId])
+}
+
+model DeliverableAssignmentHistory {
+  id String @id @default(uuid())
+
+  deliverableId String
+  deliverable   Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+
+  assigneeId String
+  assignee   Employee @relation("DeliverableAssignmentAssignee", fields: [assigneeId], references: [id])
+
+  assignedById String
+  assignedBy   Employee @relation("DeliverableAssignmentActor", fields: [assignedById], references: [id])
+
+  assignedAt   DateTime  @default(now())
+  endedAt      DateTime?
+  changeReason String?
+
+  @@index([deliverableId])
+  @@index([assigneeId])
+  @@index([assignedById])
+}
+
 model ProjectTask {
   id           String  @id @default(uuid())
   notionPageId String? @unique
@@ -1031,8 +1153,11 @@ model PlannedWorkEntry {
   id           String  @id @default(uuid())
   notionPageId String? @unique
 
-  taskId String
-  task   ProjectTask @relation(fields: [taskId], references: [id])
+  taskId String?
+  task   ProjectTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  deliverableId String?
+  deliverable   Deliverable? @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
 
   yearOptionId       String?
   yearOption         SelectOption? @relation("PlannedWorkEntryYear", fields: [yearOptionId], references: [id])
@@ -1049,6 +1174,9 @@ model PlannedWorkEntry {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([deliverableId])
 }
 
 model ActualWorkEntry {

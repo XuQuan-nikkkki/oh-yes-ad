@@ -2,7 +2,7 @@
 
 import { Space, Button, Popconfirm } from "antd";
 import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 type Props = {
   onEdit?: () => void;
@@ -17,6 +17,7 @@ type Props = {
   gap?: number;
   buttonStyle?: CSSProperties;
   showIcons?: boolean;
+  middleAction?: ReactNode;
 };
 
 const TableActions = ({
@@ -32,6 +33,7 @@ const TableActions = ({
   gap = 4,
   buttonStyle,
   showIcons = true,
+  middleAction,
 }: Props) => {
   return (
     <Space size={gap} wrap={false} style={{ whiteSpace: "nowrap" }}>
@@ -52,6 +54,8 @@ const TableActions = ({
           {editText}
         </Button>
       )}
+
+      {middleAction}
 
       {onDelete && (
         <Popconfirm

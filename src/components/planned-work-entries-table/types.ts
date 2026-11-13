@@ -21,13 +21,23 @@ export type PlannedWorkEntryRow = {
     owner?: { id: string; name: string } | null;
     segment?: { id: string; name: string; project?: { id: string; name: string } };
   };
+  deliverable?: {
+    id: string;
+    title: string;
+    assignee?: { id: string; name: string } | null;
+    brief?: {
+      id: string;
+      title: string;
+      project?: { id: string; name: string };
+    };
+  };
 };
 
 export type PlannedWorkColumnKey =
   | "name"
   | "projectName"
-  | "segmentName"
-  | "taskName"
+  | "briefName"
+  | "deliverableName"
   | "ownerName"
   | "year"
   | "month"
@@ -43,8 +53,8 @@ export type PlannedWorkEntriesTableProps = {
     pageSize: number;
     filters: {
       projectName?: string;
-      segmentName?: string;
-      taskName?: string;
+      briefName?: string;
+      deliverableName?: string;
       ownerName?: string;
       year?: string;
       weekNumber?: string;
@@ -59,8 +69,8 @@ export type PlannedWorkEntriesTableProps = {
   showTableOptions?: boolean;
   actionsDisabled?: boolean;
   projectFilterOptions?: RawFilterOption[];
-  segmentFilterOptions?: RawFilterOption[];
-  taskFilterOptions?: RawFilterOption[];
+  briefFilterOptions?: RawFilterOption[];
+  deliverableFilterOptions?: RawFilterOption[];
   ownerFilterOptions?: RawFilterOption[];
   yearFilterOptions?: RawFilterOption[];
   weekNumberFilterOptions?: RawFilterOption[];
@@ -68,4 +78,5 @@ export type PlannedWorkEntriesTableProps = {
   renderYearCell?: (row: PlannedWorkEntryRow) => ReactNode;
   monthTitle?: ReactNode;
   renderMonthCell?: (row: PlannedWorkEntryRow) => ReactNode;
+  compact?: boolean;
 };

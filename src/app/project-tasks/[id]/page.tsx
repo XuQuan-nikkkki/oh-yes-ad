@@ -60,7 +60,7 @@ type Detail = {
   creator?: { id: string; name: string } | null;
 };
 
-type PlannedEntryInitialValues = PlannedWorkEntryFormPayload & { id: string };
+type PlannedEntryInitialValues = Omit<PlannedWorkEntryFormPayload, "deliverableId"> & { id: string; deliverableId?: string };
 
 export default function ProjectTaskDetailPage() {
   const params = useParams();
@@ -244,7 +244,7 @@ export default function ProjectTaskDetailPage() {
     row: PlannedWorkEntryRow,
   ): PlannedEntryInitialValues => ({
     id: row.id,
-    taskId: row.task?.id ?? id,
+    deliverableId: row.deliverable?.id,
     yearOption:
       row.yearOption?.value ??
       (row.year !== null && row.year !== undefined ? String(row.year) : ""),
@@ -338,22 +338,6 @@ export default function ProjectTaskDetailPage() {
     },
     [],
   );
-
-  const plannedProjectOptions = data?.segment?.project
-    ? [{ id: data.segment.project.id, name: data.segment.project.name }]
-    : [];
-
-  const plannedTaskOptions = data?.segment
-    ? [
-        {
-          id,
-          name: data.name,
-          projectId: data.segment.project?.id ?? "",
-          segmentId: data.segment.id,
-          segmentName: data.segment.name,
-        },
-      ]
-    : [];
 
   if (loading) {
     return (
@@ -572,20 +556,11 @@ export default function ProjectTaskDetailPage() {
       >
         {data?.segment ? (
           <PlannedWorkEntryForm
-            projectOptions={plannedProjectOptions}
             selectedProjectId={data.segment.project?.id}
             disableProjectSelect
-            disableSegmentSelect
-            disableTaskSelect
-            defaultSegmentId={data.segment.id}
-            defaultTaskId={id}
-            taskOptions={plannedTaskOptions}
             initialValues={editingPlanned}
             onSubmit={async (payload) => {
-              await handleSubmitPlannedEntry({
-                ...payload,
-                taskId: id,
-              });
+              await handleSubmitPlannedEntry(payload);
             }}
           />
         ) : null}

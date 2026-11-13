@@ -759,7 +759,7 @@ const ProjectDetailPage = () => {
   const handleCreatePlannedWorkEntry = async (
     payload: PlannedWorkEntryFormPayload,
   ) => {
-    const res = await fetch(`/api/projects/${projectId}/planned-work-entries`, {
+    const res = await fetch("/api/planned-work-entries", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -1974,11 +1974,6 @@ const ProjectDetailPage = () => {
         project={project}
         editing={
           activeModal.type === "planned-work" ? activeModal.editing : null
-        }
-        defaultTaskId={
-          activeModal.type === "planned-work"
-            ? activeModal.defaultTaskId
-            : undefined
         }
         onCancel={() => {
           setActiveModal({ type: null });

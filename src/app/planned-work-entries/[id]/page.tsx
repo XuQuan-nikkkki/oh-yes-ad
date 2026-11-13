@@ -69,19 +69,39 @@ type Detail = {
       project?: { id: string; name: string };
     };
   };
-};
-
-type ProjectDetailForTasks = {
-  id: string;
-  name: string;
-  segments?: {
+  deliverable?: {
     id: string;
-    name: string;
-    projectTasks?: {
+    title: string;
+    status: string;
+    assignee?: {
       id: string;
       name: string;
-    }[];
-  }[];
+      functionOption?: NullableSelectOptionValue;
+    } | null;
+    brief: {
+      id: string;
+      title: string;
+      project: { id: string; name: string };
+    };
+  };
+};
+
+const deliverableStatusLabels: Record<string, string> = {
+  pending: "待处理",
+  in_progress: "进行中",
+  pending_review: "待审核",
+  revision_required: "需修改",
+  completed: "已完成",
+  paused: "暂停",
+};
+
+const deliverableStatusColors: Record<string, string> = {
+  pending: "default",
+  in_progress: "green",
+  pending_review: "orange",
+  revision_required: "red",
+  completed: "blue",
+  paused: "gold",
 };
 
 export default function Page() {
@@ -98,18 +118,6 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [tasks, setTasks] = useState<
-    {
-      id: string;
-      name: string;
-      projectId: string;
-      segmentId?: string;
-      segmentName?: string;
-    }[]
-  >([]);
-  const [optionsLoaded, setOptionsLoaded] = useState(false);
-  const [optionsLoading, setOptionsLoading] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
   const clearEntriesCache = usePlannedWorkEntriesStore(
     (state) => state.clearEntriesCache,
@@ -127,43 +135,6 @@ export default function Page() {
     setData(await res.json());
     setLoading(false);
   }, [id]);
-
-  const fetchOptions = useCallback(async () => {
-    if (optionsLoaded || optionsLoading) return;
-    setOptionsLoading(true);
-    try {
-      const projectId = data?.task?.segment?.project?.id;
-      if (!projectId) {
-        setProjects([]);
-        setTasks([]);
-        setOptionsLoaded(true);
-        return;
-      }
-
-      const projectRes = await fetch(`/api/projects/${projectId}`);
-      if (!projectRes.ok) {
-        setProjects([]);
-        setTasks([]);
-        return;
-      }
-      const project = (await projectRes.json()) as ProjectDetailForTasks;
-      setProjects([{ id: project.id, name: project.name }]);
-      const taskRows =
-        project.segments?.flatMap((segment) =>
-          (segment.projectTasks ?? []).map((task) => ({
-            id: task.id,
-            name: task.name,
-            projectId: project.id,
-            segmentId: segment.id,
-            segmentName: segment.name,
-          })),
-        ) ?? [];
-      setTasks(taskRows);
-      setOptionsLoaded(true);
-    } finally {
-      setOptionsLoading(false);
-    }
-  }, [data?.task?.segment?.project?.id, optionsLoaded, optionsLoading]);
 
   useEffect(() => {
     if (!id) return;
@@ -235,14 +206,9 @@ export default function Page() {
     router.push("/planned-work-entries");
   };
 
-  const onOpenEdit = async () => {
+  const onOpenEdit = () => {
     if (!canManagePlannedWork) return;
-    try {
-      await fetchOptions();
-      setOpen(true);
-    } catch {
-      messageApi.error("加载项目和任务失败");
-    }
+    setOpen(true);
   };
 
   const updatePlannedEntryYear = async (nextOption: {
@@ -301,13 +267,12 @@ export default function Page() {
     <DetailPageContainer>
       {contextHolder}
       <Card
-        title={data.task?.name || "计划工时详情"}
+        title={data.deliverable?.title || "计划工时详情"}
         extra={
           <Space>
             <Button
               icon={<EditOutlined />}
-              onClick={() => void onOpenEdit()}
-              loading={optionsLoading}
+              onClick={onOpenEdit}
               disabled={!canManagePlannedWork}
             >
               编辑
@@ -328,50 +293,52 @@ export default function Page() {
       >
         <Space orientation="vertical" size={24} style={{ width: "100%" }}>
           <div>
-            <h4 style={{ margin: "0 0 12px" }}>任务信息</h4>
+            <h4 style={{ margin: "0 0 12px" }}>交付物信息</h4>
             <Descriptions column={2} size="small">
               <Descriptions.Item label="所属项目">
-                {data.task?.segment?.project ? (
-                  <AppLink href={`/projects/${data.task.segment.project.id}`}>
-                    {data.task.segment.project.name}
+                {data.deliverable?.brief.project ? (
+                  <AppLink href={`/projects/${data.deliverable.brief.project.id}`}>
+                    {data.deliverable.brief.project.name}
                   </AppLink>
                 ) : (
                   "-"
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="所属环节">
-                {data.task?.segment ? (
-                  <AppLink href={`/project-segments/${data.task.segment.id}`}>
-                    {data.task.segment.name}
+              <Descriptions.Item label="所属需求单">
+                {data.deliverable?.brief ? (
+                  <AppLink href={`/project-briefs/${data.deliverable.brief.id}`}>
+                    {data.deliverable.brief.title}
                   </AppLink>
                 ) : (
                   "-"
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="所属任务">
-                {data.task ? (
-                  <AppLink href={`/project-tasks/${data.task.id}`}>
-                    {data.task.name}
+              <Descriptions.Item label="所属交付物">
+                {data.deliverable ? (
+                  <AppLink href={`/brief-deliverables/${data.deliverable.id}`}>
+                    {data.deliverable.title}
                   </AppLink>
                 ) : (
                   "-"
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="任务状态">
-                <Tag color={data.task?.statusOption?.color ?? undefined}>
-                  {data.task?.statusOption?.value ?? data.task?.status ?? "-"}
+              <Descriptions.Item label="交付物状态">
+                <Tag color={deliverableStatusColors[data.deliverable?.status ?? ""]}>
+                  {data.deliverable?.status
+                    ? deliverableStatusLabels[data.deliverable.status] ?? data.deliverable.status
+                    : "-"}
                 </Tag>
               </Descriptions.Item>
             </Descriptions>
           </div>
 
           <div>
-            <h4 style={{ margin: "0 0 12px" }}>任务负责人</h4>
+            <h4 style={{ margin: "0 0 12px" }}>交付物负责人</h4>
             <Descriptions column={2} size="small">
               <Descriptions.Item label="负责人">
-                {data.task?.owner ? (
-                  <AppLink href={`/employees/${data.task.owner.id}`}>
-                    {data.task.owner.name}
+                {data.deliverable?.assignee ? (
+                  <AppLink href={`/employees/${data.deliverable.assignee.id}`}>
+                    {data.deliverable.assignee.name}
                   </AppLink>
                 ) : (
                   "-"
@@ -379,9 +346,9 @@ export default function Page() {
               </Descriptions.Item>
               <Descriptions.Item label="负责人职能">
                 <Tag
-                  color={data.task?.owner?.functionOption?.color ?? undefined}
+                  color={data.deliverable?.assignee?.functionOption?.color ?? undefined}
                 >
-                  {data.task?.owner?.functionOption?.value ?? "-"}
+                  {data.deliverable?.assignee?.functionOption?.value ?? "-"}
                 </Tag>
               </Descriptions.Item>
             </Descriptions>
@@ -491,13 +458,9 @@ export default function Page() {
         destroyOnHidden
       >
         <PlannedWorkEntryForm
-          projectOptions={projects}
-          selectedProjectId={data?.task?.segment?.project?.id}
-          disableProjectSelect
-          taskOptions={tasks}
           initialValues={{
             id: data.id,
-            taskId: data.task?.id ?? "",
+            deliverableId: data.deliverable?.id ?? "",
             yearOption: data.yearOption?.value ?? String(data.year ?? ""),
             weekNumberOption:
               data.weekNumberOption?.value ?? String(data.weekNumber ?? ""),
@@ -512,6 +475,20 @@ export default function Page() {
             saturday: data.saturday,
             sunday: data.sunday,
           }}
+          deliverableContext={
+            data.deliverable
+              ? {
+                  id: data.deliverable.id,
+                  title: data.deliverable.title,
+                  briefId: data.deliverable.brief.id,
+                  briefTitle: data.deliverable.brief.title,
+                  projectId: data.deliverable.brief.project.id,
+                  projectName: data.deliverable.brief.project.name,
+                  assigneeId: data.deliverable.assignee?.id,
+                  assigneeName: data.deliverable.assignee?.name,
+                }
+              : undefined
+          }
           onSubmit={onSubmit}
         />
       </Modal>

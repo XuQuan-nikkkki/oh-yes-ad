@@ -446,18 +446,15 @@ type PlannedWorkModalProps = {
   open: boolean;
   project: Project | null;
   editing: PlannedWorkRow | null;
-  defaultTaskId?: string;
   onCancel: () => void;
   onCreate: (payload: PlannedWorkEntryFormPayload) => Promise<void>;
   onSaved: () => Promise<void>;
 };
 
 export const ProjectPlannedWorkModal = ({
-  projectId,
   open,
   project,
   editing,
-  defaultTaskId,
   onCancel,
   onCreate,
   onSaved,
@@ -471,35 +468,13 @@ export const ProjectPlannedWorkModal = ({
     width={860}
   >
     <PlannedWorkEntryForm
-      projectOptions={
-        project
-          ? [
-              {
-                id: project.id,
-                name: project.name,
-              },
-            ]
-          : []
-      }
       selectedProjectId={project?.id}
       disableProjectSelect
-      disableTaskSelect
-      taskOptions={
-        project?.segments?.flatMap((segment) =>
-          (segment.projectTasks ?? []).map((task) => ({
-            id: task.id,
-            projectId: project.id,
-            segmentId: segment.id,
-            segmentName: segment.name,
-            name: task.name,
-          })),
-        ) ?? []
-      }
       initialValues={
         editing
           ? {
               id: editing.id,
-              taskId: editing.taskId,
+              deliverableId: editing.deliverableId,
               yearOption:
                 typeof editing.year === "number"
                   ? String(editing.year)
@@ -519,28 +494,11 @@ export const ProjectPlannedWorkModal = ({
               saturday: Boolean(editing.saturday),
               sunday: Boolean(editing.sunday),
             }
-          : defaultTaskId
-            ? {
-                id: "new",
-                taskId: defaultTaskId,
-                yearOption: String(new Date().getFullYear()),
-                weekNumberOption: "1",
-                year: new Date().getFullYear(),
-                weekNumber: 1,
-                plannedDays: 0,
-                monday: false,
-                tuesday: false,
-                wednesday: false,
-                thursday: false,
-                friday: false,
-                saturday: false,
-                sunday: false,
-              }
-            : null
+          : null
       }
       onSubmit={async (payload: PlannedWorkEntryFormPayload) => {
         if (editing) {
-          const res = await fetch(`/api/projects/${projectId}/planned-work-entries/${editing.id}`, {
+          const res = await fetch(`/api/planned-work-entries/${editing.id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),

@@ -66,15 +66,30 @@ const whereByScope = (id: string, internalOnly: boolean) =>
   internalOnly
     ? {
         id,
-        task: {
-          segment: {
-            project: {
-              typeOption: {
-                value: { in: INTERNAL_PROJECT_TYPE_VALUES as unknown as string[] },
+        OR: [
+          {
+            task: {
+              segment: {
+                project: {
+                  typeOption: {
+                    value: { in: INTERNAL_PROJECT_TYPE_VALUES as unknown as string[] },
+                  },
+                },
               },
             },
           },
-        },
+          {
+            deliverable: {
+              brief: {
+                project: {
+                  typeOption: {
+                    value: { in: INTERNAL_PROJECT_TYPE_VALUES as unknown as string[] },
+                  },
+                },
+              },
+            },
+          },
+        ],
       }
     : { id };
 
@@ -109,6 +124,27 @@ export async function GET(req: NextRequest, context: RouteContext) {
               statusOption: {
                 select: { id: true, value: true, color: true },
               },
+              project: { select: { id: true, name: true } },
+            },
+          },
+        },
+      },
+      deliverable: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          assignee: {
+            select: {
+              id: true,
+              name: true,
+              functionOption: { select: { id: true, value: true, color: true } },
+            },
+          },
+          brief: {
+            select: {
+              id: true,
+              title: true,
               project: { select: { id: true, name: true } },
             },
           },
@@ -151,6 +187,24 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     });
     if (!task) return new Response("Task not found", { status: 400 });
   }
+  if (body.deliverableId) {
+    const deliverable = await prisma.deliverable.findFirst({
+      where: internalOnly
+        ? {
+            id: body.deliverableId,
+            brief: {
+              project: {
+                typeOption: {
+                  value: { in: INTERNAL_PROJECT_TYPE_VALUES as unknown as string[] },
+                },
+              },
+            },
+          }
+        : { id: body.deliverableId },
+      select: { id: true },
+    });
+    if (!deliverable) return new Response("交付物不存在", { status: 400 });
+  }
 
   const year = normalizeInteger(body.yearOption ?? body.year);
   const weekNumber = normalizeInteger(body.weekNumberOption ?? body.weekNumber);
@@ -165,7 +219,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const item = await prisma.plannedWorkEntry.update({
     where: { id },
     data: {
-      taskId: body.taskId,
+      taskId: body.deliverableId ? null : body.taskId,
+      deliverableId: body.taskId ? null : body.deliverableId,
       yearOptionId,
       weekNumberOptionId,
       plannedDays:
@@ -205,6 +260,20 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
               statusOption: {
                 select: { id: true, value: true, color: true },
               },
+              project: { select: { id: true, name: true } },
+            },
+          },
+        },
+      },
+      deliverable: {
+        select: {
+          id: true,
+          title: true,
+          assignee: { select: { id: true, name: true } },
+          brief: {
+            select: {
+              id: true,
+              title: true,
               project: { select: { id: true, name: true } },
             },
           },
