@@ -46,7 +46,10 @@ type FormValues = {
 type Option = {
   id: string;
   name: string;
+  function?: string | null;
+  functionOption?: { value?: string | null } | null;
   employmentStatus?: string | null;
+  employmentStatusOption?: { value?: string | null } | null;
 };
 
 type ProjectOption = {
@@ -65,6 +68,70 @@ type Props = {
   disableProjectSelect?: boolean;
   onProjectChange?: (projectId?: string) => void;
   onSubmit: (payload: ProjectMilestoneFormPayload) => Promise<void> | void;
+};
+
+const InternalParticipantSelect = ({
+  projectMembers,
+  allEmployees,
+  selectedInitialMembers,
+  value,
+  onChange,
+}: {
+  projectMembers: Option[];
+  allEmployees: Option[];
+  selectedInitialMembers: Option[];
+  value?: string[];
+  onChange?: (value: string[]) => void;
+}) => {
+  const selectedIds = value ?? selectedInitialMembers.map((item) => item.id);
+  const selectedIdSet = new Set(selectedIds);
+  const employeeById = new Map<string, Option>();
+  [...projectMembers, ...selectedInitialMembers, ...allEmployees].forEach((item) => {
+    const previous = employeeById.get(item.id);
+    employeeById.set(item.id, {
+      ...previous,
+      ...item,
+      function: item.function ?? previous?.function,
+      functionOption: item.functionOption ?? previous?.functionOption,
+      employmentStatus: item.employmentStatus ?? previous?.employmentStatus,
+      employmentStatusOption:
+        item.employmentStatusOption ?? previous?.employmentStatusOption,
+    });
+  });
+
+  const groups = new Map<string, Array<{ label: string; value: string }>>();
+  employeeById.forEach((employee) => {
+    const status =
+      employee.employmentStatusOption?.value ?? employee.employmentStatus;
+    if (status === "离职" && !selectedIdSet.has(employee.id)) return;
+    const functionName =
+      employee.functionOption?.value?.trim() ||
+      employee.function?.trim() ||
+      "未设置职能";
+    const options = groups.get(functionName) ?? [];
+    options.push({ label: employee.name, value: employee.id });
+    groups.set(functionName, options);
+  });
+
+  const options = Array.from(groups.entries())
+    .sort(([a], [b]) => a.localeCompare(b, "zh-CN"))
+    .map(([label, members]) => ({
+      label,
+      options: members.sort((a, b) => a.label.localeCompare(b.label, "zh-CN")),
+    }));
+
+  return (
+    <Select
+      mode="multiple"
+      allowClear
+      placeholder="请选择项目人员"
+      options={options}
+      value={value}
+      onChange={onChange}
+      showSearch
+      optionFilterProp="label"
+    />
+  );
 };
 
 const ProjectMilestoneForm = ({
@@ -90,55 +157,6 @@ const ProjectMilestoneForm = ({
   }, [fetchAllOptions]);
 
   const selectedInternalMembers = initialValues?.internalParticipants ?? [];
-  const selectedInternalIdSet = new Set(selectedInternalMembers.map((item) => item.id));
-  const projectMemberIdSet = new Set(projectMembers.map((item) => item.id));
-
-  const labelMap = new Map<string, string>();
-  projectMembers.forEach((item) => labelMap.set(item.id, item.name));
-  allEmployees.forEach((item) => labelMap.set(item.id, item.name));
-  selectedInternalMembers.forEach((item) => labelMap.set(item.id, item.name));
-
-  const activeEmployees = allEmployees.filter(
-    (item) => item.employmentStatus !== "离职",
-  );
-
-  const projectGroupIds = new Set<string>();
-  const nonProjectGroupIds = new Set<string>();
-
-  activeEmployees.forEach((item) => {
-    if (projectMemberIdSet.has(item.id)) {
-      projectGroupIds.add(item.id);
-      return;
-    }
-    nonProjectGroupIds.add(item.id);
-  });
-
-  selectedInternalIdSet.forEach((id) => {
-    if (projectMemberIdSet.has(id)) {
-      projectGroupIds.add(id);
-      return;
-    }
-    nonProjectGroupIds.add(id);
-  });
-
-  const toSortedOptions = (ids: Set<string>) =>
-    Array.from(ids)
-      .map((id) => ({
-        value: id,
-        label: labelMap.get(id) ?? id,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label, "zh-CN"));
-
-  const internalParticipantOptions = [
-    {
-      label: "项目成员",
-      options: toSortedOptions(projectGroupIds),
-    },
-    {
-      label: "非项目成员",
-      options: toSortedOptions(nonProjectGroupIds),
-    },
-  ].filter((group) => group.options.length > 0);
 
   const startRaw = initialValues?.startAt ?? initialValues?.date ?? null;
   const endRaw = initialValues?.endAt ?? null;
@@ -380,11 +398,10 @@ const ProjectMilestoneForm = ({
 
       <StepsForm.StepForm title="参与人员">
         <Form.Item label="项目人员" name="internalParticipantIds">
-          <Select
-            mode="multiple"
-            allowClear
-            placeholder="请选择项目人员"
-            options={internalParticipantOptions}
+          <InternalParticipantSelect
+            projectMembers={projectMembers}
+            allEmployees={allEmployees}
+            selectedInitialMembers={selectedInternalMembers}
           />
         </Form.Item>
         <Form.Item label="客户人员" name="clientParticipantIds">
