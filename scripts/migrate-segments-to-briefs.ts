@@ -1,23 +1,35 @@
 import { config } from "dotenv";
+import { readFileSync } from "node:fs";
+import { parse } from "dotenv";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { getDefaultSubmissionEnabled } from "../src/lib/work-item-defaults";
+import { DEFERRED_TASK_IDS } from "./lib/deferred-migration-tasks";
 
 config();
-if (process.argv.includes("--test")) config({ path: ".db-sync/sync.env" });
-const configuredConnectionString = process.argv.includes("--test")
-  ? process.env.TEST_URL
-  : process.env.DATABASE_URL;
+const test = process.argv.includes("--test");
+const production = process.argv.includes("--production");
+if (test && production) throw new Error("--test 与 --production 不能同时使用");
+const reviewerArgs = process.argv.filter((arg) => arg.startsWith("--copy-reviewer-id="));
+if (reviewerArgs.length > 1) throw new Error("只能指定一个文案审核人");
+const copyReviewerId = reviewerArgs[0]?.slice("--copy-reviewer-id=".length);
+if (reviewerArgs.length && !copyReviewerId) throw new Error("文案审核人 ID 不能为空");
+const syncEnv = test || production
+  ? parse(readFileSync(process.env.MIGRATION_SYNC_ENV ?? ".db-sync/sync.env"))
+  : null;
+const configuredConnectionString = production
+  ? syncEnv?.PROD_URL
+  : test
+    ? syncEnv?.TEST_URL
+    : process.env.DATABASE_URL;
 if (!configuredConnectionString) {
   throw new Error(
-    process.argv.includes("--test")
-      ? "缺少 .db-sync/sync.env 中的 TEST_URL"
-      : "缺少 DATABASE_URL",
+    production ? "缺少 PROD_URL" : test ? "缺少 TEST_URL" : "缺少 DATABASE_URL",
   );
 }
 const connectionUrl = new URL(configuredConnectionString);
 // sync.env 同时供 Docker 同步脚本使用；本命令在宿主机执行时需连 localhost。
-if (process.argv.includes("--test") && connectionUrl.hostname === "host.docker.internal") {
+if (test && connectionUrl.hostname === "host.docker.internal") {
   connectionUrl.hostname = "localhost";
 }
 const connectionString = connectionUrl.toString();
@@ -28,6 +40,7 @@ const prisma = new PrismaClient({
 
 const execute = process.argv.includes("--execute");
 const setupSchema = process.argv.includes("--setup-schema");
+const deferredTaskIds = new Set<string>(DEFERRED_TASK_IDS);
 const HISTORICAL_DATA_EMPLOYEE_ID = "system-historical-data";
 const HISTORICAL_DATA_EMPLOYEE_NAME = "历史数据";
 
@@ -41,6 +54,7 @@ type MigrationStats = {
   segmentOwnersToBackfill: number;
   briefsWithoutTasks: number;
   tasksWithoutAssignee: number;
+  deferredTaskIds: string[];
   datesFromTaskDueDate: number;
   datesFromSegmentEndDate: number;
   datesFromSegmentStartDate: number;
@@ -118,6 +132,7 @@ const main = async () => {
     segmentOwnersToBackfill: 0,
     briefsWithoutTasks: 0,
     tasksWithoutAssignee: 0,
+    deferredTaskIds: [],
     datesFromTaskDueDate: 0,
     datesFromSegmentEndDate: 0,
     datesFromSegmentStartDate: 0,
@@ -150,6 +165,10 @@ const main = async () => {
 
     if (!segmentBlocked && !briefBySegmentId.has(segment.id)) stats.briefsToCreate += 1;
     for (const task of segment.projectTasks) {
+      if (deferredTaskIds.has(task.id)) {
+        stats.deferredTaskIds.push(task.id);
+        continue;
+      }
       let taskBlocked = false;
       if (!task.ownerId) {
         taskBlocked = true;
@@ -217,7 +236,11 @@ const main = async () => {
     : stats;
   console.log(
     JSON.stringify(
-      { mode: execute ? "execute" : "dry-run", ...outputStats },
+      {
+        mode: execute ? "execute" : "dry-run",
+        database: `${connectionUrl.hostname}/${connectionUrl.pathname.slice(1)}`,
+        ...outputStats,
+      },
       null,
       2,
     ),
@@ -225,6 +248,12 @@ const main = async () => {
   if (!execute) {
     console.log("\n当前为预检模式，未写入数据。确认后使用 --execute 执行。");
     return;
+  }
+  if (stats.blockingSegments.length || stats.blockingTasks.length) {
+    throw new Error("存在未处理的环节或任务异常；本次只允许跳过明确列出的 6 个任务");
+  }
+  if (production && stats.deferredTaskIds.length !== deferredTaskIds.size) {
+    throw new Error("生产库中待暂缓任务数量不符，请重新核对任务清单");
   }
   await prisma.$transaction(async (tx) => {
     const historicalDataEmployee = await tx.employee.upsert({
@@ -244,15 +273,24 @@ const main = async () => {
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         select: { id: true, name: true },
       }),
-      tx.employee.findFirst({
-        where: {
-          functionOption: { value: "品牌组" },
-          positionOption: { value: "文案策划" },
-          NOT: { employmentStatusOption: { value: "离职" } },
-        },
-        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-        select: { id: true, name: true },
-      }),
+      copyReviewerId
+        ? tx.employee.findFirst({
+            where: {
+              id: copyReviewerId,
+              functionOption: { value: "品牌组" },
+              NOT: { employmentStatusOption: { value: "离职" } },
+            },
+            select: { id: true, name: true },
+          })
+        : tx.employee.findFirst({
+            where: {
+              functionOption: { value: "品牌组" },
+              positionOption: { value: "文案策划" },
+              NOT: { employmentStatusOption: { value: "离职" } },
+            },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            select: { id: true, name: true },
+          }),
       tx.employee.findFirst({
         where: {
           functionOption: { value: "新媒体" },
@@ -263,7 +301,7 @@ const main = async () => {
       }),
     ]);
     if (!designReviewer) throw new Error("找不到在职美术指导，无法迁移设计工作项");
-    if (!copyReviewer) throw new Error("找不到在职品牌组文案策划，无法迁移文案工作项");
+    if (!copyReviewer) throw new Error("找不到可用的品牌组文案审核人；请显式传入 --copy-reviewer-id=<员工ID>");
     if (!newMediaReviewer) throw new Error("找不到在职新媒体职能员工，无法迁移新媒体工作项");
 
     for (const segment of segments) {
@@ -306,6 +344,7 @@ const main = async () => {
       });
 
       for (const task of segment.projectTasks) {
+        if (deferredTaskIds.has(task.id)) continue;
         const functionName = task.owner?.functionOption?.value;
         const type =
           functionName === "品牌组"
@@ -370,10 +409,26 @@ const main = async () => {
         });
       }
     }
-  });
+    const [briefCount, workItemCount, unmatchedEntries] = await Promise.all([
+      tx.brief.count({ where: { legacySegmentId: { not: null } } }),
+      tx.workItem.count({ where: { legacyTaskId: { not: null } } }),
+      tx.$queryRawUnsafe<Array<{ count: bigint }>>(`
+        SELECT count(*) AS count FROM "PlannedWorkEntry" entry
+        JOIN "ProjectTask" task ON task.id = entry."taskId"
+        LEFT JOIN "WorkItem" item ON item."legacyTaskId" = task.id
+        WHERE entry."taskId" IS NOT NULL
+          AND entry."workItemId" IS DISTINCT FROM item.id
+      `),
+    ]);
+    if (briefCount !== stats.segments ||
+        workItemCount !== stats.tasks - stats.deferredTaskIds.length ||
+        Number(unmatchedEntries[0]?.count ?? 0) !== 0) {
+      throw new Error("迁移后数量或计划工时关联不符，事务已回滚");
+    }
+  }, { maxWait: 10_000, timeout: 600_000 });
 
   console.log(
-    `\n迁移完成：回填 ${stats.segmentOwnersToBackfill} 个环节负责人，新增 ${stats.briefsToCreate} 张需求单、${stats.workItemsToCreate} 个工作项；跳过 ${stats.blockingSegments.length} 个问题环节、${stats.blockingTasks.length} 个问题任务。`,
+    `\n迁移完成：回填 ${stats.segmentOwnersToBackfill} 个环节负责人，新增 ${stats.briefsToCreate} 张需求单、${stats.workItemsToCreate} 个工作项；暂缓 ${stats.deferredTaskIds.length} 个指定任务，其余异常 0 个。`,
   );
 };
 
