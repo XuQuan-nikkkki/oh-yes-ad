@@ -5,7 +5,7 @@
   "packageManager": "npm@10.9.2",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && tsx scripts/rename-deliverables-to-work-items.ts --execute --deployment && prisma db push && tsx scripts/backfill-estimation-execution-cost-items.ts && tsx scripts/backfill-initiation-execution-cost-items.ts && tsx scripts/backfill-project-service-content.ts --execute && prisma db seed && next build && tsx scripts/auto-migrate-on-deploy.ts",
+    "build": "prisma generate && tsx scripts/rename-deliverables-to-work-items.ts --execute --deployment && prisma db push && tsx scripts/ensure-work-item-final-index.ts && tsx scripts/backfill-estimation-execution-cost-items.ts && tsx scripts/backfill-initiation-execution-cost-items.ts && tsx scripts/backfill-project-service-content.ts --execute && prisma db seed && next build && tsx scripts/auto-migrate-on-deploy.ts",
     "start": "next start",
     "lint": "eslint",
     "test:project-segment-update": "node --import tsx --test src/lib/project-segment-update.test.ts",
