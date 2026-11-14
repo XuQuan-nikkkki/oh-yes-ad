@@ -1,6 +1,9 @@
 import { Prisma, SystemSettingValueType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireSystemSettingsPermission } from "@/lib/api-permissions";
+import {
+  requireAdminPermission,
+  requireSystemSettingsPermission,
+} from "@/lib/api-permissions";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 
 const parseOrderValue = (value: unknown) => {
@@ -150,7 +153,7 @@ export async function DELETE(
   _req: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const { response } = await requireSystemSettingsPermission();
+  const { response } = await requireAdminPermission();
   if (response) return response;
 
   const { id } = await context.params;

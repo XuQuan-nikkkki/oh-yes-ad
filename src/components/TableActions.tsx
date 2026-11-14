@@ -8,6 +8,7 @@ type Props = {
   onEdit?: () => void;
   onDelete?: () => void;
   disabled?: boolean;
+  deleteDisabled?: boolean;
   editLoading?: boolean;
   deleteLoading?: boolean;
   deleteTitle?: string;
@@ -24,6 +25,7 @@ const TableActions = ({
   onEdit,
   onDelete,
   disabled = false,
+  deleteDisabled = false,
   editLoading = false,
   deleteLoading = false,
   deleteTitle = "确定删除该记录？",
@@ -60,7 +62,7 @@ const TableActions = ({
       {onDelete && (
         <Popconfirm
           title={deleteTitle}
-          disabled={disabled}
+          disabled={disabled || deleteDisabled}
           okText="确认"
           cancelText="取消"
           onConfirm={(e) => {
@@ -73,7 +75,7 @@ const TableActions = ({
             variant={disableTextVairant ? undefined : "text"}
             danger
             style={buttonStyle}
-            disabled={disabled}
+            disabled={disabled || deleteDisabled}
             loading={deleteLoading}
             icon={showIcons ? <DeleteOutlined /> : undefined}
             onClick={(e) => e.stopPropagation()}

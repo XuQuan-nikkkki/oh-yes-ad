@@ -57,6 +57,7 @@ const SystemSettingsPage = () => {
   const [form] = Form.useForm<SystemSettingFormValues>();
   const currentUser = useAuthStore((state) => state.currentUser);
   const roleCodes = getRoleCodesFromUser(currentUser);
+  const canDeleteSystemSettings = roleCodes.includes("ADMIN");
   const canManageSystemSettings =
     roleCodes.includes("ADMIN") ||
     roleCodes.includes("HR") ||
@@ -230,12 +231,13 @@ const SystemSettingsPage = () => {
           <TableActions
             onEdit={() => openEditModal(record)}
             onDelete={() => handleDelete(record)}
+            deleteDisabled={!canDeleteSystemSettings}
             deleteTitle={`确定删除系统参数「${record.name}」？`}
           />
         ),
       },
     ],
-    [handleDelete],
+    [canDeleteSystemSettings, handleDelete],
   );
 
   if (!canManageSystemSettings) {
@@ -260,7 +262,7 @@ const SystemSettingsPage = () => {
         options={false}
         headerTitle={<ProTableHeaderTitle>系统参数</ProTableHeaderTitle>}
         columns={columns}
-        pagination={{ pageSize: 20 }}
+        pagination={false}
         scroll={{ x: "max-content" }}
       />
 
