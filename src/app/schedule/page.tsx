@@ -6,7 +6,6 @@ import {
   Card,
   Collapse,
   Empty,
-  Modal,
   Spin,
   Tabs,
   message,
@@ -19,12 +18,7 @@ import ClientProjectSchedulePane from "@/components/schedule/ClientProjectSchedu
 import WeeklyTasksPanel from "@/components/schedule/WeeklyTasksPanel";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import type { ProjectMilestoneFormPayload } from "@/components/project-detail/ProjectMilestoneForm";
-import type { ProjectSegmentFormPayload } from "@/components/project-detail/ProjectSegmentForm";
-import type { ProjectTaskFormPayload } from "@/components/project-detail/ProjectTaskForm";
 import ProjectMilestoneFormModal from "@/components/project-detail/ProjectMilestoneFormModal";
-import ProjectSegmentFormModal from "@/components/project-detail/ProjectSegmentFormModal";
-import ProjectTaskFormModal from "@/components/project-detail/ProjectTaskFormModal";
-import ProjectDetailProgressContent from "@/components/project-detail/ProjectDetailProgressContent";
 import ProjectBriefProgressContent from "@/components/project-detail/ProjectBriefProgressContent";
 import type {
   ProjectBrief,
@@ -32,9 +26,6 @@ import type {
 } from "@/components/project-detail/ProjectBriefProgressContent";
 import BriefFormModal from "@/components/project-detail/BriefFormModal";
 import WorkItemEditModal from "@/components/project-detail/WorkItemEditModal";
-import PlannedWorkEntryForm, {
-  PlannedWorkEntryFormPayload,
-} from "@/components/project-detail/PlannedWorkEntryForm";
 import ProjectMilestoneSection from "@/components/project-detail/ProjectMilestoneSection";
 import ProjectMilestoneSectionActions from "@/components/project-detail/ProjectMilestoneSectionActions";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
@@ -103,20 +94,6 @@ type ClientParticipant = {
   name: string;
   title?: string | null;
   order?: number | null;
-};
-
-type PlannedWorkEntry = {
-  id: string;
-  year: number;
-  weekNumber: number;
-  plannedDays: number;
-  monday: boolean;
-  tuesday: boolean;
-  wednesday: boolean;
-  thursday: boolean;
-  friday: boolean;
-  saturday: boolean;
-  sunday: boolean;
 };
 
 type WeeklyPlannedEntry = {
@@ -199,91 +176,9 @@ type ProjectDetail = {
     clientParticipants?: ClientParticipant[];
     vendorParticipants?: Participant[];
   }[];
-  segments?: {
-    id: string;
-    name: string;
-    status?: string | null;
-    statusOption?: {
-      id?: string;
-      value?: string | null;
-      color?: string | null;
-    } | null;
-    startDate?: string | null;
-    endDate?: string | null;
-    dueDate?: string | null;
-    owner?: {
-      id: string;
-      name: string;
-    } | null;
-    projectTasks?: {
-      id: string;
-      name: string;
-      status?: string | null;
-      statusOption?: {
-        id?: string;
-        value?: string | null;
-        color?: string | null;
-      } | null;
-      dueDate?: string | null;
-      owner?: {
-        id: string;
-        name: string;
-      } | null;
-      plannedWorkEntries?: PlannedWorkEntry[];
-    }[];
-  }[];
   briefs?: ProjectBrief[];
 };
 
-type SegmentRow = {
-  id: string;
-  name: string;
-  status?: string | null;
-  statusOption?: {
-    id?: string;
-    value?: string | null;
-    color?: string | null;
-  } | null;
-  ownerName: string;
-  ownerId?: string | null;
-  startDate?: string | null;
-  endDate?: string | null;
-  dueDate?: string | null;
-  tasks: TaskRow[];
-};
-
-type TaskRow = {
-  id: string;
-  segmentId: string;
-  segmentName: string;
-  name: string;
-  status?: string | null;
-  statusOption?: {
-    id?: string;
-    value?: string | null;
-    color?: string | null;
-  } | null;
-  ownerName: string;
-  ownerId?: string | null;
-  dueDate?: string | null;
-  plannedEntries?: TaskPlannedRow[];
-};
-
-type TaskPlannedRow = {
-  id: string;
-  taskId: string;
-  workItemId?: string;
-  year: number;
-  weekNumber: number;
-  plannedDays: number;
-  monday: boolean;
-  tuesday: boolean;
-  wednesday: boolean;
-  thursday: boolean;
-  friday: boolean;
-  saturday: boolean;
-  sunday: boolean;
-};
 const ASCII_INITIAL_RE = /^[A-Za-z0-9]/;
 const EN_NAME_COLLATOR = new Intl.Collator("en", {
   numeric: true,
@@ -346,8 +241,6 @@ function SchedulePageContent() {
   const [milestoneProjectId, setMilestoneProjectId] = useState<string | null>(
     null,
   );
-  const [segmentProjectContext, setSegmentProjectContext] =
-    useState<ProjectListItem | null>(null);
   const [briefProjectContext, setBriefProjectContext] =
     useState<BriefProjectContext | null>(null);
   const [editingBrief, setEditingBrief] = useState<ProjectBrief | null>(null);
@@ -357,14 +250,8 @@ function SchedulePageContent() {
     projectId: string;
   } | null>(null);
   const [milestoneModalOpen, setMilestoneModalOpen] = useState(false);
-  const [segmentModalOpen, setSegmentModalOpen] = useState(false);
   const [briefModalOpen, setBriefModalOpen] = useState(false);
-  const [taskModalOpen, setTaskModalOpen] = useState(false);
-  const [plannedWorkModalOpen, setPlannedWorkModalOpen] = useState(false);
   const [milestoneSubmitting, setMilestoneSubmitting] = useState(false);
-  const [segmentSubmitting, setSegmentSubmitting] = useState(false);
-  const [taskSubmitting, setTaskSubmitting] = useState(false);
-  const [plannedWorkSubmitting, setPlannedWorkSubmitting] = useState(false);
   const { canManageProject } = useProjectPermission();
 
   const scheduleStateWrapStyle = {
@@ -392,20 +279,6 @@ function SchedulePageContent() {
   const fetchProjectsFromStore = useProjectsStore(
     (state) => state.fetchProjects,
   );
-  const [editingSegment, setEditingSegment] = useState<SegmentRow | null>(null);
-  const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
-  const [editingPlannedEntry, setEditingPlannedEntry] =
-    useState<TaskPlannedRow | null>(null);
-  const [taskDefaultSegmentId, setTaskDefaultSegmentId] = useState<
-    string | undefined
-  >(undefined);
-  const [, setPlannedDefaultTaskId] = useState<
-    string | undefined
-  >(undefined);
-  const [taskProjectContext, setTaskProjectContext] =
-    useState<ProjectListItem | null>(null);
-  const [plannedWorkProjectContext, setPlannedWorkProjectContext] =
-    useState<ProjectListItem | null>(null);
   const [internalExpandedProjectIds, setInternalExpandedProjectIds] = useState<
     string[]
   >([]);
@@ -647,38 +520,6 @@ function SchedulePageContent() {
     [activeMilestoneProjectId, projectDetails],
   );
 
-  const activeTaskProjectId = useMemo(
-    () => taskProjectContext?.id ?? selectedClientProject?.id ?? null,
-    [taskProjectContext?.id, selectedClientProject?.id],
-  );
-
-  const activeTaskProjectDetail = useMemo(
-    () =>
-      activeTaskProjectId ? (projectDetails[activeTaskProjectId] ?? null) : null,
-    [activeTaskProjectId, projectDetails],
-  );
-
-  const activePlannedWorkProjectId = useMemo(
-    () => plannedWorkProjectContext?.id ?? selectedClientProject?.id ?? null,
-    [plannedWorkProjectContext?.id, selectedClientProject?.id],
-  );
-
-  const selectedProjectSegmentOptions = useMemo(
-    () =>
-      (activeTaskProjectDetail?.segments ?? []).map((segment) => ({
-        id: segment.id,
-        name: segment.name,
-        projectId: activeTaskProjectId ?? undefined,
-        projectName: taskProjectContext?.name ?? selectedClientProject?.name,
-      })),
-    [
-      activeTaskProjectDetail,
-      activeTaskProjectId,
-      selectedClientProject?.name,
-      taskProjectContext?.name,
-    ],
-  );
-
   useEffect(() => {
     if (!milestoneModalOpen) return;
     const clientId = activeMilestoneProjectDetail?.client?.id;
@@ -836,176 +677,6 @@ function SchedulePageContent() {
     }
   };
 
-  const openEditSegmentModal = (
-    segment: SegmentRow,
-    project: ProjectListItem,
-  ) => {
-    if (!canManageProject) return;
-    setSegmentProjectContext(project);
-    setEditingSegment(segment);
-    setSegmentModalOpen(true);
-  };
-
-  const openCreateTaskModal = (
-    defaultSegmentId?: string,
-    project?: ProjectListItem,
-  ) => {
-    if (!canManageProject) return;
-    setTaskProjectContext(project ?? null);
-    setEditingTask(null);
-    setTaskDefaultSegmentId(defaultSegmentId);
-    setTaskModalOpen(true);
-  };
-
-  const openCreatePlannedWorkModal = (
-    defaultTaskId?: string,
-    project?: ProjectListItem,
-  ) => {
-    if (!canManageProject) return;
-    setPlannedWorkProjectContext(project ?? null);
-    setEditingPlannedEntry(null);
-    setPlannedDefaultTaskId(defaultTaskId);
-    setPlannedWorkModalOpen(true);
-  };
-
-  const openEditPlannedWorkModal = (
-    entry: TaskPlannedRow,
-    project?: ProjectListItem,
-  ) => {
-    if (!canManageProject) return;
-    setPlannedWorkProjectContext(project ?? null);
-    setEditingPlannedEntry(entry);
-    setPlannedDefaultTaskId(undefined);
-    setPlannedWorkModalOpen(true);
-  };
-
-  const handleSubmitSegment = async (payload: ProjectSegmentFormPayload) => {
-    if (!canManageProject) return;
-    const activeSegmentProjectId =
-      segmentProjectContext?.id ?? selectedClientProject?.id;
-    if (!activeSegmentProjectId) {
-      messageApi.error("未选择项目");
-      return;
-    }
-    try {
-      setSegmentSubmitting(true);
-      const endpoint = editingSegment
-        ? `/api/project-segments/${editingSegment.id}`
-        : `/api/projects/${activeSegmentProjectId}/segments`;
-      const method = editingSegment ? "PATCH" : "POST";
-      const res = await fetch(endpoint, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...payload,
-          projectId: activeSegmentProjectId,
-        }),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "保存环节失败");
-      }
-      messageApi.success(editingSegment ? "环节已更新" : "环节已创建");
-      setSegmentModalOpen(false);
-      setEditingSegment(null);
-      setSegmentProjectContext(null);
-      refreshProjectDetails(activeSegmentProjectId);
-    } catch (error) {
-      const text = error instanceof Error ? error.message : "保存环节失败";
-      messageApi.error(text);
-    } finally {
-      setSegmentSubmitting(false);
-    }
-  };
-
-  const handleUpdateSegmentStatus = async (
-    segment: SegmentRow,
-    nextOption: { id: string; value: string; color: string },
-  ) => {
-    if (!canManageProject) return;
-    const res = await fetch(`/api/project-segments/${segment.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: nextOption,
-      }),
-    });
-    if (!res.ok) {
-      throw new Error((await res.text()) || "更新环节状态失败");
-    }
-  };
-
-  const handleSubmitTask = async (payload: ProjectTaskFormPayload) => {
-    if (!canManageProject) return;
-    const currentTaskProjectId = activeTaskProjectId;
-    if (!currentTaskProjectId) {
-      messageApi.error("未选择项目");
-      return;
-    }
-    try {
-      setTaskSubmitting(true);
-      const endpoint = editingTask
-        ? `/api/project-tasks/${editingTask.id}`
-        : `/api/projects/${currentTaskProjectId}/tasks`;
-      const method = editingTask ? "PATCH" : "POST";
-      const res = await fetch(endpoint, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "保存任务失败");
-      }
-      messageApi.success(editingTask ? "任务已更新" : "任务已创建");
-      setTaskModalOpen(false);
-      setEditingTask(null);
-      setTaskDefaultSegmentId(undefined);
-      setTaskProjectContext(null);
-      refreshProjectDetails(currentTaskProjectId);
-    } catch (error) {
-      const text = error instanceof Error ? error.message : "保存任务失败";
-      messageApi.error(text);
-    } finally {
-      setTaskSubmitting(false);
-    }
-  };
-
-  const handleSubmitPlannedWork = async (
-    payload: PlannedWorkEntryFormPayload,
-  ) => {
-    if (!canManageProject) return;
-    try {
-      setPlannedWorkSubmitting(true);
-      const endpoint = editingPlannedEntry
-        ? `/api/planned-work-entries/${editingPlannedEntry.id}`
-        : "/api/planned-work-entries";
-      const method = editingPlannedEntry ? "PATCH" : "POST";
-      const res = await fetch(endpoint, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "保存计划工时失败");
-      }
-      messageApi.success(
-        editingPlannedEntry ? "计划工时已更新" : "计划工时已创建",
-      );
-      setPlannedWorkModalOpen(false);
-      setEditingPlannedEntry(null);
-      setPlannedDefaultTaskId(undefined);
-      setPlannedWorkProjectContext(null);
-      refreshProjectDetails(activePlannedWorkProjectId);
-    } catch (error) {
-      const text = error instanceof Error ? error.message : "保存计划工时失败";
-      messageApi.error(text);
-    } finally {
-      setPlannedWorkSubmitting(false);
-    }
-  };
-
   const renderProjectScheduleContent = (project: ProjectListItem) => {
     const detail = projectDetails[project.id];
     const detailLoading = Boolean(projectDetailLoadingById[project.id]);
@@ -1036,53 +707,6 @@ function SchedulePageContent() {
       );
     }
 
-    const segmentRows: SegmentRow[] =
-      detail?.segments
-        ?.map((segment) => ({
-          id: segment.id,
-          name: segment.name,
-          status: segment.status,
-          statusOption: segment.statusOption ?? null,
-          ownerName: segment.owner?.name ?? "-",
-          ownerId: segment.owner?.id ?? null,
-          startDate: segment.startDate ?? null,
-          endDate: segment.endDate ?? null,
-          dueDate: segment.dueDate,
-          tasks: (segment.projectTasks ?? [])
-            .filter((task) => !(task.status ?? "").includes("完成"))
-            .map((task) => ({
-              id: task.id,
-              segmentId: segment.id,
-              segmentName: segment.name,
-              name: task.name,
-              status: task.status,
-              statusOption: task.statusOption ?? null,
-              ownerName: task.owner?.name ?? "-",
-              ownerId: task.owner?.id ?? null,
-              dueDate: task.dueDate,
-              plannedEntries: (task.plannedWorkEntries ?? [])
-                .map((entry) => ({
-                  id: entry.id,
-                  taskId: task.id,
-                  year: entry.year,
-                  weekNumber: entry.weekNumber,
-                  plannedDays: entry.plannedDays,
-                  monday: entry.monday,
-                  tuesday: entry.tuesday,
-                  wednesday: entry.wednesday,
-                  thursday: entry.thursday,
-                  friday: entry.friday,
-                  saturday: entry.saturday,
-                  sunday: entry.sunday,
-                }))
-                .sort((left, right) => {
-                  if (left.year !== right.year) return right.year - left.year;
-                  return right.weekNumber - left.weekNumber;
-                }),
-            })),
-        }))
-        ?.sort((left, right) => compareDisplayNames(left.name, right.name)) ?? [];
-
     return (
       <div
         style={{
@@ -1112,73 +736,6 @@ function SchedulePageContent() {
           }
           showAddButton={false}
         />
-        <Card
-          title="项目进度"
-          extra={
-            canManageProject ? (
-              <Button
-                type="primary"
-                onClick={() => {
-                  setSegmentProjectContext(project);
-                  setEditingSegment(null);
-                  setSegmentModalOpen(true);
-                }}
-              >
-                新增项目环节
-              </Button>
-            ) : null
-          }
-          style={{
-            width: "100%",
-            minWidth: 0,
-            maxWidth: "100%",
-            overflow: "hidden",
-          }}
-          styles={{
-            body: {
-              width: "100%",
-              minWidth: 0,
-              overflowX: "auto",
-            },
-          }}
-        >
-          <ProjectDetailProgressContent
-            projectId={project.id}
-            projectName={project.name}
-            data={segmentRows}
-            hideCompletedItems
-            showPlannedDaysForCurrentWeekOnly
-            segmentCount={segmentRows.length}
-            taskCount={segmentRows.reduce(
-              (sum, segment) => sum + segment.tasks.length,
-              0,
-            )}
-            actionsDisabled={!canManageProject}
-            employees={employees}
-            onAddTask={(segment) => openCreateTaskModal(segment.id, project)}
-            onEditSegment={(segment) => openEditSegmentModal(segment, project)}
-            onUpdateSegmentStatus={async (segment, nextOption) => {
-              await handleUpdateSegmentStatus(segment, nextOption);
-              refreshProjectDetails(project.id);
-            }}
-            onAfterDeleteSegment={() => {
-              refreshProjectDetails(project.id);
-            }}
-            onAddPlannedWork={(task) =>
-              openCreatePlannedWorkModal(task.id, project)
-            }
-            onAfterUpdateTask={() => {
-              refreshProjectDetails(project.id);
-            }}
-            onAfterDeleteTask={() => {
-              refreshProjectDetails(project.id);
-            }}
-            onEditPlannedWork={(entry) => openEditPlannedWorkModal(entry, project)}
-            onAfterDeletePlannedWork={() => {
-              refreshProjectDetails(project.id);
-            }}
-          />
-        </Card>
         <Card
           title="项目需求单"
           extra={
@@ -1470,58 +1027,6 @@ function SchedulePageContent() {
         />
       </Card>
 
-      {segmentModalOpen ? (
-        <ProjectSegmentFormModal
-          title={editingSegment ? "编辑环节" : "新增环节"}
-          open={segmentModalOpen}
-          onCancel={() => {
-            setSegmentModalOpen(false);
-            setEditingSegment(null);
-            setSegmentProjectContext(null);
-          }}
-          confirmLoading={segmentSubmitting}
-          initialValues={
-            editingSegment
-              ? {
-                  id: editingSegment.id,
-                  name: editingSegment.name,
-                  status: editingSegment.status ?? null,
-                  statusOption: editingSegment.statusOption ?? null,
-                  dueDate: editingSegment.dueDate ?? null,
-                  owner: editingSegment.ownerId
-                    ? {
-                        id: editingSegment.ownerId,
-                        name: editingSegment.ownerName,
-                      }
-                    : null,
-                  project: segmentProjectContext
-                    ? {
-                        id: segmentProjectContext.id,
-                        name: segmentProjectContext.name,
-                      }
-                    : null,
-                }
-              : null
-          }
-          projectOptions={
-            segmentProjectContext
-              ? [
-                  {
-                    id: segmentProjectContext.id,
-                    name: segmentProjectContext.name,
-                  },
-                ]
-              : []
-          }
-          selectedProjectId={
-            segmentProjectContext?.id ?? selectedClientProject?.id
-          }
-          disableProjectSelect
-          employees={employees}
-          onSubmit={handleSubmitSegment}
-        />
-      ) : null}
-
       {briefModalOpen && briefProjectContext && currentUser ? (
         <BriefFormModal
           open={briefModalOpen}
@@ -1616,84 +1121,6 @@ function SchedulePageContent() {
           disableProjectSelect
           onSubmit={handleSubmitMilestone}
         />
-      ) : null}
-
-      {taskModalOpen ? (
-        <ProjectTaskFormModal
-          title={editingTask ? "编辑任务" : "新增任务"}
-          open={taskModalOpen}
-          onCancel={() => {
-            setTaskModalOpen(false);
-            setEditingTask(null);
-            setTaskDefaultSegmentId(undefined);
-            setTaskProjectContext(null);
-          }}
-          confirmLoading={taskSubmitting}
-          segmentOptions={selectedProjectSegmentOptions}
-          defaultSegmentId={taskDefaultSegmentId}
-          disableProjectSelect={!editingTask}
-          disableSegmentSelect={!editingTask}
-          employees={employees}
-          projectMembers={activeTaskProjectDetail?.members ?? []}
-          initialValues={
-            editingTask
-              ? {
-                  id: editingTask.id,
-                  name: editingTask.name,
-                  segmentId: editingTask.segmentId,
-                  status: editingTask.status ?? null,
-                  statusOption: editingTask.statusOption ?? null,
-                  dueDate: editingTask.dueDate ?? null,
-                  owner: editingTask.ownerId
-                    ? { id: editingTask.ownerId, name: editingTask.ownerName }
-                    : null,
-                }
-              : null
-          }
-          onSubmit={handleSubmitTask}
-        />
-      ) : null}
-
-      {plannedWorkModalOpen ? (
-        <Modal
-          title={editingPlannedEntry ? "编辑计划工时" : "新增计划工时"}
-          open={plannedWorkModalOpen}
-          onCancel={() => {
-            setPlannedWorkModalOpen(false);
-            setEditingPlannedEntry(null);
-            setPlannedDefaultTaskId(undefined);
-            setPlannedWorkProjectContext(null);
-          }}
-          footer={null}
-          confirmLoading={plannedWorkSubmitting}
-          destroyOnHidden
-        >
-          <PlannedWorkEntryForm
-            selectedProjectId={activePlannedWorkProjectId ?? undefined}
-            disableProjectSelect
-            initialValues={
-              editingPlannedEntry
-                ? {
-                    id: editingPlannedEntry.id,
-                    workItemId: editingPlannedEntry.workItemId,
-                    year: editingPlannedEntry.year,
-                    weekNumber: editingPlannedEntry.weekNumber,
-                    yearOption: String(editingPlannedEntry.year),
-                    weekNumberOption: String(editingPlannedEntry.weekNumber),
-                    plannedDays: editingPlannedEntry.plannedDays,
-                    monday: editingPlannedEntry.monday,
-                    tuesday: editingPlannedEntry.tuesday,
-                    wednesday: editingPlannedEntry.wednesday,
-                    thursday: editingPlannedEntry.thursday,
-                    friday: editingPlannedEntry.friday,
-                    saturday: editingPlannedEntry.saturday,
-                    sunday: editingPlannedEntry.sunday,
-                  }
-                : null
-            }
-            onSubmit={handleSubmitPlannedWork}
-          />
-        </Modal>
       ) : null}
     </>
   );
