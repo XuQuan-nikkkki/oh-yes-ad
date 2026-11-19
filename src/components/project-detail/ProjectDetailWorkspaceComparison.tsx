@@ -142,7 +142,9 @@ export default function ProjectDetailWorkspaceComparison({
 }: Props) {
   const [workspace, setWorkspace] = useState<Workspace>("execution");
   const [activeExecution, setActiveExecution] = useState<ExecutionTab>("overview");
-  const [activeFinance, setActiveFinance] = useState<"quote" | "initiation" | "payments" | "cost" | "expenses">("cost");
+  const [activeFinance, setActiveFinance] = useState<"quote" | "initiation" | "payments" | "cost" | "expenses">(
+    latestInitiation ? "cost" : "quote",
+  );
   const [activeQuoteTab, setActiveQuoteTab] = useState<"cost-estimation" | "pricing-reference">("cost-estimation");
   const [activeInitiationTab, setActiveInitiationTab] = useState<"project-initiation" | "project-financial-structure">("project-initiation");
   const [financeCounts, setFinanceCounts] = useState<{ receivable: number | null; payable: number | null; reimbursements: number | null }>({ receivable: null, payable: null, reimbursements: null });
@@ -211,6 +213,9 @@ export default function ProjectDetailWorkspaceComparison({
       return rank(left) - rank(right) || left.localeCompare(right, "zh-CN");
     });
   const submittedWorkItemCount = workItems.filter(({ item }) => (item.submissions?.length ?? 0) > 0).length;
+  const orderedFinanceLinks = latestInitiation
+    ? financeLinks
+    : [...financeLinks.slice(1), financeLinks[0]];
 
   return (
     <>
@@ -220,7 +225,7 @@ export default function ProjectDetailWorkspaceComparison({
           <AppstoreOutlined /><strong>项目执行</strong><span>人员、供应商、里程碑、需求单与工作项、工时和提交内容</span>
         </button>
         <button type="button" className={workspace === "finance" ? styles.selected : ""}
-          aria-pressed={workspace === "finance"} onClick={() => { if (workspace === "finance") void loadFinanceCounts(); setWorkspace("finance"); setActiveFinance("cost"); }}>
+          aria-pressed={workspace === "finance"} onClick={() => { if (workspace === "finance") void loadFinanceCounts(); setWorkspace("finance"); setActiveFinance(latestInitiation ? "cost" : "quote"); }}>
           <WalletOutlined /><strong>商务财务</strong><span>报价、立项、收付款、成本与报销</span>
         </button>
       </div>
@@ -243,7 +248,7 @@ export default function ProjectDetailWorkspaceComparison({
                 <Icon /><span>{label}</span>{tab === "vendors" && <em>{vendors.length}</em>}{tab === "milestones" && <em>{milestones.length}</em>}{tab === "progress" && <em>{briefs.length} / {workItemCount}</em>}{tab === "work" && <em>{actualWorkEntries.length}</em>}{tab === "submissions" && <em>{submissionCount}</em>}
               </button>
             ))}
-          </> : financeLinks.map(({ label, icon: Icon, tab }) => (
+          </> : orderedFinanceLinks.map(({ label, icon: Icon, tab }) => (
             <button type="button" key={tab} className={(tab === "cost-estimation" && activeFinance === "quote") || (tab === "project-initiation" && activeFinance === "initiation") || (tab === "receivable" && activeFinance === "payments") || (tab === "expense-records" && activeFinance === "expenses") || (tab === "realtime-cost" && activeFinance === "cost") ? styles.activeItem : ""}
               aria-current={(tab === "cost-estimation" && activeFinance === "quote") || (tab === "project-initiation" && activeFinance === "initiation") || (tab === "receivable" && activeFinance === "payments") || (tab === "expense-records" && activeFinance === "expenses") || (tab === "realtime-cost" && activeFinance === "cost") ? "page" : undefined}
               onClick={() => {
