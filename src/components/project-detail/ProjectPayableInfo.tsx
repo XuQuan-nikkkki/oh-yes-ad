@@ -31,6 +31,7 @@ type Props = {
   projectId: string;
   project: Project;
   canManageProject: boolean;
+  canManagePayableActivity?: boolean;
   planModalOpen?: boolean;
   planModalMode?: "create" | "edit";
   onPlanModalOpenChange?: (open: boolean) => void;
@@ -150,6 +151,7 @@ const ProjectPayableInfo = forwardRef<
       projectId,
       project,
       canManageProject,
+      canManagePayableActivity = canManageProject,
       planModalOpen: externalPlanModalOpen,
       planModalMode: externalPlanModalMode,
       onPlanModalOpenChange,
@@ -1191,7 +1193,7 @@ const ProjectPayableInfo = forwardRef<
             setActivityRows([]);
             setActivityTargetStageOptionIds([]);
           }}
-          canManageProject={canManageProject}
+          canManageProject={canManagePayableActivity}
           onEditNode={async (row, values) => {
             await handleEditNode(row as PayableNode, values);
           }}

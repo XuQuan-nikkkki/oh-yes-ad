@@ -1,7 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
-import { requireFinanceOrAdminPermission } from "@/lib/api-permissions";
+import { requireReceivablePayableWritePermission } from "@/lib/api-permissions";
 import { sanitizeRequestBody } from "@/lib/sanitize-request-body";
 import { toNullableDecimal } from "@/lib/toNullableDecimal";
 
@@ -56,7 +56,7 @@ const normalizeRecordType = (value: unknown): AdjustmentRecordType | null => {
 };
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
-  const denied = await requireFinanceOrAdminPermission();
+  const denied = await requireReceivablePayableWritePermission();
   if (denied) return denied;
 
   const { id } = await context.params;
@@ -114,7 +114,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(_req: NextRequest, context: RouteContext) {
-  const denied = await requireFinanceOrAdminPermission();
+  const denied = await requireReceivablePayableWritePermission();
   if (denied) return denied;
 
   const { id } = await context.params;

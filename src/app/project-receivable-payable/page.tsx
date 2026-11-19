@@ -521,7 +521,7 @@ const renderAmountTrend = ({
   return (
     <Space size={4} wrap={false}>
       <span>{formatAmountWithYen(amount)}</span>
-      <Tooltip title={tooltipTitle} overlayInnerStyle={{ paddingRight: 16 }}>
+      <Tooltip title={tooltipTitle} styles={{ container: { paddingRight: 16 } }}>
         <Icon style={{ color: isIncrease ? "#52c41a" : "#ff4d4f" }} />
       </Tooltip>
     </Space>

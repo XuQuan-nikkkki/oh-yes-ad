@@ -1066,7 +1066,7 @@ const ProjectReceivableInfo = forwardRef<
             setActivityModalOpen(false);
             setActivityTargetStageOptionIds([]);
           }}
-          canManageProject={canManageProject}
+          canManageProject={canCollectReceivable}
           canManageBadDebtRecords={canManageBadDebtRecords}
           onEditNode={async (row, values) => {
             await handleEditNode(row as ReceivableNode, values);

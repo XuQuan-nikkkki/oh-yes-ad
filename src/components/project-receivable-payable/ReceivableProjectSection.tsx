@@ -242,7 +242,7 @@ export default function ReceivableProjectSection({
           {hasExpectedContractDiff ? (
             <>
               <Tooltip
-                overlayInnerStyle={{ paddingRight: 16 }}
+                styles={{ container: { paddingRight: 16 } }}
                 title={
                   <div style={{ whiteSpace: "nowrap" }}>
                     <div>合同金额：{formatAmount(Number(contractAmountTotal ?? 0))}</div>

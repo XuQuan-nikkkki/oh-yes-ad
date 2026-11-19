@@ -98,6 +98,7 @@ export default function ProjectWorkspacePayments({
         projectId={projectId}
         project={project}
         canManageProject={canManageProject}
+        canManagePayableActivity={canCollectReceivable}
         planModalOpen={payablePlanModalOpen}
         planModalMode={payablePlanModalMode}
         onPlanModalOpenChange={setPayablePlanModalOpen}
