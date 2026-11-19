@@ -298,11 +298,7 @@ const ProjectCostEstimationCard = ({
         </div>
       </div>
 
-      <div style={workspaceLayout ? {
-        border: "1px solid #e7eaf0",
-        borderRadius: 7,
-        padding: "18px 20px",
-      } : undefined}>
+      <div>
         <Typography.Title level={5} style={sectionTitleStyle}>
           人员配置
         </Typography.Title>
