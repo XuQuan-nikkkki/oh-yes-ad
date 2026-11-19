@@ -709,7 +709,7 @@ function ProjectReceivablePayablePageContent() {
     (state) => state.fetchProjects,
   );
   const projectStatusOptionsFromStore = useSelectOptionsStore(
-    (state) => state.optionsByField["project.status"] ?? [],
+    (state) => state.optionsByField["project.status"],
   );
   const [activeTab, setActiveTab] = useState<TabKey>("summary");
   const [receivableViewMode, setReceivableViewMode] =
@@ -1130,7 +1130,7 @@ function ProjectReceivablePayablePageContent() {
       Array.from(
         new Map(
           [
-            ...projectStatusOptionsFromStore.map((item) => ({
+            ...(projectStatusOptionsFromStore ?? []).map((item) => ({
               value: String(item.value ?? "").trim(),
             })),
             ...allNonInternalProjects.map((item) => ({
