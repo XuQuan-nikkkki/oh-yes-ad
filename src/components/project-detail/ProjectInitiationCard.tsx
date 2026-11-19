@@ -4,15 +4,11 @@ import { useMemo, useState } from "react";
 import { Button, Card, Empty, Modal, Space, Typography } from "antd";
 import ProjectInitiationModal from "@/components/project-detail/ProjectInitiationModal";
 import ProjectCostBasisMembersTable from "@/components/project-detail/ProjectCostBasisMembersTable";
-import {
-  formatProjectOutsourceItemsText,
-  getProjectOutsourceTotal,
-} from "@/lib/project-outsource";
+import ProjectCostFeesInfo from "@/components/project-detail/ProjectCostFeesInfo";
+import { formatProjectOutsourceItemsText } from "@/lib/project-outsource";
 import type { Employee, Project } from "@/types/projectDetail";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import CopyTextButton from "../actions/CopyTextButton";
-import InfoGrid from "./InfoGrid";
-import MultipleSelectOptions from "../MultipleSelectOptions";
 import StyledStatisticCard from "./StyledStatisticCard";
 
 type Props = {
@@ -35,7 +31,6 @@ type Props = {
 
 const sectionTitleStyle = { marginBottom: 12 } as const;
 const statisticDescriptionStyle = { color: "rgba(0,0,0,0.45)" } as const;
-const executionCostField = "projectCostEstimation.executionCostType";
 
 const formatAmount = (value?: number | null) => {
   if (typeof value !== "number") return "-";
@@ -171,20 +166,10 @@ const ProjectInitiationCard = ({
     ],
   );
 
-  const hasAgencyFeeRate =
-    typeof latestInitiation?.agencyFeeRate === "number" &&
-    latestInitiation.agencyFeeRate > 0;
   const estimatedAgencyFee =
     typeof latestInitiation?.estimatedAgencyFee === "number"
       ? latestInitiation.estimatedAgencyFee
       : null;
-  const hasOtherExecutionCostType = useMemo(
-    () =>
-      (latestInitiation?.executionCostTypes ?? []).some(
-        (item) => typeof item?.value === "string" && item.value.trim() === "其他",
-      ),
-    [latestInitiation?.executionCostTypes],
-  );
 
   const actionsNode = canManageByPmRole ? (
     hasInitiation ? (
@@ -211,7 +196,7 @@ const ProjectInitiationCard = ({
     )
   ) : null;
 
-  const contentNode = hasInitiation ? (
+  const contentNode = latestInitiation ? (
     <Space orientation="vertical" size={18} style={{ width: "100%" }}>
       <div>
         <Typography.Title level={5} style={sectionTitleStyle}>
@@ -278,100 +263,7 @@ const ProjectInitiationCard = ({
         <Typography.Title level={5} style={sectionTitleStyle}>
           费用信息
         </Typography.Title>
-        <InfoGrid
-          style={{ marginBottom: 12 }}
-          rows={[
-            {
-              columns: 2,
-              title: "中介费用",
-              items: [
-                {
-                  title: "中介费率",
-                  value: hasAgencyFeeRate
-                    ? `${formatAmount(latestInitiation.agencyFeeRate ?? 0)}%`
-                    : "-",
-                },
-                {
-                  title: "中介费",
-                  value:
-                    typeof estimatedAgencyFee === "number"
-                      ? `${formatAmount(estimatedAgencyFee)} 元`
-                      : "-",
-                },
-              ],
-            },
-            {
-              columns: 3,
-              title: "外包费用",
-              items: [
-                {
-                  title: "外包费用",
-                  value:
-                    (latestInitiation?.outsourceItems?.length ?? 0) > 0
-                      ? `${getProjectOutsourceTotal(latestInitiation?.outsourceItems)} 元`
-                      : "-",
-                },
-                {
-                  title: "外包费用明细",
-                  value: latestInitiation?.outsourceInfo?.trim()
-                    ? latestInitiation.outsourceInfo
-                    : (latestInitiation?.outsourceItems?.length ?? 0) > 0
-                      ? formatProjectOutsourceItemsText(
-                          latestInitiation?.outsourceItems,
-                        )
-                      : "-",
-                },
-                {
-                  title: "外包费用备注",
-                  value: latestInitiation?.outsourceRemark?.trim() || "-",
-                },
-              ],
-            },
-            {
-              columns: hasOtherExecutionCostType ? 2 : 1,
-              title: "执行费用",
-              items: [
-                {
-                  title: "执行费用类别",
-                  value:
-                    (latestInitiation?.executionCostTypes?.length ?? 0) > 0 &&
-                    (latestInitiation?.executionCostTypes ?? []).some(
-                      (item) => item?.value,
-                    ) ? (
-                      <Space orientation="vertical" size={4}>
-                        {(latestInitiation?.executionCostTypes ?? []).map((option) => {
-                          const amount = latestInitiation?.executionCostItems?.find(
-                            (item) => item.costTypeOptionId === option.id,
-                          )?.requestedAmount;
-                          return (
-                            <Space key={option.id ?? option.value}>
-                              <MultipleSelectOptions
-                                field={executionCostField}
-                                options={[option]}
-                              />
-                              {typeof amount === "number" ? (
-                                <span>申请预算 {formatAmount(amount)} 元</span>
-                              ) : null}
-                            </Space>
-                          );
-                        })}
-                      </Space>
-                    ) : (
-                      "-"
-                    ),
-                },
-                ...(hasOtherExecutionCostType
-                  ? [
-                      {
-                        title: "其他执行费用备注",
-                        value: latestInitiation?.otherExecutionCostRemark?.trim() || "-",
-                      },
-                    ]
-                  : []),
-              ],
-            },
-          ]}
-        />
+        <ProjectCostFeesInfo estimation={latestInitiation} agencyFeeAmount={estimatedAgencyFee} />
       </div>
     </Space>
   ) : (

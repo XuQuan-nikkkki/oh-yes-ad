@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Button, Card, Empty, Modal, Space, Typography } from "antd";
-import SelectOptionQuickEditTag from "@/components/SelectOptionQuickEditTag";
-import InfoGrid from "@/components/project-detail/InfoGrid";
+import ProjectCostFeesInfo from "@/components/project-detail/ProjectCostFeesInfo";
 import ProjectCostEstimationModal from "@/components/project-detail/ProjectCostEstimationModal";
 import {
   ProjectMinimumQuoteDetails,
@@ -12,11 +11,7 @@ import {
 } from "@/components/project-detail/ProjectMinimumQuoteEstimate";
 import minimumQuoteStyles from "@/components/project-detail/ProjectMinimumQuoteEstimate.module.css";
 import StyledStatisticCard from "@/components/project-detail/StyledStatisticCard";
-import {
-  formatProjectOutsourceItemsText,
-  getProjectOutsourceTotal,
-  normalizeProjectOutsourceItems,
-} from "@/lib/project-outsource";
+import { normalizeProjectOutsourceItems } from "@/lib/project-outsource";
 import type { Employee, Project } from "@/types/projectDetail";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import { useProjectPermission } from "@/hooks/useProjectPermission";
@@ -43,7 +38,6 @@ type Props = {
 
 const sectionTitleStyle = { marginBottom: 12 } as const;
 const statisticDescriptionStyle = { color: "rgba(0,0,0,0.45)" } as const;
-const executionCostField = "projectCostEstimation.executionCostType";
 
 const formatAmount = (value?: number | null) => {
   if (typeof value !== "number") return "-";
@@ -201,32 +195,6 @@ const ProjectCostEstimationCard = ({
     ],
   );
 
-  const hasOtherExecutionCostType =
-    typeof latestCostEstimation?.hasOtherExecutionCostType === "boolean"
-      ? latestCostEstimation.hasOtherExecutionCostType
-      : (latestCostEstimation?.executionCostTypes ?? []).some(
-          (item) =>
-            typeof item?.value === "string" && item.value.trim() === "其他",
-        );
-  const executionCostOptions = (latestCostEstimation?.executionCostTypes ?? [])
-    .filter((option) => Boolean(option?.value));
-  const requestedAmountsByOptionId = new Map(
-    (latestCostEstimation?.executionCostItems ?? []).map((item) => [
-      item.costTypeOptionId,
-      item.requestedAmount,
-    ]),
-  );
-  const requestedAmounts = executionCostOptions.map((option) =>
-    requestedAmountsByOptionId.get(option.id ?? ""),
-  );
-  const executionCostTotal =
-    requestedAmounts.length > 0 &&
-    requestedAmounts.every((amount): amount is number =>
-      typeof amount === "number" && Number.isFinite(amount),
-    )
-      ? requestedAmounts.reduce((total, amount) => total + (amount ?? 0), 0)
-      : null;
-
   const actionsNode = canManageByPmRole ? (
     hasEstimation ? (
       <>
@@ -317,130 +285,7 @@ const ProjectCostEstimationCard = ({
         <Typography.Title level={5} style={sectionTitleStyle}>
           费用信息
         </Typography.Title>
-        <InfoGrid
-          style={{ marginBottom: 12 }}
-          rows={[
-            {
-              columns: 3,
-              title: (
-                <span style={{ display: "grid", gridTemplateColumns: "1fr 2fr" }}>
-                  <span
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      padding: "8px 24px",
-                    }}
-                  >
-                    <span>中介费用</span>
-                    <span style={{ fontWeight: 700 }}>
-                      费率 {typeof latestCostEstimation.agencyFeeRate === "number"
-                        ? `${formatAmount(latestCostEstimation.agencyFeeRate)}%`
-                        : "-"}
-                    </span>
-                  </span>
-                  <span
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      padding: "8px 24px",
-                      borderLeft: "1px solid #e5e5e5",
-                    }}
-                  >
-                    <span>外包费用</span>
-                    {(latestCostEstimation?.outsourceItems?.length ?? 0) > 0 ? (
-                      <span style={{ fontWeight: 700 }}>
-                        合计 {formatAmount(getProjectOutsourceTotal(latestCostEstimation?.outsourceItems))} 元
-                      </span>
-                    ) : null}
-                  </span>
-                </span>
-              ),
-              titleStyle: { padding: 0 },
-              items: [
-                {
-                  title: null,
-                  value: "按最终报价计算",
-                },
-                {
-                  title: null,
-                  cornerTag: "明细",
-                  style: { whiteSpace: "pre-line" },
-                  value: latestCostEstimation?.outsourceInfo?.trim()
-                    ? latestCostEstimation.outsourceInfo
-                    : (latestCostEstimation?.outsourceItems?.length ?? 0) > 0
-                      ? formatProjectOutsourceItemsText(
-                          latestCostEstimation?.outsourceItems,
-                        )
-                      : "-",
-                },
-                {
-                  title: null,
-                  cornerTag: "备注",
-                  value: latestCostEstimation?.outsourceRemark?.trim() || "-",
-                },
-              ],
-            },
-            {
-              columns: hasOtherExecutionCostType ? 2 : 1,
-              title: (
-                <span style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-                  <span>执行费用</span>
-                  {executionCostTotal !== null ? (
-                    <span style={{ fontWeight: 700 }}>
-                      合计 {formatAmount(executionCostTotal)} 元
-                    </span>
-                  ) : null}
-                </span>
-              ),
-              items: [
-                {
-                  title: null,
-                  value:
-                    executionCostOptions.length > 0 ? (
-                      <Space size={[8, 8]} wrap>
-                        {executionCostOptions.map((option) => {
-                          const amount = requestedAmountsByOptionId.get(option.id ?? "");
-                          return (
-                            <SelectOptionQuickEditTag
-                              key={option.id ?? option.value}
-                              field={executionCostField}
-                              option={option}
-                              tagSuffix={typeof amount === "number" ? (
-                                <span
-                                  style={{
-                                    borderLeft: "1px solid currentColor",
-                                    marginLeft: 10,
-                                    paddingLeft: 10,
-                                    fontWeight: 400,
-                                  }}
-                                >
-                                  {formatAmount(amount)} 元
-                                </span>
-                              ) : undefined}
-                            />
-                          );
-                        })}
-                      </Space>
-                    ) : (
-                      "-"
-                    ),
-                },
-                ...(hasOtherExecutionCostType
-                  ? [
-                      {
-                        title: "其他执行费用备注",
-                        value:
-                          latestCostEstimation?.otherExecutionCostRemark?.trim() ||
-                          "-",
-                      },
-                    ]
-                  : []),
-              ],
-            },
-          ]}
-        />
+        <ProjectCostFeesInfo estimation={latestCostEstimation} />
       </div>
 
       {minimumQuote.estimate ? (
