@@ -362,6 +362,7 @@ const ProjectCostEstimationCard = ({
                 {
                   title: null,
                   cornerTag: "明细",
+                  style: { whiteSpace: "pre-line" },
                   value: latestCostEstimation?.outsourceInfo?.trim()
                     ? latestCostEstimation.outsourceInfo
                     : (latestCostEstimation?.outsourceItems?.length ?? 0) > 0
