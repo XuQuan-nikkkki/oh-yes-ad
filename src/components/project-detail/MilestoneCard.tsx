@@ -71,8 +71,6 @@ type Props = {
   milestone: MilestoneCardRow;
   height?: number;
   projectName?: string;
-  onOpen?: () => void;
-  titleLink?: boolean;
 };
 
 const getMilestoneDateStatus = (date?: string | null) => {
@@ -102,7 +100,7 @@ const getCountdownIcon = (dateStatus: "past" | "today" | "future" | null) => {
   return null;
 };
 
-const MilestoneCard = ({ milestone, height, projectName, onOpen, titleLink = true }: Props) => {
+const MilestoneCard = ({ milestone, height, projectName }: Props) => {
   const dateStatus = getMilestoneDateStatus(milestone.date);
   const countdownIcon = getCountdownIcon(dateStatus);
   const rightBorderColor =
@@ -125,11 +123,9 @@ const MilestoneCard = ({ milestone, height, projectName, onOpen, titleLink = tru
           }}
         >
           <span style={{ fontSize: 14, minWidth: 0, flex: 1 }}>
-            {onOpen || !titleLink ? milestone.name : (
-              <AppLink href={`/project-milestones/${milestone.id}`}>
-                {milestone.name}
-              </AppLink>
-            )}
+            <AppLink href={`/project-milestones/${milestone.id}`}>
+              {milestone.name}
+            </AppLink>
           </span>
           {/* <MilestoneTypeValue
             type={milestone.type}
@@ -138,15 +134,6 @@ const MilestoneCard = ({ milestone, height, projectName, onOpen, titleLink = tru
         </div>
       }
       bordered
-      onClick={onOpen}
-      onKeyDown={onOpen ? (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpen();
-        }
-      } : undefined}
-      role={onOpen ? "button" : undefined}
-      tabIndex={onOpen ? 0 : undefined}
       extra={
         <MilestoneTypeValue
           type={milestone.type}
@@ -157,7 +144,6 @@ const MilestoneCard = ({ milestone, height, projectName, onOpen, titleLink = tru
         height: height ?? "100%",
         width: "100%",
         minWidth: 0,
-        cursor: onOpen ? "pointer" : undefined,
         opacity: dateStatus === "past" ? 0.7 : 1,
         ...(rightBorderColor
           ? { borderLeft: `3px solid ${rightBorderColor}` }

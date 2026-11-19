@@ -60,7 +60,6 @@ function HomePageContent() {
   const [selectedWork, setSelectedWork] = useState<HomeWorkItem | null>(null);
   const [selectedBrief, setSelectedBrief] = useState<ProjectBrief | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
-  const [selectedMilestone, setSelectedMilestone] = useState<HomeMilestone | null>(null);
   const [createWorkLogRequest, setCreateWorkLogRequest] = useState(0);
   const [messageApi, contextHolder] = message.useMessage();
   const allowedTabs = new Set(["site-map", ...(canViewOwnedProjects ? ["owned-projects"] : []), ...(canViewWork ? ["participation", "participation-milestones", "work-logs"] : [])]);
@@ -156,7 +155,7 @@ function HomePageContent() {
     </div>;
   };
   const milestoneRow = (item: HomeMilestone) => {
-    return <MilestoneCard key={item.id} milestone={item} projectName={item.project.name} onOpen={() => setSelectedMilestone(item)} />;
+    return <MilestoneCard key={item.id} milestone={item} projectName={item.project.name} />;
   };
 
   return <div className="home-workbench">
@@ -174,8 +173,7 @@ function HomePageContent() {
     <Drawer title="全部功能" open={drawer === "site-map"} onClose={() => setDrawer(null)} size="min(900px, 100vw)" destroyOnHidden><HomeSiteMap onNavigate={(path) => { setNavigating(true); router.push(path); }} /></Drawer>
     <Drawer title={`参与项目 · ${data?.projects.length ?? 0}`} open={drawer === "participation" && canViewWork} onClose={() => setDrawer(null)} size="min(720px, 100vw)" destroyOnHidden><div className="home-project-list">{data?.projects.length ? data.projects.map((project) => <div className="home-project-row" key={project.id}><div><strong>{project.name}</strong><small>{project.personalOpenWorkItemCount ? `${project.personalOpenWorkItemCount} 项未完成工作项` : "暂无个人工作项"}</small></div>{project.statusOption?.value ? <Tag color={project.statusOption.color ?? undefined}>{project.statusOption.value}</Tag> : null}{workItems.find((item) => item.brief.project.id === project.id && item.status !== "completed") ? <Button size="small" onClick={() => { const first = workItems.find((item) => item.brief.project.id === project.id && item.status !== "completed"); if (first) { setDrawer(null); void openWork(first); } }}>打开工作项</Button> : null}<Button size="small" onClick={() => router.push(`/projects/${project.id}`)}>查看项目</Button></div>) : <Empty description="暂无参与项目" />}</div></Drawer>
     <Drawer title="负责项目" open={drawer === "owned-projects" && canViewOwnedProjects} onClose={() => setDrawer(null)} size="min(720px, 100vw)" destroyOnHidden><div className="home-project-list">{data?.projects.filter((project) => project.ownerId === currentUser?.id).length ? data.projects.filter((project) => project.ownerId === currentUser?.id).map((project) => <div className="home-project-row" key={project.id}><div><strong>{project.name}</strong><small>{project.personalOpenWorkItemCount} 项个人未完成工作项</small></div><Button size="small" onClick={() => router.push(`/projects/${project.id}`)}>查看项目</Button></div>) : <Empty description="暂无负责项目" />}</div></Drawer>
-    <Drawer title="全部未来里程碑" open={drawer === "participation-milestones" && canViewWork} onClose={() => setDrawer(null)} size="min(720px, 100vw)" destroyOnHidden><p className="home-drawer-path">今天起共 {futureMilestones.length} 条</p>{futureMilestones.length ? <div className="home-milestone-list">{futureMilestones.map((item) => <MilestoneCard key={item.id} milestone={item} projectName={item.project.name} titleLink={false} />)}</div> : <Empty description="暂无未来里程碑" />}</Drawer>
-    <Drawer title="里程碑" open={Boolean(selectedMilestone)} onClose={() => setSelectedMilestone(null)} size="min(640px, 100vw)" destroyOnHidden>{selectedMilestone ? <><p className="home-drawer-path">{selectedMilestone.project.name}</p><MilestoneCard milestone={selectedMilestone} /></> : null}</Drawer>
+    <Drawer title="全部未来里程碑" open={drawer === "participation-milestones" && canViewWork} onClose={() => setDrawer(null)} size="min(720px, 100vw)" destroyOnHidden><p className="home-drawer-path">今天起共 {futureMilestones.length} 条</p>{futureMilestones.length ? <div className="home-milestone-list">{futureMilestones.map((item) => <MilestoneCard key={item.id} milestone={item} projectName={item.project.name} />)}</div> : <Empty description="暂无未来里程碑" />}</Drawer>
   </div>;
 }
 export default function Home() { return <Suspense fallback={<Card loading />}><HomePageContent /></Suspense>; }
