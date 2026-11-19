@@ -5,7 +5,7 @@ import { Button, Card, Empty, Modal, Space, Typography } from "antd";
 import ProjectInitiationModal from "@/components/project-detail/ProjectInitiationModal";
 import ProjectCostBasisMembersTable from "@/components/project-detail/ProjectCostBasisMembersTable";
 import ProjectCostFeesInfo from "@/components/project-detail/ProjectCostFeesInfo";
-import { formatProjectOutsourceItemsText } from "@/lib/project-outsource";
+import { normalizeProjectOutsourceItems } from "@/lib/project-outsource";
 import type { Employee, Project } from "@/types/projectDetail";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
 import CopyTextButton from "../actions/CopyTextButton";
@@ -92,8 +92,11 @@ const buildSyncSummary = (
   lines.push(...(memberLines.length > 0 ? memberLines : ["- 暂无成员"]));
   lines.push("");
 
+  const outsourceItems = normalizeProjectOutsourceItems(estimation.outsourceItems);
   lines.push(
-    `外包费用：${formatProjectOutsourceItemsText(estimation.outsourceItems)}`,
+    `外包费用：${outsourceItems.length > 0
+      ? outsourceItems.map((item) => `${item.type} ${item.amount} 元`).join("\n")
+      : "-"}`,
   );
 
   const otherExecutionCostRemark = toTrimmedString(
@@ -110,10 +113,10 @@ const buildSyncSummary = (
         (item) => item.costTypeOption?.value === value,
       )?.requestedAmount;
       return typeof amount === "number"
-        ? `${label}：${formatAmount(amount)}元`
+        ? `${label} ${formatAmount(amount)} 元`
         : label;
     });
-  lines.push(`执行费用需求：${executionCostValues.join("、") || "-"}`);
+  lines.push(`执行费用：${executionCostValues.join("、") || "-"}`);
 
   if (detailLink) {
     lines.push("");
