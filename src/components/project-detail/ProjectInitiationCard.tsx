@@ -95,9 +95,11 @@ const buildSyncSummary = (
   const outsourceItems = normalizeProjectOutsourceItems(estimation.outsourceItems);
   lines.push(
     `外包费用：${outsourceItems.length > 0
-      ? outsourceItems.map((item) => `${item.type} ${item.amount} 元`).join("\n")
+      ? outsourceItems.map((item) => `${item.type} ${item.amount} 元`).join("、")
       : "-"}`,
   );
+  const outsourceRemark = toTrimmedString(estimation.outsourceRemark);
+  if (outsourceRemark) lines.push(`外包费用备注：${outsourceRemark}`);
 
   const otherExecutionCostRemark = toTrimmedString(
     estimation.otherExecutionCostRemark,
