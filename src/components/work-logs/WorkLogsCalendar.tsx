@@ -751,7 +751,11 @@ const WorkLogsCalendar = ({ employee, title, extra, createRequest = 0, onEntryCh
   };
 
   const syncCalendarSearchParams = (info: DatesSetArg) => {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(
+      typeof window === "undefined"
+        ? searchParams.toString()
+        : window.location.search,
+    );
     let changed = false;
 
     if (params.get(WORK_LOG_VIEW_PARAM) !== info.view.type) {
