@@ -1007,47 +1007,6 @@ const ProjectFinancialStructureModal = ({
             }}
           </Form.Item>
 
-          <Form.Item
-            noStyle
-            shouldUpdate
-          >
-            {({ getFieldValue }) => {
-              const contractAmountTaxIncluded = toMoney(
-                getFieldValue("contractAmountTaxIncluded"),
-              );
-              const outsourceTotal = getProjectOutsourceTotal(
-                getFieldValue("outsourceItems") as
-                  | Array<{ type?: string; amount?: number }>
-                  | undefined,
-              );
-              const total = roundMoney(
-                  toMoney(getFieldValue("laborCost")) +
-                  toMoney(getFieldValue("rentCost")) +
-                  toMoney(getFieldValue("middleOfficeCost")) +
-                  roundMoney(
-                    (contractAmountTaxIncluded * toMoney(getFieldValue("agencyFeeRate"))) /
-                      100,
-                  ) +
-                  outsourceTotal +
-                  ((getFieldValue("executionCostItems") as ExecutionCostItemFormRow[]) ?? []).reduce(
-                    (sum, item) => sum + toMoney(item.budgetAmount),
-                    0,
-                  ),
-              );
-
-              return (
-                <div style={{ marginBottom: 16 }}>
-                  <Typography.Text type="secondary">成本合计</Typography.Text>
-                  <div style={{ marginTop: 4 }}>
-                    <Typography.Text strong>{`${total.toLocaleString("zh-CN", {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2,
-                    })} 元`}</Typography.Text>
-                  </div>
-                </div>
-              );
-            }}
-          </Form.Item>
         </StepsForm.StepForm>
       </StepsForm>
     </Modal>
