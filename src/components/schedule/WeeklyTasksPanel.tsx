@@ -309,7 +309,9 @@ const WeeklyTasksPanel = ({
       .filter((row) => {
         const shouldHideWhenNoSchedule =
           CONDITIONAL_VISIBLE_EMPLOYEES.has(row.name) ||
-          row.name.includes("外协");
+          row.name.includes("外协") ||
+          row.functionLabel === "财政组" ||
+          row.functionLabel === "未设置职能";
         if (!shouldHideWhenNoSchedule) {
           return true;
         }
