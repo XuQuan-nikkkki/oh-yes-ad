@@ -161,6 +161,23 @@ export default function ProjectDetailWorkspaceComparison({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const structureKey = `${projectId}:${latestInitiation?.id ?? ""}`;
+  const [structurePresence, setStructurePresence] = useState<{ key: string; exists: boolean } | null>(null);
+  const hasFinancialStructure = structurePresence?.key === structureKey && structurePresence.exists;
+  useEffect(() => {
+    const controller = new AbortController();
+    const query = new URLSearchParams({ projectId });
+    if (latestInitiation?.id) query.set("estimationId", latestInitiation.id);
+    void fetch(`/api/project-financial-structures?${query.toString()}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    }).then(async (response) => {
+      if (!response.ok) return;
+      const rows: unknown = await response.json();
+      setStructurePresence({ key: structureKey, exists: Array.isArray(rows) && rows.length > 0 });
+    }).catch(() => {});
+    return () => controller.abort();
+  }, [projectId, latestInitiation?.id, financialStructureRefreshKey, structureKey]);
   const tabParam = searchParams.get("tab");
   const viewParam = searchParams.get("view");
   const workspace: Workspace = searchParams.get("workspace") === "finance" ||
@@ -169,7 +186,7 @@ export default function ProjectDetailWorkspaceComparison({
   const activeExecution: ExecutionTab = executionTabs.find((tab) => tab === tabParam) ?? "overview";
   const activeFinance: FinanceTab = tabParam && Object.hasOwn(financeTabBySlug, tabParam)
     ? financeTabBySlug[tabParam]
-    : latestInitiation ? "cost" : "quote";
+    : hasFinancialStructure ? "cost" : "quote";
   const activeQuoteTab = viewParam === "pricing-reference" ? "pricing-reference" : "cost-estimation";
   const activeInitiationTab = viewParam === "project-financial-structure" ? "project-financial-structure" : "project-initiation";
   const workView = viewParam === "analysis" ? "analysis" : "records";
@@ -250,7 +267,7 @@ export default function ProjectDetailWorkspaceComparison({
       return rank(left) - rank(right) || left.localeCompare(right, "zh-CN");
     });
   const submittedWorkItemCount = workItems.filter(({ item }) => (item.submissions?.length ?? 0) > 0).length;
-  const orderedFinanceLinks = latestInitiation
+  const orderedFinanceLinks = hasFinancialStructure
     ? financeLinks
     : [...financeLinks.slice(1), financeLinks[0]];
 
@@ -262,7 +279,7 @@ export default function ProjectDetailWorkspaceComparison({
           <AppstoreOutlined /><strong>项目执行</strong><span>人员、供应商、里程碑、需求单与工作项、工时和提交内容</span>
         </button>
         <button type="button" className={workspace === "finance" ? styles.selected : ""}
-          aria-pressed={workspace === "finance"} onClick={() => { if (workspace === "finance") void loadFinanceCounts(); openTab("finance", financeSlugByTab[latestInitiation ? "cost" : "quote"]); }}>
+          aria-pressed={workspace === "finance"} onClick={() => { if (workspace === "finance") void loadFinanceCounts(); openTab("finance", financeSlugByTab[hasFinancialStructure ? "cost" : "quote"]); }}>
           <WalletOutlined /><strong>商务财务</strong><span>报价、立项、收付款、成本与报销</span>
         </button>
       </div>
