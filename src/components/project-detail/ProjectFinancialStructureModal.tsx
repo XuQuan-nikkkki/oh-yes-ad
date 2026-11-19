@@ -104,19 +104,9 @@ type Props = {
   onSaved?: () => void | Promise<void>;
 };
 
-type PricingStrategyExecutionCostItem = {
-  costTypeOptionId?: string | null;
-  budgetAmount?: number | null;
-  costTypeOption?: {
-    value?: string | null;
-  } | null;
-};
-
-type PricingStrategyResponse = {
-  executionCostItems?: PricingStrategyExecutionCostItem[] | null;
-};
-
 const MODAL_FORM_MAX_HEIGHT = "calc(100vh - 220px)";
+const executionCostGridColumns =
+  "minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1.4fr)";
   const toMoney = (value: unknown) => {
     if (value === null || value === undefined || value === "") return 0;
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -177,10 +167,6 @@ const ProjectFinancialStructureModal = ({
   const [submitting, setSubmitting] = useState(false);
   const [fallbackExecutionCostDefinitions, setFallbackExecutionCostDefinitions] =
     useState<Array<{ id: string; label: string }>>([]);
-  const [pricingExecutionCostPrefill, setPricingExecutionCostPrefill] = useState<{
-    byId: Record<string, number>;
-    byLabel: Record<string, number>;
-  }>({ byId: {}, byLabel: {} });
   const formRef = useRef<ProFormInstance<FormValues> | null>(null);
   const systemSettings = useSystemSettingsStore((state) => state.records);
   const fetchSystemSettings = useSystemSettingsStore(
@@ -214,56 +200,6 @@ const ProjectFinancialStructureModal = ({
   useEffect(() => {
     void fetchSystemSettings();
   }, [fetchSystemSettings]);
-
-  useEffect(() => {
-    if (!open || !projectId || existingStructure?.id) return;
-
-    let cancelled = false;
-    const fetchPricingStrategyExecutionCosts = async () => {
-      try {
-        // Prefill from the latest pricing strategy of the project (regardless of estimation).
-        // If the latest pricing strategy doesn't include a cost type, keep it empty.
-        const query = new URLSearchParams({ projectId });
-	        const res = await fetch(
-	          `/api/project-pricing-strategies?${query.toString()}`,
-	          { cache: "no-store" },
-	        );
-	        if (!res.ok) {
-	          if (!cancelled)
-	            setPricingExecutionCostPrefill({ byId: {}, byLabel: {} });
-	          return;
-	        }
-
-        const rows = (await res.json()) as PricingStrategyResponse[];
-        const latest = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-        const byId: Record<string, number> = {};
-        const byLabel: Record<string, number> = {};
-
-        for (const item of latest?.executionCostItems ?? []) {
-          const optionId = String(item?.costTypeOptionId ?? "").trim();
-          const label = String(item?.costTypeOption?.value ?? "").trim();
-          if (
-            typeof item?.budgetAmount === "number" &&
-            Number.isFinite(item.budgetAmount)
-          ) {
-            if (optionId) byId[optionId] = item.budgetAmount;
-            if (label) byLabel[label] = item.budgetAmount;
-          }
-        }
-
-        if (!cancelled) {
-          setPricingExecutionCostPrefill({ byId, byLabel });
-        }
-      } catch {
-        if (!cancelled) setPricingExecutionCostPrefill({ byId: {}, byLabel: {} });
-      }
-    };
-
-    void fetchPricingStrategyExecutionCosts();
-    return () => {
-      cancelled = true;
-    };
-  }, [existingStructure?.id, open, projectId]);
 
   useEffect(() => {
     if (!open) return;
@@ -417,10 +353,15 @@ const ProjectFinancialStructureModal = ({
   }, [estimation?.executionCostTypes]);
 
   const executionCostItemDefinitions = useMemo(() => {
-    const baseDefinitions =
-      estimationExecutionCostItemDefinitions.length > 0
-        ? estimationExecutionCostItemDefinitions
-        : fallbackExecutionCostDefinitions;
+    const baseDefinitions = Array.from(new Map(
+      [
+        ...(existingStructure?.executionCostItems ?? []).map((item) => ({
+          id: item.costTypeOptionId,
+          label: item.costTypeOption?.value || "未命名费用类型",
+        })),
+        ...estimationExecutionCostItemDefinitions,
+      ].map((item) => [item.id, item]),
+    ).values());
     const mergedDefinitions = Array.from(
       new Map(
         [...baseDefinitions, ...fallbackExecutionCostDefinitions].map((item) => [
@@ -454,14 +395,17 @@ const ProjectFinancialStructureModal = ({
     return Array.from(selected.values());
   }, [
     estimationExecutionCostItemDefinitions,
+    existingStructure?.executionCostItems,
     fallbackExecutionCostDefinitions,
     hasImportedExecutionPrefill,
     importedPrefill?.executionCostItems,
   ]);
 
   const initialValues = useMemo<FormValues>(() => {
-    const getPrefillAmount = (id: string, label: string) =>
-      pricingExecutionCostPrefill.byId[id] ?? pricingExecutionCostPrefill.byLabel[label];
+    const getRequestedAmount = (id: string) =>
+      estimation?.executionCostItems?.find(
+        (item) => item.costTypeOptionId === id,
+      )?.requestedAmount ?? undefined;
     const importedExecutionAmountByExactLabel = new Map<string, number>();
     const importedExecutionAmountByNormalizedLabel = new Map<string, number>();
     for (const item of importedPrefill?.executionCostItems ?? []) {
@@ -548,7 +492,7 @@ const ProjectFinancialStructureModal = ({
               existingItem?.budgetAmount ??
               (hasImportedExecutionPrefill
                 ? undefined
-                : getPrefillAmount(definition.id, definition.label)),
+                : getRequestedAmount(definition.id)),
           };
         }),
       };
@@ -595,7 +539,7 @@ const ProjectFinancialStructureModal = ({
           getImportedExecutionAmount(item.label) ??
           (hasImportedExecutionPrefill
             ? undefined
-            : getPrefillAmount(item.id, item.label)),
+            : getRequestedAmount(item.id)),
       })),
     };
   }, [
@@ -609,52 +553,12 @@ const ProjectFinancialStructureModal = ({
     existingStructure,
     hasImportedExecutionPrefill,
     importedPrefill,
-    pricingExecutionCostPrefill,
   ]);
 
   useEffect(() => {
     if (!open) return;
     formRef.current?.setFieldsValue(initialValues);
   }, [initialValues, open]);
-
-  useEffect(() => {
-    // StepsForm can mount fields lazily. Ensure execution cost item amounts are prefilled
-    // once we have the latest pricing strategy numbers. Do not override user input.
-    if (!open || existingStructure?.id || hasImportedExecutionPrefill) return;
-    if (executionCostItemDefinitions.length === 0) return;
-    if (
-      Object.keys(pricingExecutionCostPrefill.byId).length === 0 &&
-      Object.keys(pricingExecutionCostPrefill.byLabel).length === 0
-    ) {
-      return;
-    }
-
-    const currentRows = (formRef.current?.getFieldValue("executionCostItems") ??
-      []) as ExecutionCostItemFormRow[];
-    const nextRows = executionCostItemDefinitions.map((definition, index) => {
-      const existing = currentRows[index];
-      const currentAmount = existing?.budgetAmount;
-      const shouldKeep =
-        typeof currentAmount === "number" && Number.isFinite(currentAmount);
-      const suggested =
-        pricingExecutionCostPrefill.byId[definition.id] ??
-        pricingExecutionCostPrefill.byLabel[definition.label];
-
-      return {
-        costTypeOptionId: definition.id,
-        budgetAmount:
-          shouldKeep ? currentAmount : typeof suggested === "number" ? suggested : undefined,
-      };
-    });
-
-    formRef.current?.setFieldsValue({ executionCostItems: nextRows });
-  }, [
-    executionCostItemDefinitions,
-    existingStructure?.id,
-    hasImportedExecutionPrefill,
-    open,
-    pricingExecutionCostPrefill,
-  ]);
 
   const notifyError = (content: string) => {
     if (typeof app?.message?.error === "function") {
@@ -744,22 +648,6 @@ const ProjectFinancialStructureModal = ({
           if (submitting) return false;
 
           const executionCostRows = values.executionCostItems ?? [];
-          const hasMissingExecutionBudget = executionCostItemDefinitions.some(
-            (definition) => {
-              const row = executionCostRows.find(
-                (item) => item.costTypeOptionId === definition.id,
-              );
-              return (
-                typeof row?.budgetAmount !== "number" ||
-                !Number.isFinite(row.budgetAmount)
-              );
-            },
-          );
-          if (hasMissingExecutionBudget) {
-            notifyError("请填写全部执行费用预算金额");
-            return false;
-          }
-
           const contractAmountTaxIncluded = roundMoney(
             values.contractAmountTaxIncluded,
           );
@@ -1020,54 +908,78 @@ const ProjectFinancialStructureModal = ({
         </StepsForm.StepForm>
 
         <StepsForm.StepForm title="执行费用">
-          <Form.Item label="执行费用明细" style={{ marginBottom: 20 }}>
+          <Form.Item label="执行费用明细" style={{ marginBottom: 24 }}>
             {executionCostItemDefinitions.length > 0 ? (
-              <ul
+              <div
                 style={{
-                  margin: 0,
-                  paddingInlineStart: 28,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 14,
+                  border: "1px solid #f0f0f0",
+                  borderRadius: 8,
+                  overflow: "hidden",
                 }}
               >
-                {executionCostItemDefinitions.map((item, index) => (
-                  <li key={item.id}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: executionCostGridColumns,
+                    gap: 16,
+                    padding: "10px 16px",
+                    background: "#fafafa",
+                    color: "rgba(0, 0, 0, 0.65)",
+                    fontWeight: 600,
+                  }}
+                >
+                  <span>费用类别</span>
+                  <span>项目经理申请</span>
+                  <span>财务预算（元）</span>
+                </div>
+                {executionCostItemDefinitions.map((item, index) => {
+                  const requestedAmount = estimation?.executionCostItems?.find(
+                    (costItem) => costItem.costTypeOptionId === item.id,
+                  )?.requestedAmount;
+                  const label = item.label.trim() === "其他" && estimation?.otherExecutionCostRemark?.trim()
+                    ? `${item.label}（${estimation.otherExecutionCostRemark.trim()}）`
+                    : item.label;
+                  return <div key={item.id}>
+                    <Form.Item
+                      name={["executionCostItems", index, "costTypeOptionId"]}
+                      initialValue={initialValues.executionCostItems?.[index]?.costTypeOptionId}
+                      hidden
+                    >
+                      <Input />
+                    </Form.Item>
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "170px minmax(220px, 1fr)",
-                        gap: 12,
+                        gridTemplateColumns: executionCostGridColumns,
                         alignItems: "center",
+                        gap: 16,
+                        padding: "10px 16px",
+                        borderTop: "1px solid #f0f0f0",
                       }}
                     >
-                      <Typography.Text>{item.label}</Typography.Text>
-                      <div>
-                        <Form.Item
-                          name={["executionCostItems", index, "costTypeOptionId"]}
-                          initialValue={
-                            initialValues.executionCostItems?.[index]?.costTypeOptionId
-                          }
-                          hidden
-                        >
-                          <Input />
-                        </Form.Item>
-                        <Form.Item
-                          name={["executionCostItems", index, "budgetAmount"]}
-                          initialValue={initialValues.executionCostItems?.[index]?.budgetAmount}
-                          style={{ marginBottom: 0 }}
-                          rules={[{ required: true, message: "请输入预算金额" }]}
-                        >
-                          <InputNumber min={0} precision={2} style={{ width: "100%" }} />
-                        </Form.Item>
-                      </div>
+                      <Typography.Text style={{ minWidth: 0 }}>{label}</Typography.Text>
+                      <Typography.Text type="secondary">
+                        {typeof requestedAmount === "number"
+                          ? roundMoney(requestedAmount).toLocaleString("zh-CN", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })
+                          : "-"}
+                      </Typography.Text>
+                      <Form.Item
+                        name={["executionCostItems", index, "budgetAmount"]}
+                        initialValue={initialValues.executionCostItems?.[index]?.budgetAmount}
+                        style={{ marginBottom: 0, width: "100%" }}
+                      >
+                        <InputNumber min={0} precision={2} style={{ width: "100%" }} />
+                      </Form.Item>
                     </div>
-                  </li>
-                ))}
-              </ul>
+                  </div>;
+                })}
+              </div>
             ) : (
               <Typography.Text type="secondary">
-                暂无执行费用类型
+                该立项申请没有执行费用类型
               </Typography.Text>
             )}
           </Form.Item>
@@ -1082,14 +994,15 @@ const ProjectFinancialStructureModal = ({
               );
 
               return (
-                <Form.Item label="执行费用成本">
-                  <InputNumber
-                    value={suggestedExecutionCost}
-                    disabled
-                    precision={2}
-                    style={{ width: "100%" }}
-                  />
-                </Form.Item>
+                <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 12 }}>
+                  <Typography.Text type="secondary">执行费用成本合计</Typography.Text>
+                  <Typography.Text strong>
+                    {suggestedExecutionCost.toLocaleString("zh-CN", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })} 元
+                  </Typography.Text>
+                </div>
               );
             }}
           </Form.Item>
