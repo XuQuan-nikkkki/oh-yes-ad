@@ -12,6 +12,7 @@ import zhCN from "antd/locale/zh_CN";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { useSelectOptionsStore } from "@/stores/selectOptionsStore";
 import { getDefaultSubmissionEnabled } from "@/lib/work-item-defaults";
+import { DEFAULT_COPY_REVIEWER_NAME } from "@/lib/work-item-reviewers";
 import { DEFAULT_COLOR } from "@/lib/constants";
 
 export type WorkItemType = "DESIGN" | "COPY" | "PROJECT_MANAGEMENT" | "NEW_MEDIA";
@@ -309,7 +310,10 @@ export const getDefaultWorkItemReviewerId = (
     )?.id;
   }
   if (type !== "COPY") return undefined;
-  return activeEmployees.find((employee) => employee.name.trim() === "诗敏")?.id;
+  return activeEmployees.find((employee) =>
+    employee.name.trim() === DEFAULT_COPY_REVIEWER_NAME &&
+    (employee.functionOption?.value ?? employee.function)?.trim() === "品牌组",
+  )?.id;
 };
 
 export const WorkItemFormFields = ({

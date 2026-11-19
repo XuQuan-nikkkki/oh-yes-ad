@@ -4,12 +4,16 @@ import { parse } from "dotenv";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { getDefaultSubmissionEnabled } from "../src/lib/work-item-defaults";
+import { DEFAULT_COPY_REVIEWER_NAME } from "../src/lib/work-item-reviewers";
 import { DEFERRED_TASK_IDS } from "./lib/deferred-migration-tasks";
 
 config();
 const test = process.argv.includes("--test");
 const production = process.argv.includes("--production");
-if (test && production) throw new Error("--test 与 --production 不能同时使用");
+const deployment = process.argv.includes("--deployment");
+if ([test, production, deployment].filter(Boolean).length > 1) {
+  throw new Error("--test、--production 与 --deployment 不能同时使用");
+}
 const reviewerArgs = process.argv.filter((arg) => arg.startsWith("--copy-reviewer-id="));
 if (reviewerArgs.length > 1) throw new Error("只能指定一个文案审核人");
 const copyReviewerId = reviewerArgs[0]?.slice("--copy-reviewer-id=".length);
@@ -252,7 +256,7 @@ const main = async () => {
   if (stats.blockingSegments.length || stats.blockingTasks.length) {
     throw new Error("存在未处理的环节或任务异常；本次只允许跳过明确列出的 6 个任务");
   }
-  if (production && stats.deferredTaskIds.length !== deferredTaskIds.size) {
+  if ((production || deployment) && stats.deferredTaskIds.length !== deferredTaskIds.size) {
     throw new Error("生产库中待暂缓任务数量不符，请重新核对任务清单");
   }
   await prisma.$transaction(async (tx) => {
@@ -284,8 +288,8 @@ const main = async () => {
           })
         : tx.employee.findFirst({
             where: {
+              name: DEFAULT_COPY_REVIEWER_NAME,
               functionOption: { value: "品牌组" },
-              positionOption: { value: "文案策划" },
               NOT: { employmentStatusOption: { value: "离职" } },
             },
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -301,7 +305,7 @@ const main = async () => {
       }),
     ]);
     if (!designReviewer) throw new Error("找不到在职美术指导，无法迁移设计工作项");
-    if (!copyReviewer) throw new Error("找不到可用的品牌组文案审核人；请显式传入 --copy-reviewer-id=<员工ID>");
+    if (!copyReviewer) throw new Error(`找不到在职品牌组审核人「${DEFAULT_COPY_REVIEWER_NAME}」；请核对员工资料或显式传入 --copy-reviewer-id=<员工ID>`);
     if (!newMediaReviewer) throw new Error("找不到在职新媒体职能员工，无法迁移新媒体工作项");
 
     for (const segment of segments) {

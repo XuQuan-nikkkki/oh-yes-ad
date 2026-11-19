@@ -97,6 +97,7 @@ model SelectOption {
   projectsByStage                             Project[]                                    @relation("ProjectStage")
   projectSegmentsByStatus                     ProjectSegment[]                             @relation("ProjectSegmentStatus")
   projectTasksByStatus                        ProjectTask[]                                @relation("ProjectTaskStatus")
+  projectDocumentsByType                      ProjectDocument[]                            @relation("ProjectDocumentType")
   projectMilestonesByType                     ProjectMilestone[]                           @relation("ProjectMilestoneType")
   projectMilestonesByMethod                   ProjectMilestone[]                           @relation("ProjectMilestoneMethod")
   projectCostEstimationsByExecutionCostType   ProjectCostEstimation[]                      @relation("ProjectCostEstimationExecutionCostTypes")
@@ -473,6 +474,7 @@ model Project {
   segments ProjectSegment[]
   briefs   Brief[]
 
+  documents           ProjectDocument[]
   vendors             Vendor[]                    @relation("ProjectVendors")
   milestones          ProjectMilestone[]
   costEstimations     ProjectCostEstimation[]
@@ -1175,6 +1177,30 @@ model ProjectTask {
   @@index([ownerId])
 }
 
+// 历史项目资料已从界面移除；保留物理表，避免部署同步时删除旧数据。
+model ProjectDocument {
+  id           String  @id @default(uuid())
+  notionPageId String? @unique
+
+  name         String
+  typeOptionId String?
+  typeOption   SelectOption? @relation("ProjectDocumentType", fields: [typeOptionId], references: [id])
+  date         DateTime?
+  isFinal      Boolean       @default(false)
+  internalLink String?
+
+  projectId   String
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestoneId String?
+  milestone   ProjectMilestone? @relation("MilestoneDocuments", fields: [milestoneId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([milestoneId])
+}
+
 model Vendor {
   id           String  @id @default(uuid())
   notionPageId String? @unique
@@ -1271,6 +1297,7 @@ model ProjectMilestone {
   internalParticipants Employee[]      @relation("MilestoneInternalParticipants")
   vendorParticipants   Vendor[]        @relation("MilestoneVendorParticipants")
   clientParticipants   ClientContact[] @relation("MilestoneClientParticipants")
+  documents            ProjectDocument[] @relation("MilestoneDocuments")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
