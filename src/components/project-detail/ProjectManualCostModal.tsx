@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Alert, Form, Input, InputNumber, Modal } from "antd";
+import { Alert, Form, Input, InputNumber, Modal, Space } from "antd";
 import type { Project, ProjectManualCost } from "@/types/projectDetail";
 
 type Props = {
@@ -203,14 +203,18 @@ const ProjectManualCostModal = ({
               gap: 16,
             }}
           >
-            <Form.Item<ManualCostFormValues> label={`${label}金额`} name={amountKey}>
-              <InputNumber
-                style={{ width: "100%" }}
-                min={0}
-                precision={2}
-                placeholder={`请输入${label}金额`}
-                addonAfter="元"
-              />
+            <Form.Item label={`${label}金额`}>
+              <Space.Compact style={{ width: "100%" }}>
+                <Form.Item<ManualCostFormValues> name={amountKey} noStyle>
+                  <InputNumber
+                    style={{ flex: 1, minWidth: 0 }}
+                    min={0}
+                    precision={2}
+                    placeholder={`请输入${label}金额`}
+                  />
+                </Form.Item>
+                <Input disabled value="元" style={{ width: 44, textAlign: "center" }} />
+              </Space.Compact>
             </Form.Item>
             <Form.Item<ManualCostFormValues> label={`${label}备注`} name={remarkKey}>
               <Input.TextArea
