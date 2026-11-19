@@ -142,6 +142,9 @@ const includeDetail = {
         select: {
           id: true,
           name: true,
+          salary: true,
+          socialSecurity: true,
+          providentFund: true,
           functionOption: { select: { value: true, color: true } },
           employmentStatusOption: { select: { value: true, color: true } },
         },
