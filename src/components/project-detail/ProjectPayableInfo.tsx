@@ -270,6 +270,18 @@ const ProjectPayableInfo = forwardRef<
       });
     }, [employeesFull, project.members]);
 
+    const defaultOwnerFromProject = useMemo(() => {
+      const ownerId = project.owner?.id ?? "";
+      if (!ownerId) return undefined;
+      return activeProjectMemberOptions.some((group) =>
+        Array.isArray(group.options)
+          ? group.options.some((item) => item.value === ownerId)
+          : group.value === ownerId,
+      )
+        ? ownerId
+        : undefined;
+    }, [activeProjectMemberOptions, project.owner?.id]);
+
     const vendorOptions = useMemo(
       () =>
         (vendors ?? [])
@@ -583,13 +595,13 @@ const ProjectPayableInfo = forwardRef<
               remarkNeedsAttention: editingPlan.remarkNeedsAttention,
             }
           : {
-              ownerEmployeeId: undefined,
+              ownerEmployeeId: defaultOwnerFromProject,
               contractAmount: undefined,
               hasCustomerCollection: false,
               remark: undefined,
               remarkNeedsAttention: false,
             },
-      [editingPlan, planModalMode],
+      [defaultOwnerFromProject, editingPlan, planModalMode],
     );
 
     const handleSubmitPlan = async (values: ProjectPayablePlanFormValues) => {
