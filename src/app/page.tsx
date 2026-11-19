@@ -9,11 +9,14 @@ import isoWeek from "dayjs/plugin/isoWeek";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import HomeSiteMap from "@/components/home/HomeSiteMap";
 import MilestoneCard, { type MilestoneCardRow } from "@/components/project-detail/MilestoneCard";
-import ProjectBriefProgressContent, { type ProjectBrief } from "@/components/project-detail/ProjectBriefProgressContent";
+import ProjectBriefProgressContent, { type ProjectBrief, type ProjectBriefWorkItem } from "@/components/project-detail/ProjectBriefProgressContent";
+import WorkItemEditModal from "@/components/project-detail/WorkItemEditModal";
+import type { WorkItemEditPayload } from "@/components/project-detail/WorkItemEditForm";
 import WorkLogsCalendar from "@/components/work-logs/WorkLogsCalendar";
 import { getActualWorkEntryHours } from "@/lib/actual-workdays";
 import { canManageProjectResources } from "@/lib/role-permissions";
 import { getRoleCodesFromUser, useAuthStore } from "@/stores/authStore";
+import { useEmployeesStore } from "@/stores/employeesStore";
 import { useNavigationStore } from "@/stores/navigationStore";
 import "./home-workbench.css";
 
@@ -48,6 +51,8 @@ function HomePageContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentUser = useAuthStore((state) => state.currentUser);
+  const employees = useEmployeesStore((state) => state.employees);
+  const fetchEmployees = useEmployeesStore((state) => state.fetchEmployees);
   const setNavigating = useNavigationStore((state) => state.setNavigating);
   const roleCodes = useMemo(() => getRoleCodesFromUser(currentUser), [currentUser]);
   const canManageProject = canManageProjectResources(roleCodes);
@@ -59,6 +64,7 @@ function HomePageContent() {
   const [showAllWork, setShowAllWork] = useState(false);
   const [selectedWork, setSelectedWork] = useState<HomeWorkItem | null>(null);
   const [selectedBrief, setSelectedBrief] = useState<ProjectBrief | null>(null);
+  const [editingWorkItem, setEditingWorkItem] = useState<ProjectBriefWorkItem | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [createWorkLogRequest, setCreateWorkLogRequest] = useState(0);
   const [messageApi, contextHolder] = message.useMessage();
@@ -114,6 +120,26 @@ function HomePageContent() {
     setSelectedBrief(await response.json() as ProjectBrief);
     await loadHome();
   };
+  const openWorkItemEditor = async (workItem: ProjectBriefWorkItem) => {
+    await fetchEmployees();
+    setEditingWorkItem(workItem);
+  };
+  const saveWorkItem = async (payload: WorkItemEditPayload) => {
+    if (!editingWorkItem) return;
+    try {
+      const response = await fetch(`/api/work-items/${editingWorkItem.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error((await response.text()) || "更新工作项失败");
+      messageApi.success("工作项已更新");
+      setEditingWorkItem(null);
+      await refreshBrief();
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : "保存工作项失败，请重试");
+    }
+  };
   const openCalendar = (record = false) => {
     setDrawer("work-logs");
     if (record) setCreateWorkLogRequest((value) => value + 1);
@@ -168,7 +194,8 @@ function HomePageContent() {
       {canViewWork ? <Card className="home-panel home-hours-panel" title="本周工时" extra={<Button type="link" onClick={() => openCalendar()}>查看日历 <ArrowRightOutlined /></Button>}><p className="home-hours-period">{weekStart.format("M月D日")} - {weekEnd.subtract(1, "day").format("M月D日")}</p><div className="home-hours-total"><strong>{hoursText(totalHours)}</strong><b>小时</b><span>已记录</span></div><div className="home-hours-chart">{dailyHours.map((item) => <button key={item.date} className={item.date === today ? "is-today" : undefined} aria-label={`${dayjs(item.date).format("M月D日")}，已记录 ${hoursText(item.hours)} 小时，查看日历`} onClick={() => { const params = new URLSearchParams(searchParams.toString()); params.set("tab", "work-logs"); params.set("workLogView", "timeGridDay"); params.set("workLogDate", item.date); router.replace(`${pathname}?${params.toString()}`, { scroll: false }); }}><span>{item.hours ? `${hoursText(item.hours)}h` : "—"}</span><i><b style={{ height: `${item.hours ? Math.max(8, item.hours / Math.max(8, ...dailyHours.map((day) => day.hours)) * 48) : 4}px`, opacity: item.hours ? 1 : 0.2 }} /></i><small>{dayjs(item.date).format("dd D")}</small></button>)}</div><div className="home-project-hours"><div className="home-project-hours-title">已记项目 <small>{projectHours.length} 个</small></div>{projectHours.length ? projectHours.map(({ project, hours }) => <div className="home-project-hours-row" key={project.id}><i className="home-project-hours-dot" aria-hidden="true" /><span>{project.name}</span><strong>{hoursText(hours)} 小时</strong></div>) : <p className="home-hours-empty">本周还没有工时记录</p>}</div></Card> : null}</div>
     </div></Spin>
 
-    <Drawer title="项目需求单" open={Boolean(selectedWork)} onClose={() => { setSelectedWork(null); setSelectedBrief(null); }} size="min(1060px, 100vw)" destroyOnHidden extra={selectedWork && canViewWork ? <Button icon={<ClockCircleOutlined />} onClick={() => openCalendar(true)}>记录工时</Button> : null}>{selectedWork ? <><p className="home-drawer-path">{selectedWork.brief.project.name}　›　需求单</p><Spin spinning={briefLoading}>{selectedBrief ? <ProjectBriefProgressContent key={selectedWork.id} briefs={[selectedBrief]} project={selectedWork.brief.project} initialExpandedWorkItemId={selectedWork.id} includeCompletedWorkItems canManagePlannedWork={canManageProject} onEditBrief={canManageProject ? () => router.push(`/projects/${selectedWork.brief.project.id}`) : undefined} onEditWorkItem={canManageProject ? () => router.push(`/projects/${selectedWork.brief.project.id}`) : undefined} onAfterSubmissionChange={refreshBrief} onAfterStatusChange={refreshBrief} onAfterPlannedWorkChange={refreshBrief} onAfterAssignmentChange={refreshBrief} /> : null}</Spin></> : null}</Drawer>
+    <Drawer title="项目需求单" open={Boolean(selectedWork)} onClose={() => { setEditingWorkItem(null); setSelectedWork(null); setSelectedBrief(null); }} size="min(1060px, 100vw)" destroyOnHidden extra={selectedWork && canViewWork ? <Button icon={<ClockCircleOutlined />} onClick={() => openCalendar(true)}>记录工时</Button> : null}>{selectedWork ? <><p className="home-drawer-path">{selectedWork.brief.project.name}　›　需求单</p><Spin spinning={briefLoading}>{selectedBrief ? <ProjectBriefProgressContent key={selectedWork.id} briefs={[selectedBrief]} project={selectedWork.brief.project} initialExpandedWorkItemId={selectedWork.id} includeCompletedWorkItems canManagePlannedWork={canManageProject} onEditBrief={canManageProject ? () => router.push(`/projects/${selectedWork.brief.project.id}`) : undefined} onEditWorkItem={canManageProject ? (workItem) => { void openWorkItemEditor(workItem); } : undefined} onAfterSubmissionChange={refreshBrief} onAfterStatusChange={refreshBrief} onAfterPlannedWorkChange={refreshBrief} onAfterAssignmentChange={refreshBrief} /> : null}</Spin></> : null}</Drawer>
+    {editingWorkItem ? <WorkItemEditModal open workItem={editingWorkItem} employees={employees} projectOwnerId={data?.projects.find((project) => project.id === selectedWork?.brief.project.id)?.ownerId} onCancel={() => setEditingWorkItem(null)} onSubmit={saveWorkItem} /> : null}
     <Drawer title="实际工时" open={drawer === "work-logs" && canViewWork} onClose={() => setDrawer(null)} size="min(1220px, 100vw)" extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateWorkLogRequest((value) => value + 1)}>记录工时</Button>} destroyOnHidden>{drawer === "work-logs" && <WorkLogsCalendar employee={currentUser ? { id: currentUser.id, name: currentUser.name } : null} createRequest={createWorkLogRequest} onEntryChanged={() => void loadHome()} />}</Drawer>
     <Drawer title="全部功能" open={drawer === "site-map"} onClose={() => setDrawer(null)} size="min(900px, 100vw)" destroyOnHidden><HomeSiteMap onNavigate={(path) => { setNavigating(true); router.push(path); }} /></Drawer>
     <Drawer title={`参与项目 · ${data?.projects.length ?? 0}`} open={drawer === "participation" && canViewWork} onClose={() => setDrawer(null)} size="min(720px, 100vw)" destroyOnHidden><div className="home-project-list">{data?.projects.length ? data.projects.map((project) => <div className="home-project-row" key={project.id}><div><strong>{project.name}</strong><small>{project.personalOpenWorkItemCount ? `${project.personalOpenWorkItemCount} 项未完成工作项` : "暂无个人工作项"}</small></div>{project.statusOption?.value ? <Tag color={project.statusOption.color ?? undefined}>{project.statusOption.value}</Tag> : null}{workItems.find((item) => item.brief.project.id === project.id && item.status !== "completed") ? <Button size="small" onClick={() => { const first = workItems.find((item) => item.brief.project.id === project.id && item.status !== "completed"); if (first) { setDrawer(null); void openWork(first); } }}>打开工作项</Button> : null}<Button size="small" onClick={() => router.push(`/projects/${project.id}`)}>查看项目</Button></div>) : <Empty description="暂无参与项目" />}</div></Drawer>
