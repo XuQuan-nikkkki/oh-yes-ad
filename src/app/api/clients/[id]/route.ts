@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { NextRequest } from "next/server";
 import { requireCrmWritePermission } from "@/lib/api-permissions";
+import { findClientWithSameName, normalizeClientName } from "@/lib/client-name";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -43,11 +44,24 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
 
   const body = await req.json();
+  const name = normalizeClientName(body?.name);
+  if (!name) return new Response("请输入客户名称", { status: 400 });
+  const existingClient = await prisma.client.findUnique({
+    where: { id },
+    select: { name: true },
+  });
+  if (!existingClient) return new Response("客户不存在", { status: 404 });
+  if (
+    existingClient.name.trim().toLowerCase() !== name.toLowerCase() &&
+    (await findClientWithSameName(prisma, name, id))
+  ) {
+    return new Response("客户名称已存在", { status: 409 });
+  }
 
   const client = await prisma.client.update({
     where: { id },
     data: {
-      name: body.name,
+      name,
       industryOptionId: body.industryOptionId,
     },
     include: {
