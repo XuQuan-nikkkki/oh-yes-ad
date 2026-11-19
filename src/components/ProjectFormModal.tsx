@@ -28,6 +28,7 @@ type Project = {
   stage?: string | null;
   clientId?: string | null;
   ownerId?: string | null;
+  owner?: { id: string; name: string } | null;
   startDate?: string | null;
   endDate?: string | null;
 };
@@ -141,6 +142,9 @@ const ProjectFormModal = ({
   const [currentTypeCode, setCurrentTypeCode] = useState<string | null>(
     normalizeProjectTypeCode(initialValues?.type ?? projectType),
   );
+  const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(
+    initialValues?.ownerId ?? null,
+  );
   const baseFormRef = useRef<FormInstance<ProjectFormValues> | undefined>(
     undefined,
   );
@@ -197,6 +201,7 @@ const ProjectFormModal = ({
   const projectOwnerOptions = useMemo<DefaultOptionType[]>(() => {
     const grouped = new Map<string, Employee[]>();
     employees.forEach((employee) => {
+      if (isResignedEmployee(employee) && employee.id !== selectedOwnerId) return;
       const label = getFunctionGroupLabel(employee);
       const list = grouped.get(label) ?? [];
       list.push(employee);
@@ -231,14 +236,17 @@ const ProjectFormModal = ({
           })),
       }))
       .filter((group) => Array.isArray(group.options) && group.options.length > 0);
-  }, [employees]);
+  }, [employees, selectedOwnerId]);
   const projectOwnerLabelMap = useMemo(() => {
     const map = new Map<string, string>();
     employees.forEach((employee) => {
-      map.set(employee.id, getOwnerOptionLabel(employee));
+      map.set(employee.id, employee.name);
     });
     if (initialValues?.ownerId && !map.has(initialValues.ownerId)) {
-      map.set(initialValues.ownerId, initialValues.ownerId);
+      map.set(
+        initialValues.ownerId,
+        initialValues.owner?.name ?? initialValues.ownerId,
+      );
     }
     return map;
   }, [employees, initialValues]);
@@ -349,6 +357,7 @@ const ProjectFormModal = ({
       open={open}
       afterOpenChange={(nextOpen) => {
         if (!nextOpen) return;
+        setSelectedOwnerId(initialValues?.ownerId ?? null);
         setCurrentTypeCode(
           normalizeProjectTypeCode(initialValues?.type ?? projectType),
         );
@@ -444,6 +453,7 @@ const ProjectFormModal = ({
                   labelRender={renderEmployeeSelectedLabel(
                     projectOwnerLabelMap,
                   )}
+                  onChange={(ownerId) => setSelectedOwnerId(ownerId ?? null)}
                 />
               </ProForm.Item>
             </Col>
