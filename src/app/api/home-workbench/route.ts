@@ -34,7 +34,20 @@ export async function GET(request: NextRequest) {
       orderBy: { name: "asc" },
     }),
     prisma.workItem.findMany({
-      where: { assigneeId: employeeId, brief: { project: { isArchived: false } } },
+      where: {
+        assigneeId: employeeId,
+        brief: { project: { isArchived: false } },
+        OR: [
+          { status: { not: "completed" } },
+          {
+            status: "completed",
+            finalAt: {
+              gte: new Date(`${weekStart}T00:00:00.000Z`),
+              lt: new Date(`${weekEnd}T00:00:00.000Z`),
+            },
+          },
+        ],
+      },
       select: {
         id: true, title: true, type: true, status: true, submissionEnabled: true,
         firstDraftAt: true, revisionAt: true, finalAt: true,
