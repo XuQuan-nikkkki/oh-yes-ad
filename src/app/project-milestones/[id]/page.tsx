@@ -337,19 +337,10 @@ export default function Page() {
     [id, refreshAll],
   );
 
-  const onEdit = () => {
-    if (!canManageProject) return;
-    if (!data) return;
-    if (projects.length === 0) {
-      void fetchProjects();
-    }
-    setOpen(true);
-  };
-
   const ensureProjectContextLoaded = useCallback(async () => {
     const projectId = data?.project?.id;
     if (!projectId) return;
-    if (contextProjectId === projectId) return;
+    if (contextProjectId === projectId) return contextClientId;
 
     const projectRes = await fetch(`/api/projects/${projectId}`);
     if (!projectRes.ok) {
@@ -371,24 +362,26 @@ export default function Page() {
       clientContacts: [],
     });
     setContextProjectId(projectId);
-    setContextClientId(project.client?.id ?? null);
+    const clientId = project.client?.id ?? null;
+    setContextClientId(clientId);
     setClientContactsProjectId(null);
-  }, [contextProjectId, data?.project?.id]);
+    return clientId;
+  }, [contextClientId, contextProjectId, data?.project?.id]);
 
   const ensureClientContactsLoaded = useCallback(async () => {
     const projectId = data?.project?.id;
     if (!projectId) return;
 
-    await ensureProjectContextLoaded();
+    const clientId = await ensureProjectContextLoaded();
 
     if (clientContactsProjectId === projectId) return;
-    if (!contextClientId) {
+    if (!clientId) {
       setClientContactsProjectId(projectId);
       return;
     }
 
     const clientRes = await fetch(
-      `/api/client-contacts?clientId=${contextClientId}`,
+      `/api/client-contacts?clientId=${clientId}`,
     );
     const clientContacts = clientRes.ok
       ? ((await clientRes.json()) as ClientContact[])
@@ -400,10 +393,17 @@ export default function Page() {
     setClientContactsProjectId(projectId);
   }, [
     clientContactsProjectId,
-    contextClientId,
     data?.project?.id,
     ensureProjectContextLoaded,
   ]);
+
+  const onEdit = () => {
+    if (!canManageProject || !data) return;
+    if (projects.length === 0) {
+      void fetchProjects();
+    }
+    void ensureClientContactsLoaded().then(() => setOpen(true));
+  };
 
   const onSubmit = async (values: ProjectMilestoneFormPayload) => {
     try {
@@ -415,6 +415,7 @@ export default function Page() {
         endAt: values.endAt ?? null,
         datePrecision: values.datePrecision ?? "DATE",
         location: values.location ?? null,
+        detail: values.detail ?? null,
         method: values.method ?? null,
         internalParticipantIds: values.internalParticipantIds,
         clientParticipantIds: values.clientParticipantIds,
