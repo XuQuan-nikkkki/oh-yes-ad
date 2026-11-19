@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Empty, Tag } from "antd";
+import { Button, Empty, Tag } from "antd";
 import dayjs from "dayjs";
 import AppLink from "@/components/AppLink";
 import SelectOptionTag from "@/components/SelectOptionTag";
@@ -39,9 +39,12 @@ const clientNames = (milestone: Milestone) =>
     person.title ? `${person.name}（${person.title}）` : person.name,
   ).join("、") ?? "";
 
-type Props = { milestones: NonNullable<Project["milestones"]> };
+type Props = {
+  milestones: NonNullable<Project["milestones"]>;
+  onCreate?: () => void;
+};
 
-export default function ProjectWorkspaceMilestones({ milestones }: Props) {
+export default function ProjectWorkspaceMilestones({ milestones, onCreate }: Props) {
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const sortedMilestones = useMemo(() => [...milestones].sort((left, right) => {
     const leftDate = dateValue(left);
@@ -52,7 +55,10 @@ export default function ProjectWorkspaceMilestones({ milestones }: Props) {
   }), [milestones]);
 
   return <>
-    <h2 className={styles.heading}>里程碑</h2>
+    <div className={styles.toolbar}>
+      <h2 className={styles.heading}>里程碑</h2>
+      {onCreate && <Button type="primary" onClick={onCreate}>新增里程碑</Button>}
+    </div>
     {sortedMilestones.length === 0 ? <div className={styles.empty}><Empty description="暂无里程碑" /></div> :
       <ol className={styles.timeline}>
         {sortedMilestones.map((milestone) => {

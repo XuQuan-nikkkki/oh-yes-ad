@@ -74,6 +74,7 @@ type Props = {
   actualWorkEntries: NonNullable<Project["actualWorkEntries"]>;
   briefProgressContent: ReactNode;
   onCreateBrief: () => void;
+  onCreateMilestone: () => void;
   employees: Employee[];
   canManageProject: boolean;
   canManageReimbursements: boolean;
@@ -148,6 +149,7 @@ export default function ProjectDetailWorkspaceComparison({
   actualWorkEntries,
   briefProgressContent,
   onCreateBrief,
+  onCreateMilestone,
   employees,
   canManageProject,
   canManageReimbursements,
@@ -362,7 +364,7 @@ export default function ProjectDetailWorkspaceComparison({
             </div></div> : activeExecution === "members" ? <ProjectWorkspaceMembers projectId={projectId} members={members} employees={employees}
               canManageProject={canManageProject} onMembersChanged={onMembersChanged} /> : activeExecution === "vendors" ?
               <ProjectWorkspaceVendors projectId={projectId} vendors={vendors} /> : activeExecution === "milestones" ?
-              <ProjectWorkspaceMilestones milestones={milestones} /> : activeExecution === "progress" ?
+              <ProjectWorkspaceMilestones milestones={milestones} onCreate={canManageProject ? onCreateMilestone : undefined} /> : activeExecution === "progress" ?
               <div>
                 <div className={styles.progressToolbar}>
                   <h2>需求单 / 工作项</h2>

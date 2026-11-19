@@ -805,6 +805,7 @@ const ProjectDetailPage = () => {
             actualWorkEntries={project.actualWorkEntries ?? []}
             briefProgressContent={briefProgressContent}
             onCreateBrief={openCreateBrief}
+            onCreateMilestone={() => setActiveModal({ type: "milestone", editing: null })}
             employees={employees}
             canManageProject={canManageProject}
             canManageReimbursements={canManageReimbursements}
@@ -982,6 +983,20 @@ const ProjectDetailPage = () => {
           }}
         />
       </Modal>
+
+      {!isInternalProject && <ProjectMilestoneAction
+        projectId={projectId}
+        visible={false}
+        canManageProject={canManageProject}
+        project={project}
+        employees={employees}
+        clientContacts={clientContacts}
+        open={activeModal.type === "milestone"}
+        editing={activeModal.type === "milestone" ? activeModal.editing : null}
+        onOpenCreate={() => setActiveModal({ type: "milestone", editing: null })}
+        onCancel={() => setActiveModal({ type: null })}
+        onSaved={fetchProject}
+      />}
 
       <ProjectActualWorkAction
         projectId={projectId}
