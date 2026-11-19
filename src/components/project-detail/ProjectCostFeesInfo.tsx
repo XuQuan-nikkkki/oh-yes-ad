@@ -77,7 +77,7 @@ export default function ProjectCostFeesInfo({ estimation, agencyFeeAmount }: Pro
             {
               title: null,
               value: typeof agencyFeeAmount === "number"
-                ? `按最终报价计算：${formatAmount(agencyFeeAmount)} 元`
+                ? `${formatAmount(agencyFeeAmount)} 元`
                 : "按最终报价计算",
             },
             {
