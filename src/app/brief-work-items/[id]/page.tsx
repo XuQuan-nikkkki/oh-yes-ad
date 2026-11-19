@@ -153,7 +153,7 @@ export default function WorkItemDetailPage() {
         </Descriptions>
       </Card>
       {data.assignmentChanges?.length ? (
-        <Card title="执行人交接记录">
+        <Card title="执行人指派与交接记录">
           <WorkItemAssignmentHistory
             changes={data.assignmentChanges}
             variant="detail"

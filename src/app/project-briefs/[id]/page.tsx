@@ -305,7 +305,7 @@ export default function BriefDetailPage() {
           {activeWorkItem.assignmentChanges?.length ? (
             <div style={{ marginTop: 28 }}>
               <Typography.Title level={5} style={{ marginBottom: 20 }}>
-                执行人交接记录
+                执行人指派与交接记录
               </Typography.Title>
               <WorkItemAssignmentHistory
                 changes={activeWorkItem.assignmentChanges}

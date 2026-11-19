@@ -67,7 +67,7 @@ export const WorkItemAssignmentHistory = ({
     <div className={`brief-work-item-assignment-history is-${variant}`}>
       {variant === "embedded" ? (
         <div className="brief-work-item-assignment-history-title">
-          <Typography.Text className="brief-work-item-section-title">执行人交接记录</Typography.Text>
+          <Typography.Text className="brief-work-item-section-title">执行人指派与交接记录</Typography.Text>
         </div>
       ) : null}
       <Timeline items={items} />

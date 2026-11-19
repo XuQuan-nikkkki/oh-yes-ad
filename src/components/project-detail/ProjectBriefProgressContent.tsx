@@ -270,13 +270,13 @@ const WorkItemDetails = ({
           { key: "planned-work", label: `计划工时 · ${Number(totalPlannedDays.toFixed(4))}d`, children: plannedWorkSection },
           {
             key: "assignment",
-            label: `执行人交接 · ${item.assignmentChanges?.length ?? 0}次`,
+            label: `执行人指派与交接 · ${item.assignmentChanges?.length ?? 0}条`,
             children: (
               <div className="brief-work-item-assignment-panel">
                 {item.assignmentChanges?.length ? (
                   <WorkItemAssignmentHistory changes={item.assignmentChanges} variant="detail" />
                 ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无执行人交接记录" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无执行人指派与交接记录" />
                 )}
               </div>
             ),
