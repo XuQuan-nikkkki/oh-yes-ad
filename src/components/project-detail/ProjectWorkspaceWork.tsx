@@ -21,6 +21,8 @@ type CalculatedEntry = Entry & { hours: number; dailyHours: number; days: number
 type Props = {
   entries: Entry[];
   members: Member[];
+  view: "records" | "analysis";
+  onViewChange: (view: "records" | "analysis") => void;
   onCreate: () => void;
   onEdit: (entry: Entry) => void;
   onDelete: (entry: Entry) => Promise<void>;
@@ -33,12 +35,13 @@ const formatHours = (value: number) => value.toFixed(1);
 export default function ProjectWorkspaceWork({
   entries,
   members,
+  view,
+  onViewChange,
   onCreate,
   onEdit,
   onDelete,
   canManageEntry,
 }: Props) {
-  const [view, setView] = useState<"records" | "analysis">("records");
   const [search, setSearch] = useState("");
   const [employeeId, setEmployeeId] = useState<string | undefined>();
   const [page, setPage] = useState(1);
@@ -120,7 +123,7 @@ export default function ProjectWorkspaceWork({
     setEmployeeId(id.startsWith("unknown-") ? undefined : id);
     setSearch("");
     setPage(1);
-    setView("records");
+    onViewChange("records");
   };
 
   return <div className={styles.work}>
@@ -131,7 +134,7 @@ export default function ProjectWorkspaceWork({
     <Segmented
       value={view}
       options={[{ label: "工时记录", value: "records" }, { label: "工时分析", value: "analysis" }]}
-      onChange={(value) => setView(value as "records" | "analysis")}
+      onChange={(value) => onViewChange(value as "records" | "analysis")}
     />
 
     {view === "records" ? <div className={styles.records}>

@@ -23,6 +23,8 @@ type Props = {
   projectName: string;
   employees: { id: string; name: string }[];
   canManageReimbursements: boolean;
+  view: "summary" | "records";
+  onViewChange: (view: "summary" | "records") => void;
 };
 
 const toNumber = (value: number | string | null) => {
@@ -32,8 +34,7 @@ const toNumber = (value: number | string | null) => {
 
 const money = (value: number) => `${value.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元`;
 
-export default function ProjectWorkspaceReimbursements({ projectId, projectName, employees, canManageReimbursements }: Props) {
-  const [view, setView] = useState<"summary" | "records">("summary");
+export default function ProjectWorkspaceReimbursements({ projectId, projectName, employees, canManageReimbursements, view, onViewChange }: Props) {
   const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
   const [reimbursements, setReimbursements] = useState<Reimbursement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,7 +94,7 @@ export default function ProjectWorkspaceReimbursements({ projectId, projectName,
           <div><span>剩余可报销</span><strong className={summary.remaining < 0 ? styles.overBudget : ""}>{money(summary.remaining)}</strong><small>预算减去全部已报销金额</small></div>
         </div>
 
-        <Segmented className={styles.viewSwitch} value={view} onChange={(value) => setView(value as typeof view)} options={[{ label: "预算汇总", value: "summary" }, { label: "报销明细", value: "records" }]} />
+        <Segmented className={styles.viewSwitch} value={view} onChange={(value) => onViewChange(value as typeof view)} options={[{ label: "预算汇总", value: "summary" }, { label: "报销明细", value: "records" }]} />
 
         {view === "summary" ? <section className={styles.panel}>
           <div className={styles.panelHeader}><h3>按执行费用类别</h3></div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { Button, Card, Modal, Popconfirm, Space, message } from "antd";
-import { useParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ProCard } from "@ant-design/pro-components";
 import DetailPageContainer from "@/components/DetailPageContainer";
 import ProjectFormModal from "@/components/ProjectFormModal";
@@ -71,7 +71,24 @@ type ActiveModalState =
 
 const ProjectDetailPage = () => {
   const params = useParams();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const projectId = params.id as string;
+  const tabParam = searchParams.get("tab");
+  const executionTopTab = tabParam === "milestones" || tabParam === "progress" || tabParam === "work"
+    ? tabParam : "members";
+  const actualWorkView = searchParams.get("view") === "analysis" ? "analysis" : "records";
+  const openInternalTab = (tab: string, view?: string) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("workspace", "execution");
+    next.set("tab", tab);
+    if (view) next.set("view", view);
+    else next.delete("view");
+    next.delete("step");
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  };
+  const setActualWorkView = (view: "records" | "analysis") => openInternalTab("work", view);
   const cachedProject = useProjectsStore((state) => state.byId[projectId]);
   const upsertProjects = useProjectsStore((state) => state.upsertProjects);
   const removeProjectFromStore = useProjectsStore((state) => state.removeProject);
@@ -105,9 +122,6 @@ const ProjectDetailPage = () => {
   });
   const [deletingProject, setDeletingProject] = useState(false);
   const [addingFunction, setAddingFunction] = useState<string | null>(null);
-  const [executionTopTab, setExecutionTopTab] = useState<
-    "members" | "vendors" | "milestones" | "progress" | "work"
-  >("members");
   const [realtimeCostDownload, setRealtimeCostDownload] = useState<
     (() => void) | null
   >(null);
@@ -115,9 +129,6 @@ const ProjectDetailPage = () => {
   const [deletingManualCost, setDeletingManualCost] = useState(false);
   const [financialStructureRefreshKey, setFinancialStructureRefreshKey] =
     useState(0);
-  const [actualWorkView, setActualWorkView] = useState<"records" | "analysis">(
-    "records",
-  );
   const [workEntriesRefreshKey, setWorkEntriesRefreshKey] = useState(0);
   const handleRealtimeCostDownloadReady = useCallback(
     (downloadFn: (() => void) | null) => {
@@ -371,12 +382,6 @@ const ProjectDetailPage = () => {
     project?.client?.id,
   ]);
 
-  useEffect(() => {
-    if (!isInternalProject) return;
-    if (executionTopTab !== "vendors") return;
-    setExecutionTopTab("members");
-  }, [executionTopTab, isInternalProject]);
-
   const milestoneCount = project?.milestones?.length ?? 0;
   const actualWorkEmployeeFilterOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -628,14 +633,7 @@ const ProjectDetailPage = () => {
                   />
                 </div>
               ) : null,
-            onChange: (key) =>
-              setExecutionTopTab(
-                key as
-                  | "members"
-                  | "milestones"
-                  | "progress"
-                  | "work",
-              ),
+            onChange: (key) => openInternalTab(key),
             items: [
               {
                 key: "members",

@@ -10,6 +10,8 @@ import styles from "./ProjectWorkspacePayments.module.css";
 type Props = {
   projectId: string;
   project: Project;
+  view: "receivable" | "payable";
+  onViewChange: (view: "receivable" | "payable") => void;
   canManageProject: boolean;
   canCollectReceivable: boolean;
   canManageBadDebtRecords: boolean;
@@ -19,12 +21,13 @@ type Props = {
 export default function ProjectWorkspacePayments({
   projectId,
   project,
+  view,
+  onViewChange,
   canManageProject,
   canCollectReceivable,
   canManageBadDebtRecords,
   onPlansChanged,
 }: Props) {
-  const [view, setView] = useState<"receivable" | "payable">("receivable");
   const [receivablePlanModalOpen, setReceivablePlanModalOpen] = useState(false);
   const [receivablePlanModalMode, setReceivablePlanModalMode] = useState<"create" | "edit">("create");
   const [receivableNodeModalOpen, setReceivableNodeModalOpen] = useState(false);
@@ -47,7 +50,7 @@ export default function ProjectWorkspacePayments({
     <div className={styles.toolbar}>
       <Segmented
         value={view}
-        onChange={(value) => setView(value as "receivable" | "payable")}
+        onChange={(value) => onViewChange(value as "receivable" | "payable")}
         options={[{ label: "项目收款", value: "receivable" }, { label: "项目付款", value: "payable" }]}
       />
       <Space wrap>

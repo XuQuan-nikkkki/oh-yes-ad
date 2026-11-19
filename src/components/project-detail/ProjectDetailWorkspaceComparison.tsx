@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Button, Empty, Segmented, Tag } from "antd";
 import dayjs from "dayjs";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AppstoreOutlined,
   BankOutlined,
@@ -31,6 +32,23 @@ import styles from "./ProjectDetailWorkspaceComparison.module.css";
 
 type Workspace = "execution" | "finance";
 type ExecutionTab = "overview" | "members" | "vendors" | "milestones" | "progress" | "work" | "submissions";
+type FinanceTab = "quote" | "initiation" | "payments" | "cost" | "expenses";
+
+const executionTabs: readonly ExecutionTab[] = ["overview", "members", "vendors", "milestones", "progress", "work", "submissions"];
+const financeTabBySlug: Record<string, FinanceTab> = {
+  "cost-estimation": "quote",
+  "project-initiation": "initiation",
+  receivable: "payments",
+  "realtime-cost": "cost",
+  "expense-records": "expenses",
+};
+const financeSlugByTab: Record<FinanceTab, string> = {
+  quote: "cost-estimation",
+  initiation: "project-initiation",
+  payments: "receivable",
+  cost: "realtime-cost",
+  expenses: "expense-records",
+};
 
 type Props = {
   projectId: string;
@@ -140,13 +158,32 @@ export default function ProjectDetailWorkspaceComparison({
   onDeleteActualWork,
   canManageActualWorkEntry,
 }: Props) {
-  const [workspace, setWorkspace] = useState<Workspace>("execution");
-  const [activeExecution, setActiveExecution] = useState<ExecutionTab>("overview");
-  const [activeFinance, setActiveFinance] = useState<"quote" | "initiation" | "payments" | "cost" | "expenses">(
-    latestInitiation ? "cost" : "quote",
-  );
-  const [activeQuoteTab, setActiveQuoteTab] = useState<"cost-estimation" | "pricing-reference">("cost-estimation");
-  const [activeInitiationTab, setActiveInitiationTab] = useState<"project-initiation" | "project-financial-structure">("project-initiation");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const viewParam = searchParams.get("view");
+  const workspace: Workspace = searchParams.get("workspace") === "finance" ||
+    (searchParams.get("workspace") !== "execution" && tabParam !== null && Object.hasOwn(financeTabBySlug, tabParam))
+    ? "finance" : "execution";
+  const activeExecution: ExecutionTab = executionTabs.find((tab) => tab === tabParam) ?? "overview";
+  const activeFinance: FinanceTab = tabParam && Object.hasOwn(financeTabBySlug, tabParam)
+    ? financeTabBySlug[tabParam]
+    : latestInitiation ? "cost" : "quote";
+  const activeQuoteTab = viewParam === "pricing-reference" ? "pricing-reference" : "cost-estimation";
+  const activeInitiationTab = viewParam === "project-financial-structure" ? "project-financial-structure" : "project-initiation";
+  const workView = viewParam === "analysis" ? "analysis" : "records";
+  const paymentView = viewParam === "payable" ? "payable" : "receivable";
+  const expenseView = viewParam === "records" ? "records" : "summary";
+  const openTab = (nextWorkspace: Workspace, tab: string, view?: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("workspace", nextWorkspace);
+    params.set("tab", tab);
+    if (view) params.set("view", view);
+    else params.delete("view");
+    params.delete("step");
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
   const [financeCounts, setFinanceCounts] = useState<{ receivable: number | null; payable: number | null; reimbursements: number | null }>({ receivable: null, payable: null, reimbursements: null });
   const loadFinanceCounts = useCallback(async () => {
     const count = async (url: string) => {
@@ -221,11 +258,11 @@ export default function ProjectDetailWorkspaceComparison({
     <>
       <div className={styles.switch} role="group" aria-label="项目内容分区">
         <button type="button" className={workspace === "execution" ? styles.selected : ""}
-          aria-pressed={workspace === "execution"} onClick={() => setWorkspace("execution")}>
+          aria-pressed={workspace === "execution"} onClick={() => openTab("execution", activeExecution)}>
           <AppstoreOutlined /><strong>项目执行</strong><span>人员、供应商、里程碑、需求单与工作项、工时和提交内容</span>
         </button>
         <button type="button" className={workspace === "finance" ? styles.selected : ""}
-          aria-pressed={workspace === "finance"} onClick={() => { if (workspace === "finance") void loadFinanceCounts(); setWorkspace("finance"); setActiveFinance(latestInitiation ? "cost" : "quote"); }}>
+          aria-pressed={workspace === "finance"} onClick={() => { if (workspace === "finance") void loadFinanceCounts(); openTab("finance", financeSlugByTab[latestInitiation ? "cost" : "quote"]); }}>
           <WalletOutlined /><strong>商务财务</strong><span>报价、立项、收付款、成本与报销</span>
         </button>
       </div>
@@ -234,31 +271,24 @@ export default function ProjectDetailWorkspaceComparison({
         <nav className={styles.nav} aria-label={workspace === "execution" ? "项目执行内容" : "商务财务内容"}>
           {workspace === "execution" ? <>
             <button type="button" className={activeExecution === "overview" ? styles.activeItem : ""}
-              aria-current={activeExecution === "overview" ? "page" : undefined} onClick={() => setActiveExecution("overview")}>
+              aria-current={activeExecution === "overview" ? "page" : undefined} onClick={() => openTab("execution", "overview")}>
               <AppstoreOutlined /><span>执行概览</span>
             </button>
             <button type="button" className={activeExecution === "members" ? styles.activeItem : ""}
-              aria-current={activeExecution === "members" ? "page" : undefined} onClick={() => setActiveExecution("members")}>
+              aria-current={activeExecution === "members" ? "page" : undefined} onClick={() => openTab("execution", "members")}>
               <TeamOutlined /><span>人员信息</span><em>{members.length}</em>
             </button>
             {executionLinks.map(({ label, icon: Icon, tab }) => (
               <button type="button" key={tab} className={tab === activeExecution ? styles.activeItem : ""}
                 aria-current={tab === activeExecution ? "page" : undefined}
-                onClick={() => setActiveExecution(tab as ExecutionTab)}>
+                onClick={() => openTab("execution", tab)}>
                 <Icon /><span>{label}</span>{tab === "vendors" && <em>{vendors.length}</em>}{tab === "milestones" && <em>{milestones.length}</em>}{tab === "progress" && <em>{briefs.length} / {workItemCount}</em>}{tab === "work" && <em>{actualWorkEntries.length}</em>}{tab === "submissions" && <em>{submissionCount}</em>}
               </button>
             ))}
           </> : orderedFinanceLinks.map(({ label, icon: Icon, tab }) => (
             <button type="button" key={tab} className={(tab === "cost-estimation" && activeFinance === "quote") || (tab === "project-initiation" && activeFinance === "initiation") || (tab === "receivable" && activeFinance === "payments") || (tab === "expense-records" && activeFinance === "expenses") || (tab === "realtime-cost" && activeFinance === "cost") ? styles.activeItem : ""}
               aria-current={(tab === "cost-estimation" && activeFinance === "quote") || (tab === "project-initiation" && activeFinance === "initiation") || (tab === "receivable" && activeFinance === "payments") || (tab === "expense-records" && activeFinance === "expenses") || (tab === "realtime-cost" && activeFinance === "cost") ? "page" : undefined}
-              onClick={() => {
-                if (tab === "expense-records") setActiveFinance("expenses");
-                else if (tab === "realtime-cost") setActiveFinance("cost");
-                else if (tab === "cost-estimation") setActiveFinance("quote");
-                else if (tab === "project-initiation") setActiveFinance("initiation");
-                else if (tab === "receivable") setActiveFinance("payments");
-                else setActiveFinance("cost");
-              }}>
+              onClick={() => openTab("finance", tab)}>
               <Icon /><span>{label}</span>{financeBadge(tab) && <em>{financeBadge(tab)}</em>}
             </button>
           ))}
@@ -274,12 +304,12 @@ export default function ProjectDetailWorkspaceComparison({
                     { label: "工作项", value: workItems.length, caption: summarizeStatuses(workItems.map(({ item }) => item.status)), tab: "progress" as ExecutionTab },
                     { label: "里程碑", value: milestones.length, caption: milestoneSummary, tab: "milestones" as ExecutionTab },
                     { label: "实际工时记录", value: actualWorkEntries.length, caption: "", tab: "work" as ExecutionTab },
-                  ].map(({ label, value, caption, tab }) => <button type="button" className={styles.metric} key={label} onClick={() => setActiveExecution(tab)}>
+                  ].map(({ label, value, caption, tab }) => <button type="button" className={styles.metric} key={label} onClick={() => openTab("execution", tab)}>
                     <span>{label}</span><strong>{value}</strong>{caption && <small>{caption}</small>}
                   </button>)}
                 </div>
                 <section className={styles.overviewPanel}>
-                  <div className={styles.overviewHeading}><h2>当前工作项</h2><Button type="link" onClick={() => setActiveExecution("progress")}>查看全部 →</Button></div>
+                  <div className={styles.overviewHeading}><h2>当前工作项</h2><Button type="link" onClick={() => openTab("execution", "progress")}>查看全部 →</Button></div>
                   {currentWorkItems.length ? <div className={styles.overviewTable}>
                     <div className={`${styles.overviewRow} ${styles.overviewRowHead}`}><span>所属需求单</span><span>工作项</span><span>状态</span><span>提交</span></div>
                     {currentWorkItems.map(({ brief, item }) => <div className={styles.overviewRow} key={item.id}>
@@ -289,7 +319,7 @@ export default function ProjectDetailWorkspaceComparison({
                   </div> : <Empty description="暂无进行中的工作项" />}
                 </section>
                 <section className={styles.overviewPanel}>
-                  <div className={styles.overviewHeading}><h2>项目里程碑</h2><Button type="link" onClick={() => setActiveExecution("milestones")}>查看全部 {milestones.length} 条 →</Button></div>
+                  <div className={styles.overviewHeading}><h2>项目里程碑</h2><Button type="link" onClick={() => openTab("execution", "milestones")}>查看全部 {milestones.length} 条 →</Button></div>
                   {recentMilestones.length ? recentMilestones.map((milestone) => <div className={styles.overviewMilestone} key={milestone.id}>
                     <time>{milestoneDate(milestone)?.format("YYYY/MM/DD") ?? "日期待定"}</time><strong>{milestone.name}</strong><Tag>{milestone.typeOption?.value ?? milestone.type ?? "未分类"}</Tag>
                   </div>) : <Empty description="暂无里程碑" />}
@@ -297,18 +327,18 @@ export default function ProjectDetailWorkspaceComparison({
               </div>
               <aside className={styles.overviewAside}>
                 <section className={styles.overviewPanel}>
-                  <div className={styles.overviewHeading}><h2>项目成员</h2><Button type="link" onClick={() => setActiveExecution("members")}>查看</Button></div>
+                  <div className={styles.overviewHeading}><h2>项目成员</h2><Button type="link" onClick={() => openTab("execution", "members")}>查看</Button></div>
                   {memberGroups.length ? memberGroups.map(([group, people]) => <div className={styles.memberGroup} key={group}>
                     <span>{group}</span><div>{[...(people ?? [])].sort((left, right) => Number(left.employmentStatus === "离职") - Number(right.employmentStatus === "离职") || left.name.localeCompare(right.name, "zh-CN")).map((person) =>
                       <Tag key={person.id}>{person.name}{person.employmentStatus === "离职" ? "（离职）" : ""}</Tag>)}</div>
                   </div>) : <Empty description="暂无项目成员" />}
                 </section>
                 <section className={styles.overviewPanel}>
-                  <div className={styles.overviewHeading}><h2>合作供应商</h2><Button type="link" onClick={() => setActiveExecution("vendors")}>查看</Button></div>
+                  <div className={styles.overviewHeading}><h2>合作供应商</h2><Button type="link" onClick={() => openTab("execution", "vendors")}>查看</Button></div>
                   {vendors.length ? <strong>{vendors.map((vendor) => vendor.name).join("、")}</strong> : <Empty description="暂无合作供应商" />}
                 </section>
                 <section className={styles.overviewPanel}>
-                  <div className={styles.overviewHeading}><h2>项目提交内容</h2><Button type="link" onClick={() => setActiveExecution("submissions")}>查看</Button></div>
+                  <div className={styles.overviewHeading}><h2>项目提交内容</h2><Button type="link" onClick={() => openTab("execution", "submissions")}>查看</Button></div>
                   <strong className={styles.overviewCount}>{submissionCount}</strong><span className={styles.overviewMuted}> 条提交版本，来自 {submittedWorkItemCount} 个工作项</span>
                 </section>
               </aside>
@@ -325,13 +355,14 @@ export default function ProjectDetailWorkspaceComparison({
               </div> : activeExecution === "submissions" ?
               <ProjectWorkspaceSubmissions briefs={briefs} /> :
               <ProjectWorkspaceWork entries={actualWorkEntries} members={members} onCreate={onOpenActualWorkCreate}
-                onEdit={onEditActualWork} onDelete={onDeleteActualWork} canManageEntry={canManageActualWorkEntry} />}
+                onEdit={onEditActualWork} onDelete={onDeleteActualWork} canManageEntry={canManageActualWorkEntry}
+                view={workView} onViewChange={(view) => openTab("execution", "work", view)} />}
           </> : activeFinance === "quote" ? <div className={styles.quotePage}>
             <h2>测算&报价</h2>
             <div className={styles.quoteToolbar}>
               <Segmented
                 value={activeQuoteTab}
-                onChange={(value) => setActiveQuoteTab(value as "cost-estimation" | "pricing-reference")}
+                onChange={(value) => openTab("finance", "cost-estimation", value)}
                 options={[{ label: "成本测算", value: "cost-estimation" }, { label: "报价参考", value: "pricing-reference" }]}
               />
               {activeQuoteTab === "cost-estimation" ? (
@@ -376,7 +407,7 @@ export default function ProjectDetailWorkspaceComparison({
             <div className={styles.quoteToolbar}>
               <Segmented
                 value={activeInitiationTab}
-                onChange={(value) => setActiveInitiationTab(value as "project-initiation" | "project-financial-structure")}
+                onChange={(value) => openTab("finance", "project-initiation", value)}
                 options={[{ label: "立项申请", value: "project-initiation" }, { label: "项目财务结构", value: "project-financial-structure" }]}
               />
               {activeInitiationTab === "project-initiation" ? (
@@ -435,6 +466,8 @@ export default function ProjectDetailWorkspaceComparison({
           </div> : activeFinance === "payments" ? <ProjectWorkspacePayments
             projectId={projectId}
             project={project}
+            view={paymentView}
+            onViewChange={(view) => openTab("finance", "receivable", view)}
             canManageProject={canManageProject}
             canCollectReceivable={canCollectReceivable}
             canManageBadDebtRecords={canManageReimbursements}
@@ -448,7 +481,8 @@ export default function ProjectDetailWorkspaceComparison({
               onDownloadReady={onCostDownloadReady} embedded />
           </div> : <ProjectWorkspaceReimbursements projectId={projectId} projectName={projectName}
             employees={members.map((member) => ({ id: member.id, name: member.name }))}
-            canManageReimbursements={canManageReimbursements} />}
+            canManageReimbursements={canManageReimbursements}
+            view={expenseView} onViewChange={(view) => openTab("finance", "expense-records", view)} />}
         </section>
       </div>
     </>
