@@ -137,6 +137,13 @@ export async function POST(req: NextRequest) {
     upsertSelectOption("projectMilestone.method", body.method),
   ]);
   const datePayload = parseMilestoneDatePayload(body);
+  const participantIds = (value: unknown) =>
+    Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string" && item.length > 0)
+      : [];
+  const internalParticipantIds = participantIds(body.internalParticipantIds);
+  const clientParticipantIds = participantIds(body.clientParticipantIds);
+  const vendorParticipantIds = participantIds(body.vendorParticipantIds);
 
   const item = await prisma.projectMilestone.create({
     data: {
@@ -149,6 +156,15 @@ export async function POST(req: NextRequest) {
       detail: body.detail ?? null,
       methodOptionId,
       projectId: body.projectId,
+      internalParticipants: {
+        connect: internalParticipantIds.map((id) => ({ id })),
+      },
+      clientParticipants: {
+        connect: clientParticipantIds.map((id) => ({ id })),
+      },
+      vendorParticipants: {
+        connect: vendorParticipantIds.map((id) => ({ id })),
+      },
     },
     include: {
       typeOption: { select: { id: true, value: true, color: true } },
