@@ -480,7 +480,7 @@ const VendorFormModal = ({
 
       return (
         <div style={{ marginBottom: 24 }}>
-          <Space style={{ width: "100%" }} align="start">
+          <Space style={{ width: "100%" }} align="start" wrap>
             <ProForm.Item
               label={label}
               name={config.nameField}
@@ -597,11 +597,13 @@ const VendorFormModal = ({
           hydrateFormValues();
         }
       }}
-      width="80%"
+      width="min(1400px, calc(100vw - 32px))"
       styles={{
         body: {
           maxHeight: "80vh",
-          overflow: "auto",
+          paddingInline: 12,
+          overflowY: "auto",
+          overflowX: "hidden",
         },
       }}
     >
