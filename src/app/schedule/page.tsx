@@ -11,6 +11,7 @@ import {
   message,
 } from "antd";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import dayjs from "dayjs";
 import isoWeek from "dayjs/plugin/isoWeek";
 import AppLink from "@/components/AppLink";
@@ -34,6 +35,11 @@ import { useProjectsStore } from "@/stores/projectsStore";
 import { useAuthStore } from "@/stores/authStore";
 
 dayjs.extend(isoWeek);
+
+const ProjectMilestonesView = dynamic(
+  () => import("@/components/ProjectMilestonesView"),
+  { ssr: false },
+);
 
 type ProjectListItem = {
   id: string;
@@ -194,6 +200,7 @@ const SCHEDULE_TAB_KEYS = new Set([
   "next-weekly-tasks",
   "client-project-schedule",
   "internal-project-schedule",
+  "project-milestones",
 ]);
 
 const compareDisplayNames = (left?: string | null, right?: string | null) => {
@@ -250,6 +257,7 @@ function SchedulePageContent() {
     projectId: string;
   } | null>(null);
   const [milestoneModalOpen, setMilestoneModalOpen] = useState(false);
+  const [timelineCreateOpen, setTimelineCreateOpen] = useState(false);
   const [briefModalOpen, setBriefModalOpen] = useState(false);
   const [milestoneSubmitting, setMilestoneSubmitting] = useState(false);
   const { canManageProject } = useProjectPermission();
@@ -969,6 +977,17 @@ function SchedulePageContent() {
         <Tabs
           activeKey={activeScheduleTab}
           onChange={handleScheduleTabChange}
+          tabBarExtraContent={
+            activeScheduleTab === "project-milestones" ? (
+              <Button
+                type="primary"
+                disabled={!canManageProject}
+                onClick={() => setTimelineCreateOpen(true)}
+              >
+                新增里程碑
+              </Button>
+            ) : null
+          }
           items={[
             {
               key: "client-project-schedule",
@@ -992,6 +1011,19 @@ function SchedulePageContent() {
               key: "internal-project-schedule",
               label: "内部项目排期",
               children: internalScheduleContent,
+            },
+            {
+              key: "project-milestones",
+              label: "项目里程碑",
+              children: (
+                <ProjectMilestonesView
+                  view="timeline"
+                  embedded
+                  active={activeScheduleTab === "project-milestones"}
+                  createOpen={timelineCreateOpen}
+                  onCreateClose={() => setTimelineCreateOpen(false)}
+                />
+              ),
             },
             {
               key: "weekly-tasks",
